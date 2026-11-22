@@ -132,6 +132,55 @@ test('0405 GraphQL adapter: token form, retries, and errors that never carry Sho
   await assert.rejects(a.shopInfo('evil.com', 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
 });
 
+test('catalog read: when Shopify refuses the stock-location part, the sync reads the catalog without it', async () => {
+  const sent = [], replies = [];
+  const send = async (url, init) => { sent.push(JSON.parse(init.body)); const r = replies.shift(); return new Response(JSON.stringify(r), { status: 200 }); };
+  const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, async () => undefined);
+  const node = (id, extra) => ({ id: `gid://shopify/ProductVariant/${id}`, title: 'Default Title', sku: null, barcode: null, price: '10.00', compareAtPrice: null,
+    inventoryQuantity: 3, position: 1, inventoryItem: { tracked: true, unitCost: null, ...extra },
+    product: { id: `gid://shopify/Product/${id}0`, title: 'Belt ' + id, status: 'ACTIVE', vendor: '', productType: '', handle: 'belt-' + id, featuredMedia: null } });
+  const denied = { errors: [{ message: 'Access denied for location field.', extensions: { code: 'ACCESS_DENIED' } }], data: { productVariants: null } };
+  // Page 1 refused, read again plain; page 2 stays plain.
+  replies.push(denied, { data: { productVariants: { pageInfo: { hasNextPage: true, endCursor: 'c1' }, nodes: [node(1, {})] } } },
+    { data: { productVariants: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [node(2, {})] } } });
+  const r = await a.catalog(SHOP, 'shpat_1');
+  assert.equal(r.complete, true);
+  assert.deepEqual(r.products.map(p => p.title), ['Belt 1', 'Belt 2']);
+  assert.equal('fulfilledBy' in r.products[0].variants[0], false, 'not asked, so the mirror keeps what it had');
+  assert.deepEqual(sent.map(b => [b.query.includes('inventoryLevels'), b.variables.after]), [[true, null], [false, null], [false, 'c1']]);
+  // The full read still names the fulfilment service when Shopify answers it.
+  sent.length = 0;
+  replies.push({ data: { productVariants: { pageInfo: { hasNextPage: false, endCursor: null },
+    nodes: [node(3, { inventoryLevels: { nodes: [{ location: { fulfillmentService: { serviceName: 'Sample Print Co', type: 'THIRD_PARTY' } } }] } })] } } });
+  assert.equal((await a.catalog(SHOP, 'shpat_1')).products[0].variants[0].fulfilledBy, 'Sample Print Co');
+  assert.equal(sent.length, 1);
+  // A plain read that is refused too fails the sync as before, and throttling is never treated as a refusal.
+  replies.push(denied, denied);
+  await assert.rejects(a.catalog(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  const throttled = { errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] };
+  sent.length = 0; replies.push(throttled, throttled, throttled, throttled);
+  await assert.rejects(a.catalog(SHOP, 'shpat_1'), e => e.message === 'RATE_LIMITED');
+  assert.equal(sent.every(b => b.query.includes('inventoryLevels')), true);
+});
+
+test('refused GraphQL answers leave one log line with codes, field names and scope names only', async () => {
+  const notes = [], replies = [];
+  const send = async () => new Response(JSON.stringify(replies.shift()), { status: 200 });
+  const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, async () => undefined, line => notes.push(line));
+  replies.push({ errors: [{ message: 'Access denied for payouts field. Required access: `read_shopify_payments_payouts` access scope. Store secret-shop.myshopify.com id 12345',
+    path: ['shopifyPaymentsAccount', 'payouts', 0, 'gid://shopify/X/9'], extensions: { code: 'ACCESS_DENIED', requiredAccess: '`read_shopify_payments_payouts` access scope.' } },
+    { message: 'Something about 4111111111111111', extensions: { code: 'lower case' } }] });
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  assert.deepEqual(notes, ['shopify_graphql_refused operation=HonFinance errors=2 [ACCESS_DENIED at shopifyPaymentsAccount.payouts needs read_shopify_payments_payouts; NO_CODE]']);
+  for (const secret of ['secret-shop', '12345', '4111', 'shpat_1', 'gid:', SHOP]) assert.equal(notes[0].includes(secret), false);
+  // Throttling is not a refusal and is not logged.
+  const throttled = { errors: [{ message: 'Throttled', extensions: { code: 'THROTTLED' } }] };
+  notes.length = 0; replies.push(throttled, throttled, throttled, throttled);
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'RATE_LIMITED');
+  assert.equal(notes.length, 0);
+  assert.equal(adapter.refusalNote('nonsense', [null, 'x']), 'shopify_graphql_refused operation=unknown errors=2 [NO_CODE; NO_CODE]');
+});
+
 // ---- Service with the fake store and a stub database that records what it was given ----
 
 function stubDatabase() {
@@ -257,4 +306,29 @@ test('0405 the state the browser carries is 32 random bytes and the database see
   const state = url.searchParams.get('state');
   assert.match(state, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(s.db.calls[0].params[2], createHash('sha256').update(state).digest('hex'));
+});
+
+test('PD1 (0611) who fulfils a variant: the first third-party service by name, null for the school, left out when not asked', () => {
+  const node = levels => ({ id: 'gid://shopify/ProductVariant/1', title: 'M', sku: 'S', barcode: null, price: '12.5', compareAtPrice: null, inventoryQuantity: 0, position: 1,
+    inventoryItem: { tracked: false, unitCost: null, ...(levels === undefined ? {} : { inventoryLevels: { nodes: levels } }) },
+    product: { id: 'gid://shopify/Product/1', title: 'Hoodie', status: 'ACTIVE', vendor: null, productType: null, handle: 'hoodie', featuredMedia: null } });
+  const by = levels => adapter.productsFromVariantNodes([node(levels)])[0].variants[0];
+  const level = service => ({ location: { fulfillmentService: service } });
+  assert.equal('fulfilledBy' in by(undefined), false, 'a read that did not ask leaves the key out, so the mirror keeps its value');
+  assert.equal(by([]).fulfilledBy, null);
+  assert.equal(by([level(null), { location: null }]).fulfilledBy, null, 'the school\'s own location');
+  assert.equal(by([level({ serviceName: 'Manual', type: 'MANUAL' }), level({ serviceName: 'Gift cards', type: 'GIFT_CARD' })]).fulfilledBy, null);
+  assert.equal(by([level(null), level({ serviceName: ' Printful\u0007 ', type: 'THIRD_PARTY' })]).fulfilledBy, 'Printful');
+  assert.equal(by([level({ serviceName: 'x'.repeat(90), type: 'THIRD_PARTY' })]).fulfilledBy.length, 64);
+  assert.equal(by([level({ serviceName: '  ', type: 'THIRD_PARTY' }), level({ serviceName: 'Second', type: 'THIRD_PARTY' })]).fulfilledBy, 'Second');
+  assert.throws(() => by('nope'), adapter.ShopifyProviderError);
+  assert.throws(() => by([level({ serviceName: 7, type: 'THIRD_PARTY' })]), adapter.ShopifyProviderError);
+  // The catalog contract: a provider's variant is never low stock, and the name is bounded.
+  const variant = over => ({ variantId: '9200000031', title: 'Black / M', sku: null, barcode: null, price: 45, compareAtPrice: null, unitCost: null, margin: null, marginPercent: null,
+    tracked: true, inventoryQuantity: 0, lowStock: false, fulfilledBy: 'Sample Print Co', ...over });
+  const catalog = over => contracts.verifyShopifyCatalog({ schoolId: '44444444-4444-4444-8444-444444444444', currency: 'USD', products: [{ productId: '9100000003', title: 'Hoodie', status: 'ACTIVE',
+    vendor: null, productType: null, imageUrl: null, variants: [variant(over)] }] });
+  assert.equal(catalog({}).products[0].variants[0].fulfilledBy, 'Sample Print Co');
+  assert.equal(catalog({ fulfilledBy: null, lowStock: true }).products[0].variants[0].lowStock, true);
+  for (const bad of [{ lowStock: true }, { fulfilledBy: 'x'.repeat(65) }, { fulfilledBy: undefined }]) assert.throws(() => catalog(bad), /SHOPIFY_RESPONSE_INVALID/);
 });

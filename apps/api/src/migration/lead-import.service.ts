@@ -37,7 +37,7 @@ export class LeadImportService {
     for (const d of input.decisions) { closed(d,['index','choice']); if (!Number.isInteger(d.index) || (d.index as number)<1 || (d.index as number)>1000 || !['IMPORT','SKIP'].includes(d.choice as string)) invalid(); }
     return this.mutate(c,'decide',id,input);
   }
-  /** IC1 (0593): consentChannels (optional, both by default) records consent for the leads this finalize creates. */
+  /** IC1 (0634): consentChannels (optional, both by default) records consent for the leads this finalize creates. */
   finalize(c: LeadImportContext,id: string,value: {expectedVersion: number;reviewToken: string;selectedIndices: number[];consentChannels?: IntakeConsentChannel[]}): Promise<LeadImportResult> {
     human(c); uuid(id); closed(value,['expectedVersion','reviewToken','selectedIndices','consentChannels']);
     const { consentChannels, ...input } = value;

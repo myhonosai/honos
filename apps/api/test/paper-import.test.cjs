@@ -83,7 +83,7 @@ const context = (patch = {}) => ({ ...scope, principalType: 'HUMAN_USER', source
 const summary = (patch = {}) => ({ id: setId, kind: 'STUDENT_CARDS', target: 'STUDENTS', version: 1, status: 'OPEN', pageCount: 0, reader: null, readOutcome: null, sentBatchId: null,
   createdAt: '2026-11-15T22:00:00.000Z', expiresAt: '2026-12-15T22:00:00.000Z', readAt: null, sentAt: null, deletedAt: null, deleteReason: null, ...patch });
 const detail = (patch = {}, rest = {}) => ({ set: summary(patch), columns: ['studentGivenName', 'studentFamilyName', 'birthDate', 'studentEmail', 'studentMobile', 'guardianGivenName', 'guardianFamilyName', 'guardianEmail', 'guardianMobile', 'familyKey'],
-  rows: [], unsure: [], pages: [], ...rest });
+  rows: [], unsure: [], pages: [], aiReading: null, ...rest });
 
 function db(options = {}) {
   const queries = [];

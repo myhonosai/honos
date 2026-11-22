@@ -29,7 +29,7 @@ const count = async table => Number((await admin.query(`SELECT count(*) n FROM h
 const primary = ['people','crm_leads','crm_lead_attributions','public_lead_forms','public_lead_form_receipts','audit_events','outbox_events'];
 const countTables = async tables => { const result = {}; for (const table of tables) result[table] = await count(table); return result; };
 const counts = () => countTables(primary);
-// IC1 (0593): form submits now record email consent; that is checked on its own below.
+// IC1 (0634): form submits now record email consent; that is checked on its own below.
 const noEffects = ['communication_messages','crm_appointments','class_bookings','attendance_records','memberships','membership_payment_schedules','billing_accounts','invoices','payment_attempts','action_requests','action_approvals','ai_usage_ledger','ai_invocation_plans','work_items','crm_activities','student_profiles','outbox_delivery_attempts'];
 const monitorReadTables=[...new Set([...primary,'public_lead_form_versions','public_lead_form_requests','communication_consents',...noEffects])];
 const monitorFootprint=async()=>({

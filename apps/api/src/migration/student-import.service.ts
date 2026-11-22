@@ -120,7 +120,7 @@ export class StudentImportService {
 
   async finalize(context: StudentImportContext, batchId: string, value: unknown): Promise<{ batch: StudentImportBatch; replayed: boolean }> {
     this.assertHuman(context, true); this.assertId(batchId); batchId = batchId.toLowerCase();
-    // IC1 (0593): optional consentChannels (both by default) records consent for the people this finalize creates.
+    // IC1 (0634): optional consentChannels (both by default) records consent for the people this finalize creates.
     const { consentChannels, rest } = this.validated(() => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('VALIDATION_FAILED');
       const { consentChannels: channels, ...others } = value as Record<string, unknown>;

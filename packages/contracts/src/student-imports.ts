@@ -1,6 +1,6 @@
 // B-CRM-7 (0226): student and guardian CSV import. Staging, row decisions and finalize create people, families,
 // family links and student profiles only: never a membership, plan, schedule, invoice, payment, enrollment, account,
-// invitation or message. IC1 (0593): finalize may record intake consent for the people it creates (staff can untick).
+// invitation or message. IC1 (0634): finalize may record intake consent for the people it creates (staff can untick).
 
 import { isIntakeConsentChannels, type IntakeConsentChannel } from './index.js';
 export const STUDENT_IMPORT_FIELDS = ['studentGivenName', 'studentFamilyName', 'birthDate', 'studentEmail', 'studentMobile',

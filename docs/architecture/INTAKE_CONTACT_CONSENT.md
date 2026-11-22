@@ -1,4 +1,4 @@
-# Automatic contact consent at lead intake (IC1, migration 0593)
+# Automatic contact consent at lead intake (IC1, migration 0634)
 
 Status: spec, 2026-11-19. Owner ask (David, 2026-11-19 05:07Z): "Any contact info coming in is through lead input,
 so it should be assumed consent. Can we make it that way so we don't have this step?" The step is the contact card's

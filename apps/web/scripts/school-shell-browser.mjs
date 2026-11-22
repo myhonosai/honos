@@ -50,6 +50,21 @@ const snapshot = (scope) => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 118, FAILED: 3, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 1 } },
 });
 
+// Parent app > Curriculum synthetic fixtures (names and links are placeholders).
+const pcRes = (n, patch) => ({ id: id(1000 + n), curriculumId: id(960), rankId: null, cycleId: null, kind: 'VIDEO', url: `https://www.youtube.com/watch?v=sample${n}`, title: `Sample ${n}`, description: '', audience: 'PARENT', status: 'ACTIVE', version: 1, ...patch });
+const pcSettings = (patch) => ({ saved: true, version: 3, displayMode: 'CYCLE', showInApp: true, rankShowEarlier: false, rankShowNext: false, cycleRotation: 'AUTO', cycleAnchorDate: '2026-11-02', cycleLengthWeeks: 2, cycleShowNext: true, ...patch });
+const parentCurriculum = () => ({ timeZone: 'America/Los_Angeles', curricula: [
+  { id: id(960), name: 'Little Dragons', modelCode: 'ROTATIONAL', lifecycle: 'PUBLISHED', ranks: [],
+    app: { curriculumId: id(960), settings: pcSettings({}), cycles: [['Cycle 1: Stances', 961], ['Cycle 2: Kicks', 962], ['Cycle 3: Forms', 963]].map(([name, n], i) => ({ id: id(n), name, position: i + 1, version: 1 })),
+      cycleState: { today: '2026-11-19', current: { id: id(962), name: 'Cycle 2: Kicks', startsOn: '2026-11-16', endsOn: '2026-11-29' }, next: { id: id(963), name: 'Cycle 3: Forms', startsOn: '2026-11-30' } } },
+    resources: [pcRes(1, { cycleId: id(962), title: 'Front kick drill', description: 'Practice 10 each side.' }), pcRes(2, { cycleId: id(962), kind: 'DOCUMENT', title: 'Kicks checklist', url: 'https://drive.google.com/file/d/sample2' }),
+      pcRes(3, { cycleId: id(961), title: 'Horse stance' }), pcRes(4, { kind: 'LINK', title: 'Student handbook', url: 'https://example.com/handbook' })] },
+  { id: id(970), name: 'Adult Karate', modelCode: 'LINEAR', lifecycle: 'PUBLISHED', ranks: [['White', '#FFFFFF', 971], ['Yellow', '#FFD400', 972], ['Orange', '#FF8A00', 973]].map(([name, color, n], i) => ({ id: id(n), name, color, order: i + 1 })),
+    app: { curriculumId: id(970), settings: pcSettings({ displayMode: 'RANK', cycleRotation: 'STAFF_PICK', cycleAnchorDate: null, cycleLengthWeeks: null, rankShowNext: true }), cycles: [], cycleState: { today: '2026-11-19', current: null, next: null } },
+    resources: [pcRes(5, { curriculumId: id(970), rankId: id(971), title: 'White belt form' })] }] });
+const parentCurriculumPreview = () => ({ childDisplayName: 'Avery Sample', curricula: [{ curriculumName: 'Little Dragons', mode: 'CYCLE', rank: null, cycle: { name: 'Cycle 2: Kicks', startsOn: '2026-11-16', endsOn: '2026-11-29', rotation: 'AUTO' },
+  next: { name: 'Cycle 3: Forms', startsOn: '2026-11-30' }, sections: [{ label: 'CURRENT', items: [{ title: 'Front kick drill', description: 'Practice 10 each side.', kind: 'VIDEO', url: 'https://www.youtube.com/watch?v=sample1' },
+    { title: 'Kicks checklist', description: '', kind: 'DOCUMENT', url: 'https://drive.google.com/file/d/sample2' }] }, { label: 'ALL', items: [{ title: 'Student handbook', description: '', kind: 'LINK', url: 'https://example.com/handbook' }] }] }] });
 const day = 86_400_000, at = (offset) => new Date(Date.parse(iso()) + offset).toISOString();
 const win = (count, from, to) => ({ availability: 'AVAILABLE', windowFrom: at(from), windowTo: at(to), count });
 const commandCenter = (scope) => ({
@@ -138,14 +153,64 @@ function api(route) {
       messages: [{ messageId: id(971), from: 'SCHOOL', mine: true, body: 'Welcome to the parent app!', sentAt: at(-day) }, { messageId: id(972), from: 'FAMILY', mine: false, body: 'Thanks! Is there class on Friday?', sentAt: at(-3600_000) }] }, meta: {} });
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
+    // Texts > History, Templates, Opted out (TE3b over 0585/0586): synthetic rows, newest first.
+    // Email (TE4) asks with channel=EMAIL: synthetic emails with a subject.
+    const asked = new URL(route.request().url()).searchParams.get('channel');
+    if (path === `${prefix}/communications/history` && asked === 'EMAIL') return json(route, 200, { data: { nextCursor: null, messages: [
+      ['Avery Sample', 'avery@example.test', 'Your trial class is booked', 'Hi Avery, your trial class is Thursday at 5 PM.', 'STAFF', 'DELIVERED', 'DELIVERED', 'Kim Placeholder', 1],
+      ['Rowan Example', 'rowan@example.test', 'Belt testing this Saturday', 'Belt testing starts at 10 AM. Please arrive early.', 'CAMPAIGN', 'FAILED', 'FAILED', null, 2],
+    ].map(([personName, address, subject, preview, origin, delivery, outcome, by, n]) => ({ messageId: id(970 - n), personId: id(850), personName, address, channel: 'EMAIL', subject, preview,
+      at: new Date(Date.parse(at(-n * 3600_000))).toISOString(), origin, delivery, outcome, by })) }, meta: {} });
+    if (path === `${prefix}/communications/opted-out` && asked === 'EMAIL') return json(route, 200, { data: { nextCursor: null, contacts: [
+      ['Sample Parent', 'parent@example.test', 'STAFF', 2]].map(([personName, address, source, n]) => ({ consentId: id(965 - n), personId: id(860 + n),
+      personName, address, channel: 'EMAIL', source, optedOutAt: new Date(Date.parse(at(-n * day))).toISOString(), at: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    if (path === `${prefix}/communications/templates` && method === 'GET' && asked === 'EMAIL') {
+      const status = new URL(route.request().url()).searchParams.get('status') ?? 'ACTIVE';
+      return json(route, 200, { data: { templates: status !== 'ACTIVE' ? [] : [
+        ['Trial welcome', 'Welcome to {{school_name}}, {{first_name}}', 'Hi {{first_name}},\n\nThanks for booking a trial class. Wear comfortable clothes and bring water.\n\nSee you soon!', 1],
+        ['Belt testing', 'Belt testing this Saturday', 'Hi {{first_name}}, belt testing starts at 10 AM on Saturday. Please arrive 15 minutes early.', 2],
+      ].map(([name, subject, body, n]) => ({ templateId: id(975 + n), channel: 'EMAIL', name, subject, body, status: 'ACTIVE', version: 1,
+        createdAt: new Date(Date.parse(at(-10 * day))).toISOString(), updatedAt: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    }
+    if (path === `${prefix}/communications/history`) return json(route, 200, { data: { nextCursor: null, messages: [
+      ['Avery Sample', '+15555550101', 'See you at the trial class on Thursday at 5 PM!', 'STAFF', 'DELIVERED', 'DELIVERED', 'Kim Placeholder', 1],
+      ['Rowan Example', null, 'Reminder: belt testing is this Saturday at 10 AM.', 'CAMPAIGN', 'FAILED', 'FAILED', null, 2],
+      ['Avery Sample', '+15555550101', 'Thanks for your message, a coach will text you back soon.', 'AUTOMATION', 'SENDING', 'IN_PROGRESS', null, 3],
+      ['Kim Placeholder', '+15555550103', 'Yes, Thursday works. See you then.', 'CONVERSATION', 'ACCEPTED', 'DELIVERED', 'Avery Sample', 4],
+    ].map(([personName, address, preview, origin, delivery, outcome, by, n]) => ({ messageId: id(990 - n), personId: id(850), personName, address, channel: 'SMS', subject: null, preview,
+      at: new Date(Date.parse(at(-n * 3600_000))).toISOString(), origin, delivery, outcome, by })) }, meta: {} });
+    if (path === `${prefix}/communications/opted-out`) return json(route, 200, { data: { nextCursor: null, contacts: [
+      ['Sample Parent', '+15555550110', 'RECIPIENT', 1], ['Example Guardian', '+15555550111', 'STAFF', 5]].map(([personName, address, source, n]) => ({ consentId: id(995 - n), personId: id(860 + n),
+      personName, address, channel: 'SMS', source, optedOutAt: new Date(Date.parse(at(-n * day))).toISOString(), at: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    if (path === `${prefix}/communications/templates` && method === 'GET') {
+      const status = new URL(route.request().url()).searchParams.get('status') ?? 'ACTIVE';
+      return json(route, 200, { data: { templates: status !== 'ACTIVE' ? [] : [
+        ['Class cancelled', 'Hi {{first_name}}, class is cancelled tonight because of the weather. See you next time!', 1],
+        ['Missed class', 'Hi {{first_name}}, we missed you at class this week. Reply here if you need a new time.', 2],
+        ['Trial reminder', 'Hi {{first_name}}, this is {{school_name}}. Your trial class is tomorrow. Wear comfortable clothes and bring water.', 3],
+      ].map(([name, body, n]) => ({ templateId: id(980 + n), channel: 'SMS', name, subject: null, body, status: 'ACTIVE', version: 1,
+        createdAt: new Date(Date.parse(at(-10 * day))).toISOString(), updatedAt: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    }
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
+    // Parent app > Curriculum (0605/0610): one cycle-based and one rank-based synthetic curriculum.
+    if (method === 'POST' && /\/parent-app\/curriculum\/[0-9a-f-]{36}\/cycles$/.test(path)) return json(route, 409, { code: 'CYCLE_NAME_TAKEN' });
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum`) return json(route, 200, { data: parentCurriculum(), meta: { requestId: id(990), correlationId: id(990), replayed: false } });
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum/preview/${id(820)}`) return json(route, 200, { data: parentCurriculumPreview(), meta: { requestId: id(991), correlationId: id(991), replayed: false } });
+    if (path === `${prefix}/journey-recommendations`) return json(route, 200, { data: { recommendations: [], programs: [], checkouts: [], events: [] }, meta: { requestId: id(992), correlationId: id(992), replayed: false } });
+    if (path === `${prefix}/pickers/enrollments`) return json(route, 200, { data: [['Avery', 'Sample'], ['Rowan', 'Example']].map(([givenName, familyName], i) => ({ enrollmentId: id(980 + i),
+      curriculumId: new URL(route.request().url()).searchParams.get('curriculumId') ?? id(960), curriculumName: 'Little Dragons', studentProfileId: id(820 + i), givenName, familyName, currentRankId: null, currentRankName: null, nextRankId: null, nextRankName: null, version: 1 })),
+      meta: { requestId: id(985), correlationId: id(985), limit: 50 } });
     if (path === `${prefix}/pickers/staff`) return json(route, 200, { data: [['Avery Sample', 870], ['Rowan Example', 871], ['Kim Placeholder', 872]]
       .map(([displayName, n]) => ({ principalId: id(n), displayName })), meta: { requestId: id(875), correlationId: id(875), limit: 200 } });
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
       .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
         studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
+    // Top-bar search (2026-11-21): the staff search read for leads and classes, synthetic rows only.
+    if (path === `${prefix}/search`) return json(route, 200, { data: { search: { organizationId: scope.organizationId, schoolId: scope.schoolId, results: [
+      { kind: 'LEAD', entityId: id(201), title: 'Avery Sample', subtitle: 'Open lead', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/LEAD/${id(201)}` },
+      { kind: 'CLASS_SESSION', entityId: id(100), title: 'Little Tigers', subtitle: 'Scheduled class', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/CLASS_SESSION/${id(100)}` }] } }, meta: {} });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -475,6 +540,27 @@ await check('Parent app is its own page laid out like the texts inbox (TE3a)', a
   assert.equal(await page.locator('[data-compose]').count(), 0, 'no composer on the parent app page');
   await shot(page, 'te3a-parent-app-desktop'); await ctx.close();
 });
+for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/parent-app/curriculum');
+  const posts = () => report.apiRequests.filter(r => r.startsWith('POST')).length, postsBefore = posts();
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Now: Cycle 2: Kicks, through Sun, Nov 29.').waitFor();
+  assert.ok(await page.getByText('Not in the app yet').count() >= 1, 'cycle and document material is labeled');
+  await page.getByRole('combobox', { name: 'Student' }).selectOption({ label: 'Avery Sample · Little Dragons · No rank yet' });
+  await page.locator('[data-preview]').waitFor();
+  assert.equal(await page.getByRole('combobox', { name: 'Student' }).inputValue(), id(980), 'the picked student stays selected');
+  await page.getByText(/^No recommendations for .+ yet\.$/).waitFor();
+  assert.equal(posts(), postsBefore, 'nothing saved by looking');
+  await page.screenshot({ path: join(results, `pca3-cycle-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-cycle-${size}.png`);
+  // A refused command keeps what was typed (review P3): the mock refuses every new cycle as a duplicate name.
+  await page.getByLabel('New cycle').fill('Cycle 2: Kicks'); await page.getByLabel('New cycle').press('Enter');
+  await page.getByRole('alert').filter({ hasText: 'already has that name' }).waitFor();
+  assert.equal(await page.getByLabel('New cycle').inputValue(), 'Cycle 2: Kicks', 'a refused cycle name stays in the field');
+  await page.getByRole('button', { name: /Adult Karate/ }).click();
+  await page.getByRole('heading', { name: 'Material by rank' }).waitFor();
+  await page.screenshot({ path: join(results, `pca3-rank-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-rank-${size}.png`);
+  await ctx.close();
+});
 await check('Texts > Send: type a name, pick the contact, nothing sent before Send (TE3a)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
@@ -487,6 +573,88 @@ await check('Texts > Send: type a name, pick the contact, nothing sent before Se
   assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true, 'no mobile number, no text');
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
   await shot(page, 'te3a-texts-send-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Texts > History, Templates, Opted out (TE3b ${mode} ${size})`, async () => {
+  theme = mode;
+  let { ctx, page } = await open(viewports[size], '/staff/texts/history');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Text history', exact: true }).first().waitFor();
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.locator('[data-drawer]').getByText('No address on file').first().waitFor();
+  assert.equal(await page.locator('[data-message-history]').evaluate(el => /[0-9a-f]{8}-[0-9a-f]{4}/i.test(el.textContent ?? '')), false, 'no IDs shown');
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-history-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/texts/templates'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Class cancelled' }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Use in Send' }).first().getAttribute('href'), `/staff/texts/send?template=${id(981)}`);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-templates-${mode}-${size}`);
+  await page.getByRole('button', { name: 'New text template' }).click();
+  await page.locator('input[name="templateName"]').fill('Belt testing');
+  await page.locator('textarea[name="templateBody"]').fill('Hi {{first_name}}, belt testing is Saturday. {{nickname}}');
+  await page.getByText('Not a merge tag: {{nickname}}').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Save template' }).isDisabled(), true, 'a stray tag cannot be saved');
+  await shot(page, `te3b-texts-template-editor-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/texts/opted-out'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Replied STOP', { exact: true }).waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te3b-texts-opted-out-${mode}-${size}`); await ctx.close();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('/communications/')), false, 'nothing saved or sent');
+});
+await check('Send shows the message box and merge tags before a contact is picked (owner ask 2026-11-21)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.locator('textarea[name="composeContent"]').waitFor();
+  await page.getByRole('combobox', { name: 'Insert a merge tag' }).waitFor();
+  await page.getByText('Pick a contact above to send.').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true);
+  await shot(page, 'te4-texts-send-empty-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Email > Send, History, Templates, Opted out (TE4 ${mode} ${size})`, async () => {
+  theme = mode;
+  let { ctx, page } = await open(viewports[size], `/staff/email?template=${id(976)}`);
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Send an email', exact: true }).first().waitFor();
+  assert.equal(await page.locator('a[href="/staff/email"]').count() > 0, true, 'Email is in the menu');
+  await page.locator('input[name="composeSubject"]').waitFor();
+  assert.equal(await page.locator('input[name="composeSubject"]').inputValue(), 'Welcome to {{school_name}}, {{first_name}}');
+  await page.locator('input[name="composeQuery"]').fill('Sample');
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.locator('[data-email-preview]').getByText('Welcome to', { exact: false }).waitFor();
+  await page.locator('[data-email-preview]').getByText(', Rowan', { exact: false }).first().waitFor();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-send-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/email/history'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Email history', exact: true }).first().waitFor();
+  await page.getByText('Belt testing this Saturday', { exact: false }).first().waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-history-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/email/templates'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Trial welcome' }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Use in Send' }).first().getAttribute('href'), `/staff/email?template=${id(976)}`);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-templates-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/email/opted-out'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Staff recorded', { exact: true }).waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-opted-out-${mode}-${size}`); await ctx.close();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('/communications/')), false, 'nothing saved or sent');
+});
+await check('Texts > Send starts from a template picked on Templates (TE3b)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, `/staff/texts/send?template=${id(981)}`);
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.locator('input[name="composeQuery"]').fill('Sample');
+  await page.getByRole('button', { name: /Avery Sample/ }).click();
+  await page.getByText('Hi Avery, class is cancelled tonight', { exact: false }).first().waitFor();
+  assert.equal(await page.locator('select[name="useTemplate"]').inputValue(), id(981));
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
+  await shot(page, 'te3b-texts-send-from-template-desktop'); await ctx.close();
 });
 for (const mode of ['modern', 'classic', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Staff opens on names; a name opens its card (${mode} ${size})`, async () => {
   theme = mode; const { ctx, page } = await open(viewports[size], '/staff/team/invitations');
@@ -549,6 +717,56 @@ await check('multi-school staff choose a named school; the dashboard reloads for
   await page.waitForFunction(() => document.querySelector('[data-phase] strong')?.textContent === 'Synthetic South Academy');
   await shot(page, 'u1-school-chosen-desktop'); await ctx.close();
 });
+for (const [mode, size] of [['modern', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`a click outside the Menu box closes it (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    const opener = size === 'phone' ? page.locator('nav[aria-label="Quick navigation"] button[aria-expanded]') : page.locator('button[aria-label="Open navigation"]').or(page.locator('[data-nav-more]')).first();
+    if (size !== 'phone' && !(await opener.isVisible())) await page.evaluate(() => document.querySelector('[data-nav-more]')?.click()); else await opener.click();
+    await page.waitForSelector('[role="dialog"][aria-label="Menu"]');
+    await page.waitForTimeout(150); await shot(page, `gs-menu-open-${mode}-${size}`);
+    const box = await page.locator('[role="dialog"][aria-label="Menu"]').boundingBox();
+    // Beside the box when there is room, else below it.
+    const x = box.x > 40 ? box.x / 2 : box.x + box.width / 2, y = box.x > 40 ? box.y + 200 : box.y + box.height + 15;
+    await page.mouse.click(x, y);
+    await page.waitForSelector('[role="dialog"][aria-label="Menu"]', { state: 'detached' });
+    await page.getByText('Call back trial family').waitFor();
+    await ctx.close();
+  });
+}
+for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`top-bar search finds contacts, leads, classes and pages (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByText('Call back trial family').waitFor();
+    await page.locator('[data-global-search-open]').click();
+    const input = page.getByRole('combobox', { name: 'Search contacts, leads, classes and pages' });
+    await input.waitFor();
+    await page.waitForTimeout(150); await shot(page, `gs-search-empty-${mode}-${size}`);
+    await input.fill('av');
+    await page.waitForSelector('[data-search-group="CONTACTS"] a');
+    await page.waitForSelector('[data-search-group="LEADS"] a');
+    assert.equal(await page.locator('[data-search-group="CONTACTS"] a').first().getAttribute('href'), `/staff/people?person=${id(850)}`);
+    await page.waitForTimeout(100); await shot(page, `gs-search-results-${mode}-${size}`);
+    await input.fill('invoi');
+    await page.waitForSelector('[data-search-group="PAGES"] a[href="/staff/billing/invoices"]');
+    await shot(page, `gs-search-pages-${mode}-${size}`);
+    await noOverflow(page);
+    // Esc closes and returns to the page; Ctrl+K opens again; a click outside closes.
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-global-search]', { state: 'detached' });
+    await page.keyboard.press('Control+k');
+    await input.waitFor();
+    await page.mouse.click(10, viewports[size].height - 10);
+    await page.waitForSelector('[data-global-search]', { state: 'detached' });
+    // Keyboard: arrows and Enter open the highlighted page.
+    await page.keyboard.press('Control+k'); await input.fill('planned abs');
+    await page.waitForSelector('[data-search-group="PAGES"] a');
+    await page.keyboard.press('ArrowDown');
+    await Promise.all([page.waitForURL(/\/staff\/attendance\/planned-absences/), page.keyboard.press('Enter')]);
+    await ctx.close();
+  });
+}
 await check('view switch saves the personal preference', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');

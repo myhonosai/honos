@@ -12,6 +12,7 @@ import { verifyParentBillingView, type ParentBillingView } from '@hon/contracts/
 import { verifyParentClassPassView, type ParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView, type ParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary, type ParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyParentCurriculumApp, type ParentCurriculumApp } from '@hon/contracts/parent-app-curriculum';
 import {
   validateBookParentSchoolBookingTypeInput, validateBookParentSchoolEventSlotInput, validateCancelParentSchoolBookingInput,
   verifyParentSchoolBookingReceipt, verifyParentSchoolBookings,
@@ -23,7 +24,19 @@ import {
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
 } from '@hon/contracts/parent-invoice-pay';
 import { verifyParentSchoolAnnouncements, type ParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentAttendanceStreaks, type ParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
 import { verifyParentProShop, type ParentProShop } from '@hon/contracts/parent-pro-shop';
+import { verifyParentJourneyRecommendations, verifyParentJourneyResponseReceipt, type ParentJourneyRecommendations, type ParentJourneyResponseInput,
+  type ParentJourneyResponseReceipt } from '@hon/contracts/journey-recommendations';
+import { verifyParentReferralLink, verifyParentReferrals, type ParentReferralLink, type ParentReferrals } from '@hon/contracts/family-referrals';
+import {
+  validateRegisterParentPushDeviceInput, validateUnregisterParentPushDeviceInput, verifyParentPushDeviceReceipt, verifyParentPushStatus, verifyParentPushUnregisterReceipt,
+  type ParentPushDeviceReceipt, type ParentPushPlatform, type ParentPushStatus, type ParentPushUnregisterReceipt,
+} from '@hon/contracts/parent-push';
+import {
+  validateOpenParentCheckoutOrderInput, verifyParentCheckoutOrderResult, verifyParentCheckoutOrderStart, verifyParentCheckoutPages,
+  type OpenParentCheckoutOrderInput, type ParentCheckoutOrderResult, type ParentCheckoutOrderStart, type ParentCheckoutPages,
+} from '@hon/contracts/family-checkout';
 
 /**
  * What a screen shows when a read does not return verified data. Every protected read maps to one of these;
@@ -59,7 +72,8 @@ export function classifyFailure(status: number, code: unknown): ParentFailureSta
   return 'unavailable';
 }
 
-function checkedBaseUrl(raw: string): string {
+/** The API base exactly as reads use it (origin + path, e.g. https://app.myhonos.com/api). Sign-in must use the same base. */
+export function checkedBaseUrl(raw: string): string {
   let url: URL;
   try { url = new URL(raw); } catch { throw new Error('The HON API address is not a valid URL.'); }
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '10.0.2.2';
@@ -182,8 +196,49 @@ export function createParentApi(options: ParentApiOptions) {
     /** 0530: the family's open invoices the parent may pay on the school's own processor page (test mode only). */
     /** The school's live announcements (0576) for the one family this sign-in belongs to. No school or family id is sent. */
     announcements: (): Promise<ParentRead<ParentSchoolAnnouncements>> => get('/v1/parent/announcements', dataOf(verifyParentSchoolAnnouncements)),
+    /** Each child's weekly attendance streak (0602) for the one family this sign-in belongs to: name and number only. */
+    attendanceStreaks: (): Promise<ParentRead<ParentAttendanceStreaks>> => get('/v1/parent/attendance-streaks', dataOf(verifyParentAttendanceStreaks)),
+    /** 0603: what the school recommends for each child at the point they have reached on their journey. Read only. */
+    journeyRecommendations: (): Promise<ParentRead<ParentJourneyRecommendations>> => get('/v1/parent/journey-recommendations', dataOf(verifyParentJourneyRecommendations)),
+    /**
+     * 0608 (guardians): "Not now" (HIDDEN, the family stops seeing it) or interest for a named child or a brother or sister
+     * (INTERESTED: the school sees it and gets a lead to follow up). Nothing is sent, bought or booked.
+     */
+    respondJourneyRecommendation: (recommendationId: string, input: ParentJourneyResponseInput, idempotencyKey: string): Promise<ParentWrite<ParentJourneyResponseReceipt>> =>
+      post(`/v1/parent/journey-recommendations/${encodeURIComponent(recommendationId)}/response`, 'parent.journey_recommendations.respond', idempotencyKey, input,
+        data => verifyParentJourneyResponseReceipt(data, { recommendationId, ...input })),
+    /** 0601: whether the school's server sends notifications at all (the app asks for permission only then). */
+    pushStatus: (): Promise<ParentRead<ParentPushStatus>> => get('/v1/parent/push-devices/status', dataOf(verifyParentPushStatus)),
+    /** 0601: this phone's Expo push token for announcement notifications. The server decides the person and school. */
+    registerPushDevice: (expoPushToken: string, platform: ParentPushPlatform, idempotencyKey: string): Promise<ParentWrite<ParentPushDeviceReceipt>> =>
+      post('/v1/parent/push-devices', 'parent.push_device.register', idempotencyKey, validateRegisterParentPushDeviceInput({ expoPushToken, platform }),
+        data => verifyParentPushDeviceReceipt(data, platform)),
+    /** 0601: stop notifications to this phone (sign out). */
+    unregisterPushDevice: (expoPushToken: string, idempotencyKey: string): Promise<ParentWrite<ParentPushUnregisterReceipt>> =>
+      post('/v1/parent/push-devices/unregister', 'parent.push_device.unregister', idempotencyKey, validateUnregisterParentPushDeviceInput({ expoPushToken }),
+        verifyParentPushUnregisterReceipt),
     /** The school's own Shopify products (0581); buying opens the school's store page. No school or family id is sent. */
     proShop: (): Promise<ParentRead<ParentProShop>> => get('/v1/parent/pro-shop', dataOf(verifyParentProShop)),
+    /** 0604: the school's family referral program, the family's counts and referrals (never a friend's name). */
+    referrals: (): Promise<ParentRead<ParentReferrals>> => get('/v1/parent/referrals', dataOf(verifyParentReferrals)),
+    /** 0604: the family's personal link, created once per school; the same link every time. Needs a guardian. */
+    referralLink: (idempotencyKey: string): Promise<ParentWrite<ParentReferralLink>> =>
+      post('/v1/parent/referrals/link', 'parent.referrals.link', idempotencyKey, {}, verifyParentReferralLink, ['PARENT_REFERRALS_NOT_CONFIGURED']),
+    /** 0598: the school's checkout pages the family can buy from, the family's children and latest orders. No school or family id is sent. */
+    checkoutPages: (): Promise<ParentRead<ParentCheckoutPages>> => get('/v1/parent/checkout-pages', dataOf(verifyParentCheckoutPages)),
+    /** Places an order and opens the processor page when it is not free. The server decides who, what and how much. */
+    orderCheckout: (input: OpenParentCheckoutOrderInput, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>
+      post('/v1/parent/checkout-pages/orders', 'parent.checkout.order', idempotencyKey, validateOpenParentCheckoutOrderInput(input), verifyParentCheckoutOrderStart,
+        // The return page is checked before anything is written, so this 503 is a definite no.
+        ['FAMILY_CHECKOUT_NOT_CONFIGURED']),
+    startCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderStart>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/start`, 'parent.checkout.pay.start', idempotencyKey, {}, verifyParentCheckoutOrderStart,
+        ['FAMILY_CHECKOUT_NOT_CONFIGURED']),
+    /** The processor's own answer for the order's payment, as HON recorded it. */
+    confirmCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderResult>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/confirm`, 'parent.checkout.pay.confirm', idempotencyKey, {}, verifyParentCheckoutOrderResult),
+    cancelCheckoutOrder: (orderId: string, idempotencyKey: string): Promise<ParentWrite<ParentCheckoutOrderResult>> =>
+      post(`/v1/parent/checkout-pages/orders/${encodeURIComponent(orderId)}/cancel`, 'parent.checkout.pay.cancel', idempotencyKey, {}, verifyParentCheckoutOrderResult),
     invoicePayments: (): Promise<ParentRead<ParentInvoicePayments>> => get('/v1/parent/invoice-payments', dataOf(verifyParentInvoicePayments)),
     /** Opens (or gets back) the processor page for one invoice. The server decides the amount; the app sends nothing else. */
     startInvoicePayment: (invoiceId: string, idempotencyKey: string): Promise<ParentWrite<ParentInvoicePayStart>> =>
@@ -211,6 +266,8 @@ export function createParentApi(options: ParentApiOptions) {
     classPass: (): Promise<ParentRead<ParentClassPassView>> => get('/v1/parent/classpass', dataOf(verifyParentClassPassView)),
     testingStatus: (): Promise<ParentRead<ParentTestingStatusView>> => get('/v1/parent/testing/status', dataOf(verifyParentTestingStatusView)),
     curriculumLibrary: (): Promise<ParentRead<ParentCurriculumLibrary>> => get('/v1/parent/curriculum-library', dataOf(verifyParentCurriculumLibrary)),
+    /** The Curriculum screen (0610): per child, the current rank or cycle and the material the school shares for it. No ids. */
+    curriculumApp: (): Promise<ParentRead<ParentCurriculumApp>> => get('/v1/parent/curriculum-app', dataOf(verifyParentCurriculumApp)),
     /** Whether Eian answers with the school's AI right now (AI) or only with guided answers (GUIDED), with a closed reason. */
     eianStatus: (): Promise<ParentRead<EianStatus>> => get('/v1/parent/eian/status', dataOf(verifyEianStatus)),
     /**

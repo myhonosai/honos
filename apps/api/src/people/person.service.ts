@@ -108,7 +108,7 @@ export class PersonService {
          VALUES ($1::uuid,$2,$3,'people.person.created',1,'PERSON',$4::uuid,$5,$6::uuid,$7::uuid,$8::jsonb)`,
         [randomUUID(), context.organizationId, context.schoolId, person.id, person.version, context.correlationId, context.requestId, JSON.stringify(payload)],
       );
-      // IC1 (0593): a person staff add by hand records the consent channels they left ticked (both by default).
+      // IC1 (0634): a person staff add by hand records the consent channels they left ticked (both by default).
       await recordStaffIntakeConsent(client, context, { method: 'STAFF_ADD', personId: person.id }, input.consentChannels);
       await client.query(
         `UPDATE hon.idempotency_records SET status='COMPLETED',response_status=201,response_body=$5::jsonb

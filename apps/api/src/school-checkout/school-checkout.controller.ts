@@ -5,7 +5,7 @@ import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 import { SaveCheckoutPageDto, SaveCheckoutSettingsDto } from './school-checkout.dto.js';
-import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout-human-ui.guard.js';
+import { SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout-human-ui.guard.js';
 import { SchoolCheckoutService } from './school-checkout.service.js';
 
 const MANAGE = 'school_checkout.manage';
@@ -37,6 +37,23 @@ export class SchoolCheckoutController {
     this.noQuery(request);
     const context = await this.context(request, organizationId, schoolId, '');
     const data = await this.checkout.pages(context);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
+  /** 0598: family checkout orders of this school, newest first (at most 200). */
+  @Get('orders')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolCheckoutOrdersReadHumanUiGuard)
+  async orders(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, '');
+    const data = await this.checkout.orders(context);
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 

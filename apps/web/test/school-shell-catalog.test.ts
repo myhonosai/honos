@@ -22,7 +22,7 @@ describe('school shell navigation catalog', () => {
     const menu = Object.fromEntries(SCHOOL_SHELL_SECTIONS.map(section => [section.key, schoolShellSectionItems(section.key).map(item => shellText('en', item.titleKey))]));
     expect(menu).toEqual({
       dashboard: ['Dashboard', 'Ask HON'], ai: ['AI Team', 'Conversation AI'], calendar: ['Calendar', 'Attendance'], contacts: ['Contact list', 'Staff'],
-      leads: ['Lead pipeline', 'Automations'], communication: ['Texts', 'Parent app', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Shopify', 'Invoices'],
+      leads: ['Lead pipeline', 'Automations'], communication: ['Texts', 'Email', 'Parent app', 'Facebook & Instagram'], finance: ['Checkout Pages', 'Point of Sale', 'Shopify', 'Invoices'],
       marketing: ['Website', 'Marketing', 'Ads', 'Creative Studio'], ranks: ['Rank setup', 'Tests', 'Mass rank promotion'], business: ['Membership', 'Reports'], community: ['Community'],
     });
     expect(SCHOOL_SHELL_NAV.filter(item => !item.section).map(item => item.key)).toEqual(['settings']);
@@ -72,7 +72,7 @@ describe('school shell navigation catalog', () => {
 
   it('puts every former page where the owner\'s menu says', () => {
     const where: Record<string, string> = {
-      '/staff/team/invitations': 'staff', '/staff/roles': 'staff', '/staff/texts': 'messages', '/staff/texts/send': 'messages', '/staff/conversations/train-ai': 'conversationAi', '/staff/family-messages': 'parentApp',
+      '/staff/team/invitations': 'staff', '/staff/roles': 'staff', '/staff/texts': 'messages', '/staff/texts/send': 'messages', '/staff/email': 'email', '/staff/email/opted-out': 'email', '/staff/conversations/train-ai': 'conversationAi', '/staff/family-messages': 'parentApp',
       '/staff/marketing/social': 'social', '/staff/marketing/campaigns': 'marketing', '/staff/champions-club': 'marketing', '/staff/creative-studio': 'creative', '/staff/marketing/ads': 'ads',
       '/staff/automations': 'automation', '/staff/automation/rules': 'automation', '/staff/operations': 'analytics', '/staff/retention/review': 'analytics', '/community/marketplace': 'community',
       '/staff/testing/promotion-decisions': 'promotions', '/staff/billing/payment-processors': 'settings', '/staff/attendance/planned-absences': 'attendance',

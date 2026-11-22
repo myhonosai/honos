@@ -13,7 +13,7 @@ import type {
   CrmAppointmentSummary,
   CrmAppointmentType,
 } from '@hon/contracts';
-import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
+import { assertCurrentCrmAuthority, holdCrmTrialAuthority } from './crm-authority-recheck.js';
 import { assertCrmEntitlementInEffect, resolveCrmReadAccess, type CrmReadAccess } from './crm-entitlement.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -165,6 +165,7 @@ const APPOINTMENT_COLUMNS = `
   updated_at AS "updatedAt"`;
 
 const MAX_RECONCILIATION_ROWS = 50;
+const SCHEDULE_REFUSAL = 'HON trial scheduling is no longer authorized for this school.';
 
 function toSummary(row: TrialAppointmentRow): CrmAppointmentSummary {
   return {
@@ -220,10 +221,12 @@ export class TrialAppointmentService {
       // devices or a lost response retried with a new key cannot each create a SCHEDULED trial.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended('hon.crm.trial:' || $1::text, 0))", [leadId]);
 
-      // The controller's authorization ran before this lock, and the wait can be long: re-resolve it now, before any
-      // idempotency reservation, appointment, audit or outbox row exists.
-      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.schedule',
-        'HON trial scheduling is no longer authorized for this school.');
+      // The controller's authorization ran before this lock, and the wait can be long. Hold the authority rows first
+      // (lead lock, then IAM rows, the reviewed order), then re-resolve: a revocation or suspension that committed
+      // during the wait is refused here, and one that arrives later waits for this transaction to end, so the
+      // idempotency waits below cannot let the trial commit on withdrawn authority.
+      await holdCrmTrialAuthority(client, authority.externalSubject, context, SCHEDULE_REFUSAL);
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.schedule', SCHEDULE_REFUSAL);
       await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required for trial scheduling.');
 
       const reservation = await client.query<{ id: string }>(
@@ -257,6 +260,8 @@ export class TrialAppointmentService {
           });
         }
         if (record.status === 'COMPLETED' && record.response_body) {
+          // Final check after the idempotency row-lock wait; the hold makes it stable until commit.
+          await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.schedule', SCHEDULE_REFUSAL);
           return { appointment: record.response_body, replayed: true };
         }
         throw new ConflictException({
@@ -383,6 +388,8 @@ export class TrialAppointmentService {
         ],
       );
 
+      // Final authority check before the commit that publishes the trial (TA2).
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.schedule', SCHEDULE_REFUSAL);
       return { appointment, replayed: false };
     });
   }

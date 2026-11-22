@@ -372,6 +372,40 @@ try {
   const paidC = await success(() => record(RECORDER, inv.C, goodC), 'record on C after access is restored');
   ok(paidC.data.invoice.balanceMinor === 600 && paidC.data.payment.currency === 'EUR', 'C partially paid in EUR');
 
+  // 7b. 0630 invoice INSERT status guard (launch-readiness P2): the restricted runtime, which keeps INSERT on hon.invoices for
+  // human drafting, can create an invoice only as DRAFT; an INSERT as PAID (no payment records, zero balance shown), ISSUED,
+  // VOID or UNCOLLECTIBLE is refused in scope, and nothing is written. Trusted owner writes (fixtures, definer paths) are unchanged.
+  {
+    const draftRow = (await sql('SELECT school_id, billing_account_id, currency::text AS currency FROM hon.invoices WHERE id=$1', [inv.draft])).rows[0];
+    const before = (await sql('SELECT count(*)::integer AS n FROM hon.invoices WHERE organization_id=$1', [ids.organization])).rows[0].n;
+    const runtimeInsert = async (status) => {
+      await runtime.query('BEGIN');
+      try {
+        await runtime.query("SELECT set_config('app.hon_organization_id',$1,true), set_config('app.hon_school_id',$2,true)", [ids.organization, draftRow.school_id]);
+        await runtime.query('SELECT hon.require_tenant_context()');
+        await runtime.query(`INSERT INTO hon.invoices(organization_id,school_id,billing_account_id,status,currency,subtotal_minor,total_minor)
+          VALUES($1,$2,$3,$4::hon.invoice_status,$5::char(3),900,900)`, [ids.organization, draftRow.school_id, draftRow.billing_account_id, status, draftRow.currency]);
+        return 'inserted';
+      } catch (error) {
+        return error.message;
+      } finally {
+        await runtime.query('ROLLBACK');
+      }
+    };
+    for (const status of ['PAID', 'ISSUED', 'VOID', 'UNCOLLECTIBLE']) {
+      const outcome = await runtimeInsert(status);
+      ok(/INVOICE_INSERT_STATUS_GUARD/.test(outcome), `runtime INSERT of an in-scope ${status} invoice is refused (${outcome})`);
+    }
+    ok(await runtimeInsert('DRAFT') === 'inserted', 'runtime INSERT of an in-scope DRAFT invoice is still allowed (rolled back)');
+    const after = (await sql('SELECT count(*)::integer AS n FROM hon.invoices WHERE organization_id=$1', [ids.organization])).rows[0].n;
+    ok(after === before, 'refused runtime invoice INSERTs wrote nothing');
+    const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+    const section = verify.split('-- Invoice INSERT status guard exact verification (0630')[1]?.split('-- End invoice INSERT status guard exact verification.')[0];
+    ok(section, 'the 0630 011 section exists');
+    await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE));
+    ok(true, 'the 0630 011 section passes against this fixture');
+  }
+
   // 8. Settings-free triggers: no owner write can mark paid, reopen, rewrite or delete outside the commands.
   await sql('BEGIN');
   await rejectsSql(() => sql("UPDATE hon.invoices SET status='PAID' WHERE id=$1", [inv.C]), /INVOICE_PAYMENT_STATUS_GUARD/, 'PAID without covering records');
