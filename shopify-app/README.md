@@ -52,8 +52,8 @@ unchanged, nothing `(removed)`. Before releasing it, HON's live API must already
 and eventually drop the subscriptions.
 Released as `hon-os-4` on 2026-11-21.
 
-Next release (prepared, not released): adds the optional scope `read_shopify_payments_payouts` (Allow finance: the
-payouts list). Expected: only `access_scopes` changes; URLs, webhooks and the extension stay as they are.
+Released as `hon-os-5` on 2026-11-22: adds the optional scope `read_shopify_payments_payouts` (Allow finance: the
+payouts and transactions lists). Only `access_scopes` changed.
 The `orders/*` topics carry customer data: Shopify needs protected customer data access approved for the app in the
 Dev Dashboard (API access requests) first, or the deploy can refuse those subscriptions.
 The orders HON creates carry a shipping name and address. The app's protected customer data request covers Level 1
