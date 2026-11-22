@@ -253,6 +253,10 @@
       "title": "HON | Hours"
     },
     {
+      "path": "/staff/marketing/blasts",
+      "title": "HON | Blasts"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
