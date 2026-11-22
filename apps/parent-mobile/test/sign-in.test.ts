@@ -60,3 +60,14 @@ describe('native sign-in', () => {
     }
   });
 });
+
+describe('sign-in uses the same API base as the reads', () => {
+  it('keeps the /api path of the production address, so the exchange reaches the API through the web', async () => {
+    const { checkedBaseUrl } = require('../src/api/client');
+    const base = checkedBaseUrl('https://app.example.test/api');
+    expect(base).toBe('https://app.example.test/api');
+    const d = deps({ apiBaseUrl: base });
+    await signIn(d);
+    expect((d.fetchImpl as jest.Mock).mock.calls[0][0]).toBe(`https://app.example.test/api/v1/auth/mobile/session`);
+  });
+});

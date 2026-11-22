@@ -62,7 +62,7 @@ export interface ShopifyAdapter {
   createDraft(shop: string, accessToken: string, input: ShopifyDraftInput): Promise<{ productId: string; variantId: string }>;
   updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields): Promise<void>;
   updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void>;
-  /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts. */
+  /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts; payouts also need read_shopify_payments_payouts (left out when refused). */
   finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot>;
   /**
    * TB2: the school's storefront settings as one app-data metafield on HON's own app installation, which HON's theme app
@@ -290,10 +290,14 @@ const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   }
 }`;
 const SHOP_QUERY = 'query HonShop { shop { name currencyCode } }';
-const FINANCE_QUERY = `query HonFinance { shopifyPaymentsAccount { activated balance { amount currencyCode }
-  payouts(first: 20, reverse: true) { nodes { id status transactionType issuedAt net { amount currencyCode } } }
+// SH-F1. Payouts (and a transaction's payout) need read_shopify_payments_payouts on top of read_shopify_payments_accounts
+// (seen on the test store 2026-11-22: ACCESS_DENIED at shopifyPaymentsAccount.payouts). A store that granted only the
+// first gets the plain read: the balance and the transactions, with no payouts.
+const financeQuery = (payouts: boolean) => `query ${payouts ? 'HonFinance' : 'HonFinancePlain'} { shopifyPaymentsAccount { activated balance { amount currencyCode }${payouts ? `
+  payouts(first: 20, reverse: true) { nodes { id status transactionType issuedAt net { amount currencyCode } } }` : ''}
   balanceTransactions(first: 50, reverse: true) { nodes { id type test transactionDate amount { amount currencyCode }
-    fee { amount currencyCode } net { amount currencyCode } associatedPayout { id } } } } }`;
+    fee { amount currencyCode } net { amount currencyCode }${payouts ? ' associatedPayout { id }' : ''} } } } }`;
+const FINANCE_QUERY = financeQuery(true), FINANCE_PLAIN_QUERY = financeQuery(false);
 const PRODUCT_FIELDS = `id title status vendor productType handle featuredMedia { preview { image { url } } }
     variants(first: 100) { nodes { id title sku barcode price compareAtPrice inventoryQuantity position inventoryItem { tracked unitCost { amount } } } }`;
 const PRODUCT_QUERY = `query HonProduct($id: ID!) { product(id: $id) { ${PRODUCT_FIELDS} } }`;
@@ -341,7 +345,7 @@ export function financeFromAccount(v: unknown): ShopifyFinanceSnapshot {
   const seen = new Set<string>();
   const balances = list(a.balance).slice(0, 10).map(moneyV2).filter(b => !seen.has(b.currency) && !!seen.add(b.currency))
     .map(b => ({ currency: b.currency, amount: b.amount }));
-  const payouts = list(obj(a.payouts).nodes).slice(0, 20).map(n => {
+  const payouts = (a.payouts === undefined ? [] : list(obj(a.payouts).nodes)).slice(0, 20).map(n => {
     const p = obj(n), net = moneyV2(p.net);
     const status = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'].includes(p.status as string) ? p.status as ShopifyFinanceSnapshot['payouts'][number]['status'] : bad();
     const direction: 'DEPOSIT' | 'WITHDRAWAL' = p.transactionType === 'DEPOSIT' || p.transactionType === 'WITHDRAWAL' ? p.transactionType : bad();
@@ -499,7 +503,14 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
   }
 
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
-    return financeFromAccount((await this.graphql(shop, accessToken, FINANCE_QUERY, {})).shopifyPaymentsAccount);
+    let data: Record<string, unknown>;
+    try { data = await this.graphql(shop, accessToken, FINANCE_QUERY, {}); }
+    catch (e) {
+      // Shopify refused part of the read (payouts without their scope): the balance and transactions alone. A second refusal is the failure.
+      if (!(e instanceof ShopifyProviderError) || e.failure !== 'INVALID_RESPONSE') throw e;
+      data = await this.graphql(shop, accessToken, FINANCE_PLAIN_QUERY, {});
+    }
+    return financeFromAccount(data.shopifyPaymentsAccount);
   }
 
   async setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void> {
@@ -727,7 +738,11 @@ export class FakeShopify implements ShopifyAdapter {
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
     // Shopify refuses this read when the store never granted the scope (a top-level ACCESS_DENIED error).
     this.calls.push('finance:' + shop); this.check(shop, accessToken, 'access', 'read_shopify_payments_accounts');
-    return structuredClone(this.store(shop).finance);
+    const finance = structuredClone(this.store(shop).finance);
+    // Like Shopify: payouts need their own scope; without it the plain read has the balance and transactions only.
+    try { this.check(shop, accessToken, 'access', 'read_shopify_payments_payouts'); }
+    catch { return { ...finance, payouts: [], transactions: finance.transactions.map(t => ({ ...t, payoutId: null })) }; }
+    return finance;
   }
   async catalog(shop: string, accessToken: string) {
     this.calls.push('catalog:' + shop); this.check(shop, accessToken, 'access');

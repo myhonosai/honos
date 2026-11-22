@@ -44,3 +44,38 @@ export function compareChain(repositoryFiles, appliedFiles) {
     supersededApplied: SUPERSEDED_CRM_FILENAMES.filter((file) => applied.has(file)),
   };
 }
+
+/**
+ * Applies one migration and records it in hon.schema_migrations in the SAME transaction.
+ *
+ * Every accepted migration file is exactly `BEGIN; ... COMMIT;` (verify-migrations.mjs enforces this and the bytes are
+ * checksum-locked). Sending the file as-is commits the migration before the ledger INSERT, so a crash or lost connection
+ * between the two leaves the change applied but unrecorded, and the next run replays non-idempotent SQL. Instead the
+ * in-memory text loses only its final `COMMIT;` (the file is untouched), the ledger row is written inside the migration's
+ * own transaction, and one COMMIT publishes both. Any failure rolls both back.
+ */
+export function withoutFinalCommit(file, sql) {
+  const trimmed = sql.trimEnd();
+  if (!sql.trimStart().startsWith('BEGIN;') || !trimmed.endsWith('COMMIT;')) {
+    throw new Error(`${file} must use an explicit BEGIN/COMMIT transaction.`);
+  }
+  const body = trimmed.slice(0, -'COMMIT;'.length);
+  // A second transaction-control statement would commit part of the file early and defeat the atomic ledger row.
+  if (/^\s*(COMMIT|ROLLBACK|START\s+TRANSACTION|BEGIN)\s*;/im.test(body.slice(body.indexOf('BEGIN;') + 'BEGIN;'.length))) {
+    throw new Error(`${file} contains more than one transaction boundary.`);
+  }
+  return body;
+}
+
+export async function applyMigrationAtomically(client, file, sql) {
+  if (!/^\d{4}_[A-Za-z0-9_]+\.sql$/.test(file)) throw new Error(`Unexpected migration filename: ${file}`);
+  const body = withoutFinalCommit(file, sql);
+  try {
+    await client.query(body);
+    await client.query('INSERT INTO hon.schema_migrations (filename) VALUES ($1)', [file]);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  }
+}

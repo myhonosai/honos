@@ -284,6 +284,16 @@ owner presses Allow editing and the returned token carries the scopes.
 **Allow finance** needs `read_shopify_payments_accounts`, and **Allow orders** needs `write_orders`. Both are *optional*
 scopes in `shopify-app/shopify.app.toml`, released in app version `hon-os-4` (2026-11-21).
 
+Seen on the test store on 2026-11-22 (refusal log): with `read_shopify_payments_accounts` alone Shopify answers the
+balance but refuses `shopifyPaymentsAccount.payouts` (ACCESS_DENIED), which failed the whole finance read. Payouts need
+`read_shopify_payments_payouts`. So Allow finance now asks for both scopes (the second is in the app file for the next
+app version, not released yet; until then Shopify's request page may not offer it), and the adapter reads finance
+without payouts and without each transaction's payout when Shopify refuses the full read. `financeAllowed` still means
+the accounts scope. The Finance screen cannot tell "no payouts" from "payouts not allowed", so an empty payouts list
+shows an **Allow payouts** button that runs Allow finance again.
+The same log shows why the catalog read with stock locations is refused: it needs `read_locations`, which the app does
+not ask for; the catalog keeps using the plain read (no fulfilment source) until that scope is decided.
+
 Settled on the test store on 2026-11-22: with managed installation, `/admin/oauth/authorize` with the scope in `scope=`
 does **not** grant an optional scope (the owner comes back connected, without it). Shopify's request address does
 (`https://admin.shopify.com/store/{store}/oauth/install?client_id=...&optional_scopes=...`); it returns the owner to the

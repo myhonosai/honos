@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "3e1a8b5f8d8feceefe3ba9b3608b696142583b0716712444d16e39d176f284fd",
+  "chainSha256": "7010e3e4d0269239462852bdefdbe088cd04f3d15560bfb2f951a2eca4878397",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -821,6 +821,22 @@
     {
       "file": "0617_school_creative_designs.sql",
       "sha256": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139"
+    },
+    {
+      "file": "0629_crm_trial_authority_hold.sql",
+      "sha256": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043"
+    },
+    {
+      "file": "0630_invoice_insert_status_guard.sql",
+      "sha256": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec"
+    },
+    {
+      "file": "0631_class_booking_lock_identity_plane.sql",
+      "sha256": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe"
+    },
+    {
+      "file": "0632_class_sessions_function_only_reads.sql",
+      "sha256": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e"
     }
   ]
 }
