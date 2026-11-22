@@ -144,6 +144,32 @@ test('the upload transport admits only one exact path, picture types and sizes u
   assert.equal(MEDIA_UPLOADS_IN_FLIGHT, 4);
 });
 
+test('the upload transport refuses a request without the browser command before reading, and slow bodies cannot hold the slots', async () => {
+  const { PassThrough } = require('node:stream');
+  const env = { HON_PUBLIC_ORIGIN: 'https://app.example.test', HON_PUBLIC_CLIENT_IP_HOPS: '1' };
+  const mw = schoolMediaUploadTransport(env, 50);
+  const path = `/v1/organizations/${randomUUID()}/schools/${randomUUID()}/marketing/media/upload`;
+  const good = { 'content-type': 'image/png', 'content-length': '4', origin: 'https://app.example.test', 'x-hon-human-command': 'marketing_media.upload', cookie: 'hon_session=x' };
+  for (const drop of ['origin', 'x-hon-human-command', 'cookie']) {
+    const headers = { ...good }; delete headers[drop];
+    assert.deepEqual(await run(mw, { method: 'POST', path, headers }).then(r => [r.status, r.body.code]), [403, 'HUMAN_UI_REQUIRED'], drop);
+  }
+  assert.equal((await run(schoolMediaUploadTransport({}, 50), { method: 'POST', path, headers: good })).status, 403, 'no configured origin');
+  const slow = Object.assign(new PassThrough(), { method: 'POST', path, originalUrl: path, headers: { ...good, 'x-forwarded-for': '203.0.113.7' } });
+  const resListeners = {};
+  mw(slow, { setHeader() {}, on: (e, fn) => { resListeners[e] = fn; }, status() { return this; }, json() {} }, () => assert.fail('a body that never arrives is not admitted'));
+  const second = await run(mw, { method: 'POST', path, headers: { ...good, 'x-forwarded-for': '203.0.113.7' } });
+  assert.deepEqual([second.status, second.body.code], [503, 'MEDIA_BUSY'], 'one upload in flight per client');
+  await new Promise(r => setTimeout(r, 120));
+  assert.equal(slow.destroyed, true, 'the slow body is cut off at the deadline');
+  resListeners.close?.();
+  const again = Object.assign(new PassThrough(), { method: 'POST', path, originalUrl: path, headers: { ...good, 'x-forwarded-for': '203.0.113.7' } });
+  const admitted = new Promise(resolve => mw(again, { setHeader() {}, on() {}, status() { return this; }, json: (body) => resolve(body) }, () => resolve('next')));
+  again.end(Buffer.from([1, 2, 3, 4]));
+  assert.equal(await admitted, 'next', 'the slot is free again and a whole body is admitted');
+  assert.deepEqual([...again.body], [1, 2, 3, 4]);
+});
+
 test('the public picture link admits one GET path with a 43-character token and limits each client', async () => {
   const limit = new PublicClientLimit(1, () => 0);
   const mw = publicMediaTransport(limit);
@@ -159,7 +185,13 @@ test('the public picture link admits one GET path with a 43-character token and 
 
 function service({ storage = MediaStorage.withSettings(null, async () => new Response('{}')), answers = [] } = {}) {
   const calls = [];
-  const client = { query: async (sql, values) => { calls.push([sql, values]); if (sql.startsWith('SELECT hon.')) return { rows: [{ data: answers.shift() }] }; return { rows: [] }; } };
+  const client = { query: async (sql, values) => {
+    calls.push([sql, values]);
+    if (!sql.startsWith('SELECT hon.')) return { rows: [] };
+    const answer = answers.shift();
+    if (answer instanceof Error) throw answer;
+    return { rows: [{ data: answer }] };
+  } };
   const database = {
     withTenantTransaction: async (_c, fn) => fn(client), withTenantReadOnlyTransaction: async (_c, fn) => fn(client),
     runPublicEventCall: async (sql, values) => { calls.push([sql, values]); return answers.shift(); },
@@ -205,6 +237,19 @@ test('an upload stores the cleaned bytes under the database key and only then co
   const bad = service({ storage, answers: [{ ...pending, objectKey: 'media/other' }] });
   await assert.rejects(bad.media.upload(context(), { title: 'Open house', mediaType: 'image/png', bytes: image }), status(503, 'SCHOOL_MEDIA_UNAVAILABLE'));
   assert.equal(stored.length, 1);
+});
+
+test('a picture deleted while its bytes were being stored has its file removed again, not left in the bucket', async () => {
+  const requests = [];
+  const storage = MediaStorage.withSettings({ baseUrl: 'https://example.supabase.co', key: 'k'.repeat(40), bucket: 'hon-media' }, async (url, init) => { requests.push({ url, method: init.method, body: init.body }); return new Response('{}'); });
+  const pending = { assetId: ASSET, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 1, width: 2, height: 2, state: 'PENDING', version: 1, linkToken: null,
+    createdAt: '2026-11-22T10:00:00.000Z', readyAt: null, updatedAt: '2026-11-22T10:00:00.000Z' };
+  const notPending = Object.assign(new Error('MEDIA_NOT_PENDING'), { code: '55000' });
+  const { media, calls } = service({ storage, answers: [{ ...pending, objectKey: `media/${ASSET}` }, notPending, { assetId: ASSET, state: 'REMOVED' }] });
+  await assert.rejects(media.upload(context(), { title: 'Open house', mediaType: 'image/png', bytes: png(2, 2) }), status(409, 'MEDIA_DELETED'));
+  assert.deepEqual(requests.map(r => r.method), ['POST', 'DELETE'], 'stored, then removed again');
+  assert.deepEqual(JSON.parse(requests[1].body), { prefixes: [`media/${ASSET}`] });
+  assert.match(calls.filter(([sql]) => sql.startsWith('SELECT hon.')).at(-1)[0], /confirm_school_media_removed/);
 });
 
 test('the public link signs only what the database names, and answers nothing for an unknown token', async () => {

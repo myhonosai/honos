@@ -48,8 +48,10 @@ by the API and again by the database.
 ## Upload
 
 1. The upload transport admits only `POST .../marketing/media/upload` with `Content-Type` image/jpeg, image/png or image/gif,
-   a `Content-Length` of 1 byte to 25 MiB, no compression and no query string. At most four uploads are read into memory
-   at once per API process (`MEDIA_BUSY` otherwise).
+   a `Content-Length` of 1 byte to 25 MiB, no compression and no query string. Before reading the body it also needs a
+   cookie, the configured Origin and the upload's `X-HON-Human-Command` (`403 HUMAN_UI_REQUIRED` otherwise). At most four
+   uploads are read into memory at once per API process, and one per client when the client address is known
+   (`HON_PUBLIC_CLIENT_IP_HOPS`); `MEDIA_BUSY` otherwise. A body must arrive within 150 seconds or the connection is closed.
 2. The upload guard is the browser human-command guard (exact Origin, same-origin fetch, `X-HON-Human-Command:
    marketing_media.upload`, no source or delegation headers) with picture body types instead of JSON. The title travels
    percent-encoded in `X-HON-Media-Title`.
@@ -67,6 +69,8 @@ by the API and again by the database.
    the picture to READY.
 7. If storing fails, the API deletes the reservation and removes any partial file (best effort), and answers
    `MEDIA_STORAGE_FAILED`.
+8. If the picture was deleted while its bytes were being stored, the finish step finds it no longer PENDING; the API removes
+   the file again (best effort, then confirms REMOVED) and answers `409 MEDIA_DELETED`, so no file is left in the bucket.
 
 A replay with the same Idempotency-Key answers with the picture as it is now: READY is returned without storing again;
 PENDING is stored and confirmed; a deleted picture answers `409 MEDIA_DELETED`.

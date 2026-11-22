@@ -100,8 +100,19 @@ export class SchoolMediaService {
       if (error instanceof MediaStorageOff) throw storageOff();
       throw storageFailed();
     }
-    const ready = await this.write(context, 'SELECT hon.finish_school_media_upload($1,$2::jsonb,$3::uuid,$4::uuid) AS data',
-      [JSON.stringify({ assetId, byteSize: image.byteSize, sha256: image.sha256 })], value => this.asset(value, assetId));
+    let ready: SchoolMediaAsset;
+    try {
+      ready = await this.write(context, 'SELECT hon.finish_school_media_upload($1,$2::jsonb,$3::uuid,$4::uuid) AS data',
+        [JSON.stringify({ assetId, byteSize: image.byteSize, sha256: image.sha256 })], value => this.asset(value, assetId));
+    } catch (error) {
+      // Deleted while its bytes were being stored (states only move forward): the delete may have removed the file before the
+      // put finished, so remove it again (best effort) rather than leave an orphan in the bucket.
+      if (error instanceof ConflictException && (error.getResponse() as { code?: unknown }).code === 'MEDIA_NOT_PENDING') {
+        await this.removeFile(context, assetId, begun.objectKey);
+        throw new ConflictException({ code: 'MEDIA_DELETED', detail: 'This picture was deleted.' });
+      }
+      throw error;
+    }
     if (ready.state !== 'READY') unverified();
     return { asset: ready, replayed: begun.replayed };
   }

@@ -1,18 +1,26 @@
 import { raw, type NextFunction, type Request, type Response } from 'express';
-import { SCHOOL_MEDIA_LIMITS, SCHOOL_MEDIA_TYPES } from '@hon/contracts';
-import { sharedPublicClientLimit, type PublicClientLimit } from '../schedule/public-client-limit.js';
+import { SCHOOL_MEDIA_COMMANDS, SCHOOL_MEDIA_LIMITS, SCHOOL_MEDIA_TYPES } from '@hon/contracts';
+import { configuredPublicOrigin } from '@hon/auth';
+import { publicClientAddress, publicClientIpHops, sharedPublicClientLimit, type PublicClientLimit } from '../schedule/public-client-limit.js';
 
 const UPLOAD_PATH = /^\/v1\/organizations\/[0-9a-f-]{36}\/schools\/[0-9a-f-]{36}\/marketing\/media\/upload$/i;
 /** At most this many pictures are being read into memory at once in one API process (25 MB each). */
 export const MEDIA_UPLOADS_IN_FLIGHT = 4;
+/** A picture body must arrive within this time, or the connection is closed and its slot freed. */
+export const MEDIA_UPLOAD_BODY_MS = 150_000;
 
 /**
  * 0628 staff upload transport: only POST .../marketing/media/upload, only a JPEG, PNG or GIF body of at most 25 MiB, not
  * compressed, and no more than four uploads in flight per process. Everything else on that path is refused before the body
- * is read. The guard, identity and database checks follow in the controller.
+ * is read, including a request without a cookie, the configured Origin or the upload's X-HON-Human-Command. So that slow
+ * bodies cannot hold the slots, a body must arrive within MEDIA_UPLOAD_BODY_MS, and when the client address is known
+ * (HON_PUBLIC_CLIENT_IP_HOPS) one client has at most one upload in flight. The guard, identity and database checks follow
+ * in the controller.
  */
-export function schoolMediaUploadTransport() {
+export function schoolMediaUploadTransport(env: Record<string, string | undefined> = process.env, bodyMs = MEDIA_UPLOAD_BODY_MS) {
   const parser = raw({ type: () => true, limit: SCHOOL_MEDIA_LIMITS.maxBytes, inflate: false });
+  const hops = publicClientIpHops(env);
+  const clients = new Set<string>();
   let inFlight = 0;
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!/\/marketing\/media\/upload\/?$/i.test(req.path)) { next(); return; }
@@ -25,10 +33,20 @@ export function schoolMediaUploadTransport() {
       res.status(400).json({ code: 'VALIDATION_FAILED' }); return;
     }
     if (length > SCHOOL_MEDIA_LIMITS.maxBytes) { res.status(413).json({ code: 'MEDIA_TOO_LARGE', detail: 'A picture can be at most 25 MB.' }); return; }
-    if (inFlight >= MEDIA_UPLOADS_IN_FLIGHT) { res.setHeader('Retry-After', '5'); res.status(503).json({ code: 'MEDIA_BUSY', detail: 'Other pictures are uploading. Try again in a moment.' }); return; }
+    let origin: string | undefined;
+    try { origin = configuredPublicOrigin(env); } catch { /* fail closed */ }
+    if (!origin || req.headers.origin !== origin || req.headers['x-hon-human-command'] !== SCHOOL_MEDIA_COMMANDS.upload || !req.headers.cookie) {
+      res.status(403).json({ code: 'HUMAN_UI_REQUIRED' }); return;
+    }
+    const client = publicClientAddress(req.headers['x-forwarded-for'], hops);
+    const busy = () => { res.setHeader('Retry-After', '5'); res.status(503).json({ code: 'MEDIA_BUSY', detail: 'Other pictures are uploading. Try again in a moment.' }); };
+    if (inFlight >= MEDIA_UPLOADS_IN_FLIGHT || (client !== null && clients.has(client))) { busy(); return; }
     inFlight += 1;
+    if (client !== null) clients.add(client);
     let released = false;
-    const release = () => { if (!released) { released = true; inFlight -= 1; } };
+    const deadline = setTimeout(() => { req.destroy(); }, bodyMs);
+    deadline.unref?.();
+    const release = () => { if (!released) { released = true; inFlight -= 1; if (client !== null) clients.delete(client); clearTimeout(deadline); } };
     res.on('finish', release); res.on('close', release);
     parser(req, res, (error?: unknown) => {
       if (error) {
@@ -36,6 +54,7 @@ export function schoolMediaUploadTransport() {
         res.status(status).json({ code: status === 413 ? 'MEDIA_TOO_LARGE' : 'VALIDATION_FAILED' }); return;
       }
       if (!Buffer.isBuffer(req.body) || req.body.length !== length) { res.status(400).json({ code: 'VALIDATION_FAILED' }); return; }
+      clearTimeout(deadline);
       next();
     });
   };
