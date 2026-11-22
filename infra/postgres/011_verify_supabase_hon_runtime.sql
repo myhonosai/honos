@@ -6131,3 +6131,17 @@ BEGIN
     RAISE EXCEPTION 'Creative design permissions missing or changed'; END IF;
 END $$;
 -- End creative designs exact verification.
+
+-- CRM trial authority hold exact verification (0629, launch-readiness P1): one runtime entry point, fixed body and posture.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.hold_crm_trial_authority(text)'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='6d0ab855befc8721fab5e656f4472c76'
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe CRM trial authority hold'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='hold_crm_trial_authority')<>1 THEN
+    RAISE EXCEPTION 'Unexpected CRM trial authority hold overload'; END IF;
+END $$;
+-- End CRM trial authority hold exact verification.
