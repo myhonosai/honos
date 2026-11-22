@@ -10,7 +10,7 @@ import { RosterSessionDetail } from '../class-roster/view';
 import { ClassBookingWorkbench } from '../class-booking-workbench';
 import { EventError, schoolEventsApi, type SchoolEventsApi } from '../school-events/http';
 import type { CreateCalendarCardInput } from '@hon/contracts';
-import { CalendarCardForm, initialCardForm } from './card-form';
+import { CalendarCardForm, firstRosterDate, initialCardForm } from './card-form';
 import { CardError, calendarCardsApi, type CalendarCardsApi } from './cards-http';
 import { calendarText, type CalendarKey } from './copy';
 import { zonedInstant } from './drag';
@@ -67,6 +67,10 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   const [creating, setCreating] = useState<Creating | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
+  // The first class of what was just added, with the result line: the page scrolls to it, or says when it cannot show it.
+  const [fresh, setFresh] = useState<{ id: string; text: string; shown?: boolean } | null>(null);
+  // Only a read that started after the save counts: the calendar shown at the moment of saving is the old one.
+  const freshRead = useRef(false);
   const writes = useRef(0);
   const [refresh, setRefresh] = useState(0);
   const privacy = useRef(0), mounted = useRef(false), generation = useRef(0), lastSchool = useRef<string | null>(null);
@@ -78,12 +82,12 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); retire(); privacy.current++;
     setClasses({ state: 'LOADING' }); setEvents({ state: 'LOADING' }); setSelected(null); setBooking(false); detail.clear();
-    setCards({ state: 'LOADING' }); setCreating(null); setPending(null); setMessage(null); writes.current++;
+    setCards({ state: 'LOADING' }); setCreating(null); setPending(null); setMessage(null); setFresh(null); writes.current++;
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setAnchor(null); setSelected(null); setBooking(false); setClassFilter([]);
-      setProgramFilter([]); setInstructorFilter([]); setCreating(null); setPending(null); setMessage(null); writes.current++; }
+      setProgramFilter([]); setInstructorFilter([]); setCreating(null); setPending(null); setMessage(null); setFresh(null); writes.current++; }
     if (school !== null) lastSchool.current = school;
   }, [school]);
 
@@ -195,15 +199,38 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     cardsApi.create(scope, input, key, signalFor(abort), owned).then((receipt) => {
       if (!owned()) return;
       setCreating(null);
-      const text = receipt.repeats ? t('createdRoster', { name: input.name, n: String(receipt.created) }) : t('createdOne', { name: input.name });
-      setMessage({ text: receipt.skippedDates.length ? `${text} ${t('createdSkipped', { n: String(receipt.skippedDates.length) })}` : text });
-      setAnchor(input.localDate); setRefresh((n) => n + 1);
+      // A roster begins on its first class still ahead (0251 fill): one started today at an earlier time begins next week,
+      // so the calendar goes to that day rather than to a week where nothing new shows.
+      const first = receipt.repeats && zone ? firstRosterDate(input, zone) ?? input.localDate : input.localDate;
+      let text = receipt.repeats ? t('createdRoster', { name: input.name, n: String(receipt.created) }) : t('createdOne', { name: input.name });
+      if (receipt.repeats && receipt.created > 0) text = `${text} ${t('createdFirst', { day: dayName(first) })}`;
+      if (receipt.skippedDates.length) text = `${text} ${t('createdSkipped', { n: String(receipt.skippedDates.length) })}`;
+      setMessage({ text });
+      // A filter chosen before could hide the new class.
+      setClassFilter([]); setProgramFilter([]); setInstructorFilter([]);
+      freshRead.current = false; setFresh(receipt.created > 0 && receipt.sessionId ? { id: receipt.sessionId, text } : null);
+      setAnchor(first); setRefresh((n) => n + 1);
     }, (error) => {
       if (!owned()) return;
       setCreating((c) => c ? { ...c, busy: false, error: errorText(error), key: newKey() } : c);
       if (error instanceof CardError && (error.kind === 'GONE' || error.kind === 'UNKNOWN')) setRefresh((n) => n + 1);
     });
   };
+
+  // Once the calendar is read again, scroll to the class just added; if this view cannot show it, say so instead of leaving
+  // an empty week behind a success line.
+  useEffect(() => {
+    if (!fresh || fresh.shown) { freshRead.current = false; return; }
+    if (classes.state === 'LOADING') { freshRead.current = true; return; }
+    if (!freshRead.current) return;
+    if (classes.state === 'READY' && classes.items.some((x) => x.sessionId === fresh.id)) {
+      try { document.querySelector(`[data-new="true"]`)?.scrollIntoView?.({ block: 'center' }); } catch { /* not available */ }
+      setFresh({ ...fresh, shown: true });
+      return;
+    }
+    setMessage({ text: `${fresh.text} ${t('createdHidden')}` });
+    setFresh(null);
+  }, [fresh, classes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMove = (move: Pending) => {
     if (!scope) return;
@@ -247,7 +274,7 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     </span> : pending?.saving ? null : <button type="button" className={styles.clearLink} onClick={() => setMessage(null)}>{t('dismiss')}</button>}
   </div> : null;
   const createPanel = creating && cards.state === 'READY' ? <CalendarCardForm key={creating.serial} language={preferences.language} programs={cards.programs} instructors={cards.instructors}
-    initial={initialCardForm(creating.date, creating.minutes, cards.programs)} busy={creating.busy} error={creating.error}
+    initial={initialCardForm(creating.date, creating.minutes, cards.programs)} busy={creating.busy} error={creating.error} timeZone={zone}
     onCancel={() => setCreating(null)} onSubmit={submitCreate}/> : null;
 
   const session = selectedClass && classes.state === 'READY' ? classes.items.find((s) => s.sessionId === selectedClass) ?? null : null;
@@ -269,6 +296,6 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
       onView={onView} onShift={onShift} onToday={onToday} onSelect={onSelect} onDay={onDay} onRefresh={onRefresh} onManageEvent={onManageEvent}
       classFilter={classFilter} onClassFilter={setClassFilter} cards={cards} programFilter={programFilter} onProgramFilter={setProgramFilter}
       instructorFilter={instructorFilter} onInstructorFilter={setInstructorFilter} onCreateAt={manage ? openCreate : undefined} onDrop={manage ? onDrop : undefined}
-      pending={pending} createPanel={createPanel} message={messageBar} closed={closed}/>
+      pending={pending} createPanel={createPanel} message={messageBar} closed={closed} fresh={fresh?.id ?? null}/>
   </div>;
 }

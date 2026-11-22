@@ -46,8 +46,13 @@ function chunks<T>(items: readonly T[]): T[][] {
 async function syncFinance(app: ShopifyApp, shop: string, token: string, record: (body: { finance: ShopifyFinanceSnapshot }) => Promise<unknown>): Promise<void> {
   let finance: ShopifyFinanceSnapshot;
   try { finance = await app.adapter.finance(shop, token); }
-  catch (e) { if (e instanceof ShopifyProviderError && e.failure === 'AUTH') throw e; return; }
-  await record({ finance }).catch(() => undefined);
+  catch (e) {
+    if (e instanceof ShopifyProviderError && e.failure === 'AUTH') throw e;
+    // Finance stays as it was, but the reason is kept: one word, never the shop or Shopify's text.
+    console.warn(`shopify_finance_skipped stage=read reason=${e instanceof ShopifyProviderError ? e.failure : 'OTHER'}`);
+    return;
+  }
+  await record({ finance }).catch(() => { console.warn('shopify_finance_skipped stage=record'); });
 }
 
 /**

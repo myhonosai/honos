@@ -34,29 +34,55 @@
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
 .video { width: 100%; max-width: 420px; border-radius: 12px; background: #000; }
 
-/* Printed sheet: CR80 cards (85.6 x 54 mm), two across. */
-.sheet { display: flex; flex-wrap: wrap; gap: 4mm; padding: 4mm; background: #fff; border-radius: 8px; }
-.face { position: relative; display: grid; grid-template-columns: 22mm 1fr; grid-template-rows: auto 1fr auto; gap: 1.5mm 3mm; box-sizing: border-box; width: 85.6mm; height: 54mm;
-  padding: 3mm; border: 0.3mm solid #c9d3dd; border-radius: 3mm; background: #fff; color: #0b1622; font-family: system-ui, sans-serif; overflow: hidden; break-inside: avoid; }
-.face[data-design="BOLD"] { border-top: 6mm solid var(--card-accent, #0f5d8c); padding-top: 2mm; }
-.face[data-design="MINIMAL"] { border-color: #e3e8ee; }
-.face[data-design="CLASSIC"] { box-shadow: inset 0 0 0 0.8mm var(--card-accent, #0f5d8c); }
-.faceHead { grid-column: 1 / -1; display: flex; align-items: center; gap: 2mm; min-width: 0; font-size: 3.2mm; font-weight: 800; }
-.faceHead img { height: 7mm; max-width: 22mm; object-fit: contain; }
-.faceHead span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.facePhoto { grid-row: 2 / 4; display: grid; place-items: center; width: 22mm; height: 28mm; border-radius: 2mm; overflow: hidden; background: #e8eef4; font-size: 7mm; font-weight: 800; color: #3d5266; }
-.facePhoto img { width: 100%; height: 100%; object-fit: cover; }
-.faceName { align-self: start; margin: 0; font-size: 4.2mm; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
-.faceCode { display: grid; justify-items: start; gap: 0.6mm; align-self: end; }
-.faceCode svg { display: block; }
-.faceCode small { font-family: ui-monospace, monospace; font-size: 2.4mm; letter-spacing: 0.02em; }
-.face[data-photo="false"] { grid-template-columns: 1fr; }
-.face[data-photo="false"] .faceCode { justify-items: center; }
+/* Printed sheet: Avery 8371 / 5371 / 8859 business cards. US Letter, 2 across x 5 down, each card 3.5 x 2 in,
+   0.5 in top/bottom and 0.75 in side margins, no gutters. Card content keeps a 0.16 in safe margin so a printer
+   that feeds a little off still lands everything inside the perforation. */
+.preview { overflow: auto; max-width: 100%; padding: 12px; border-radius: 12px; background: #3a4654; }
+.sheets { display: grid; justify-content: center; gap: 16px; }
+.averyPage { display: grid; grid-template-columns: repeat(2, 3.5in); grid-template-rows: repeat(5, 2in); box-sizing: border-box;
+  width: 8.5in; height: 11in; padding: 0.5in 0.75in; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+.averyCell { box-sizing: border-box; width: 3.5in; height: 2in; overflow: hidden; outline: 1px dashed #c3ccd6; outline-offset: -0.5px; }
+.averyCell[data-empty="true"] { background: repeating-linear-gradient(135deg, #f6f8fa 0 6px, #eef1f4 6px 12px); }
 
+.face { --card-accent: #0f5d8c; position: relative; display: flex; gap: 0.14in; box-sizing: border-box; width: 3.5in; height: 2in; padding: 0.16in 0.18in;
+  background: #fff; color: #0b1622; font-family: Inter, "Helvetica Neue", Arial, system-ui, sans-serif; overflow: hidden;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.faceMain { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: space-between; gap: 0.06in; min-width: 0; }
+.faceHead { flex: 0 0 auto; display: flex; align-items: center; gap: 0.08in; min-width: 0; height: 0.42in; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: #22313f; line-height: 1.15; }
+.faceHead img { flex: 0 0 auto; height: 0.42in; max-width: 0.9in; object-fit: contain; }
+.faceHead span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.faceCode { flex: 0 0 auto; display: grid; justify-items: start; gap: 0.02in; min-width: 0; }
+.faceBar { display: block; width: 100%; height: 0.44in; }
+.faceQr { display: block; width: 0.8in; height: 0.8in; }
+.faceCode[data-kind="qr"] { grid-template-columns: auto 1fr; align-items: end; column-gap: 0.06in; }
+.faceDigits { display: block; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 5.6pt; line-height: 1.25; letter-spacing: 0.02em; color: #44525f; overflow-wrap: anywhere; }
+.faceName { flex: 0 1 auto; min-height: 0; margin: 0; font-size: 10.5pt; font-weight: 800; line-height: 1.15; color: #0b1622;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.facePhoto { flex: 0 0 1.3in; display: grid; place-items: center; align-self: stretch; overflow: hidden; border-radius: 0.06in;
+  background: #e6edf4; color: #3d5266; font-size: 22pt; font-weight: 800; letter-spacing: 0.02em; }
+.facePhoto img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+.faceSideCode { flex: 0 0 1.3in; display: grid; place-items: center; }
+.faceSideCode .faceQr { width: 1.3in; height: 1.3in; }
+
+.face[data-code-type="QR"][data-photo="true"] .faceHead, .face[data-code-type="QR"][data-photo="true"] .faceHead img { height: 0.36in; }
+
+/* Styles: Classic draws an accent rule under the logo row; Bold adds an accent bar and accent name; Minimal stays plain. */
+.face[data-design="CLASSIC"] .faceHead { padding-bottom: 0.04in; border-bottom: 0.02in solid var(--card-accent); }
+.face[data-design="BOLD"] { padding-left: 0.3in; }
+.face[data-design="BOLD"]::before { content: ""; position: absolute; left: 0.16in; top: 0.16in; bottom: 0.16in; width: 0.06in; border-radius: 0.03in; background: var(--card-accent); }
+.face[data-design="BOLD"] .faceName { color: var(--card-accent); }
+.face[data-design="BOLD"] .facePhoto { box-shadow: inset 0 0 0 0.03in var(--card-accent); }
+
+/* The print copy lives straight under <body>; it is hidden on screen and is the only thing on paper. */
+.printRoot { display: none; }
 @media print {
-  :global(body):has(.sheet) * { visibility: hidden !important; }
-  :global(body) .sheet, :global(body) .sheet * { visibility: visible !important; }
-  .sheet { position: absolute; left: 0; top: 0; padding: 0; gap: 3mm; border-radius: 0; }
-  .face { border-color: #b7c3cf; }
+  :global(body):has(> .printRoot) > :not(.printRoot) { display: none !important; }
+  :global(html):has(.printRoot), :global(body):has(> .printRoot) { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .printRoot { display: block; }
+  .printRoot .sheets { display: block; }
+  .printRoot .averyPage { box-shadow: none; break-after: page; page-break-after: always; overflow: hidden; }
+  .printRoot .averyPage:last-child { break-after: auto; page-break-after: auto; }
+  .printRoot .averyCell { outline: 0; }
+  .printRoot .averyCell[data-empty="true"] { background: none; }
 }
 @media (max-width: 640px) { .page { padding: 14px; } }
