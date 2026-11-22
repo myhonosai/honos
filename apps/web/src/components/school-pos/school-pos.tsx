@@ -37,6 +37,7 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
   const [sales, setSales] = useState<SalesState>({ state: 'IDLE' });
   const [selected, setSelected] = useState<PosSale | null>(null);
   const [found, setFound] = useState<readonly PersonSummary[] | null>(null);
+  const searchTurn = useRef(0);
   const [stockSend, setStockSend] = useState<StockSend>('IDLE');
   const gen = useRef(0), privacy = useRef(0), mounted = useRef(false), pending = useRef<Pending | null>(null), sending = useRef(false), lastSchool = useRef<string | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; gen.current++; privacy.current++; pending.current = null; }; }, []);
@@ -106,12 +107,14 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
     pending.current = { key: globalThis.crypto.randomUUID(), command };
     void send();
   }, [send]);
+  const onClearFound = useCallback(() => { searchTurn.current += 1; setFound(null); }, []);
   const onSearchPeople = useCallback((query: string) => {
     if (!orgId || !schoolId) return;
-    const shown = privacy.current;
+    // Search as you type: only the answer to the latest letters is shown.
+    const shown = privacy.current, turn = ++searchTurn.current, current = () => mounted.current && shown === privacy.current && turn === searchTurn.current;
     people.search({ organizationId: orgId, schoolId }, query, AbortSignal.timeout(15000)).then(
-      (list) => { if (mounted.current && shown === privacy.current) setFound(list.slice(0, 8)); },
-      () => { if (mounted.current && shown === privacy.current) setFound([]); });
+      (list) => { if (current()) setFound(list.slice(0, 8)); },
+      () => { if (current()) setFound([]); });
   }, [people, orgId, schoolId]);
   const onOpenSale = useCallback((saleId: string) => {
     if (!schoolId) return;
@@ -142,7 +145,7 @@ export function SchoolPos({ api = posApi, people = peopleApi }: { api?: PosApi; 
       onRange={setRange} onOpen={onOpenSale} onClose={() => setSelected(null)} onRun={run} onTryAgain={() => void send()}/>;
     if (tab === 'INVENTORY') return <PosInventory read={ready} outcome={outcome} locked={locked} canRetry={busy === 'KEPT'} onRun={run} onTryAgain={() => void send()}/>;
     return <PosRegister read={ready} cart={cart} receipt={receipt} outcome={outcome} locked={locked} canRetry={busy === 'KEPT'} found={found}
-      onCart={setCart} onSearchPeople={onSearchPeople} onClearFound={() => setFound(null)} onNewSale={() => { setReceipt(null); setOutcome(null); }} stockSend={stockSend} onResendStock={onResendStock}
+      onCart={setCart} onSearchPeople={onSearchPeople} onClearFound={onClearFound} onNewSale={() => { setReceipt(null); setOutcome(null); }} stockSend={stockSend} onResendStock={onResendStock}
       onPay={(method: PosMethod, reference: string, note: string, shipTo: PosShipTo | null) => run({ op: 'sale', input: payInput(ready, cart, method, reference, note, shipTo) })}
       onTryAgain={() => void send()}/>;
   })();
