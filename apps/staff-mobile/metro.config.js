@@ -7,6 +7,8 @@ const { getDefaultConfig } = require('expo/metro-config');
 const config = getDefaultConfig(__dirname);
 const contracts = path.resolve(__dirname, '../../packages/contracts/src');
 config.watchFolders = [...(config.watchFolders ?? []), contracts];
+// Contracts sources have no node_modules of their own: anything they need (Babel helpers) resolves from this app.
+config.resolver.nodeModulesPaths = [...(config.resolver.nodeModulesPaths ?? []), path.resolve(__dirname, 'node_modules')];
 const upstream = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName.startsWith('@hon/contracts/')) {

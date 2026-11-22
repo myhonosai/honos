@@ -5,5 +5,7 @@ module.exports = {
   moduleNameMapper: {
     '^@hon/contracts/(.*)$': '<rootDir>/../../packages/contracts/src/$1',
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    // Contracts sources live outside this app; Babel helpers they need come from this app's node_modules.
+    '^@babel/runtime/(.*)$': '<rootDir>/node_modules/@babel/runtime/$1',
   },
 };
