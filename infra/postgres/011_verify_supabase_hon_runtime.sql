@@ -6165,7 +6165,7 @@ END $$;
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_attendance_report(text,jsonb)'::regprocedure
       AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='s'
-      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='be84e087eabc964ebe5c31985f03f120974f2c30be302edc767470fcae17f850'
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='a9fa38de85db47bb077e2c3d8bfa79b2368cbf195e5f15e802f081549e6f8980'
       AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
       AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a

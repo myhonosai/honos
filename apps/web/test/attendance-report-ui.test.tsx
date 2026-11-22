@@ -29,7 +29,7 @@ const raw = (over: Record<string, unknown> = {}) => ({ schoolId: school, schoolN
     { weekday: 1, time: '15:30', name: 'Tiny Tigers', program: 'Kids', sessions: 3, sessionsWithCheckIns: 2, checkIns: 21 },
     { weekday: 2, time: '18:30', name: 'All belts', program: 'Kids', sessions: 2, sessionsWithCheckIns: 0, checkIns: 0 }] },
   programs: [{ programId: id(30), name: 'Kids', activeStudents: 3, attended30Days: 2 }, { programId: null, name: null, activeStudents: 1, attended30Days: 0 }],
-  students: { truncated: false, items: [student(1, 'Never', null, false, false, null, null), student(2, 'Longgone', '2026-10-12', false, false),
+  students: { visible: true, truncated: false, items: [student(1, 'Never', null, false, false, null, null), student(2, 'Longgone', '2026-10-12', false, false),
     student(3, 'Tenago', '2026-11-11', false, true), student(4, 'Recent', '2026-11-20', true, true)] }, ...over });
 const read = (over: Record<string, unknown> = {}) => verifyAttendanceReport(raw(over), school, {});
 const view = (props: Partial<React.ComponentProps<typeof AttendanceReportView>> = {}, over: Record<string, unknown> = {}) => renderToStaticMarkup(
@@ -62,8 +62,8 @@ it('the contract closes the query and refuses numbers that do not add up', () =>
   expect(() => verifyAttendanceReport(raw({ participation: { activeStudents: 4, attended7Days: 3, attended30Days: 2 } }), school, {})).toThrow();
   expect(() => verifyAttendanceReport(raw({ programs: [{ programId: id(30), name: 'Kids', activeStudents: 3, attended30Days: 2 }] }), school, {})).toThrow();
   expect(() => verifyAttendanceReport(raw({ week: { start: '2026-11-17', end: '2026-11-23', sessions: [] } }), school, {})).toThrow();
-  expect(() => verifyAttendanceReport(raw({ students: { truncated: false, items: [] } }), school, {})).toThrow();
-  expect(() => verifyAttendanceReport(raw({ students: { truncated: false, items: [student(1, 'A', '2026-11-22', true, true), student(2, 'B', null, false, false), student(3, 'C', null, false, false), student(4, 'D', null, false, false)] } }), school, {})).toThrow();
+  expect(() => verifyAttendanceReport(raw({ students: { visible: true, truncated: false, items: [] } }), school, {})).toThrow();
+  expect(() => verifyAttendanceReport(raw({ students: { visible: true, truncated: false, items: [student(1, 'A', '2026-11-22', true, true), student(2, 'B', null, false, false), student(3, 'C', null, false, false), student(4, 'D', null, false, false)] } }), school, {})).toThrow();
   expect(() => verifyAttendanceReport(raw({ extra: 1 }), school, {})).toThrow();
   expect(attendanceReportPercent(147, 202)).toBe(73); expect(attendanceReportPercent(0, 0)).toBeNull();
 });
@@ -105,12 +105,26 @@ it('shows participation, the week, class averages, programs and the students mis
 
 it('says so plainly when there is nothing to show or the read is refused', () => {
   const empty = view({}, { savedCheckIns: 0, participation: { activeStudents: 0, attended7Days: 0, attended30Days: 0 }, week: { start: '2026-11-16', end: '2026-11-22', sessions: [] },
-    classes: { month: '2026-11', truncated: false, rows: [] }, programs: [], students: { truncated: false, items: [] } });
+    classes: { month: '2026-11', truncated: false, rows: [] }, programs: [], students: { visible: true, truncated: false, items: [] } });
   for (const text of ['No classes this week.', 'No classes were held in this period.', 'No active students yet', '—']) expect(empty).toContain(text);
   const state = (s: 'LOADING' | 'DENIED' | 'TIMEZONE' | 'UNAVAILABLE') => renderToStaticMarkup(<AttendanceReportView language="en" waiting={false} concealed={false} hasSchool report={{ state: s }} month="ALL" filter="MISSING" search=""/>);
   expect(state('DENIED')).toContain('reporting permission'); expect(state('UNAVAILABLE')).toContain('not available right now'); expect(state('LOADING')).toContain('Reading');
   expect(renderToStaticMarkup(<AttendanceReportView language="en" waiting={false} concealed hasSchool report={{ state: 'READY', read: read() }} month="ALL" filter="ALL" search=""/>)).not.toContain('Synthetic');
   expect(view({ language: 'ko' } as never)).toContain('출석 리포트'); expect(view({ language: 'es' } as never)).toContain('Informe de asistencia');
+});
+
+it('hides the student list, not the totals, for a reader without people.read', () => {
+  const hidden = { students: { visible: false, truncated: false, items: [] } };
+  const read = verifyAttendanceReport(raw(hidden), school, {});
+  expect(read.students).toEqual({ visible: false, truncated: false, items: [] }); expect(read.participation.activeStudents).toBeGreaterThan(0);
+  const page = view({}, hidden);
+  expect(page).toContain('data-testid="ar-students-hidden"'); expect(page).toContain('Student names are hidden');
+  for (const gone of ['Synthetic', 'missing</a>', 'Open Contacts', 'Search by name', 'ar-missing-summary']) expect(page).not.toContain(gone);
+  expect(page).toContain('data-testid="ar-week"');
+  // A hidden list may carry no rows and no truncation mark.
+  expect(() => verifyAttendanceReport(raw({ students: { visible: false, truncated: false, items: [student(1, 'A', null, false, false)] } }), school, {})).toThrow();
+  expect(() => verifyAttendanceReport(raw({ students: { visible: false, truncated: true, items: [] } }), school, {})).toThrow();
+  expect(() => verifyAttendanceReport(raw({ students: { truncated: false, items: [] } }), school, {})).toThrow();
 });
 
 it('is a page under Attendance in the school menu, in three languages, behind a verified session', () => {

@@ -101,7 +101,7 @@ function Kpis({ p, read, t }: { p: AttendanceReportViewProps; read: AttendanceRe
   const num = (value: number) => value.toLocaleString(p.language);
   const pct = (a: number) => { const x = attendanceReportPercent(a, n); return x === null ? '—' : `${x}%`; };
   const of = (a: number) => n === 0 ? t('kpiNone') : t('kpiOf', { a: num(a), n: num(n) });
-  const missing = (a: number) => n - a > 0 ? <a href="#attendance-report-students" className={styles.details} onClick={() => p.onFilter?.('ALL')}>{t('viewMissing', { n: num(n - a) })}</a> : null;
+  const missing = (a: number) => read.students.visible && n - a > 0 ? <a href="#attendance-report-students" className={styles.details} onClick={() => p.onFilter?.('ALL')}>{t('viewMissing', { n: num(n - a) })}</a> : null;
   return <ul className={styles.kpis}>
     <Kpi id="d7" label={t('kpi7')} value={pct(a7)} sub={of(a7)} action={missing(a7)}/>
     <Kpi id="d30" label={t('kpi30')} value={pct(a30)} sub={of(a30)} action={missing(a30)}/>
@@ -202,6 +202,10 @@ function Programs({ p, read, t }: { p: AttendanceReportViewProps; read: Attendan
 }
 
 function Students({ p, read, t }: { p: AttendanceReportViewProps; read: AttendanceReport; t: T }) {
+  if (!read.students.visible) return <article className={base.card} aria-labelledby="ar-students-title" data-testid="ar-students" id="attendance-report-students">
+    <div className={base.cardHead}><h2 id="ar-students-title">{t('missingTitle')}</h2></div>
+    <p className={base.notice} role="status" data-testid="ar-students-hidden">{t('namesHidden')}</p>
+  </article>;
   const missing = missingStudents(read), never = missing.filter((s) => s.lastCheckIn === null).length;
   const pool = p.filter === 'MISSING' ? missing : read.students.items;
   const needle = p.search.trim().toLocaleLowerCase(p.language);

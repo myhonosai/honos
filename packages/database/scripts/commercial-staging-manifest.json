@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bcff7e38458a3c95cff9179ba269acb8c9d2fa6b6de7b4285c54bfcc103b3cf4",
+  "chainSha256": "436b72a7c2c85825b5cbe1c325df6d50d8696828d7deec4a20c7ee796293931f",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -832,7 +832,7 @@
     },
     {
       "file": "0633_attendance_report.sql",
-      "sha256": "aa6fab24d7e40c516d3ebb33d646cd02803157fc0c483c4613124bb167bf4a9c"
+      "sha256": "1aaee04ced78a32ad5f878834f00f55b2da151f816424bd905a3e1d1d0c9793c"
     }
   ]
 }

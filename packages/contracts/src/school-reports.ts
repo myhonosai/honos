@@ -307,7 +307,8 @@ export interface AttendanceReport {
   week: { start: string; end: string; sessions: AttendanceReportSession[] };
   classes: { month: string; truncated: boolean; rows: AttendanceReportClass[] };
   programs: AttendanceReportProgram[];
-  students: { truncated: boolean; items: AttendanceReportStudent[] };
+  /** visible is false when the reader lacks people.read: the counts stand, no student is named. */
+  students: { visible: boolean; truncated: boolean; items: AttendanceReportStudent[] };
 }
 
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -386,9 +387,10 @@ export function verifyAttendanceReport(value: unknown, expectedSchoolId: string,
   });
   if (programStudents !== participation.activeStudents || programAttended !== participation.attended30Days) fail();
 
-  const st = exact(source.students, ['truncated', 'items']);
-  if (typeof st.truncated !== 'boolean' || !Array.isArray(st.items) || st.items.length > 2000
-    || st.truncated !== (participation.activeStudents > 2000) || (!st.truncated && st.items.length !== participation.activeStudents)) fail();
+  const st = exact(source.students, ['visible', 'truncated', 'items']);
+  if (typeof st.visible !== 'boolean' || typeof st.truncated !== 'boolean' || !Array.isArray(st.items) || st.items.length > 2000) fail();
+  if (st.visible ? st.truncated !== (participation.activeStudents > 2000) || (!st.truncated && st.items.length !== participation.activeStudents)
+    : st.truncated || st.items.length !== 0) fail();
   const seenStudents = new Set<string>();
   const items = st.items.map(item => {
     const x = exact(item, ['studentProfileId', 'personId', 'givenName', 'familyName', 'program', 'rank', 'lastCheckIn', 'attended7Days', 'attended30Days']);
@@ -403,7 +405,7 @@ export function verifyAttendanceReport(value: unknown, expectedSchoolId: string,
 
   return { schoolId, schoolName: text(source.schoolName, 200), timezone: text(source.timezone, 64), generatedAt: instant(source.generatedAt), localToday,
     savedCheckIns: count(source.savedCheckIns), participation, week: { start, end, sessions }, classes: { month: c.month as string, truncated: c.truncated, rows },
-    programs, students: { truncated: st.truncated, items } };
+    programs, students: { visible: st.visible as boolean, truncated: st.truncated as boolean, items } };
 }
 
 /** Whole percent of a over b; null when b is 0. */

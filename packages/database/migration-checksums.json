@@ -380,6 +380,6 @@
     "0617_school_creative_designs.sql": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139",
     "0629_crm_trial_authority_hold.sql": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043",
     "0630_invoice_insert_status_guard.sql": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec",
-    "0633_attendance_report.sql": "aa6fab24d7e40c516d3ebb33d646cd02803157fc0c483c4613124bb167bf4a9c"
+    "0633_attendance_report.sql": "1aaee04ced78a32ad5f878834f00f55b2da151f816424bd905a3e1d1d0c9793c"
   }
 }

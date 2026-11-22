@@ -26,6 +26,7 @@ const en = {
   never: 'No record', statusNever: 'No check-in recorded', statusAbsent: '{n} days absent', statusToday: 'Attended today', statusRecent: 'Attended {n} days ago', statusYesterday: 'Attended yesterday',
   missingEmpty: 'Everyone has checked in within the last two weeks.', studentsEmpty: 'No active students yet.', studentsTruncated: 'Showing the first 2,000 students.',
   search: 'Search by name', noMatch: 'No student matches that name.', openContacts: 'Open Contacts', importHistory: 'Import past attendance',
+  namesHidden: 'Student names are hidden. Your role can see the attendance totals but not people records. Ask the school owner for access to Contacts to see who is missing.',
 };
 export type AttendanceReportKey = keyof typeof en;
 const ko: Record<AttendanceReportKey, string> = {
@@ -55,6 +56,7 @@ const ko: Record<AttendanceReportKey, string> = {
   never: '기록 없음', statusNever: '체크인 기록 없음', statusAbsent: '{n}일 결석', statusToday: '오늘 출석', statusRecent: '{n}일 전 출석', statusYesterday: '어제 출석',
   missingEmpty: '모두 최근 2주 안에 체크인했습니다.', studentsEmpty: '아직 활동 수련생이 없습니다.', studentsTruncated: '처음 2,000명만 표시합니다.',
   search: '이름으로 검색', noMatch: '해당 이름의 수련생이 없습니다.', openContacts: '연락처 열기', importHistory: '지난 출석 가져오기',
+  namesHidden: '수련생 이름은 표시되지 않습니다. 현재 역할은 출석 합계는 볼 수 있지만 인적 정보는 볼 수 없습니다. 누가 빠졌는지 보려면 관장님께 연락처 열람 권한을 요청하세요.',
 };
 const es: Record<AttendanceReportKey, string> = {
   pageTitle: 'Informe de asistencia',
@@ -83,6 +85,7 @@ const es: Record<AttendanceReportKey, string> = {
   never: 'Sin registro', statusNever: 'Sin registros de asistencia', statusAbsent: '{n} días ausente', statusToday: 'Asistió hoy', statusRecent: 'Asistió hace {n} días', statusYesterday: 'Asistió ayer',
   missingEmpty: 'Todos han asistido en las últimas dos semanas.', studentsEmpty: 'Aún no hay alumnos activos.', studentsTruncated: 'Se muestran los primeros 2,000 alumnos.',
   search: 'Buscar por nombre', noMatch: 'Ningún alumno coincide con ese nombre.', openContacts: 'Abrir Contactos', importHistory: 'Importar asistencia anterior',
+  namesHidden: 'Los nombres de los alumnos están ocultos. Tu rol puede ver los totales de asistencia, pero no los registros de personas. Pide al dueño de la escuela acceso a Contactos para ver quién falta.',
 };
 
 /** Picks wording by language prefix, so 'ko-KR' is Korean and 'en-US' or anything unknown is English. */

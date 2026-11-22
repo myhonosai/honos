@@ -174,7 +174,7 @@ async function staff(label, roles, { org = ids.organization, school = ids.school
   return { subject, principal, grants, org, school };
 }
 
-let OWN, REPORTER, NONE, MIXED, OTHER_SCHOOL, HQ;
+let OWN, REPORTER, COUNTS_ONLY, CROSS, NONE, MIXED, OTHER_SCHOOL, HQ;
 const local = async (text) => (await sql('SELECT ($1::timestamp AT TIME ZONE $2) t', [text, LA])).rows[0].t;
 
 async function seed() {
@@ -184,7 +184,13 @@ async function seed() {
     await sql('INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1,$2,$3,$4,$5)', [school, org, `Attrep ${slug}`, `attrep-${slug}-${school.slice(0, 8)}`, LA]);
   }
   OWN = await staff('owner', [await role(ids.organization, allPermissions, 'OWNER')]);
-  REPORTER = await staff('reporter', [await role(ids.organization, ['reporting.view'])]);
+  REPORTER = await staff('reporter', [await role(ids.organization, ['reporting.view', 'people.read'])]);
+  // Totals without names: reporting.view but no people.read at this school.
+  COUNTS_ONLY = await staff('counts-only', [await role(ids.organization, ['reporting.view', 'attendance.record'])]);
+  // people.read held only at school B must not reveal school A's names.
+  CROSS = await staff('cross', [await role(ids.organization, ['reporting.view'])]);
+  await sql("INSERT INTO hon.principal_role_grants(id,organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,$4,clock_timestamp()-interval '1 day')",
+    [randomUUID(), ids.organization, ids.schoolB, CROSS.principal, await role(ids.organization, ['people.read'])]);
   NONE = await staff('none', [await role(ids.organization, ['people.read', 'crm.lead.read', 'attendance.record', 'billing.membership.read'])]);
   MIXED = await staff('mixed', [await role(ids.organization, ['reporting.view']), await role(ids.organization, ['people.read'], 'PARENT_PORTAL')]);
   OTHER_SCHOOL = await staff('other-school', [await role(ids.organization, allPermissions)], { school: ids.schoolB });
@@ -288,13 +294,21 @@ try {
     && j(cls('Empty class', '19:00').map((x) => [x.sessions, x.sessionsWithCheckIns, x.checkIns])) === j([[1, 0, 0]]), `classes all time ${j(R.classes)}`);
   ok(j(R.programs) === j([{ programId: A.kids, name: 'Kids', activeStudents: 2, attended30Days: 2 }, { programId: A.adults, name: 'Adults', activeStudents: 1, attended30Days: 0 },
     { programId: null, name: null, activeStudents: 1, attended30Days: 0 }]), `programs ${j(R.programs)}`);
-  ok(R.students.truncated === false && j(R.students.items) === j([
+  ok(R.students.visible === true && R.students.truncated === false && j(R.students.items) === j([
     { studentProfileId: A.neverP, personId: A.people.never, givenName: 'Never', familyName: 'FamA', program: null, rank: null, lastCheckIn: null, attended7Days: false, attended30Days: false },
     { studentProfileId: A.pausedP, personId: A.people.paused, givenName: 'Paused', familyName: 'FamA', program: 'Adults', rank: 'White', lastCheckIn: day(-40), attended7Days: false, attended30Days: false },
     { studentProfileId: A.monthP, personId: A.people.month, givenName: 'Month', familyName: 'FamA', program: 'Kids', rank: 'Yellow', lastCheckIn: day(-10), attended7Days: false, attended30Days: true },
     { studentProfileId: A.recentP, personId: A.people.recent, givenName: 'Recent', familyName: 'FamA', program: 'Kids', rank: 'White', lastCheckIn: day(-1), attended7Days: true, attended30Days: true },
   ]), `students: longest absent first; cancelled, draft and profile-less members left out ${j(R.students.items)}`);
   ok(!/FamB|FamO|Left|NoProfile|Draft|Payer|Closed/.test(j(R)), 'no other school, former member, payer or cancelled class');
+
+  // 2b. Names need people.read at this school: without it every total is the same and no student is named.
+  for (const [actor, label] of [[COUNTS_ONLY, 'reporting.view without people.read'], [CROSS, 'people.read held only at another school']]) {
+    const c = (await success(() => call(actor, `week=${day(-1)}&month=ALL`), label)).data;
+    ok(j(c.students) === j({ visible: false, truncated: false, items: [] }), `${label}: the student list is hidden ${j(c.students)}`);
+    ok(j({ ...c, students: 0, generatedAt: 0 }) === j({ ...R, students: 0, generatedAt: 0 }), `${label}: every total matches the full read`);
+    ok(!/FamA|Never|Paused|Month|Recent/.test(j({ ...c, schoolName: '' })) && ![...Object.values(A.people), A.neverP, A.pausedP, A.monthP, A.recentP].some((v) => j(c).includes(v)), `${label}: no name or person id in the response`);
+  }
 
   // 3. Defaults, another month, another school.
   const def = await success(() => call(OWN), 'defaults');

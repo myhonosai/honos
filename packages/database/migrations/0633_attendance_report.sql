@@ -22,6 +22,9 @@ BEGIN;
 --                   current rank of that enrollment. Students without one are counted under no program.
 --   students        every active student (at most 2000, marked truncated beyond): name, rank, program, last check-in
 --                   date and whether they attended in the last 7 / 30 days. Names only: no contact details or notes.
+--                   The list names people, so it also needs live people.read at this school for the same principal
+--                   (hon.resolve_authorized_scope). Without it the counts above are unchanged and students is
+--                   {visible:false, truncated:false, items:[]}: no name or id leaves the database.
 -- Nothing is written, sent, charged or scheduled.
 
 CREATE FUNCTION hon.read_attendance_report(p_subject text, p_input jsonb) RETURNS jsonb
@@ -29,10 +32,12 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); tz text; s hon.schools%ROWTYPE;
   as_of timestamptz:=statement_timestamp(); today date; week_start date; month_start date; month_text text;
   d7 timestamptz; d30 timestamptz; w_from timestamptz; w_to timestamptz; c_from timestamptz; c_to timestamptz;
-  week jsonb; classes jsonb; students jsonb; programs jsonb; totals jsonb; active_count integer;
+  week jsonb; classes jsonb; students jsonb; programs jsonb; totals jsonb; active_count integer; actor uuid; names boolean;
   utc constant text:='YYYY-MM-DD"T"HH24:MI:SS.MS"Z"';
 BEGIN
-  PERFORM hon.require_school_reports_actor(p_subject);
+  actor:=hon.require_school_reports_actor(p_subject);
+  names:=EXISTS(SELECT 1 FROM hon.resolve_authorized_scope(p_subject, school, 'people.read') r
+    WHERE r.principal_id=actor AND r.organization_id=org AND r.school_id=school);
   IF p_input IS NULL OR jsonb_typeof(p_input)<>'object' OR EXISTS(SELECT 1 FROM jsonb_object_keys(p_input) k WHERE k NOT IN ('week','month'))
     OR (p_input ? 'week' AND (jsonb_typeof(p_input->'week')<>'string' OR (p_input->>'week') !~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'))
     OR (p_input ? 'month' AND (jsonb_typeof(p_input->'month')<>'string'
@@ -112,11 +117,12 @@ BEGIN
     coalesce((SELECT jsonb_agg(jsonb_build_object('programId', q.program_id, 'name', q.program, 'activeStudents', q.n, 'attended30Days', q.a)
         ORDER BY q.n DESC, q.program NULLS LAST, q.program_id) FROM (
       SELECT program_id, min(program) program, count(*) n, count(*) FILTER (WHERE a30) a FROM rows GROUP BY program_id) q), '[]'::jsonb),
-    coalesce((SELECT jsonb_agg(jsonb_build_object('studentProfileId', r.profile_id, 'personId', r.person_id, 'givenName', r.given_name,
+    CASE WHEN names THEN coalesce((SELECT jsonb_agg(jsonb_build_object('studentProfileId', r.profile_id, 'personId', r.person_id, 'givenName', r.given_name,
         'familyName', r.family_name, 'program', r.program, 'rank', r.rank,
         'lastCheckIn', CASE WHEN r.last_at IS NULL THEN NULL ELSE to_char(r.last_at AT TIME ZONE tz, 'YYYY-MM-DD') END,
         'attended7Days', r.a7, 'attended30Days', r.a30) ORDER BY r.last_at NULLS FIRST, r.family_name, r.given_name, r.profile_id)
       FROM (SELECT * FROM rows ORDER BY last_at NULLS FIRST, family_name, given_name, profile_id LIMIT 2000) r), '[]'::jsonb)
+      ELSE '[]'::jsonb END
     INTO active_count, totals, programs, students;
 
   RETURN jsonb_build_object('schoolId', school, 'schoolName', s.name, 'timezone', tz,
@@ -127,14 +133,14 @@ BEGIN
     'participation', totals,
     'week', jsonb_build_object('start', to_char(week_start, 'YYYY-MM-DD'), 'end', to_char(week_start + 6, 'YYYY-MM-DD'), 'sessions', week),
     'classes', classes, 'programs', programs,
-    'students', jsonb_build_object('truncated', active_count > 2000, 'items', students));
+    'students', jsonb_build_object('visible', names, 'truncated', names AND active_count > 2000, 'items', students));
 END $$;
 COMMENT ON FUNCTION hon.read_attendance_report(text,jsonb) IS
-'Direct HUMAN_UI read-only attendance report for the session school (AR1, 0633): weekly check-ins by class time, participation, class averages, programs and active students'' last check-in. reporting.view; no DML.';
+'Direct HUMAN_UI read-only attendance report for the session school (AR1, 0633): weekly check-ins by class time, participation, class averages, programs and active students'' last check-in. reporting.view; the named student list also needs people.read; no DML.';
 
 DO $$ DECLARE r text; BEGIN
   REVOKE ALL ON FUNCTION hon.read_attendance_report(text,jsonb) FROM PUBLIC;
-  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION hon.read_attendance_report(text,jsonb) FROM %I',r);
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
