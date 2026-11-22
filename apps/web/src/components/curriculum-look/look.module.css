@@ -96,3 +96,12 @@ textarea.field { min-height: 80px; resize: vertical; line-height: 1.5; }
 .panel [data-picker] { display: grid; gap: 6px; font-size: var(--hon-text-sm, 13px); font-weight: 700; color: var(--hon-text-muted, #a9b8d6); max-width: 520px; }
 .panel [data-picker] input, .panel [data-picker] select { box-sizing: border-box; width: 100%; min-height: var(--hon-control-h, 40px); padding: 8px 12px; border: 1px solid var(--hon-border, #24405a);
   border-radius: var(--hon-radius-sm, 8px); background: var(--hon-bg-raised, #08112a); color: var(--hon-text, #eef3ff); color-scheme: dark; font-weight: 400; }
+/* Quick setup: answer buttons and the editable belt list. */
+.choices button.choice { width: 100%; text-align: left; background: var(--hon-surface-2, #13263a); color: inherit; font: inherit; }
+.choices button.choice[aria-pressed='true'] { border-color: var(--hon-accent, #2f7bff); background: color-mix(in srgb, var(--hon-accent, #2f7bff) 18%, transparent); }
+.quickList { display: grid; gap: 6px; }
+.quickRow { display: grid; grid-template-columns: 24px 44px minmax(140px, 1fr) 96px 96px auto; gap: 8px; align-items: end; padding: 8px; border-radius: var(--hon-radius-sm, 8px); background: var(--hon-surface-2, #13263a); }
+.quickRow > .pos, .quickRow > .colorInput { align-self: center; }
+.quickNum { display: grid; gap: 2px; font-size: var(--hon-text-xs, 12px); color: var(--hon-text-muted, #a9b8d6); }
+@media (max-width: 650px) { .quickRow { grid-template-columns: 24px 44px 1fr 1fr; } .quickRow > input.field { grid-column: 3 / -1; } .quickRow > .quickNum { grid-column: 1 / 4; }
+  .quickRow > .quickNum + .quickNum { grid-column: 4 / 5; } .quickRow > .actions { grid-column: 1 / -1; justify-content: flex-end; } }

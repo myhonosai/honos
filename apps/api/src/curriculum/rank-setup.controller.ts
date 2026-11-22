@@ -25,8 +25,10 @@ export class RankSetupHumanUiGuard extends CurriculumHumanUiGuard {
 /** Closed bodies; the service validates every field again with the contract checks and the database checks a third time. */
 export class RankSetupProgramDto { @Allow() declare name: string }
 export class RankSetupProgramRenameDto { @Allow() declare expectedVersion: number; @Allow() declare name: string }
-export class RankSetupRankDto { @Allow() declare name: string; @Allow() declare color: string | null }
-export class RankSetupRankUpdateDto { @Allow() declare expectedVersion: number; @Allow() declare name: string; @Allow() declare color: string | null }
+export class RankSetupRankDto { @Allow() declare name: string; @Allow() declare color: string | null; @Allow() declare classes: number; @Allow() declare days: number }
+export class RankSetupRankUpdateDto extends RankSetupRankDto { @Allow() declare expectedVersion: number }
+export class RankSetupQuickDto { @Allow() declare name: string; @Allow() declare ranks: unknown[] }
+export class RankSetupRankRemoveDto { @Allow() declare expectedVersion: number }
 export class RankSetupRankMoveDto { @Allow() declare expectedVersion: number; @Allow() declare direction: 'UP' | 'DOWN' }
 
 /** Rank setup (0622): a school's programs and belt ladders. The organization comes from the verified scope only. */
@@ -55,6 +57,11 @@ export class StaffRankSetupController {
  createProgram(@Param('schoolId', new ParseUUIDPipe()) school: string, @Headers('idempotency-key') key: string | undefined, @Body() body: RankSetupProgramDto, @Req() request: HonRequest) {
   return this.run(request, school, key, 'PROGRAM_CREATE', null, null, body);
  }
+ /** Quick setup: one program with all its belts in order, in one command. */
+ @Post('quick-setup') @HttpCode(200) @Header('Cache-Control', 'private, no-store')
+ quickSetup(@Param('schoolId', new ParseUUIDPipe()) school: string, @Headers('idempotency-key') key: string | undefined, @Body() body: RankSetupQuickDto, @Req() request: HonRequest) {
+  return this.run(request, school, key, 'PROGRAM_SETUP', null, null, body);
+ }
  @Post('programs/:programId/versions') @HttpCode(200) @Header('Cache-Control', 'private, no-store')
  renameProgram(@Param('schoolId', new ParseUUIDPipe()) school: string, @Param('programId', new ParseUUIDPipe()) program: string, @Headers('idempotency-key') key: string | undefined, @Body() body: RankSetupProgramRenameDto, @Req() request: HonRequest) {
   return this.run(request, school, key, 'PROGRAM_RENAME', program, null, body);
@@ -70,5 +77,9 @@ export class StaffRankSetupController {
  @Post('programs/:programId/ranks/:rankId/move') @HttpCode(200) @Header('Cache-Control', 'private, no-store')
  moveRank(@Param('schoolId', new ParseUUIDPipe()) school: string, @Param('programId', new ParseUUIDPipe()) program: string, @Param('rankId', new ParseUUIDPipe()) rank: string, @Headers('idempotency-key') key: string | undefined, @Body() body: RankSetupRankMoveDto, @Req() request: HonRequest) {
   return this.run(request, school, key, 'RANK_MOVE', program, rank, body);
+ }
+ @Post('programs/:programId/ranks/:rankId/remove') @HttpCode(200) @Header('Cache-Control', 'private, no-store')
+ removeRank(@Param('schoolId', new ParseUUIDPipe()) school: string, @Param('programId', new ParseUUIDPipe()) program: string, @Param('rankId', new ParseUUIDPipe()) rank: string, @Headers('idempotency-key') key: string | undefined, @Body() body: RankSetupRankRemoveDto, @Req() request: HonRequest) {
+  return this.run(request, school, key, 'RANK_REMOVE', program, rank, body);
  }
 }

@@ -1,4 +1,4 @@
-import { RANK_SETUP_COMMAND, isRankSetupId, verifyRankSetupProgram, verifyStaffRankSetup, type RankRequirementKind, type RankSetupProgram, type StaffRankSetup } from '@hon/contracts';
+import { RANK_SETUP_COMMAND, isRankSetupId, verifyRankSetupProgram, verifyStaffRankSetup, type RankRequirementKind, type RankSetupProgram, type RankSetupRankInput, type StaffRankSetup } from '@hon/contracts';
 
 /**
  * Rank setup calls (docs/architecture/RANK_SETUP_AND_PLAIN_CURRICULUM_PAGES.md section 4). Same-origin only; the school in the path is
@@ -11,10 +11,11 @@ const MESSAGES: Record<string, string> = {
   VERSION_CONFLICT: 'Someone else changed this a moment ago. Refresh to see the latest, then try again.',
   PROGRAM_NAME_TAKEN: 'Your school already has a program with that name.',
   RANK_NAME_TAKEN: 'This program already has a belt with that name.',
+  RANK_IN_USE: 'This belt cannot be removed because it has students, requirements or test history. You can rename it or move it instead.',
   RANK_AT_END: 'That belt is already at the end of the list.',
   PROGRAM_LIMIT: 'A school can have up to 100 programs.',
   RANK_LIMIT: 'A program can have up to 60 belts.',
-  VALIDATION_FAILED: 'Check the fields and try again. Names can be up to 120 characters, without < or >.',
+  VALIDATION_FAILED: 'Check the fields and try again. Names can be up to 120 characters, without < or >, and each belt needs its own name.',
   IDEMPOTENCY_KEY_REUSED: 'This change could not be matched to the earlier try. Refresh and make it again.',
   CURRICULUM_DUPLICATE_OR_KEY_REUSED: 'This student is already in that program, or this change was already made. Refresh to check.',
   INACTIVE_ENROLLMENT: 'This student is no longer active in the program.',
@@ -70,9 +71,12 @@ export const rankSetupApi = {
   async read(school: string, signal?: AbortSignal): Promise<StaffRankSetup> { return verifyStaffRankSetup((await call(setup(school), undefined, undefined, undefined, signal)).data); },
   createProgram: (school: string, name: string, key: string): Promise<RankSetupProgram> => program(school, 'programs', { name }, key),
   renameProgram: (school: string, p: string, expectedVersion: number, name: string, key: string): Promise<RankSetupProgram> => program(school, `programs/${id(p)}/versions`, { expectedVersion, name }, key),
-  addRank: (school: string, p: string, name: string, color: string | null, key: string): Promise<RankSetupProgram> => program(school, `programs/${id(p)}/ranks`, { name, color }, key),
-  updateRank: (school: string, p: string, rank: string, expectedVersion: number, name: string, color: string | null, key: string): Promise<RankSetupProgram> =>
-    program(school, `programs/${id(p)}/ranks/${id(rank)}/versions`, { expectedVersion, name, color }, key),
+  quickSetup: (school: string, name: string, ranks: RankSetupRankInput[], key: string): Promise<RankSetupProgram> => program(school, 'quick-setup', { name, ranks }, key),
+  addRank: (school: string, p: string, belt: RankSetupRankInput, key: string): Promise<RankSetupProgram> => program(school, `programs/${id(p)}/ranks`, belt, key),
+  updateRank: (school: string, p: string, rank: string, expectedVersion: number, belt: RankSetupRankInput, key: string): Promise<RankSetupProgram> =>
+    program(school, `programs/${id(p)}/ranks/${id(rank)}/versions`, { expectedVersion, ...belt }, key),
+  removeRank: (school: string, p: string, rank: string, expectedVersion: number, key: string): Promise<RankSetupProgram> =>
+    program(school, `programs/${id(p)}/ranks/${id(rank)}/remove`, { expectedVersion }, key),
   moveRank: (school: string, p: string, rank: string, expectedVersion: number, direction: 'UP' | 'DOWN', key: string): Promise<RankSetupProgram> =>
     program(school, `programs/${id(p)}/ranks/${id(rank)}/move`, { expectedVersion, direction }, key),
   addRequirement: (org: string, school: string, p: string, rank: string, input: { code: string; kind: RankRequirementKind; label: string; description: string; required: boolean }, key: string) =>

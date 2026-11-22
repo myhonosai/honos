@@ -197,22 +197,22 @@ try {
   // 3. Belts: add in order with colors, duplicate names, bad colors.
   let program = kids;
   for (const [name, color] of [['White', '#ffffff'], ['Yellow', '#FACC15'], ['Green', null], ['Blue', '#2563eb']]) {
-    program = (await success(() => post(OWNER, `/programs/${kids.id}/ranks`, { name, color }), `add ${name}`)).data;
+    program = (await success(() => post(OWNER, `/programs/${kids.id}/ranks`, { name, color, classes: 0, days: 0 }), `add ${name}`)).data;
   }
   ok(program.ranks.map((k) => k.name).join(',') === 'White,Yellow,Green,Blue', 'belts appended in order');
   ok(program.ranks.map((k) => k.order).join(',') === '1,2,3,4', 'orders 1..n');
   ok(program.ranks[0].color === '#FFFFFF' && program.ranks[2].color === null, 'colors stored as #RRGGBB or none');
-  await refused(() => post(OWNER, `/programs/${kids.id}/ranks`, { name: 'WHITE', color: null }), 409, 'RANK_NAME_TAKEN', 'duplicate belt name');
-  for (const color of ['white', '#fff', '#12345g', 'url(x)']) await refused(() => post(OWNER, `/programs/${kids.id}/ranks`, { name: 'Odd', color }), 400, 'VALIDATION_FAILED', `bad color ${color}`);
+  await refused(() => post(OWNER, `/programs/${kids.id}/ranks`, { name: 'WHITE', color: null, classes: 0, days: 0 }), 409, 'RANK_NAME_TAKEN', 'duplicate belt name');
+  for (const color of ['white', '#fff', '#12345g', 'url(x)']) await refused(() => post(OWNER, `/programs/${kids.id}/ranks`, { name: 'Odd', color, classes: 0, days: 0 }), 400, 'VALIDATION_FAILED', `bad color ${color}`);
   await refused(() => post(OWNER, `/programs/${kids.id}/ranks`, { name: 'No color' }), 400, 'VALIDATION_FAILED', 'color is required (null allowed)');
 
   // 4. Edit a belt with its version; stale version conflicts.
   const [white, yellow, green, blue] = program.ranks;
-  program = (await success(() => post(OWNER, `/programs/${kids.id}/ranks/${green.id}/versions`, { expectedVersion: 1, name: 'Orange', color: '#F97316' }), 'edit belt')).data;
+  program = (await success(() => post(OWNER, `/programs/${kids.id}/ranks/${green.id}/versions`, { expectedVersion: 1, name: 'Orange', color: '#F97316', classes: 0, days: 0 }), 'edit belt')).data;
   const orange = program.ranks.find((k) => k.id === green.id);
   ok(orange.name === 'Orange' && orange.color === '#F97316' && orange.version === 2, 'belt renamed and recolored');
-  await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${green.id}/versions`, { expectedVersion: 1, name: 'Green', color: null }), 409, 'VERSION_CONFLICT', 'stale belt version');
-  await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${green.id}/versions`, { expectedVersion: 2, name: 'Blue', color: null }), 409, 'RANK_NAME_TAKEN', 'rename to another belt name');
+  await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${green.id}/versions`, { expectedVersion: 1, name: 'Green', color: null, classes: 0, days: 0 }), 409, 'VERSION_CONFLICT', 'stale belt version');
+  await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${green.id}/versions`, { expectedVersion: 2, name: 'Blue', color: null, classes: 0, days: 0 }), 409, 'RANK_NAME_TAKEN', 'rename to another belt name');
 
   // 5. Move belts; the first cannot move up, the last cannot move down; both moved belts bump their version.
   program = (await success(() => post(OWNER, `/programs/${kids.id}/ranks/${blue.id}/move`, { expectedVersion: 1, direction: 'UP' }), 'move up')).data;
@@ -244,11 +244,43 @@ try {
   const shown = (await success(() => read(OWNER), 'read requirements')).data.programs[0].ranks.find((k) => k.id === white.id).requirements;
   ok(shown.length === 1 && shown[0].label === 'Front kick b' && shown[0].kind === 'TECHNIQUE' && shown[0].required === true, 'requirements listed with label text only');
 
+  // 8b. Quick setup: a program with all its belts in one command; classes and days become the 0116 readiness policy.
+  const quickBody = { name: 'Adult BJJ', ranks: [{ name: 'White', color: '#ffffff', classes: 48, days: 90 }, { name: 'Blue', color: '#2563EB', classes: 0, days: 0 }, { name: 'Purple', color: null, classes: 100, days: 365 }] };
+  const quickKey = randomUUID();
+  const quick = (await success(() => post(OWNER, '/quick-setup', quickBody, { key: quickKey }), 'quick setup')).data;
+  ok(quick.ranks.map((k) => `${k.order}:${k.name}:${k.color}:${k.classes}:${k.days}`).join(',') === '1:White:#FFFFFF:48:90,2:Blue:#2563EB:0:0,3:Purple:null:100:365', `quick setup belts in order with rules: ${JSON.stringify(quick.ranks.map((k) => [k.order, k.name, k.classes, k.days]))}`);
+  ok((await success(() => post(OWNER, '/quick-setup', quickBody, { key: quickKey }), 'quick setup replay')).meta.replayed === true, 'quick setup replays');
+  const [qWhite, qBlue, qPurple] = quick.ranks;
+  const policyOf = async (id) => (await sql('SELECT promotion_requirement p FROM hon.curriculum_ranks WHERE id=$1', [id])).rows[0].p;
+  const whitePolicy = (await policyOf(qWhite.id)).promotionReadinessV1;
+  ok(whitePolicy.minAttendanceCreditMilli === 48000 && whitePolicy.minDaysInCurrentRank === 90 && Object.keys(whitePolicy).length === 7 && whitePolicy.documentAcknowledgementRule === 'CURRENT_CALLER_STAFF_CURRENT_PUBLICATION'
+    && whitePolicy.requireOpenTestingWindow === false && whitePolicy.requiredRequirementIds.length === 0, 'classes and days stored as the exact 0116 policy');
+  ok(JSON.stringify(await policyOf(qBlue.id)) === '{}', 'no rule stores no policy');
+  await refused(() => post(OWNER, '/quick-setup', { name: 'Dup', ranks: [{ name: 'White', color: null, classes: 0, days: 0 }, { name: 'white', color: null, classes: 0, days: 0 }] }), 400, 'VALIDATION_FAILED', 'quick setup duplicate belt names');
+  await refused(() => post(OWNER, '/quick-setup', { name: 'Empty', ranks: [] }), 400, 'VALIDATION_FAILED', 'quick setup needs a belt');
+  await refused(() => post(OWNER, '/quick-setup', { name: 'Many', ranks: Array.from({ length: 61 }, (_, i) => ({ name: `Belt ${i}`, color: null, classes: 0, days: 0 })) }), 400, 'VALIDATION_FAILED', 'quick setup at most 60 belts');
+  await refused(() => post(OWNER, '/quick-setup', { name: 'Big', ranks: [{ name: 'White', color: null, classes: 2001, days: 0 }] }), 400, 'VALIDATION_FAILED', 'classes bound');
+  await refused(() => post(OWNER, '/quick-setup', { name: 'Extra', ranks: [{ name: 'White', color: null, classes: 0, days: 0, fee: 5 }] }), 400, 'VALIDATION_FAILED', 'unknown belt field');
+  await refused(() => post(OWNER, '/quick-setup', { name: 'adult bjj', ranks: [{ name: 'White', color: null, classes: 0, days: 0 }] }), 409, 'PROGRAM_NAME_TAKEN', 'quick setup duplicate program');
+  // Changing the numbers keeps requirement and document lists a school already has on the policy.
+  const keep = randomUUID();
+  await sql("UPDATE hon.curriculum_ranks SET promotion_requirement=jsonb_set(promotion_requirement,'{promotionReadinessV1,requiredRequirementIds}',$2::jsonb) WHERE id=$1", [qWhite.id, JSON.stringify([keep])]);
+  let adult = (await success(() => post(OWNER, `/programs/${quick.id}/ranks/${qWhite.id}/versions`, { expectedVersion: 1, name: 'White', color: '#FFFFFF', classes: 0, days: 0 }), 'clear belt rules')).data;
+  const kept = (await policyOf(qWhite.id)).promotionReadinessV1;
+  ok(adult.ranks[0].classes === 0 && adult.ranks[0].days === 0 && kept.minAttendanceCreditMilli === 0 && kept.requiredRequirementIds.join() === keep, 'numbers cleared, the requirement list kept');
+  // Removing a belt nothing depends on closes the gap; a belt in use is refused and loses nothing.
+  await refused(() => post(OWNER, `/programs/${quick.id}/ranks/${qBlue.id}/remove`, { expectedVersion: 9 }), 409, 'VERSION_CONFLICT', 'stale remove');
+  await refused(() => post(OTHER_SCHOOL, `/programs/${quick.id}/ranks/${qBlue.id}/remove`, { expectedVersion: 1 }), 404, undefined, 'other school cannot remove a belt');
+  adult = (await success(() => post(OWNER, `/programs/${quick.id}/ranks/${qBlue.id}/remove`, { expectedVersion: 1 }), 'remove belt')).data;
+  ok(adult.ranks.map((k) => `${k.order}:${k.name}`).join(',') === '1:White,2:Purple' && adult.ranks[1].id === qPurple.id && adult.ranks[1].version === 2, 'belt removed and the order closed up');
+  await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${white.id}/remove`, { expectedVersion: 1 }), 409, 'RANK_IN_USE', 'a belt with a student on it cannot be removed');
+  ok((await sql('SELECT count(*)::int n FROM hon.curriculum_requirements WHERE curriculum_rank_id=$1', [white.id])).rows[0].n === 1, 'a refused removal keeps the belt and what it needs');
+
   // 9. Isolation: another school of the same organization and another organization see none of it; foreign ids are not found.
   const otherView = (await success(() => read(OTHER_SCHOOL), 'other school read')).data;
   ok(otherView.programs.length === 0 && otherView.students.length === 0, 'other school sees nothing');
-  await refused(() => post(OTHER_SCHOOL, `/programs/${kids.id}/ranks`, { name: 'Sneaky', color: null }), 404, undefined, 'other school cannot add a belt');
-  await refused(() => post(OTHER_SCHOOL, `/programs/${kids.id}/ranks/${white.id}/versions`, { expectedVersion: 1, name: 'Sneaky', color: null }), 404, undefined, 'other school cannot edit a belt');
+  await refused(() => post(OTHER_SCHOOL, `/programs/${kids.id}/ranks`, { name: 'Sneaky', color: null, classes: 0, days: 0 }), 404, undefined, 'other school cannot add a belt');
+  await refused(() => post(OTHER_SCHOOL, `/programs/${kids.id}/ranks/${white.id}/versions`, { expectedVersion: 1, name: 'Sneaky', color: null, classes: 0, days: 0 }), 404, undefined, 'other school cannot edit a belt');
   await refused(() => read(OWNER, { school: ids.otherSchool }), 403, undefined, 'a school the person has no role at');
   await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${yellow.id}/move`, { expectedVersion: 1, direction: 'DOWN' }, { school: ids.schoolB }), 403, undefined, 'path school must be a granted school');
 
@@ -271,14 +303,15 @@ try {
   // 12. Audit: one row per successful command, none for refusals or replays; receipts in the 0070 private table.
   const audits = (await sql("SELECT action_code, count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'curriculum.rank_setup.%' AND source='HUMAN_UI' GROUP BY 1 ORDER BY 1", [ids.organization])).rows;
   const count = (code) => audits.find((a) => a.action_code === `curriculum.rank_setup.${code}`)?.n ?? 0;
-  ok(count('program_create') === 1 && count('rank_add') === 4 && count('rank_update') === 1 && count('rank_move') === 1 && count('program_rename') === 1, `one audit row per command: ${JSON.stringify(audits)}`);
-  ok((await sql('SELECT count(*)::int n FROM hon.curriculum_command_requests WHERE organization_id=$1', [ids.organization])).rows[0].n === 8, 'one receipt per command');
-  ok((await sql('SELECT count(*)::int n FROM hon.curricula WHERE organization_id=$1', [ids.organization])).rows[0].n === 1, 'refused creates left nothing');
+  ok(count('program_create') === 1 && count('program_setup') === 1 && count('rank_add') === 4 && count('rank_update') === 2 && count('rank_move') === 1 && count('rank_remove') === 1 && count('program_rename') === 1, `one audit row per command: ${JSON.stringify(audits)}`);
+  ok((await sql('SELECT count(*)::int n FROM hon.curriculum_command_requests WHERE organization_id=$1', [ids.organization])).rows[0].n === 11, 'one receipt per command');
+  ok((await sql('SELECT count(*)::int n FROM hon.curricula WHERE organization_id=$1', [ids.organization])).rows[0].n === 2, 'refused creates left nothing');
 
   // 13. Runtime ACL: the two entry points only; the projection helper is private; direct calls without the human session are refused.
   const helper = (await sql(`SELECT has_function_privilege($1,'hon.rank_setup_program(uuid,uuid,uuid)','EXECUTE') runtime,
     EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0) pub FROM pg_proc p WHERE p.oid='hon.rank_setup_program(uuid,uuid,uuid)'::regprocedure`, [CRM_CLOSE_RUNTIME_ROLE])).rows[0];
   ok(!helper.runtime && !helper.pub, 'projection helper is private');
+  ok(!(await sql("SELECT has_function_privilege($1,'hon.rank_setup_rules(jsonb,integer,integer)','EXECUTE') e", [CRM_CLOSE_RUNTIME_ROLE])).rows[0].e, 'belt rule helper is private');
   for (const fn of ['read_staff_rank_setup(text)', 'mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)']) {
     ok((await sql("SELECT has_function_privilege($1,$2,'EXECUTE') e", [CRM_CLOSE_RUNTIME_ROLE, `hon.${fn}`])).rows[0].e, `runtime may execute ${fn}`);
   }

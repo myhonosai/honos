@@ -3,13 +3,13 @@
  * A school's programs (curricula) and their belt ladders. Strict, closed verifiers only.
  */
 export const RANK_SETUP_COMMAND = 'rank-setup';
-export type RankSetupOperation = 'PROGRAM_CREATE' | 'PROGRAM_RENAME' | 'RANK_ADD' | 'RANK_UPDATE' | 'RANK_MOVE';
+export type RankSetupOperation = 'PROGRAM_CREATE' | 'PROGRAM_SETUP' | 'PROGRAM_RENAME' | 'RANK_ADD' | 'RANK_UPDATE' | 'RANK_MOVE' | 'RANK_REMOVE';
 export const RANK_REQUIREMENT_KINDS = ['TECHNIQUE', 'KNOWLEDGE', 'CHARACTER', 'ATTENDANCE', 'PRACTICE', 'INSTRUCTOR_JUDGMENT', 'CUSTOM'] as const;
 export type RankRequirementKind = (typeof RANK_REQUIREMENT_KINDS)[number];
-export const RANK_SETUP_LIMITS = { programs: 100, ranks: 60, requirements: 100, students: 1000, name: 120 } as const;
+export const RANK_SETUP_LIMITS = { programs: 100, ranks: 60, requirements: 100, students: 1000, name: 120, classes: 2000, days: 3650 } as const;
 
 export interface RankSetupRequirement { id: string; code: string; kind: RankRequirementKind; label: string; description: string; required: boolean; version: number }
-export interface RankSetupRank { id: string; name: string; color: string | null; order: number; version: number; students: number; requirements: RankSetupRequirement[] }
+export interface RankSetupRank { id: string; name: string; color: string | null; order: number; version: number; classes: number; days: number; students: number; requirements: RankSetupRequirement[] }
 export interface RankSetupProgram { id: string; name: string; version: number; ranks: RankSetupRank[] }
 export interface RankSetupStudent { enrollmentId: string; programId: string; studentProfileId: string; givenName: string; familyName: string; currentRankId: string | null; version: number }
 /** students is null when the signed-in person may set up belts but not record student progress. */
@@ -17,7 +17,10 @@ export interface StaffRankSetup { programs: RankSetupProgram[]; students: RankSe
 
 export interface RankSetupProgramInput { name: string }
 export interface RankSetupProgramRenameInput { expectedVersion: number; name: string }
-export interface RankSetupRankInput { name: string; color: string | null }
+/** classes and days are what a student needs at this belt before the next one; 0 means no rule. */
+export interface RankSetupRankInput { name: string; color: string | null; classes: number; days: number }
+export interface RankSetupQuickInput { name: string; ranks: RankSetupRankInput[] }
+export interface RankSetupRankRemoveInput { expectedVersion: number }
 export interface RankSetupRankUpdateInput extends RankSetupRankInput { expectedVersion: number }
 export interface RankSetupRankMoveInput { expectedVersion: number; direction: 'UP' | 'DOWN' }
 
@@ -55,8 +58,8 @@ export function verifyRankSetupProgram(v: unknown): RankSetupProgram {
   if (!isRankSetupId(p.id) || !version(p.version) || !Array.isArray(p.ranks) || p.ranks.length > RANK_SETUP_LIMITS.ranks) bad();
   shown(p.name, 160);
   const ranks = unique(p.ranks.map((x) => {
-    const k = closed(x, ['id', 'name', 'color', 'order', 'version', 'students', 'requirements']);
-    if (!isRankSetupId(k.id) || !isRankSetupColor(k.color) || !int(k.order, 1, 2147483647) || !version(k.version) || !int(k.students, 0, 10000000)
+    const k = closed(x, ['id', 'name', 'color', 'order', 'version', 'classes', 'days', 'students', 'requirements']);
+    if (!isRankSetupId(k.id) || !isRankSetupColor(k.color) || !int(k.order, 1, 2147483647) || !version(k.version) || !int(k.students, 0, 10000000) || !int(k.classes, 0, RANK_SETUP_LIMITS.classes) || !int(k.days, 0, RANK_SETUP_LIMITS.days)
       || !Array.isArray(k.requirements) || k.requirements.length > RANK_SETUP_LIMITS.requirements) bad();
     shown(k.name, 160);
     return Object.freeze({ ...k, requirements: unique(k.requirements.map(verifyRankSetupRequirement), (r) => r.id) } as unknown as RankSetupRank);
@@ -86,13 +89,21 @@ export function verifyStaffRankSetup(v: unknown): StaffRankSetup {
   return Object.freeze({ programs, students });
 }
 
+const belt = (r: Record<string, unknown>) => isValidRankSetupName(r.name) && isRankSetupColor(r.color) && int(r.classes, 0, RANK_SETUP_LIMITS.classes) && int(r.days, 0, RANK_SETUP_LIMITS.days);
 /** Closed command bodies; the API and the database check every field again. */
 export function isValidRankSetupInput(op: RankSetupOperation, v: unknown): boolean {
   try {
     if (op === 'PROGRAM_CREATE') return isValidRankSetupName(closed(v, ['name']).name);
     if (op === 'PROGRAM_RENAME') { const r = closed(v, ['expectedVersion', 'name']); return version(r.expectedVersion) && isValidRankSetupName(r.name); }
-    if (op === 'RANK_ADD') { const r = closed(v, ['name', 'color']); return isValidRankSetupName(r.name) && isRankSetupColor(r.color); }
-    if (op === 'RANK_UPDATE') { const r = closed(v, ['expectedVersion', 'name', 'color']); return version(r.expectedVersion) && isValidRankSetupName(r.name) && isRankSetupColor(r.color); }
+    if (op === 'PROGRAM_SETUP') {
+      const r = closed(v, ['name', 'ranks']);
+      if (!isValidRankSetupName(r.name) || !Array.isArray(r.ranks) || r.ranks.length < 1 || r.ranks.length > RANK_SETUP_LIMITS.ranks) return false;
+      const names = r.ranks.map((x) => { const k = closed(x, ['name', 'color', 'classes', 'days']); if (!belt(k)) bad(); return (k.name as string).toLowerCase(); });
+      return new Set(names).size === names.length;
+    }
+    if (op === 'RANK_ADD') return belt(closed(v, ['name', 'color', 'classes', 'days']));
+    if (op === 'RANK_UPDATE') { const r = closed(v, ['expectedVersion', 'name', 'color', 'classes', 'days']); return version(r.expectedVersion) && belt(r); }
+    if (op === 'RANK_REMOVE') return version(closed(v, ['expectedVersion']).expectedVersion);
     if (op === 'RANK_MOVE') { const r = closed(v, ['expectedVersion', 'direction']); return version(r.expectedVersion) && (r.direction === 'UP' || r.direction === 'DOWN'); }
   } catch { return false; }
   return false;

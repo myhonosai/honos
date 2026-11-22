@@ -2,18 +2,20 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RankSetupProgram, StaffRankSetup } from '@hon/contracts';
-import { RankSetupPage, studentsIn, plural, type RankSetupActions } from '../src/components/rank-setup/rank-setup';
+import { RankSetupPage, ruleText, studentsIn, plural, type RankSetupActions } from '../src/components/rank-setup/rank-setup';
 import { rankSetupApi, RankSetupRefusal, requirementCode } from '../src/components/rank-setup/http';
+import { RANK_TEMPLATES, beltListProblem, buildBelts, choicesFor } from '../src/components/rank-setup/templates';
+import { QuickSetup } from '../src/components/rank-setup/quick-setup';
 import { SCHOOL_SHELL_NAV, schoolShellActiveItem } from '../src/components/school-shell/catalog';
 
 const u = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const school = u(1), org = u(2), prog = u(10), white = u(11), yellow = u(12);
 const program = (patch: Partial<RankSetupProgram> = {}): RankSetupProgram => ({ id: prog, name: 'Kids Taekwondo', version: 2, ranks: [
-  { id: white, name: 'White belt', color: '#FFFFFF', order: 1, version: 1, students: 1, requirements: [{ id: u(30), code: 'FRONT_KICK', kind: 'TECHNIQUE', label: 'Front kick', description: '', required: true, version: 1 }] },
-  { id: yellow, name: 'Yellow belt', color: null, order: 2, version: 1, students: 0, requirements: [] }], ...patch });
+  { id: white, name: 'White belt', color: '#FFFFFF', order: 1, version: 1, classes: 48, days: 90, students: 1, requirements: [{ id: u(30), code: 'FRONT_KICK', kind: 'TECHNIQUE', label: 'Front kick', description: '', required: true, version: 1 }] },
+  { id: yellow, name: 'Yellow belt', color: null, order: 2, version: 1, classes: 0, days: 0, students: 0, requirements: [] }], ...patch });
 const view = (patch: Partial<StaffRankSetup> = {}): StaffRankSetup => ({ programs: [program()], students: [{ enrollmentId: u(40), programId: prog, studentProfileId: u(41),
   givenName: 'Ana', familyName: 'Sample', currentRankId: white, version: 3 }], ...patch });
-const actions = (): RankSetupActions => ({ createProgram: vi.fn(), renameProgram: vi.fn(), addRank: vi.fn(), updateRank: vi.fn(), moveRank: vi.fn(), addRequirement: vi.fn(),
+const actions = (): RankSetupActions => ({ createProgram: vi.fn(), renameProgram: vi.fn(), quickSetup: vi.fn(), addRank: vi.fn(), updateRank: vi.fn(), removeRank: vi.fn(), moveRank: vi.fn(), addRequirement: vi.fn(),
   updateRequirement: vi.fn(), placeStudent: vi.fn(), setStudentRank: vi.fn() });
 const render = (v: StaffRankSetup | null, extra: Partial<Parameters<typeof RankSetupPage>[0]> = {}) => renderToStaticMarkup(<RankSetupPage view={v} selected={prog} onSelect={() => {}}
   busy={false} loading={false} error="" notice="" scope={{ organizationId: org, schoolId: school }} onRefresh={() => {}} actions={actions()} {...extra} />);
@@ -32,6 +34,9 @@ describe('rank setup page', () => {
     const html = render(view({ programs: [], students: [] }));
     expect(html).toContain('Start with your first program');
     expect(html).toContain('Add program');
+    expect(html).toContain('Quick setup');
+    expect(html).toContain('What do you teach?');
+    for (const t of RANK_TEMPLATES) expect(html).toContain(t.art.replace(/&/g, '&amp;'));
     expect(html).not.toMatch(/UUID|curriculum id|enrollment/i);
   });
   it('shows belts in order with color, students and what each belt needs', () => {
@@ -39,6 +44,8 @@ describe('rank setup page', () => {
     expect(html).toContain('Belts, first to last');
     expect(html.indexOf('White belt')).toBeLessThan(html.indexOf('Yellow belt'));
     expect(html).toContain('What this belt needs (1)');
+    expect(html).toContain('48 classes and 90 days to move up');
+    expect(html).toContain('Quick setup for a new program');
     expect(html).toContain('Move White belt up');
     expect(html).toMatch(/aria-label="Move White belt up" disabled/);
     expect(html).toMatch(/aria-label="Move Yellow belt down" disabled/);
@@ -77,14 +84,30 @@ describe('rank setup calls', () => {
   it('posts to the verified school with the rank-setup command and an idempotency key', async () => {
     const fetchMock = vi.fn(async () => ok(program()));
     vi.stubGlobal('fetch', fetchMock);
-    const r = await rankSetupApi.addRank(school, prog, 'Green belt', '#16A34A', u(500));
+    const r = await rankSetupApi.addRank(school, prog, { name: 'Green belt', color: '#16A34A', classes: 24, days: 60 }, u(500));
     expect(r.id).toBe(prog);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`/api/v1/staff/schools/${school}/rank-setup/programs/${prog}/ranks`);
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['X-Hon-Human-Command']).toBe('rank-setup');
     expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(u(500));
-    expect(JSON.parse(String(init.body))).toEqual({ name: 'Green belt', color: '#16A34A' });
+    expect(JSON.parse(String(init.body))).toEqual({ name: 'Green belt', color: '#16A34A', classes: 24, days: 60 });
+  });
+  it('sends quick setup as one command and belt removal with its version', async () => {
+    const fetchMock = vi.fn(async () => ok(program()));
+    vi.stubGlobal('fetch', fetchMock);
+    const ranks = buildBelts(RANK_TEMPLATES[0]!, choicesFor(RANK_TEMPLATES[0]!));
+    await rankSetupApi.quickSetup(school, 'Taekwondo', ranks, u(510));
+    await rankSetupApi.removeRank(school, prog, yellow, 1, u(511));
+    await rankSetupApi.updateRank(school, prog, white, 1, { name: 'White belt', color: null, classes: 10, days: 30 }, u(512));
+    const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+    expect(calls[0]![0]).toBe(`/api/v1/staff/schools/${school}/rank-setup/quick-setup`);
+    expect(JSON.parse(String(calls[0]![1].body))).toEqual({ name: 'Taekwondo', ranks });
+    expect(calls[1]![0]).toBe(`/api/v1/staff/schools/${school}/rank-setup/programs/${prog}/ranks/${yellow}/remove`);
+    expect(JSON.parse(String(calls[1]![1].body))).toEqual({ expectedVersion: 1 });
+    expect(JSON.parse(String(calls[2]![1].body))).toEqual({ expectedVersion: 1, name: 'White belt', color: null, classes: 10, days: 30 });
+    vi.stubGlobal('fetch', vi.fn(async () => fail(409, 'RANK_IN_USE')));
+    await expect(rankSetupApi.removeRank(school, prog, white, 1, u(513))).rejects.toMatchObject({ code: 'RANK_IN_USE', message: expect.stringMatching(/cannot be removed/) });
   });
   it('sends requirements and belt changes to the existing progress commands', async () => {
     const fetchMock = vi.fn(async () => ok({ id: u(31) }));
@@ -100,7 +123,7 @@ describe('rank setup calls', () => {
   });
   it('turns refusals into plain sentences and refuses unverifiable answers', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => fail(409, 'RANK_NAME_TAKEN')));
-    await expect(rankSetupApi.addRank(school, prog, 'White belt', null, u(503))).rejects.toMatchObject({ code: 'RANK_NAME_TAKEN', message: 'This program already has a belt with that name.' });
+    await expect(rankSetupApi.addRank(school, prog, { name: 'White belt', color: null, classes: 0, days: 0 }, u(503))).rejects.toMatchObject({ code: 'RANK_NAME_TAKEN', message: 'This program already has a belt with that name.' });
     vi.stubGlobal('fetch', vi.fn(async () => fail(403)));
     await expect(rankSetupApi.read(school)).rejects.toBeInstanceOf(RankSetupRefusal);
     vi.stubGlobal('fetch', vi.fn(async () => fail(500)));
@@ -108,5 +131,56 @@ describe('rank setup calls', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ok({ ...program(), extra: 1 })));
     await expect(rankSetupApi.createProgram(school, 'Adults', u(505))).rejects.toThrow(/could not be verified/);
     await expect(rankSetupApi.read('not-a-school')).rejects.toThrow(/could not be verified/);
+  });
+});
+
+describe('quick setup starting points', () => {
+  const t = (id: string) => RANK_TEMPLATES.find((x) => x.id === id)!;
+  it('every starting point builds a list the server accepts', () => {
+    for (const x of RANK_TEMPLATES) {
+      const list = buildBelts(x, choicesFor(x));
+      expect(beltListProblem(list), x.id).toBe('');
+      expect(list.length).toBeGreaterThan(0);
+      expect(list.at(-1)).toMatchObject({ classes: 0, days: 0 });
+      for (const b of list) { expect(b.color === null || /^#[0-9A-F]{6}$/.test(b.color)).toBe(true); expect(Object.keys(b).sort()).toEqual(['classes', 'color', 'days', 'name']); }
+    }
+  });
+  it('belt-based Taekwondo comes first, with degrees after the color belts', () => {
+    expect(RANK_TEMPLATES[0]!.id).toBe('taekwondo');
+    const names = buildBelts(t('taekwondo'), { stripes: 0, degrees: 3, classes: 24, days: 60 }).map((b) => b.name);
+    expect(names).toEqual(['White belt', 'Yellow belt', 'Orange belt', 'Green belt', 'Blue belt', 'Purple belt', 'Brown belt', 'Red belt', '1st degree black belt', '2nd degree black belt', '3rd degree black belt']);
+  });
+  it('adds stripes between belts but not after the black belt', () => {
+    const list = buildBelts(t('bjj-adult'), { stripes: 4, degrees: 0, classes: 40, days: 120 });
+    expect(list).toHaveLength(21);
+    expect(list[1]).toEqual({ name: 'White belt, 1 stripe', color: '#FFFFFF', classes: 40, days: 120 });
+    expect(list[4]!.name).toBe('White belt, 4 stripes');
+    expect(list.at(-1)!.name).toBe('Black belt');
+    expect(buildBelts(t('bjj-kids'), { stripes: 4, degrees: 5, classes: 0, days: 0 }).at(-1)!.name).toBe('Green belt, 4 stripes');
+  });
+  it('supports arts without belts and clamps odd answers', () => {
+    expect(buildBelts(t('levels'), choicesFor(t('levels'))).map((b) => b.name)).toEqual(['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5', 'Level 6']);
+    expect(buildBelts(t('kung-fu'), choicesFor(t('kung-fu')))[0]!.name).toBe('White sash');
+    const odd = buildBelts(t('karate'), { stripes: 99, degrees: -3, classes: 99999, days: Number.NaN });
+    expect(odd[0]).toMatchObject({ classes: 2000, days: 0 });
+    expect(odd.filter((b) => b.name.startsWith('White belt'))).toHaveLength(5);
+  });
+  it('says plainly why a list cannot be saved', () => {
+    expect(beltListProblem([])).toMatch(/at least one/);
+    expect(beltListProblem([{ name: 'White', color: null, classes: 0, days: 0 }, { name: ' white ', color: null, classes: 0, days: 0 }])).toMatch(/Two belts are named/);
+    expect(beltListProblem([{ name: ' ', color: null, classes: 0, days: 0 }])).toMatch(/needs a name/);
+    expect(beltListProblem(buildBelts(t('taekwondo'), { stripes: 4, degrees: 9, classes: 0, days: 0 }))).toBe('');
+    expect(beltListProblem(Array.from({ length: 61 }, (_, i) => ({ name: `B${i}`, color: null, classes: 0, days: 0 })))).toMatch(/up to 60 belts/);
+  });
+  it('the wizard starts with the question and saves nothing by itself', () => {
+    const html = renderToStaticMarkup(<QuickSetup busy={false} onCreate={vi.fn()} />);
+    expect(html).toContain('1. What do you teach?');
+    expect(html).not.toContain('3. Check the list');
+    expect(html).toContain('you can change anything later');
+  });
+  it('describes belt minimums in plain words', () => {
+    expect(ruleText({ classes: 48, days: 90 })).toBe('48 classes and 90 days');
+    expect(ruleText({ classes: 1, days: 0 })).toBe('1 class');
+    expect(ruleText({ classes: 0, days: 0 })).toBe('');
   });
 });

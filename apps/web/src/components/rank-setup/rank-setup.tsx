@@ -1,11 +1,12 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { RANK_REQUIREMENT_KINDS, isValidRankSetupName, type RankRequirementKind, type RankSetupProgram, type RankSetupRank, type RankSetupRequirement, type RankSetupStudent,
+import { RANK_REQUIREMENT_KINDS, isValidRankSetupName, type RankRequirementKind, type RankSetupProgram, type RankSetupRank, type RankSetupRankInput, type RankSetupRequirement, type RankSetupStudent,
   type StaffRankSetup as View } from '@hon/contracts';
 import { StudentPicker } from '../school-pickers/pickers';
 import type { PickerStudent } from '../school-pickers/http';
 import { useShellSchoolInto } from '../school-shell/page-school';
 import { rankSetupApi as api, requirementCode } from './http';
+import { QuickSetup } from './quick-setup';
 import s from '../curriculum-look/look.module.css';
 
 /**
@@ -29,8 +30,10 @@ export type RequirementDraft = { kind: RankRequirementKind; label: string; descr
 export interface RankSetupActions {
   createProgram(name: string): Promise<boolean>;
   renameProgram(p: RankSetupProgram, name: string): Promise<boolean>;
-  addRank(p: RankSetupProgram, name: string, color: string | null): Promise<boolean>;
-  updateRank(p: RankSetupProgram, k: RankSetupRank, name: string, color: string | null): Promise<boolean>;
+  quickSetup(name: string, ranks: RankSetupRankInput[]): Promise<boolean>;
+  addRank(p: RankSetupProgram, belt: RankSetupRankInput): Promise<boolean>;
+  updateRank(p: RankSetupProgram, k: RankSetupRank, belt: RankSetupRankInput): Promise<boolean>;
+  removeRank(p: RankSetupProgram, k: RankSetupRank): Promise<boolean>;
   moveRank(p: RankSetupProgram, k: RankSetupRank, direction: 'UP' | 'DOWN'): Promise<boolean>;
   addRequirement(p: RankSetupProgram, k: RankSetupRank, draft: RequirementDraft): Promise<boolean>;
   updateRequirement(p: RankSetupProgram, r: RankSetupRequirement, draft: RequirementDraft): Promise<boolean>;
@@ -63,8 +66,10 @@ export function StaffRankSetup(): React.ReactElement {
   const actions: RankSetupActions = {
     createProgram: (name) => run(`program:${name}`, async (k) => { put(await api.createProgram(school.current, name, k)); return `Added ${name}. Now add its belts in order.`; }),
     renameProgram: (p, name) => run(`rename:${p.id}:${p.version}:${name}`, async (k) => { put(await api.renameProgram(school.current, p.id, p.version, name, k)); return `Renamed to ${name}.`; }),
-    addRank: (p, name, color) => run(`rank:${p.id}:${name}:${color}`, async (k) => { put(await api.addRank(school.current, p.id, name, color, k)); return `Added ${name}.`; }),
-    updateRank: (p, r, name, color) => run(`edit:${r.id}:${r.version}:${name}:${color}`, async (k) => { put(await api.updateRank(school.current, p.id, r.id, r.version, name, color, k)); return `Saved ${name}.`; }),
+    quickSetup: (name, ranks) => run(`quick:${JSON.stringify([name, ranks])}`, async (k) => { put(await api.quickSetup(school.current, name, ranks, k)); return `Created ${name} with ${plural(ranks.length, 'belt')}. Change anything below.`; }),
+    addRank: (p, b) => run(`rank:${p.id}:${JSON.stringify(b)}`, async (k) => { put(await api.addRank(school.current, p.id, b, k)); return `Added ${b.name}.`; }),
+    updateRank: (p, r, b) => run(`edit:${r.id}:${r.version}:${JSON.stringify(b)}`, async (k) => { put(await api.updateRank(school.current, p.id, r.id, r.version, b, k)); return `Saved ${b.name}.`; }),
+    removeRank: (p, r) => run(`remove:${r.id}:${r.version}`, async (k) => { put(await api.removeRank(school.current, p.id, r.id, r.version, k)); return `Removed ${r.name}.`; }),
     moveRank: (p, r, direction) => run(`move:${r.id}:${r.version}:${direction}`, async (k) => { put(await api.moveRank(school.current, p.id, r.id, r.version, direction, k)); return `Moved ${r.name} ${direction === 'UP' ? 'up' : 'down'}.`; }),
     addRequirement: (p, r, d) => run(`need:${r.id}:${JSON.stringify(d)}`, async (k) => {
       await api.addRequirement(org.current, school.current, p.id, r.id, { ...d, code: requirementCode(d.label, r.requirements.map((x) => x.code)) }, k); return `Added "${d.label}" to ${r.name}.`; }, true),
@@ -84,6 +89,8 @@ export function StaffRankSetup(): React.ReactElement {
 export function RankSetupPage(p: { view: View | null; selected: string; onSelect: (id: string) => void; busy: boolean; loading: boolean; error: string; notice: string;
   scope: { organizationId: string; schoolId: string } | null; onRefresh: () => void; actions: RankSetupActions }): React.ReactElement {
   const current = p.view?.programs.find((x) => x.id === p.selected) ?? null;
+  const [quick, setQuick] = useState(false);
+  const create = (name: string, ranks: RankSetupRankInput[]) => p.actions.quickSetup(name, ranks).then((ok) => { if (ok) setQuick(false); return ok; });
   return <main className={s.page}>
     <header className={s.head}><div><p className={s.eyebrow}>Ranks &amp; curriculum</p><h1>Rank setup</h1>
       <p>Set up each program&apos;s belts in order, write down what each belt needs, and place students on their belt.</p></div>
@@ -96,8 +103,11 @@ export function RankSetupPage(p: { view: View | null; selected: string; onSelect
     {p.loading && !p.view && <p role="status" className={s.muted}>Reading your programs…</p>}
     {p.view && !p.view.programs.length && <section className={s.panel} aria-labelledby="first-program">
       <h2 id="first-program">Start with your first program</h2>
-      <ol className={s.steps}><li>Name a program, for example &ldquo;Kids Taekwondo&rdquo; or &ldquo;Adult BJJ&rdquo;.</li><li>Add its belts from first to last.</li>
-        <li>Write what each belt needs, then place your students on their current belt.</li></ol>
+      <p className={s.muted}>A program is one set of belts, for example &ldquo;Kids Taekwondo&rdquo; or &ldquo;Adult BJJ&rdquo;. Quick setup builds the belts for you. After that you write what each belt needs and place your students on their belt.</p>
+    </section>}
+    {p.view && !p.view.programs.length && <QuickSetup busy={p.busy} onCreate={create} />}
+    {p.view && !p.view.programs.length && <section className={s.panel} aria-labelledby="blank-program">
+      <h2 id="blank-program">Or start from an empty program</h2>
       <NewProgram busy={p.busy} actions={p.actions} />
     </section>}
     {p.view && !!p.view.programs.length && <div className={s.split}>
@@ -106,8 +116,10 @@ export function RankSetupPage(p: { view: View | null; selected: string; onSelect
           <span className={s.rowTitle}>{x.name}</span>
           <span className={s.rowMeta}><span>{plural(x.ranks.length, 'belt')}</span>{p.view!.students !== null && <span>· {plural(studentsIn(p.view!, x.id).length, 'student')}</span>}</span>
         </button></li>)}
+        <li><button type="button" className={s.primary} disabled={p.busy} aria-expanded={quick} onClick={() => setQuick(true)}>Quick setup for a new program</button></li>
         <li><NewProgram busy={p.busy} actions={p.actions} compact /></li></ul></nav>
-      {current && <div className={s.detail}>
+      {quick && <div className={s.detail}><QuickSetup busy={p.busy} onCreate={create} onCancel={() => setQuick(false)} /></div>}
+      {!quick && current && <div className={s.detail}>
         <ProgramName key={`${current.id}:${current.version}`} program={current} busy={p.busy} actions={p.actions} />
         <Belts program={current} busy={p.busy} actions={p.actions} />
         <Students program={current} students={p.view.students === null ? null : studentsIn(p.view, current.id)} scope={p.scope} busy={p.busy} actions={p.actions} />
@@ -143,16 +155,27 @@ export function ColorChoice({ value, onChange, disabled }: { value: string | nul
   </div>;
 }
 
+const count = (v: string, max: number) => Math.min(max, Math.max(0, Math.trunc(Number(v) || 0)));
+/** What a student needs at a belt before the next one, in plain words; '' when the belt has no minimum. */
+export const ruleText = (k: { classes: number; days: number }) => [k.classes ? plural(k.classes, 'class', 'classes') : '', k.days ? plural(k.days, 'day') : ''].filter(Boolean).join(' and ');
+function RuleFields(p: { classes: number; days: number; setClasses: (n: number) => void; setDays: (n: number) => void; busy: boolean }): React.ReactElement {
+  return <><div className={s.grid2}>
+    <label className={s.label}>Classes before the next belt<input className={s.field} type="number" inputMode="numeric" min={0} max={2000} value={p.classes} disabled={p.busy} onChange={(e) => p.setClasses(count(e.target.value, 2000))} /></label>
+    <label className={s.label}>Days at this belt<input className={s.field} type="number" inputMode="numeric" min={0} max={3650} value={p.days} disabled={p.busy} onChange={(e) => p.setDays(count(e.target.value, 3650))} /></label>
+  </div><p className={s.muted}>Use 0 for no minimum. Tests &gt; Who is ready uses these numbers.</p></>;
+}
+
 function Belts({ program, busy, actions }: { program: RankSetupProgram; busy: boolean; actions: RankSetupActions }): React.ReactElement {
-  const [name, setName] = useState(''), [color, setColor] = useState<string | null>(BELT_COLORS[0]!.hex); const clean = name.trim();
+  const [name, setName] = useState(''), [color, setColor] = useState<string | null>(BELT_COLORS[0]!.hex), [classes, setClasses] = useState(0), [days, setDays] = useState(0); const clean = name.trim();
   return <section className={s.panel} aria-labelledby={`belts-${program.id}`}>
     <h2 id={`belts-${program.id}`}>Belts, first to last</h2>
     {!program.ranks.length && <p className={s.muted}>No belts yet. Add the first belt a new student starts on, then the next one, and so on.</p>}
     {program.ranks.length > 1 && <p className={s.muted}>Moving a belt up or down changes the order for everyone. Students keep the belt they have.</p>}
     <ol className={s.cards}>{program.ranks.map((k, i) => <li key={k.id}><Belt program={program} rank={k} index={i} last={i === program.ranks.length - 1} busy={busy} actions={actions} /></li>)}</ol>
-    <form className={s.addForm} onSubmit={(e) => { e.preventDefault(); if (isValidRankSetupName(clean)) void actions.addRank(program, clean, color).then((ok) => { if (ok) setName(''); }); }}>
+    <form className={s.addForm} onSubmit={(e) => { e.preventDefault(); if (isValidRankSetupName(clean)) void actions.addRank(program, { name: clean, color, classes, days }).then((ok) => { if (ok) setName(''); }); }}>
       <label className={s.label}>Next belt<input className={s.field} required maxLength={120} value={name} placeholder={program.ranks.length ? 'Yellow belt' : 'White belt'} onChange={(e) => setName(e.target.value)} /></label>
       <ColorChoice value={color} onChange={setColor} disabled={busy} />
+      <RuleFields classes={classes} days={days} setClasses={setClasses} setDays={setDays} busy={busy} />
       <div className={s.actions}><button className={s.primary} disabled={busy || !isValidRankSetupName(clean)}>Add belt</button></div>
     </form>
   </section>;
@@ -160,15 +183,23 @@ function Belts({ program, busy, actions }: { program: RankSetupProgram; busy: bo
 
 function Belt({ program, rank, index, last, busy, actions }: { program: RankSetupProgram; rank: RankSetupRank; index: number; last: boolean; busy: boolean; actions: RankSetupActions }): React.ReactElement {
   const [editing, setEditing] = useState(false), [open, setOpen] = useState(false), [name, setName] = useState(rank.name), [color, setColor] = useState(rank.color); const clean = name.trim();
+  const [classes, setClasses] = useState(rank.classes), [days, setDays] = useState(rank.days), [removing, setRemoving] = useState(false), rule = ruleText(rank);
+  const same = clean === rank.name && color === rank.color && classes === rank.classes && days === rank.days;
   return <article className={s.belt} style={{ borderLeftColor: rank.color ?? undefined }} aria-label={rank.name}>
-    {editing ? <form className={s.stack} onSubmit={(e) => { e.preventDefault(); if (isValidRankSetupName(clean)) void actions.updateRank(program, rank, clean, color).then((ok) => { if (ok) setEditing(false); }); }}>
+    {editing ? <form className={s.stack} onSubmit={(e) => { e.preventDefault(); if (isValidRankSetupName(clean)) void actions.updateRank(program, rank, { name: clean, color, classes, days }).then((ok) => { if (ok) setEditing(false); }); }}>
       <label className={s.label}>Belt name<input className={s.field} maxLength={120} value={name} onChange={(e) => setName(e.target.value)} /></label>
       <ColorChoice value={color} onChange={setColor} disabled={busy} />
-      <div className={s.actions}><button className={s.primary} disabled={busy || !isValidRankSetupName(clean) || (clean === rank.name && color === rank.color)}>Save</button>
-        <button type="button" className={s.ghost} onClick={() => { setEditing(false); setName(rank.name); setColor(rank.color); }}>Cancel</button></div></form>
+      <RuleFields classes={classes} days={days} setClasses={setClasses} setDays={setDays} busy={busy} />
+      <div className={s.actions}><button className={s.primary} disabled={busy || !isValidRankSetupName(clean) || same}>Save</button>
+        <button type="button" className={s.ghost} onClick={() => { setEditing(false); setRemoving(false); setName(rank.name); setColor(rank.color); setClasses(rank.classes); setDays(rank.days); }}>Cancel</button>
+        {!removing && <button type="button" className={s.danger} disabled={busy} onClick={() => setRemoving(true)}>Remove this belt</button>}</div>
+      {removing && <div className={s.flash} data-tone="bad" role="group" aria-label={`Remove ${rank.name}`}>
+        <p>Remove {rank.name} from {program.name}? A belt with students, requirements or test history cannot be removed.</p>
+        <div className={s.actions}><button type="button" className={s.danger} disabled={busy} onClick={() => void actions.removeRank(program, rank)}>Yes, remove {rank.name}</button>
+          <button type="button" className={s.ghost} onClick={() => setRemoving(false)}>Keep it</button></div></div>}</form>
       : <div className={s.beltHead}>
         <h3><span className={s.pos}>{index + 1}</span><span className={s.swatch} data-empty={rank.color === null} style={rank.color ? { background: rank.color } : undefined} />{rank.name}
-          <span className={s.badge}>{plural(rank.students, 'student')}</span></h3>
+          <span className={s.badge}>{plural(rank.students, 'student')}</span>{rule && <span className={s.badge}>{rule} to move up</span>}</h3>
         <div className={s.actions}>
           <button type="button" className={s.icon} aria-label={`Move ${rank.name} up`} disabled={busy || index === 0} onClick={() => void actions.moveRank(program, rank, 'UP')}>↑</button>
           <button type="button" className={s.icon} aria-label={`Move ${rank.name} down`} disabled={busy || last} onClick={() => void actions.moveRank(program, rank, 'DOWN')}>↓</button>

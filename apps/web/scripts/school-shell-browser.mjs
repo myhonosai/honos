@@ -51,11 +51,11 @@ const snapshot = (scope) => ({
 });
 
 // Rank setup (0622) synthetic fixtures: one program with three belts, two students. The mock keeps belts added in this run.
-const rsRank = (n, name, color, order, students, requirements = []) => ({ id: id(700 + n), name, color, order, version: 1, students, requirements });
+const rsRank = (n, name, color, order, students, requirements = [], classes = 0, days = 0) => ({ id: id(700 + n), name, color, order, version: 1, classes, days, students, requirements });
 let rankSetupState = null;
 const rankSetup = () => rankSetupState ??= { programs: [{ id: id(690), name: 'Kids Taekwondo', version: 1, ranks: [
   rsRank(1, 'White belt', '#FFFFFF', 1, 1, [{ id: id(721), code: 'FRONT_KICK', kind: 'TECHNIQUE', label: 'Front kick, both legs', description: '', required: true, version: 1 },
-    { id: id(722), code: 'RESPECT', kind: 'CHARACTER', label: 'Bows in and out of class', description: '', required: true, version: 1 }]),
+    { id: id(722), code: 'RESPECT', kind: 'CHARACTER', label: 'Bows in and out of class', description: '', required: true, version: 1 }], 24, 60),
   rsRank(2, 'Yellow belt', '#FACC15', 2, 1, [{ id: id(723), code: 'TAEGEUK_1', kind: 'TECHNIQUE', label: 'Taegeuk 1', description: 'Whole form without help.', required: true, version: 1 }]),
   rsRank(3, 'Orange belt', '#F97316', 3, 0)] }, { id: id(691), name: 'Adult Karate', version: 1, ranks: [] }],
   students: [{ enrollmentId: id(731), programId: id(690), studentProfileId: id(741), givenName: 'Avery', familyName: 'Sample', currentRankId: id(701), version: 1 },
@@ -190,8 +190,20 @@ function api(route) {
     if (path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup`) return json(route, 200, { data: rankSetup(), meta: { requestId: id(750), correlationId: id(750), replayed: false } });
     if (method === 'POST' && path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/programs/${id(690)}/ranks`) {
       const body = JSON.parse(route.request().postData() ?? '{}'), p = rankSetup().programs[0];
-      p.ranks.push(rsRank(p.ranks.length + 10, body.name, body.color, p.ranks.length + 1, 0)); p.version += 1;
+      p.ranks.push(rsRank(p.ranks.length + 10, body.name, body.color, p.ranks.length + 1, 0, [], body.classes, body.days)); p.version += 1;
       return json(route, 200, { data: p, meta: { requestId: id(751), correlationId: id(751), replayed: false } });
+    }
+    // Quick setup creates the program and all its belts in one command; removing a belt closes the order up.
+    if (method === 'POST' && path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/quick-setup`) {
+      const body = JSON.parse(route.request().postData() ?? '{}');
+      const p = { id: id(692), name: body.name, version: 1, ranks: body.ranks.map((b, i) => rsRank(50 + i, b.name, b.color, i + 1, 0, [], b.classes, b.days)) };
+      rankSetup().programs.push(p);
+      return json(route, 200, { data: p, meta: { requestId: id(752), correlationId: id(752), replayed: false } });
+    }
+    if (method === 'POST' && /\/rank-setup\/programs\/[0-9a-f-]{36}\/ranks\/[0-9a-f-]{36}\/remove$/.test(path)) {
+      const [, pid, rid] = path.match(/programs\/([0-9a-f-]{36})\/ranks\/([0-9a-f-]{36})\/remove$/), p = rankSetup().programs.find((x) => x.id === pid);
+      p.ranks = p.ranks.filter((k) => k.id !== rid).map((k, i) => ({ ...k, order: i + 1 }));
+      return json(route, 200, { data: p, meta: { requestId: id(753), correlationId: id(753), replayed: false } });
     }
     // Parent app > Curriculum (0605/0610): one cycle-based and one rank-based synthetic curriculum.
     if (method === 'POST' && /\/parent-app\/curriculum\/[0-9a-f-]{36}\/cycles$/.test(path)) return json(route, 409, { code: 'CYCLE_NAME_TAKEN' });
@@ -550,8 +562,26 @@ for (const size of ['desktop', 'phone']) await check(`Rank setup: belts in order
   await page.getByRole('button', { name: 'Add belt' }).click();
   await page.getByText('Added Green belt.').waitFor();
   assert.equal(await page.getByRole('article', { name: 'Green belt' }).count(), 1, 'the new belt is listed last');
+  await page.getByText('24 classes and 60 days to move up').waitFor();
   await page.getByRole('button', { name: /Adult Karate/ }).click();
   await page.getByText('No belts yet.').waitFor();
+  // Quick setup: pick the art, answer, check the list, create; then a belt can be removed afterwards.
+  await page.getByRole('button', { name: 'Quick setup for a new program' }).click();
+  await page.getByRole('button', { name: /Brazilian Jiu-Jitsu \(adults\)/ }).click();
+  await page.getByText('3. Check the list (21 belts, first to last)').waitFor();
+  await page.getByLabel('Stripes on each belt').selectOption('0');
+  await page.getByText('3. Check the list (5 belts, first to last)').waitFor();
+  await page.getByLabel('Name of belt 1', { exact: true }).fill('White belt (new student)');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `rank-setup-quick-${size}.png`), fullPage: true }); report.screenshots.push(`rank-setup-quick-${size}.png`);
+  await page.getByRole('button', { name: 'Create Adult BJJ with 5 belts' }).click();
+  await page.getByText('Created Adult BJJ with 5 belts.').waitFor();
+  assert.equal(await page.getByRole('article', { name: 'White belt (new student)' }).count(), 1, 'the edited name was saved');
+  await page.getByRole('article', { name: 'Blue belt' }).getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Remove this belt' }).click();
+  await page.getByRole('button', { name: 'Yes, remove Blue belt' }).click();
+  await page.getByText('Removed Blue belt.').waitFor();
+  assert.equal(await page.getByRole('article', { name: 'Blue belt' }).count(), 0, 'the belt is gone');
   await ctx.close();
 });
 for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {

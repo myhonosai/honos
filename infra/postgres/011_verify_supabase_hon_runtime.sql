@@ -6033,13 +6033,14 @@ BEGIN
           AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
       RAISE EXCEPTION 'Unsafe rank setup entry point: %',f; END IF;
   END LOOP;
-  IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.rank_setup_program(uuid,uuid,uuid)'::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+  IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid IN('hon.rank_setup_program(uuid,uuid,uuid)'::regprocedure,'hon.rank_setup_rules(jsonb,integer,integer)'::regprocedure) AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
-    RAISE EXCEPTION 'Unsafe rank setup projection helper'; END IF;
+    RAISE EXCEPTION 'Unsafe rank setup helper'; END IF;
   FOR f,t,c,d IN SELECT * FROM (VALUES
     ('hon.read_staff_rank_setup(text)','458e2a2bec63e58d7493089816ca3179','v',true),
-    ('hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)','6b8961245fc02e710ce93278e1e1a857','v',true),
-    ('hon.rank_setup_program(uuid,uuid,uuid)','958ec40a85ea337910f6e3dec4cac3d6','s',false)) x LOOP
+    ('hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)','4f13ac880d02767a01aba321a5ba6e2b','v',true),
+    ('hon.rank_setup_program(uuid,uuid,uuid)','67367f8ce9dd8da25e1cdbb6d5fbd858','s',false),
+    ('hon.rank_setup_rules(jsonb,integer,integer)','0adc459c47c8705fc85263d5a230ee20','i',false)) x LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
         AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']) THEN
       RAISE EXCEPTION 'Rank setup function body/posture drift: %',f; END IF;

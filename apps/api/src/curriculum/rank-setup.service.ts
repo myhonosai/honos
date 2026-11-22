@@ -4,7 +4,7 @@ import { isRankSetupId, isValidRankSetupInput, verifyRankSetupProgram, verifySta
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
 /** Errors the page explains in plain words; anything else maps to the generic classes below. */
-const NAMED = ['PROGRAM_NAME_TAKEN', 'RANK_NAME_TAKEN', 'RANK_AT_END', 'PROGRAM_LIMIT', 'RANK_LIMIT'];
+const NAMED = ['PROGRAM_NAME_TAKEN', 'RANK_NAME_TAKEN', 'RANK_AT_END', 'RANK_IN_USE', 'PROGRAM_LIMIT', 'RANK_LIMIT'];
 function human(c: CurriculumResourceContext) {
  if (c.principalType !== 'HUMAN_USER' || c.source !== 'HUMAN_UI' || c.actionRequestId || c.delegatedByPrincipalId) throw new ForbiddenException({ code: 'HUMAN_COMMAND_REQUIRED' });
  if (![c.organizationId, c.schoolId, c.principalId, c.requestId, c.correlationId].every(isRankSetupId) || typeof c.externalSubject !== 'string' || !c.externalSubject.trim() || c.externalSubject.length > 200)
@@ -40,7 +40,7 @@ export class RankSetupService {
  async command(c: CurriculumResourceContext, op: RankSetupOperation, programId: string | null, rankId: string | null, input: object): Promise<{ record: RankSetupProgram; replayed: boolean }> {
   human(c);
   if (!isValidRankSetupInput(op, input)) throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'Use the closed rank setup fields and the current version.' });
-  if ((programId === null) !== (op === 'PROGRAM_CREATE') || (rankId === null) !== (op !== 'RANK_UPDATE' && op !== 'RANK_MOVE')
+  if ((programId === null) !== (op === 'PROGRAM_CREATE' || op === 'PROGRAM_SETUP') || (rankId === null) !== (op !== 'RANK_UPDATE' && op !== 'RANK_MOVE' && op !== 'RANK_REMOVE')
    || (programId !== null && !isRankSetupId(programId)) || (rankId !== null && !isRankSetupId(rankId))) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
   if (typeof c.idempotencyKey !== 'string' || !c.idempotencyKey || c.idempotencyKey.length > 200 || c.idempotencyKey.trim() !== c.idempotencyKey || /[\u0000-\u001f\u007f]/.test(c.idempotencyKey))
    throw new BadRequestException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
