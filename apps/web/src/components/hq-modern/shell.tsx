@@ -12,7 +12,18 @@ import { SignOutButton } from '../auth/sign-out-button';
 import { HonAssistant } from './assistant';
 import styles from './hq-modern.module.css';
 
-type AccessState = { kind: 'loading' | 'unauthorized' | 'forbidden' | 'unavailable' } | { kind: 'ready'; overview: HqPlatformOverview };
+type AccessState = { kind: 'loading' | 'unauthorized' | 'forbidden' | 'unavailable' | 'limited' } | { kind: 'ready'; overview: HqPlatformOverview };
+
+/**
+ * HQ pages whose own API decides HQ authority on every read and command (support by hq.support.manage, communications
+ * by purpose), so they can open without the overview. A signed-in account the overview refuses ("limited") reaches
+ * only these; it gets no overview, no HON assistant and no other page, and these pages still show only what their API
+ * returns to that account. Overview-backed pages keep the overview gate.
+ */
+export function hqPageAuthorizesItself(path: string): boolean {
+  return path === '/hq/support' || /^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)
+    || path === '/hq/communications' || /^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path);
+}
 type HqContextValue = { overview: HqPlatformOverview; view: HqView; art: HqArt; draft: string; setDraft: (value: string) => void; openAssistant: () => void };
 const HqContext = createContext<HqContextValue | null>(null);
 
@@ -61,7 +72,8 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     loadHqOverview().then(
       (overview) => { if (current) setAccess({ kind: 'ready', overview }); },
       (error: unknown) => {
-        if (current) setAccess({ kind: error instanceof HqOverviewAccessError ? error.status === 401 ? 'unauthorized' : 'forbidden' : 'unavailable' });
+        // A 403 is "no overview authority", not "no HQ authority": support and communications decide that themselves.
+        if (current) setAccess({ kind: error instanceof HqOverviewAccessError ? error.status === 401 ? 'unauthorized' : 'limited' : 'unavailable' });
       },
     );
     return () => { current = false; };
@@ -127,11 +139,13 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
           {assistant && <HonAssistant context={text(hqPageLabel(path))} onMinimize={closeAssistant}/>}
         </div>
         {(!assistant && path !== '/hq') && <button ref={assistantButton} type="button" className={styles.assistantLauncher} onClick={openAssistant} aria-label={t("Ask HON anywhere")} aria-expanded={false} title={t("Open HON assistant")}><HonCore small/><strong>{t("Ask HON anywhere")}</strong><HqIcon name="expand"/></button>}
-      </HqContext.Provider> : <main id="hq-main" tabIndex={-1} className={styles.accessState}>
+      </HqContext.Provider> : access.kind === 'limited' && hqPageAuthorizesItself(path) ? <main id="hq-main" tabIndex={-1} className={styles.main}>{children}</main>
+      : <main id="hq-main" tabIndex={-1} className={styles.accessState}>
         <HonCore small/>
-        <p className={styles.eyebrow}>{access.kind === 'loading' ? t("Verifying HQ access") : access.kind === 'forbidden' ? t("HQ access denied") : access.kind === 'unauthorized' ? t("Account required") : t("HQ unavailable")}</p>
-        <h2>{access.kind === 'loading' ? t("Loading your company workspace…") : access.kind === 'forbidden' ? t("This account has no current HQ authority.") : access.kind === 'unauthorized' ? t("Sign in to verify HQ access.") : t("The HQ overview could not be verified.")}</h2>
+        <p className={styles.eyebrow}>{access.kind === 'loading' ? t("Verifying HQ access") : access.kind === 'forbidden' || access.kind === 'limited' ? t("HQ access denied") : access.kind === 'unauthorized' ? t("Account required") : t("HQ unavailable")}</p>
+        <h2>{access.kind === 'loading' ? t("Loading your company workspace…") : access.kind === 'forbidden' || access.kind === 'limited' ? t("This account has no current HQ authority for this page.") : access.kind === 'unauthorized' ? t("Sign in to verify HQ access.") : t("The HQ overview could not be verified.")}</h2>
         <p role="status">{access.kind === 'loading' ? t("Company information will appear after HQ access is verified.") : t("No cached, sample or inferred company data is displayed.")}</p>
+        {access.kind === 'limited' ? <p><Link href="/hq/support">{t("Open Support")}</Link> · <Link href="/hq/communications">{t("Open Texts & Email")}</Link></p> : null}
         {access.kind === 'unauthorized' ? <Link href="/auth/login" className={styles.primary}>{t("Sign in to HON")}</Link> : access.kind !== 'loading' && <button type="button" className={styles.primary} onClick={() => setRevision((value) => value + 1)}>{t("Check access again")}</button>}
       </main>}
       <footer className={styles.pageFooter}><HqIcon name="shield" size={16}/><span>{t("HQ remains separate from school CRM. You retain final approval.")}</span><button type="button" onClick={() => { setAccess({ kind: 'loading' }); setRevision((value) => value + 1); }}>{t("Refresh HQ access")}</button></footer>
