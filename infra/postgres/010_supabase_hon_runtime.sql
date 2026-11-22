@@ -5097,3 +5097,19 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0622 rank setup: the staff read and the closed command are the only runtime entry points; the program projection and
+-- belt rule helpers stay migration-owner only.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_staff_rank_setup(text)','hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0622 first'; END IF;
+  FOREACH f IN ARRAY entry||ARRAY['hon.rank_setup_program(uuid,uuid,uuid)','hon.rank_setup_rules(jsonb,integer,integer)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
