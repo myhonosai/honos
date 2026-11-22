@@ -39,11 +39,12 @@ permission from the database on every call (forced RLS, existing guards). A pers
 
 ## API identity rules
 - Cookie present → web path, unchanged.
-- No cookie, `Authorization: Bearer` → try the family session, then the staff session. Channel stays `MOBILE` (so the
+- No cookie, `Authorization: Bearer` → try the family session, then the staff session. The order does not matter:
+  the two families have disjoint JWT `typ` and `aud`, so a token can verify as at most one. Channel stays `MOBILE` (so the
   existing native rule in `CurriculumHumanUiGuard` applies unchanged); `request.honMobileApp = 'FAMILY' | 'STAFF'`.
 - **Family app** routes: unchanged (`/v1/parent/`, `/v1/me/`, `/v1/auth/mobile/`).
 - **Staff app** routes: an explicit allow-list, `STAFF_MOBILE_ROUTES` in `hon-identity.service.ts`. S0 holds only:
-  - `/v1/me/…` (language, HQ contact)
+  - `/v1/me/language-preference` (exact; other `/v1/me/…` routes such as HQ contact stay refused until a phase needs them)
   - `/v1/auth/mobile/…`
   - `GET /v1/staff/current-reporting-school`, `GET /v1/staff/reporting-schools` (which school the person works at)
   Everything else, including `/v1/parent/…`, every `/v1/organizations/…` route, `/v1/hq/…` and all other `/v1/staff/…`
@@ -51,6 +52,13 @@ permission from the database on every call (forced RLS, existing guards). A pers
   its own reviewed PR, with a test per route.
 - The allow-list is matched on the URL path only (query ignored), anchored, segment-exact (no prefix tricks such as
   `/v1/staff/reporting-schoolsx`).
+
+## S0b: the app (`apps/staff-mobile`)
+Expo app outside the pnpm workspace (own npm lockfile, like the family app), CI `.github/workflows/staff-mobile.yml`.
+Sign in → `whereIWork()` (current school, else the list to choose from, same order as the web sign-in routing) →
+signed-in home. The chosen school lives only in memory and is never authority. 401 wipes the token; 403 or no
+school shows "no staff access". The "which school" verifiers moved to `packages/contracts/src/staff-school-choice.ts`
+so web and app share them. No EAS project yet (David creates it; no build without his OK).
 
 ## Out of scope (S0)
 The Expo app itself (S0b, next PR), HQ mode (S7), per-staff agent switches (S2), push, server-side token revocation

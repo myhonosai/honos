@@ -1175,3 +1175,4 @@ export * from './family-checkout.js';
 export * from './parent-attendance-streaks.js';
 export * from './journey-recommendations.js';
 export * from './creative-designs.js';
+export * from './staff-school-choice.js';
