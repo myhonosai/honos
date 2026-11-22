@@ -8,9 +8,8 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
+    # No paths filter on pull requests: main's ruleset requires both jobs, and a PR skipped by a path filter
+    # would never report them and could not merge (GitHub security review 2026-11-22).
   push:
     branches: [main]
     paths-ignore:
