@@ -9,6 +9,8 @@ export { money, shopifyAdminUrl };
 import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
 import { MerchStudio, type BrandState } from './studio';
 import type { MerchAiApi, MerchAiScope } from './merch-ai-http';
+import { CommerceReview } from './review';
+import type { ReviewApi, ReviewScope } from './review-http';
 
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
@@ -37,6 +39,8 @@ export type ShopifyViewProps = Readonly<{
   schoolName?: string | null | undefined; brand?: BrandState | undefined; creativeHref?: string | undefined;
   /** CS-M2: asking Marcus for merch ideas, when the school scope is known. */
   merchAi?: Readonly<{ api: MerchAiApi; scope: MerchAiScope }> | undefined;
+  /** CA1: asking Marcus how the store is doing, when the school scope is known. */
+  review?: Readonly<{ api: ReviewApi; scope: ReviewScope }> | undefined;
 }>;
 
 const when = (locale: string, iso: string) => { try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)); } catch { return iso; } };
@@ -388,7 +392,10 @@ function Finance({ ctx, read, c, finance, locked, busy, onAllowFinance }: { ctx:
         </div>
         <div className={styles.card}>
           <h2>{t('fin_payouts')}</h2>
-          {snap.payouts.length === 0 ? <p className={styles.meta}>{t('fin_noPayouts')}</p>
+          {snap.payouts.length === 0 ? <><p className={styles.meta}>{t('fin_noPayouts')}</p>
+            {/* An empty list is also what a store without the payouts permission gets (the view cannot tell the two apart). */}
+            {snap.paymentsActive && c.status === 'CONNECTED' && <><p className={styles.meta}>{t('fin_payoutsHelp')}</p>
+              <div className={styles.row}><button type="button" className={styles.secondary} disabled={locked} onClick={onAllowFinance} data-action="allow-payouts">{busy ? t('connecting') : t('fin_allowPayouts')}</button></div></>}</>
             : <div className={styles.tableWrap}><table className={styles.table} data-shopify-payouts>
               <thead><tr><th>{t('col_date')}</th><th>{t('col_status')}</th><th>{t('fin_amount')}</th></tr></thead>
               <tbody>{snap.payouts.map(o => <tr key={o.id} data-payout={o.id}>
@@ -518,7 +525,8 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
     </nav>
     {notice}
     {connectable && section !== 'settings' && c.status === 'NEEDS_RECONNECT' && <p className={`${styles.notice} ${styles.warn}`}>{t('needsReconnect')}</p>}
-    {section === 'overview' ? <Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} changes={changes} go={go} />
+    {section === 'overview' ? <><Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} changes={changes} go={go} />
+        {p.review && c.status === 'CONNECTED' && <CommerceReview language={p.language} canManage={read.canManage} locked={p.locked} when={(iso) => when(p.locale, iso)} review={p.review} />}</>
       : section === 'products' ? <Products ctx={ctx} catalog={p.catalog} edit={editing} />
       : section === 'studio' ? <MerchStudio ctx={ctx} language={p.language} school={p.schoolName ?? c.shopName ?? null} brand={p.brand ?? { state: 'NONE' }}
         canEdit={editing.canEdit} locked={p.locked} onPropose={editing.onPropose} creativeHref={p.creativeHref ?? '/staff/creative-studio'} merchAi={c.status === 'CONNECTED' ? p.merchAi : undefined} />

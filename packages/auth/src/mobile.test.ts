@@ -106,3 +106,60 @@ describe('bearer header', () => {
     expect(() => bearerToken(['Bearer a', 'Bearer b'])).toThrow(AuthValidationError);
   });
 });
+
+// S0 HON Staff app: a separate token family. Family and staff tokens must never verify as each other.
+import {
+  STAFF_MOBILE_START_COOKIE, exchangeStaffMobileHandoff, issueStaffMobileHandoff, issueStaffMobileSession, issueStaffMobileStart,
+  staffMobileHandoffForBrowser, verifyStaffMobileSession, verifyStaffMobileStart,
+} from './mobile.js';
+
+describe('staff mobile session (S0)', () => {
+  it('round-trips with its own type and audience', () => {
+    const token = issueStaffMobileSession(identity, config, now);
+    expect(verifyStaffMobileSession(token, config, now + 60)).toEqual(identity);
+    const decoded = jwt.decode(token, { complete: true })!;
+    expect(decoded.header).toEqual({ alg: 'HS256', typ: 'hon-staff-mobile-session+jwt' });
+    expect((decoded.payload as jwt.JwtPayload).aud).toBe('hon-test-app:staff-mobile');
+    expect(() => verifyStaffMobileSession(token, config, now + SESSION_SECONDS)).toThrow(AuthValidationError);
+  });
+  it('family, staff and web sessions never verify as each other', () => {
+    const staff = issueStaffMobileSession(identity, config, now);
+    expect(() => verifyMobileSession(staff, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => verifySession(staff, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => verifyStaffMobileSession(issueMobileSession(identity, config, now), config, now + 1)).toThrow(AuthValidationError);
+    expect(() => verifyStaffMobileSession(issueSession(identity, config, now), config, now + 1)).toThrow(AuthValidationError);
+  });
+  it('a staff session with the family typ but staff audience (or the reverse) is refused', () => {
+    const mixed = jwt.sign({ ...identity, iss: 'OIDC', aud: 'hon-test-app:staff-mobile', iat: now, exp: now + 60 }, secret, { algorithm: 'HS256', header: { alg: 'HS256', typ: 'hon-mobile-session+jwt' } });
+    expect(() => verifyStaffMobileSession(mixed, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => verifyMobileSession(mixed, config, now + 1)).toThrow(AuthValidationError);
+  });
+  it('start cookie: own cookie name, own type, challenge validated', () => {
+    expect(STAFF_MOBILE_START_COOKIE).toBe('hon_staff_mobile_start');
+    const start = issueStaffMobileStart(challenge, config, now);
+    expect(verifyStaffMobileStart(start, config, now + 1)).toBe(challenge);
+    expect(() => verifyMobileStart(start, config, now + 1)).toThrow(AuthValidationError);
+    expect(() => verifyStaffMobileStart(issueMobileStart(challenge, config, now), config, now + 1)).toThrow(AuthValidationError);
+    expect(() => issueStaffMobileStart('short', config, now)).toThrow(AuthValidationError);
+    expect(() => verifyStaffMobileStart(start, config, now + MOBILE_START_SECONDS)).toThrow(AuthValidationError);
+  });
+  it('hand-off: exchanges only with the verifier, only on the staff side, within 60 s', () => {
+    const code = issueStaffMobileHandoff(identity, challenge, config, now);
+    const { token, expiresAt } = exchangeStaffMobileHandoff(code, verifier, config, now + 5);
+    expect(verifyStaffMobileSession(token, config, now + 6)).toEqual(identity);
+    expect(expiresAt).toBe(new Date((now + 5 + SESSION_SECONDS) * 1000).toISOString());
+    expect(() => exchangeStaffMobileHandoff(code, 'w'.repeat(43), config, now + 5)).toThrow(AuthValidationError);
+    expect(() => exchangeStaffMobileHandoff(code, verifier, config, now + MOBILE_HANDOFF_SECONDS)).toThrow(AuthValidationError);
+    expect(() => exchangeMobileHandoff(code, verifier, config, now + 5)).toThrow(AuthValidationError);
+    expect(() => exchangeStaffMobileHandoff(issueMobileHandoff(identity, challenge, config, now), verifier, config, now + 5)).toThrow(AuthValidationError);
+  });
+  it('browser side: needs the staff start cookie and a web session issued at or after it', () => {
+    const start = issueStaffMobileStart(challenge, config, now);
+    const fresh = issueSession(identity, config, now + 10);
+    expect(staffMobileHandoffForBrowser(fresh, start, config, now + 20)).toEqual({ identity, challenge });
+    expect(() => staffMobileHandoffForBrowser(issueSession(identity, config, now - 1), start, config, now + 20)).toThrow(AuthValidationError);
+    expect(() => staffMobileHandoffForBrowser(fresh, issueMobileStart(challenge, config, now), config, now + 20)).toThrow(AuthValidationError);
+    expect(() => mobileHandoffForBrowser(fresh, start, config, now + 20)).toThrow(AuthValidationError);
+    expect(() => staffMobileHandoffForBrowser(undefined, start, config, now + 20)).toThrow(AuthValidationError);
+  });
+});

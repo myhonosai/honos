@@ -234,4 +234,13 @@ describe('school shell frame', () => {
     expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
     expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Calendar<\/span>/s);
   });
+
+  it('gives every phone bar slot one short single-line label, keeping the full name for screen readers (owner 2026-11-22)', () => {
+    const bar = render({ path: '/staff/schedule' }).match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
+    const labels = [...bar.matchAll(/<span>([^<]*)<\/span>/g)].map(match => match[1]);
+    expect(labels).toEqual(['Dashboard', 'Contacts', 'Pipeline', 'Calendar', 'More']);
+    expect(bar).toContain('aria-label="Contact list"'); expect(bar).toContain('aria-label="Lead pipeline"');
+    for (const language of ['ko', 'es'] as const) for (const key of ['barHome', 'barStudents', 'barCrm', 'barClasses'] as const)
+      expect(shellText(language, key).length).toBeLessThanOrEqual(10);
+  });
 });

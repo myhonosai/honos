@@ -12,7 +12,7 @@ export const SHOPIFY_SCOPES = ['read_products', 'read_inventory', 'read_orders']
 /** SH4a: asked for only when the owner presses Allow editing. write_products edits products; write_inventory edits unit costs. */
 export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as const;
 /** SH-F1: asked for only when the owner presses Allow finance. Reads the Shopify Payments balance, payouts and balance transactions. */
-export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts'] as const;
+export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts', 'read_shopify_payments_payouts'] as const;
 /** SH2b (0614): asked for only when the owner presses Allow orders. Lets the front desk create the Shopify order a print provider works from. */
 export const SHOPIFY_ORDER_SCOPES = ['write_orders'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;

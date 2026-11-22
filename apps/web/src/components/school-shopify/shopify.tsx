@@ -7,7 +7,10 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { ShopifyError, shopifyApi, type Owned, type ShopifyApi } from './http';
 import { brandingApi, type BrandingApi } from '../school-branding/http';
 import { merchAiApi, type MerchAiApi } from './merch-ai-http';
+import { reviewApi, type ReviewApi } from './review-http';
 import type { BrandState } from './studio';
+import { SHOPIFY_FINANCE_SCOPES, SHOPIFY_ORDER_SCOPES } from '@hon/contracts';
+import { rememberGrant, shopifyGrantUrl, takeGrant } from './grant';
 import type { ShopifyCatalog, ShopifyChangeResult, ShopifyFinanceView, ShopifyOrders, ShopifyProductChange, ShopifyProductChanges } from '@hon/contracts';
 import type { ProposeRequest } from './editor';
 import type { StorefrontCommand, StorefrontOutcome, StorefrontState } from './storefront';
@@ -20,13 +23,14 @@ const kindOf = (error: unknown) => error instanceof ShopifyError && error.kind !
  * orders. Blur, a hidden tab, a school change or a session end hide the page at once and retire every read. Commands are
  * never replayed automatically: a sync or disconnect whose answer was lost is checked again with a fresh read.
  */
-export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchAi = merchAiApi, navigate = (url: string) => window.location.assign(url) }: { api?: ShopifyApi; branding?: BrandingApi; merchAi?: MerchAiApi; navigate?: (url: string) => void }): React.ReactElement {
+export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchAi = merchAiApi, review = reviewApi, navigate = (url: string) => window.location.assign(url) }: { api?: ShopifyApi; branding?: BrandingApi; merchAi?: MerchAiApi; review?: ReviewApi; navigate?: (url: string) => void }): React.ReactElement {
   const locale = useLocale();
   const shell = useSchoolShell();
   const schoolId = shell.phase === 'READY' ? shell.selection?.schoolId ?? null : null;
   const organizationId = shell.phase === 'READY' ? shell.selection?.organizationId ?? null : null;
   const [brand, setBrand] = useState<BrandState>({ state: 'LOADING' });
   const marcus = useMemo(() => schoolId && organizationId ? { api: merchAi, scope: { organizationId, schoolId } } : undefined, [merchAi, organizationId, schoolId]);
+  const reviewer = useMemo(() => schoolId && organizationId ? { api: review, scope: { organizationId, schoolId } } : undefined, [review, organizationId, schoolId]);
   const [overview, setOverview] = useState<OverviewState>({ state: 'LOADING' });
   const [section, setSection] = useState<ShopifySection>('overview');
   const [catalog, setCatalog] = useState<ListState<ShopifyCatalog>>({ state: 'LOADING' });
@@ -194,7 +198,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     setOutcome(next); setConfirming(false); setRefresh((n) => n + 1);
   }, [api, schoolId, overview]);
 
-  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' | 'allowOrders' = 'connect') => {
+  const onConnect = useCallback(async (action: 'connect' | 'allowEditing' | 'allowFinance' | 'allowOrders' = 'connect', secondHop = false) => {
     if (sending.current || !schoolId) return;
     // Allow editing / Allow finance reconnect the same store, asking Shopify for those permissions as well. Reconnecting
     // the same store keeps what it already allows (Shopify replaces the whole grant on each approval).
@@ -211,12 +215,27 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       // A new attempt each time: a lost answer only leaves an unused approval that expires in 10 minutes.
       const r = await api.connect(schoolId, domain, AbortSignal.timeout(30000), () => mounted.current && shown === privacy.current, allowEditing, allowFinance, allowOrders);
       sending.current = false;
-      if (shown === privacy.current && mounted.current) navigate(r.authorizeUrl);
+      if (shown !== privacy.current || !mounted.current) return;
+      // Allow finance / Allow orders are optional permissions: Shopify grants them on its own request page, which comes
+      // back to this page; the effect below then makes the usual approval pass that records them (see grant.ts).
+      const optional = secondHop ? null : action === 'allowFinance' ? SHOPIFY_FINANCE_SCOPES : action === 'allowOrders' ? SHOPIFY_ORDER_SCOPES : null;
+      const grant = optional ? shopifyGrantUrl(r.authorizeUrl, r.shopDomain, optional) : null;
+      navigate(grant && (action === 'allowFinance' || action === 'allowOrders') && rememberGrant(action, schoolId, r.shopDomain) ? grant : r.authorizeUrl);
     } catch (error) {
       sending.current = false; setLocked(false);
       if (shown === privacy.current && mounted.current) setOutcome({ kind: kindOf(error), action });
     }
   }, [api, navigate, schoolId, shop, overview, changes, finance]);
+  // Back from Shopify's request page: finish the Allow the owner started, once, when the page knows what the store already allows.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || !schoolId || overview.state !== 'READY' || changes.state === 'LOADING' || finance.state === 'LOADING') return;
+    const domain = overview.read.connection?.shopDomain;
+    if (!domain) return;
+    resumed.current = true;
+    const owed = takeGrant(schoolId, domain);
+    if (owed) void onConnect(owed, true);
+  }, [schoolId, overview, changes, finance, onConnect]);
 
   return <div key={shell.phase} data-shell-private="">
     <ShopifyView language={locale.preferences.language} locale={locale.formattingLocale} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'}
@@ -228,7 +247,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect('allowEditing'); }}
       finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }} onAllowOrders={() => { void onConnect('allowOrders'); }}
       storefront={storefront} storefrontOutcome={storefrontOutcome} onStorefrontCommand={(c) => { void onStorefrontCommand(c); }}
-      schoolName={shell.schoolName} brand={brand} merchAi={marcus} />
+      schoolName={shell.schoolName} brand={brand} merchAi={marcus} review={reviewer} />
   </div>;
 }
 

@@ -507,8 +507,8 @@ the same tables. Owner check still open: the autopay defaults listed in section 
 
 ## 21. Checkout pages as built (0402, CP1 + CP2): many named pages, modeled on the owner's current CRM
 
-Status: source only, not deployed. Staff only: families cannot open these pages yet (the family page, its public link and
-promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
+Status: source only, not deployed. At first staff only; the HON Family app page came with §24 and each page's family share
+link with §25. Promo codes are CP4. Nothing here takes a payment, and HON adds no fee.
 
 - **Database (0402):** `school_checkouts` (many pages per school: a fixed address `slug`, a group, `DRAFT`, `PUBLISHED` or
   `ARCHIVED`, closed content, optimistic version; up to 200 pages), the append-only `school_checkout_versions`, and
@@ -688,3 +688,23 @@ codes (CP4) and public links for people without an account.
 API: `GET /v1/parent/checkout-pages`, `POST /v1/parent/checkout-pages/orders` (Idempotency-Key required),
 `POST .../orders/:orderId/start`, `.../confirm` and `.../cancel`; staff `GET /v1/organizations/:org/schools/:school/payments/checkout-pages/orders`.
 App: More > Sign up & pay. Proof: `test-family-checkout-integrity.mjs`.
+
+## 25. Checkout page share links as built (0620): a link families open without an account
+
+Owner ask (2026-11-21, testing the live app): "checkout page how do i get link to show the page". Read only: nothing is
+bought, booked, stored or sent from the link, and HON adds no fee. Signing up and paying from the link for people without
+an account is the next slice (it will need its own migration number).
+
+| Topic | Rule |
+| --- | --- |
+| The link | One per checkout page, `/checkout/<48 hex>` on the app's own address: 24 random bytes, issued once, never changed, moved or deleted. |
+| Issuing | Staff with `school_checkout.manage` call `POST /v1/organizations/:org/schools/:school/payments/checkout-pages/links` (browser command `school_checkout.links.issue`, no body, no Idempotency-Key). It issues a link for every page of the school that has none (at most 200) and returns all of them; again issues nothing new. One `school_checkout.link_issued` audit row per issued link; no outbox event. |
+| What opens | Only a PUBLISHED page of an ACTIVE school and organization with a live ESSENTIAL, CORE or COMPLETE entitlement (the 0261 public event rule). Draft, archived, unknown or malformed links read as not found. Putting a page in draft stops its link; going live again reopens the same link. |
+| What it shows | `GET /v1/public/checkout-pages/:publicId` (no cookie, session or tenant id): school name, title, description and text blocks in the page's languages, currency, participants per order, the options still available on the school's today (price, or monthly amount, months and down payment; extra-participant fee; most popular; places left from §24's count; whether the HON Family app sells it), add-ons and whether there is a waiver. Never the questions, receipt or thank-you text, collection method, plan, capacity number, ids, orders or staff names. A public read writes nothing. |
+| Transport | One GET path, no query string, no body, `no-store` and `no-referrer`; the per-client read limit shared with the other public links (`public-client-limit.ts`) and a process cap. |
+| Staff screen | Each Live card shows the link with Copy link and Open page (new tab); a draft card says the link opens once the page is live. |
+| Family page | `/checkout/:publicId`, noindex, English, Korean or Spanish by the browser's language with English fallback. It says how to sign up: in the HON Family app (More, Sign up & pay) when an option is sold there, otherwise by contacting the school. |
+| Storage | `hon.school_checkout_links`: forced RLS, no runtime table privilege, insert-only guard (a link belongs to a page of its own school), no truncate. Runtime entry points `issue_school_checkout_links(text)` and `read_public_school_checkout(text)`; helpers `public_school_checkout(text)` and `guard_school_checkout_link()` stay private. |
+
+Proof: `test-checkout-links-integrity.mjs`; `apps/api/test/checkout-links.test.cjs`; `apps/web/test/checkout-links-ui.test.tsx`;
+010/011; verify-rls; staging pin 0620.

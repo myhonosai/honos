@@ -50,6 +50,7 @@ jobs:
           node --test .github/scripts/verify-node-runtime.test.mjs
           node --test .github/scripts/ci-triggers.test.mjs
           node --test .github/scripts/database-migrate-workflow.test.mjs
+          node --test packages/database/scripts/migration-chain.test.mjs
       - name: Install dependencies (lockfile only)
         run: pnpm install --frozen-lockfile
       - name: pnpm test

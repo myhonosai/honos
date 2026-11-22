@@ -4,7 +4,7 @@ import { normalizedIdentity, SESSION_SECONDS, verifySession, type NormalizedIden
 import { constantEqual, pkceChallenge } from './transaction.js';
 
 /**
- * Native parent app sign-in (M2). The app never talks to the identity provider directly: it reuses the web OIDC
+ * Native app sign-in: HON Family (parent) app (M2) and HON Staff app (S0). The app never talks to the identity provider directly: it reuses the web OIDC
  * sign-in in the system browser, which hands back a one-minute code bound to the app's PKCE challenge. Only the app
  * holds the verifier, so an intercepted code is useless (RFC 7636 / RFC 8252). Each token kind has its own JWT type
  * and audience, so none can be replayed as another (web session, start cookie, hand-off code, mobile session).
@@ -16,9 +16,19 @@ const PKCE = /^[A-Za-z0-9_-]{43}$/;
 const IDENTITY_CLAIMS = ['externalSubject', 'displayName', 'email'] as const;
 
 type Kind = { typ: string; aud: (c: SessionConfig) => string; seconds: number; extra: readonly string[] };
-const SESSION: Kind = { typ: 'hon-mobile-session+jwt', aud: c => `${c.audience}:mobile`, seconds: SESSION_SECONDS, extra: IDENTITY_CLAIMS };
-const START: Kind = { typ: 'hon-mobile-start+jwt', aud: c => `${c.audience}:mobile-start`, seconds: MOBILE_START_SECONDS, extra: ['challenge'] };
-const HANDOFF: Kind = { typ: 'hon-mobile-handoff+jwt', aud: c => `${c.audience}:mobile-handoff`, seconds: MOBILE_HANDOFF_SECONDS, extra: [...IDENTITY_CLAIMS, 'challenge'] };
+type Family = { session: Kind; start: Kind; handoff: Kind };
+/** One token family per native app. Each has its own JWT types and audiences, so no token verifies in the other app. */
+function family(prefix: 'mobile' | 'staff-mobile'): Family {
+  return {
+    session: { typ: `hon-${prefix}-session+jwt`, aud: c => `${c.audience}:${prefix}`, seconds: SESSION_SECONDS, extra: IDENTITY_CLAIMS },
+    start: { typ: `hon-${prefix}-start+jwt`, aud: c => `${c.audience}:${prefix}-start`, seconds: MOBILE_START_SECONDS, extra: ['challenge'] },
+    handoff: { typ: `hon-${prefix}-handoff+jwt`, aud: c => `${c.audience}:${prefix}-handoff`, seconds: MOBILE_HANDOFF_SECONDS, extra: [...IDENTITY_CLAIMS, 'challenge'] },
+  };
+}
+/** HON Family (parent) app, M2. */
+const FAMILY = family('mobile');
+/** HON Staff app, S0. */
+const STAFF = family('staff-mobile');
 
 function sign(kind: Kind, claims: Record<string, unknown>, config: SessionConfig, now: number): string {
   return jwt.sign({ ...claims, iss: config.mode, aud: kind.aud(config), iat: now, exp: now + kind.seconds }, config.secret, { algorithm: 'HS256', header: { alg: 'HS256', typ: kind.typ } });
@@ -42,38 +52,36 @@ function identityFrom(p: Record<string, unknown>): NormalizedIdentity {
   return identity;
 }
 
-export function issueMobileSession(identity: NormalizedIdentity, config: SessionConfig, now = Math.floor(Date.now() / 1000)): string {
-  return sign(SESSION, profile(identity), config, now);
+function issueSessionFor(f: Family, identity: NormalizedIdentity, config: SessionConfig, now: number): string {
+  return sign(f.session, profile(identity), config, now);
 }
-export function verifyMobileSession(token: string, config: SessionConfig, now = Math.floor(Date.now() / 1000)): NormalizedIdentity {
-  try { return identityFrom(verify(SESSION, token, config, now)); } catch { throw new AuthValidationError(); }
+function verifySessionFor(f: Family, token: string, config: SessionConfig, now: number): NormalizedIdentity {
+  try { return identityFrom(verify(f.session, token, config, now)); } catch { throw new AuthValidationError(); }
 }
-
-export function issueMobileStart(challenge: string, config: SessionConfig, now = Math.floor(Date.now() / 1000)): string {
+function issueStartFor(f: Family, challenge: string, config: SessionConfig, now: number): string {
   if (!PKCE.test(challenge)) throw new AuthValidationError();
-  return sign(START, { challenge }, config, now);
+  return sign(f.start, { challenge }, config, now);
 }
-export function verifyMobileStart(token: string | undefined, config: SessionConfig, now = Math.floor(Date.now() / 1000)): string {
+function verifyStartFor(f: Family, token: string | undefined, config: SessionConfig, now: number): string {
   try {
-    const p = verify(START, token, config, now);
+    const p = verify(f.start, token, config, now);
     if (typeof p.challenge !== 'string' || !PKCE.test(p.challenge)) throw new Error();
     return p.challenge;
   } catch { throw new AuthValidationError(); }
 }
-
-export function issueMobileHandoff(identity: NormalizedIdentity, challenge: string, config: SessionConfig, now = Math.floor(Date.now() / 1000)): string {
+function issueHandoffFor(f: Family, identity: NormalizedIdentity, challenge: string, config: SessionConfig, now: number): string {
   if (!PKCE.test(challenge)) throw new AuthValidationError();
-  return sign(HANDOFF, { ...profile(identity), challenge }, config, now);
+  return sign(f.handoff, { ...profile(identity), challenge }, config, now);
 }
 /**
  * The browser side of the hand-off: the web session and the app's start cookie must both be valid, and the web
  * session must have been issued at or after the start cookie. The app opens an ephemeral browser session, so a real
- * app sign-in always produces a fresh web session; an older session already sitting in the parent's everyday browser
- * (someone else's link to /auth/mobile/start) is refused and they must sign in again.
+ * app sign-in always produces a fresh web session; an older session already sitting in the person's everyday browser
+ * (someone else's link to the start page) is refused and they must sign in again.
  */
-export function mobileHandoffForBrowser(sessionToken: string | undefined, startToken: string | undefined, config: SessionConfig, now = Math.floor(Date.now() / 1000)): { identity: NormalizedIdentity; challenge: string } {
+function handoffForBrowserFor(f: Family, sessionToken: string | undefined, startToken: string | undefined, config: SessionConfig, now: number): { identity: NormalizedIdentity; challenge: string } {
   try {
-    const start = verify(START, startToken, config, now);
+    const start = verify(f.start, startToken, config, now);
     if (typeof start.challenge !== 'string' || !PKCE.test(start.challenge)) throw new Error();
     if (typeof sessionToken !== 'string' || !sessionToken) throw new Error();
     const { emailVerified: _drop, ...identity } = verifySession(sessionToken, config, now);
@@ -82,17 +90,36 @@ export function mobileHandoffForBrowser(sessionToken: string | undefined, startT
     return { identity, challenge: start.challenge };
   } catch { throw new AuthValidationError(); }
 }
-
-/** Turns a hand-off code into a mobile session, only for the app that holds the PKCE verifier. */
-export function exchangeMobileHandoff(code: unknown, verifier: unknown, config: SessionConfig, now = Math.floor(Date.now() / 1000)): { token: string; expiresAt: string } {
+/** Turns a hand-off code into a session of the same app, only for the app that holds the PKCE verifier. */
+function exchangeFor(f: Family, code: unknown, verifier: unknown, config: SessionConfig, now: number): { token: string; expiresAt: string } {
   try {
     if (typeof verifier !== 'string' || !PKCE.test(verifier)) throw new Error();
-    const p = verify(HANDOFF, code, config, now);
+    const p = verify(f.handoff, code, config, now);
     if (typeof p.challenge !== 'string' || !constantEqual(p.challenge, pkceChallenge(verifier))) throw new Error();
     const identity = identityFrom(p);
-    return { token: issueMobileSession(identity, config, now), expiresAt: new Date((now + SESSION_SECONDS) * 1000).toISOString() };
+    return { token: issueSessionFor(f, identity, config, now), expiresAt: new Date((now + SESSION_SECONDS) * 1000).toISOString() };
   } catch { throw new AuthValidationError(); }
 }
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+// HON Family (parent) app: names and behaviour unchanged since M2.
+export const issueMobileSession = (identity: NormalizedIdentity, config: SessionConfig, now = nowSeconds()) => issueSessionFor(FAMILY, identity, config, now);
+export const verifyMobileSession = (token: string, config: SessionConfig, now = nowSeconds()) => verifySessionFor(FAMILY, token, config, now);
+export const issueMobileStart = (challenge: string, config: SessionConfig, now = nowSeconds()) => issueStartFor(FAMILY, challenge, config, now);
+export const verifyMobileStart = (token: string | undefined, config: SessionConfig, now = nowSeconds()) => verifyStartFor(FAMILY, token, config, now);
+export const issueMobileHandoff = (identity: NormalizedIdentity, challenge: string, config: SessionConfig, now = nowSeconds()) => issueHandoffFor(FAMILY, identity, challenge, config, now);
+export const mobileHandoffForBrowser = (sessionToken: string | undefined, startToken: string | undefined, config: SessionConfig, now = nowSeconds()) => handoffForBrowserFor(FAMILY, sessionToken, startToken, config, now);
+export const exchangeMobileHandoff = (code: unknown, verifier: unknown, config: SessionConfig, now = nowSeconds()) => exchangeFor(FAMILY, code, verifier, config, now);
+
+// HON Staff app (S0): the same flow with its own token family and start cookie.
+export const STAFF_MOBILE_START_COOKIE = 'hon_staff_mobile_start';
+export const issueStaffMobileSession = (identity: NormalizedIdentity, config: SessionConfig, now = nowSeconds()) => issueSessionFor(STAFF, identity, config, now);
+export const verifyStaffMobileSession = (token: string, config: SessionConfig, now = nowSeconds()) => verifySessionFor(STAFF, token, config, now);
+export const issueStaffMobileStart = (challenge: string, config: SessionConfig, now = nowSeconds()) => issueStartFor(STAFF, challenge, config, now);
+export const verifyStaffMobileStart = (token: string | undefined, config: SessionConfig, now = nowSeconds()) => verifyStartFor(STAFF, token, config, now);
+export const issueStaffMobileHandoff = (identity: NormalizedIdentity, challenge: string, config: SessionConfig, now = nowSeconds()) => issueHandoffFor(STAFF, identity, challenge, config, now);
+export const staffMobileHandoffForBrowser = (sessionToken: string | undefined, startToken: string | undefined, config: SessionConfig, now = nowSeconds()) => handoffForBrowserFor(STAFF, sessionToken, startToken, config, now);
+export const exchangeStaffMobileHandoff = (code: unknown, verifier: unknown, config: SessionConfig, now = nowSeconds()) => exchangeFor(STAFF, code, verifier, config, now);
 
 /** Exactly one `Authorization: Bearer <token>` header, or none. Anything else is refused, never ignored. */
 export function bearerToken(header: string | string[] | undefined): string | undefined {

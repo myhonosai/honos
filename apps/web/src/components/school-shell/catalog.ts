@@ -6,7 +6,7 @@ import type { ShellKey } from './copy';
  * authority. `scoped` routes accept the existing `organizationId` + `schoolId`
  * prefill, which the destination re-verifies server-side.
  */
-export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages' | 'parentApp'
+export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages' | 'email' | 'parentApp'
   | 'social' | 'checkout' | 'pos' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'ads' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
 /** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
@@ -61,6 +61,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // tabs, modeled on the owner's current CRM; the parent app chat is its own page laid out like the texts inbox.
   { key: 'messages', titleKey: 'navMessages', section: 'communication', routes: [r('/staff/texts', 'routeConversations'), r('/staff/texts/send', 'routeTextsSend'),
     r('/staff/texts/history', 'routeTextsHistory'), r('/staff/texts/templates', 'routeTextsTemplates'), r('/staff/texts/opted-out', 'routeTextsOptedOut')] },
+  { key: 'email', titleKey: 'navEmail', section: 'communication', routes: [r('/staff/email', 'routeTextsSend'), r('/staff/email/history', 'routeTextsHistory'),
+    r('/staff/email/templates', 'routeTextsTemplates'), r('/staff/email/opted-out', 'routeTextsOptedOut')] },
   { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements'), r('/staff/parent-app/curriculum', 'routeParentAppCurriculum')] },
   { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/checkout-orders', 'routeCheckoutOrders')] },
@@ -72,7 +74,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/referrals', 'routeReferrals'), r('/staff/marketing/blasts', 'routeBlasts'), r('/staff/champions-club', 'routeChampions')] },
   // Owner ask (2026-11-17): Meta Ads and Google Ads are connected and set up from Marketing, with Marcus drafting each ad.
   { key: 'ads', titleKey: 'navAds', section: 'marketing', routes: [r('/staff/marketing/ads', 'routeAds')] },
-  { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio')] },
+  { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio'), r('/staff/creative-studio/designs', 'routeDesigns')] },
   { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'),
     r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/students/achievements', 'routeAchievements')] },
   // A belt test is one job in order (L3): who is ready, sign-ups, register, grade, scorecards, certificates.
