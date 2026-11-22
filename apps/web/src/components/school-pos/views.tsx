@@ -3,7 +3,7 @@ import { POS_CATEGORIES, POS_METHODS, type PosCategory, type PosItem, type PosIt
 import type { PersonSummary } from '../people/http';
 import type { PosCommand, PosErrorKind } from './http';
 import {
-  CATEGORY_LABEL, METHOD_LABEL, addItem, addQuick, addShopify, bpsToPercent, cartTotals, changeDue, emptyShip, hasMadeToOrder, shipToInput, formatMoney, lineKey, minorToInput, parseMoney, percentToBps, setQuantity,
+  CATEGORY_LABEL, METHOD_LABEL, addItem, addQuick, addShopify, bpsToPercent, cartTotals, changeDue, customerQuery, emptyShip, hasMadeToOrder, shipToInput, formatMoney, lineKey, minorToInput, parseMoney, percentToBps, setQuantity,
   type Cart,
 } from './model';
 import type { SalesState } from './school-pos';
@@ -84,6 +84,13 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
   const [discount, setDiscount] = useState<{ kind: 'AMOUNT' | 'PERCENT'; value: string; reason: string } | null>(null);
   const [method, setMethod] = useState<PosMethod>('CASH'), [reference, setReference] = useState(''), [note, setNote] = useState(''), [cash, setCash] = useState('');
   const [who, setWho] = useState('');
+  // The customer box searches as the cashier types: a short pause after the last letter, from the second letter on.
+  const typed = customerQuery(who), picking = cart.customer.kind !== 'PERSON';
+  useEffect(() => {
+    if (!picking || typed === null) return;
+    const t = setTimeout(() => onSearchPeople(typed), 250);
+    return () => clearTimeout(t);
+  }, [typed, picking, onSearchPeople]);
   const made = read.shopify.madeToOrder, [ship, setShip] = useState(() => emptyShip(made.pickup ? 'SCHOOL' : 'CUSTOMER'));
   // A typed address belongs to one sale: it goes when the receipt shows, and school pickup stays chosen only while the school can receive.
   useEffect(() => { if (receipt) setShip(emptyShip(made.pickup ? 'SCHOOL' : 'CUSTOMER')); }, [receipt, made.pickup]);
@@ -170,8 +177,8 @@ export function PosRegister({ read, cart, receipt, outcome, locked, canRetry, fo
         {cart.customer.kind === 'PERSON' ? <p className={styles.picked}>{cart.customer.name} <button type="button" className={styles.link} disabled={locked}
           onClick={() => onCart({ ...cart, customer: { kind: 'WALK_IN', name: '' } })}>Change</button></p> : <>
           <div className={styles.row}>
-            <input className={styles.input} aria-label="Find a contact" placeholder="Find a contact, or leave empty for walk-in" value={who}
-              onChange={e => { setWho(e.target.value); if (!e.target.value.trim()) onClearFound(); }} onKeyDown={e => { if (e.key === 'Enter' && who.trim()) onSearchPeople(who); }}/>
+            <input className={styles.input} aria-label="Find a contact" placeholder="Type a name, or leave empty for walk-in" autoComplete="off" value={who}
+              onChange={e => { setWho(e.target.value); if (customerQuery(e.target.value) === null) onClearFound(); }} onKeyDown={e => { if (e.key === 'Enter' && who.trim()) onSearchPeople(who); }}/>
             <button type="button" className={styles.secondary} disabled={!who.trim()} onClick={() => onSearchPeople(who)}>Find</button>
           </div>
           {found ? found.length === 0 ? <p className={styles.meta}>No contact found. <button type="button" className={styles.link}
