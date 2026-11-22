@@ -106,33 +106,39 @@ test('SH-F1 the worker records finance only through its lease function', async (
   assert.deepEqual(seen.map(s => s[0]), ['SELECT hon.record_shopify_background_finance($1::jsonb) AS data']);
 });
 
-test('SH-F1 payouts refused (no read_shopify_payments_payouts): the balance and transactions are read without them', async () => {
+test('SH-F1 lists refused (no read_shopify_payments_payouts): the read steps down to transactions without payouts, then to the balance alone', async () => {
   const sent = [], replies = [];
   const send = async (url, init) => { sent.push(JSON.parse(init.body).query); return new Response(JSON.stringify(replies.shift()), { status: 200 }); };
   const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, () => undefined);
-  const denied = { errors: [{ message: 'Access denied for payouts field.', path: ['shopifyPaymentsAccount', 'payouts'], extensions: { code: 'ACCESS_DENIED' } }], data: null };
+  const denied = field => ({ errors: [{ message: 'Access denied.', path: ['shopifyPaymentsAccount', field], extensions: { code: 'ACCESS_DENIED' } }], data: null });
   const { payouts, balanceTransactions, ...rest } = ACCOUNT;
   const plain = { ...rest, balanceTransactions: { nodes: balanceTransactions.nodes.map(({ associatedPayout, ...t }) => t) } };
-  replies.push(denied, { data: { shopifyPaymentsAccount: plain } });
-  const f = await a.finance(SHOP, 'shpat_1');
+  const shape = () => sent.map(q => [q.includes('payouts('), q.includes('associatedPayout'), q.includes('balanceTransactions'), q.includes('balance {')]);
+  // Payouts refused, transactions answered.
+  replies.push(denied('payouts'), { data: { shopifyPaymentsAccount: plain } });
+  let f = await a.finance(SHOP, 'shpat_1');
   assert.deepEqual(f.balances, [{ currency: 'USD', amount: '245.18' }, { currency: 'CAD', amount: '-3.5' }]);
   assert.deepEqual(f.payouts, []);
   assert.deepEqual(f.transactions.map(t => [t.id, t.payoutId]), [['854848137', null], ['854848138', null]]);
-  assert.deepEqual(sent.map(q => [q.includes('payouts('), q.includes('associatedPayout'), q.includes('balanceTransactions')]), [[true, true, true], [false, false, true]]);
+  assert.deepEqual(shape(), [[true, true, true, true], [false, false, true, true]]);
   contracts.verifyShopifyFinanceSnapshot(f);
-  // The full read is used as it is when Shopify answers it; a refused plain read is the failure.
+  // As the test store answered on 2026-11-22: payouts refused, then transactions refused; the balance alone is kept.
+  sent.length = 0; replies.push(denied('payouts'), denied('balanceTransactions'), { data: { shopifyPaymentsAccount: rest } });
+  f = await a.finance(SHOP, 'shpat_1');
+  assert.deepEqual([f.paymentsActive, f.balances.length, f.payouts, f.transactions], [true, 2, [], []]);
+  assert.deepEqual(shape(), [[true, true, true, true], [false, false, true, true], [false, false, false, true]]);
+  contracts.verifyShopifyFinanceSnapshot(f);
+  // The full read is used as it is when Shopify answers it; a refused balance is the failure; throttling and auth are not stepped down.
   sent.length = 0; replies.push({ data: { shopifyPaymentsAccount: ACCOUNT } });
   assert.equal((await a.finance(SHOP, 'shpat_1')).payouts.length, 1);
   assert.equal(sent.length, 1);
-  replies.push(denied, denied);
+  sent.length = 0; replies.push(denied('payouts'), denied('balanceTransactions'), denied('balance'));
   await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  assert.equal(sent.length, 3);
 });
 
-test('SH-F1 the fake store leaves payouts out for a store that granted only the accounts scope', async () => {
-  const recorded = [];
+test('SH-F1 the fake store keeps only the balance for a store that granted only the accounts scope', async () => {
   const r = await syncWith([...contracts.SHOPIFY_SCOPES, 'read_shopify_payments_accounts']);
-  recorded.push(...r.recorded);
-  assert.equal(recorded.length, 1);
-  assert.deepEqual(recorded[0].payouts, []);
-  assert.equal(recorded[0].transactions.every(t => t.payoutId === null), true);
+  assert.equal(r.recorded.length, 1);
+  assert.deepEqual([r.recorded[0].balances.length > 0, r.recorded[0].payouts, r.recorded[0].transactions], [true, [], []]);
 });
