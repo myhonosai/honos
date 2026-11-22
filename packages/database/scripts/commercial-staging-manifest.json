@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e05202fa3fe5c8b7b5355163f9fd93e26b56b699d0435e28905ad006d47cd31a",
+  "chainSha256": "bcff7e38458a3c95cff9179ba269acb8c9d2fa6b6de7b4285c54bfcc103b3cf4",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -829,6 +829,10 @@
     {
       "file": "0630_invoice_insert_status_guard.sql",
       "sha256": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec"
+    },
+    {
+      "file": "0633_attendance_report.sql",
+      "sha256": "aa6fab24d7e40c516d3ebb33d646cd02803157fc0c483c4613124bb167bf4a9c"
     }
   ]
 }
