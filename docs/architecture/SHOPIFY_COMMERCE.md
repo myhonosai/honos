@@ -281,12 +281,31 @@ the Dev Dashboard, owner action).
 (since `hon-os-2`), so Shopify asks every store for them at install. HON still treats a store as read-only until its
 owner presses Allow editing and the returned token carries the scopes.
 
-**Allow finance** needs `read_shopify_payments_accounts`. It is declared as an *optional* scope in
-`shopify-app/shopify.app.toml`; no released version lists it yet. Open question to settle on the test store once that
-version is released and SH-F1 is deployed: with managed installation Shopify documents a separate request address for
-optional scopes (`https://admin.shopify.com/store/{store}/oauth/install?client_id=...&optional_scopes=...`), while HON
-currently sends the owner through `/admin/oauth/authorize` with the scope in `scope=`. If Shopify does not grant the
-optional scope that way, Allow finance must use the request address first.
+**Allow finance** needs `read_shopify_payments_accounts`, and **Allow orders** needs `write_orders`. Both are *optional*
+scopes in `shopify-app/shopify.app.toml`, released in app version `hon-os-4` (2026-11-21).
+
+Seen on the test store on 2026-11-22 (refusal log): with `read_shopify_payments_accounts` alone Shopify answers the
+balance but refuses `shopifyPaymentsAccount.payouts` (ACCESS_DENIED), which failed the whole finance read. Payouts need
+`read_shopify_payments_payouts`. So Allow finance now asks for both scopes (the second is in the app file for the next
+app file since app version `hon-os-5`, released 2026-11-22), and the adapter steps the finance read down when Shopify
+refuses it: without payouts and each transaction's payout, then (the test store refused `balanceTransactions` too once
+payouts were left out) the balance alone. `financeAllowed` still means
+the accounts scope. The Finance screen cannot tell "no payouts" from "payouts not allowed", so an empty payouts list
+shows an **Allow payouts** button that runs Allow finance again.
+The same log shows why the catalog read with stock locations is refused: it needs `read_locations`, which the app does
+not ask for; the catalog keeps using the plain read (no fulfilment source) until that scope is decided.
+
+Settled on the test store on 2026-11-22: with managed installation, `/admin/oauth/authorize` with the scope in `scope=`
+does **not** grant an optional scope (the owner comes back connected, without it). Shopify's request address does
+(`https://admin.shopify.com/store/{store}/oauth/install?client_id=...&optional_scopes=...`); it returns the owner to the
+app's address (the Commerce page), not to HON's return page, and one more pass through HON's usual approval then records
+the scope on the connection.
+
+So the two buttons take two hops, in the web app only (`school-shopify/grant.ts`): the request address first, with a
+note in session storage (action, school, shop domain, ten minutes, used once); back on the Commerce page the usual
+approval starts by itself and ends on HON's return page. The request address is built from the client id in the
+approval address the API returned. In development (the fake) and when the browser cannot keep the note there is no
+first hop. An owner who declines on Shopify's page still finishes connected, without the permission.
 
 ### Screens
 - Products: managers get **Edit** on each product and **New product**; a product with an open edit points to Changes.

@@ -117,7 +117,7 @@ try{
  const allowed=await connectWith(manager,{allowEditing:true,allowFinance:true});
  assert.equal(allowed.connection.connectionId,first.connection.connectionId,'Allow finance reconnects the same store');
  assert.equal(allowed.firstSync.outcome,'SUCCEEDED');
- assert.equal((await q('SELECT scopes FROM hon.shopify_connections WHERE shop_domain=$1',[SHOP]))[0].scopes,'read_products,read_inventory,read_orders,write_products,write_inventory,read_shopify_payments_accounts');
+ assert.equal((await q('SELECT scopes FROM hon.shopify_connections WHERE shop_domain=$1',[SHOP]))[0].scopes,'read_products,read_inventory,read_orders,write_products,write_inventory,read_shopify_payments_accounts,read_shopify_payments_payouts');
  let view=ok(await financeRead(manager,A.schoolId));
  assert.deepEqual([view.connected,view.financeAllowed,view.currency],[true,true,'USD']);
  assert.deepEqual(view.finance.balances,[{currency:'USD',amount:'245.18'}]);
@@ -126,7 +126,7 @@ try{
   ['9450000002','REFUND','-0.31','0','-0.31','9400000002'],['9450000001','CHARGE','150.00','4.65','145.35',null]]);
  assert.match(view.finance.readAt,/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
  assert.equal(JSON.stringify(view).includes('fake_'),false);
- pass('Allow finance re-approves the same store with read_shopify_payments_accounts; the sync records the balance, latest payouts and balance transactions as Shopify has them');
+ pass('Allow finance re-approves the same store with read_shopify_payments_accounts and read_shopify_payments_payouts; the sync records the balance, latest payouts and balance transactions as Shopify has them');
 
  // 4. Each sync replaces the snapshot whole; a store without Shopify Payments reads as payments off.
  shopify.fake.setStore(SHOP,{finance:{paymentsActive:false,balances:[],payouts:[],transactions:[]}});

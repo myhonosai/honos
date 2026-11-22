@@ -16,10 +16,11 @@ import {
   type CrmTrialOutcomeStatus,
   type RecordTrialAppointmentOutcomeInput,
 } from '@hon/contracts';
-import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
+import { assertCurrentCrmAuthority, holdCrmTrialAuthority } from './crm-authority-recheck.js';
 import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
+const OUTCOME_REFUSAL = 'HON trial outcome recording is no longer authorized for this school.';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 interface TrialAppointmentRow {
@@ -157,9 +158,10 @@ export class TrialAppointmentOutcomeService {
         [appointmentId],
       );
       // The controller authorized this command before the row lock above, which can wait behind another outcome for
-      // the same appointment. Re-resolve the authority now, before any idempotency reservation or mutation.
-      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.manage',
-        'HON trial outcome recording is no longer authorized for this school.');
+      // the same appointment. Hold the authority rows (row lock, then IAM rows, the reviewed order) and re-resolve now,
+      // before any idempotency reservation or mutation; a later revocation or suspension waits for this transaction.
+      await holdCrmTrialAuthority(client, authority.externalSubject, context, OUTCOME_REFUSAL);
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.manage', OUTCOME_REFUSAL);
       await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required to record a trial outcome.');
       const current = currentResult.rows[0];
       if (!current) throw new NotFoundException('CRM appointment was not found in this school.');
@@ -212,6 +214,8 @@ export class TrialAppointmentOutcomeService {
           });
         }
         if (record.status === 'COMPLETED' && record.response_body) {
+          // Final check after the idempotency row-lock wait; the hold makes it stable until commit.
+          await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.manage', OUTCOME_REFUSAL);
           return { appointment: record.response_body, replayed: true };
         }
         throw new ConflictException({
@@ -341,6 +345,8 @@ export class TrialAppointmentOutcomeService {
         ],
       );
 
+      // Final authority check before the commit that publishes the outcome (TA2).
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.trial.manage', OUTCOME_REFUSAL);
       return { appointment, replayed: false };
     });
   }

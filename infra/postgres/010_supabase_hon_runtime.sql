@@ -116,7 +116,7 @@ GRANT SELECT ON TABLE
   hon.promotion_decisions,
   hon.programs,
   hon.class_templates,
-  hon.class_sessions,
+  -- hon.class_sessions: no direct SELECT (0147 intent, #177 / 0632); reads go through named definer functions.
   hon.class_session_instructors,
   hon.attendance_records,
   hon.knowledge_articles,
@@ -5021,6 +5021,36 @@ BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0629 CRM trial authority hold (launch-readiness P1): one runtime entry point, no table access.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.hold_crm_trial_authority(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0629 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.hold_crm_trial_authority(text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.hold_crm_trial_authority(text) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.hold_crm_trial_authority(text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- #177 / 0632 class sessions are read only through named SECURITY DEFINER functions. The runtime keeps INSERT (class
+-- creation, without RETURNING) and gets no SELECT on hon.class_sessions; it gains EXECUTE on the operations-report counts
+-- and the parent schedule reads only. Their shared guard helper stays private.
+DO $$ DECLARE r text; f text; BEGIN
+  REVOKE SELECT ON TABLE hon.class_sessions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE SELECT ON TABLE hon.class_sessions FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_class_sessions_human_read()','hon.read_operations_report_session_counts(text,timestamptz,timestamptz)',
+    'hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_operations_report_session_counts(text,timestamptz,timestamptz),
+      hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz) TO hon_runtime;
   END IF;
 END $$;
 
