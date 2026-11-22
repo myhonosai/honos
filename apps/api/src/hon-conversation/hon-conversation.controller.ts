@@ -33,6 +33,8 @@ function boundaryError(error: unknown): never {
   const message = (error as { message?: string }).message ?? '';
   // S4 spend decision (HQ pause, HQ exception, access state) refused a question before any turn or call was recorded.
   if (code === '42501' && /^AI_[A-Z_]+$/.test(message)) throw new ForbiddenException({ code: 'HON_AI_SPEND_REFUSED', reason: message });
+  // 0635: the agent's switch is off for this person (the owner turns it on in Roles & permissions). Nothing was recorded.
+  if (code === '42501' && message === 'HON_AGENT_OFF') throw new ForbiddenException({ code: 'HON_AGENT_OFF' });
   if (code === '42501') throw new ForbiddenException({ code: 'HON_CONVERSATION_FORBIDDEN' });
   if (code === 'P0002') throw new NotFoundException({ code: 'HON_CONVERSATION_NOT_FOUND' });
   if (code === '23505') throw new ConflictException({ code: 'HON_IDEMPOTENCY_CONFLICT', detail: 'This Idempotency-Key was already used with a different request.' });

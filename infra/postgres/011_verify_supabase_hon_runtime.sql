@@ -6195,3 +6195,34 @@ DO $$ DECLARE f record; BEGIN
   END LOOP;
 END $$;
 -- End class sessions function-only reads exact verification.
+-- Staff AI agent switches exact verification (0635, HON Staff app S2): nine staff-assignable switches, the two wrapped
+-- runtime entry points, and the internal helpers and renamed 0284 bodies with no runtime or other grant.
+DO $$ DECLARE f record; BEGIN
+  IF (SELECT count(*) FROM hon.permissions WHERE code IN ('ai.agent.hon.use','ai.agent.kai.use','ai.agent.alex.use','ai.agent.chad.use','ai.agent.maya.use',
+        'ai.agent.marcus.use','ai.agent.jordan.use','ai.agent.claire.use','ai.agent.lena.use') AND NOT is_sensitive AND is_staff_assignable)<>9
+     OR (SELECT count(*) FROM hon.permissions WHERE code LIKE 'ai.agent.%')<>9 THEN
+    RAISE EXCEPTION 'Missing or altered AI agent switch permissions'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.begin_hon_turn(text,uuid,jsonb,uuid)',true,true,'v','1ccf93b0a84953331efad79fa730ecd1'),
+    ('hon.read_ai_team_readiness(text)',true,true,'v','e68977ad91563e714fed294ce11865d3'),
+    ('hon.begin_hon_turn_0284(text,uuid,jsonb,uuid)',true,false,'v','6f3e382932fa0af594a42eb120f89049'),
+    ('hon.read_ai_team_readiness_0284(text)',true,false,'v','be0673a8f5fcc45deb43213191033737'),
+    ('hon.principal_has_ai_agent(uuid,uuid,uuid,text)',true,false,'s','d07f83decb97abe3683abf01120a475e'),
+    ('hon.require_ai_agent_capability(text)',true,false,'s','47b468de5ef5c8fc4c6da3701b1d7470'),
+    ('hon.hold_and_recheck_ai_planning_authority(text)',true,false,'v','bb76ec6efac2f947e07ec938ea0ecd7e'),
+    ('hon.hon_reply_allowed_suggestions(uuid,uuid,uuid,text[])',true,false,'s','1d30a75b40e9941ffd7529ca5a626afb')
+  ) x(signature,definer,runtime_execute,volatility,body) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure
+        AND p.prosecdef=f.definer AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile::text=f.volatility AND md5(p.prosrc)=f.body
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_execute
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (NOT f.runtime_execute OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')
+            OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe AI agent switch function %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.ai_agent_switch_permission(text)'::regprocedure AND NOT p.prosecdef AND p.provolatile='i'
+      AND md5(p.prosrc)='ba0561d5fadeba02f08445d5c451d467' AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')) THEN
+    RAISE EXCEPTION 'Unsafe AI agent switch name helper'; END IF;
+END $$;
+-- End staff AI agent switches exact verification.

@@ -37,6 +37,13 @@ const STAFF_MOBILE_ROUTES: readonly StaffMobileRoute[] = [
   // Find a student by name to mark one who is not on the roster (walk-in). The controller admits only for=attendance
   // from the app (attendance.record); the other picker purposes stay web-only.
   { path: new RegExp(`^${SCHOOL}/pickers/students$`), methods: ['GET'] },
+  // S2 HON tab (docs/architecture/STAFF_MOBILE_HON.md): which agents this person has, their own conversations, one
+  // conversation, and sending a turn. Each route resolves school and ai.invocation.plan itself; 0635 refuses a turn or
+  // plan for an agent whose switch is off. Tone, briefing, school notes and orchestrations stay web-only.
+  { path: new RegExp(`^${SCHOOL}/hon/readiness$`), methods: ['GET'] },
+  { path: new RegExp(`^${SCHOOL}/hon/conversations$`), methods: ['GET', 'POST'] },
+  { path: new RegExp(`^${SCHOOL}/hon/conversations/${UUID}$`), methods: ['GET'] },
+  { path: new RegExp(`^${SCHOOL}/hon/conversations/${UUID}/turns$`), methods: ['POST'] },
 ];
 const staffRouteAllowed = (method: string, path: string) =>
   STAFF_MOBILE_ROUTES.some(route => route.path.test(path) && (route.methods === undefined || route.methods.includes(method)));
