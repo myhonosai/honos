@@ -57,8 +57,8 @@ permission from the database on every call (forced RLS, existing guards). A pers
 Expo app outside the pnpm workspace (own npm lockfile, like the family app), CI `.github/workflows/staff-mobile.yml`.
 Sign in → `whereIWork()` (current school, else the list to choose from, same order as the web sign-in routing) →
 signed-in home. The chosen school lives only in memory and is never authority. 401 wipes the token; 403 or no
-school shows "no staff access". The "which school" verifiers moved to `packages/contracts/src/staff-school-choice.ts`
-so web and app share them. No EAS project yet (David creates it; no build without his OK).
+school shows "no staff access". The app's "which school" verifiers live in `packages/contracts/src/staff-school-choice.ts`
+(same rules as the web transports, which stay self-contained for the browser verification script; follow-up: one copy). No EAS project yet (David creates it; no build without his OK).
 
 ## Out of scope (S0)
 The Expo app itself (S0b, next PR), HQ mode (S7), per-staff agent switches (S2), push, server-side token revocation
