@@ -206,8 +206,9 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
     const domain = action === 'connect' ? shop.trim() : current;
     const same = !!current && (action !== 'connect' || shop.trim().toLowerCase().replace(/\.myshopify\.com$/, '') === current.replace(/\.myshopify\.com$/, ''));
     // Allow orders (0614) is for selling made-to-order items at the front desk, which also needs editing, so it asks for both.
+    // Allow stock updates changes Shopify's count, which needs the inventory edit scope too, so it asks for editing as well.
     const allowOrders = action === 'allowOrders' || (same && overview.state === 'READY' && overview.read.connection?.ordersAllowed === true);
-    const allowEditing = action === 'allowEditing' || action === 'allowOrders' || (same && changes.state === 'READY' && changes.value.editProducts);
+    const allowEditing = action === 'allowEditing' || action === 'allowOrders' || action === 'allowStock' || (same && changes.state === 'READY' && changes.value.editProducts);
     const allowFinance = action === 'allowFinance' || (same && finance.state === 'READY' && finance.value.financeAllowed);
     sending.current = true; const shown = privacy.current;
     setLocked(true); setOutcome({ kind: 'SENDING', action });
