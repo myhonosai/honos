@@ -164,6 +164,24 @@ function api(route) {
     if (path === `${prefix}/people`) return json(route, 200, { data: [['Avery', 'Sample', '+15555550101', 'avery@example.test'], ['Rowan', 'Example', null, 'rowan@example.test']]
       .map(([givenName, familyName, phoneE164, email], i) => ({ id: id(850 + i), givenName, familyName, email, phoneE164, version: 1, createdAt: iso() })), meta: { requestId: id(860), correlationId: id(860) } });
     // Texts > History, Templates, Opted out (TE3b over 0585/0586): synthetic rows, newest first.
+    // Email (TE4) asks with channel=EMAIL: synthetic emails with a subject.
+    const asked = new URL(route.request().url()).searchParams.get('channel');
+    if (path === `${prefix}/communications/history` && asked === 'EMAIL') return json(route, 200, { data: { nextCursor: null, messages: [
+      ['Avery Sample', 'avery@example.test', 'Your trial class is booked', 'Hi Avery, your trial class is Thursday at 5 PM.', 'STAFF', 'DELIVERED', 'DELIVERED', 'Kim Placeholder', 1],
+      ['Rowan Example', 'rowan@example.test', 'Belt testing this Saturday', 'Belt testing starts at 10 AM. Please arrive early.', 'CAMPAIGN', 'FAILED', 'FAILED', null, 2],
+    ].map(([personName, address, subject, preview, origin, delivery, outcome, by, n]) => ({ messageId: id(970 - n), personId: id(850), personName, address, channel: 'EMAIL', subject, preview,
+      at: new Date(Date.parse(at(-n * 3600_000))).toISOString(), origin, delivery, outcome, by })) }, meta: {} });
+    if (path === `${prefix}/communications/opted-out` && asked === 'EMAIL') return json(route, 200, { data: { nextCursor: null, contacts: [
+      ['Sample Parent', 'parent@example.test', 'STAFF', 2]].map(([personName, address, source, n]) => ({ consentId: id(965 - n), personId: id(860 + n),
+      personName, address, channel: 'EMAIL', source, optedOutAt: new Date(Date.parse(at(-n * day))).toISOString(), at: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    if (path === `${prefix}/communications/templates` && method === 'GET' && asked === 'EMAIL') {
+      const status = new URL(route.request().url()).searchParams.get('status') ?? 'ACTIVE';
+      return json(route, 200, { data: { templates: status !== 'ACTIVE' ? [] : [
+        ['Trial welcome', 'Welcome to {{school_name}}, {{first_name}}', 'Hi {{first_name}},\n\nThanks for booking a trial class. Wear comfortable clothes and bring water.\n\nSee you soon!', 1],
+        ['Belt testing', 'Belt testing this Saturday', 'Hi {{first_name}}, belt testing starts at 10 AM on Saturday. Please arrive 15 minutes early.', 2],
+      ].map(([name, subject, body, n]) => ({ templateId: id(975 + n), channel: 'EMAIL', name, subject, body, status: 'ACTIVE', version: 1,
+        createdAt: new Date(Date.parse(at(-10 * day))).toISOString(), updatedAt: new Date(Date.parse(at(-n * day))).toISOString() })) }, meta: {} });
+    }
     if (path === `${prefix}/communications/history`) return json(route, 200, { data: { nextCursor: null, messages: [
       ['Avery Sample', '+15555550101', 'See you at the trial class on Thursday at 5 PM!', 'STAFF', 'DELIVERED', 'DELIVERED', 'Kim Placeholder', 1],
       ['Rowan Example', null, 'Reminder: belt testing is this Saturday at 10 AM.', 'CAMPAIGN', 'FAILED', 'FAILED', null, 2],
@@ -220,6 +238,10 @@ function api(route) {
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
       .map(([givenName, familyName, result], i) => ({ candidateId: id(800 + i), version: 2, result, testingEventId: id(810), testingEventName: 'Synthetic spring test', startsAt: at(-day),
         studentProfileId: id(820 + i), givenName, familyName, curriculumName: 'Synthetic curriculum', targetRankId: id(830), targetRankName: 'Yellow belt' })), meta: { requestId: id(840), correlationId: id(840), limit: 50 } });
+    // Top-bar search (2026-11-21): the staff search read for leads and classes, synthetic rows only.
+    if (path === `${prefix}/search`) return json(route, 200, { data: { search: { organizationId: scope.organizationId, schoolId: scope.schoolId, results: [
+      { kind: 'LEAD', entityId: id(201), title: 'Avery Sample', subtitle: 'Open lead', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/LEAD/${id(201)}` },
+      { kind: 'CLASS_SESSION', entityId: id(100), title: 'Little Tigers', subtitle: 'Scheduled class', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/CLASS_SESSION/${id(100)}` }] } }, meta: {} });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -647,6 +669,49 @@ for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'pho
   await shot(page, `te3b-texts-opted-out-${mode}-${size}`); await ctx.close();
   assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('/communications/')), false, 'nothing saved or sent');
 });
+await check('Send shows the message box and merge tags before a contact is picked (owner ask 2026-11-21)', async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.locator('textarea[name="composeContent"]').waitFor();
+  await page.getByRole('combobox', { name: 'Insert a merge tag' }).waitFor();
+  await page.getByText('Pick a contact above to send.').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Send', exact: true }).isDisabled(), true);
+  await shot(page, 'te4-texts-send-empty-desktop'); await ctx.close();
+});
+for (const mode of ['modern', 'big-button']) for (const size of ['desktop', 'phone']) await check(`Email > Send, History, Templates, Opted out (TE4 ${mode} ${size})`, async () => {
+  theme = mode;
+  let { ctx, page } = await open(viewports[size], `/staff/email?template=${id(976)}`);
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Send an email', exact: true }).first().waitFor();
+  assert.equal(await page.locator('a[href="/staff/email"]').count() > 0, true, 'Email is in the menu');
+  await page.locator('input[name="composeSubject"]').waitFor();
+  assert.equal(await page.locator('input[name="composeSubject"]').inputValue(), 'Welcome to {{school_name}}, {{first_name}}');
+  await page.locator('input[name="composeQuery"]').fill('Sample');
+  await page.getByRole('button', { name: /Rowan Example/ }).click();
+  await page.locator('[data-email-preview]').getByText('Welcome to', { exact: false }).waitFor();
+  await page.locator('[data-email-preview]').getByText(', Rowan', { exact: false }).first().waitFor();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('communications/messages')), false);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-send-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/email/history'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Email history', exact: true }).first().waitFor();
+  await page.getByText('Belt testing this Saturday', { exact: false }).first().waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-history-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/email/templates'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Trial welcome' }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Use in Send' }).first().getAttribute('href'), `/staff/email?template=${id(976)}`);
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-templates-${mode}-${size}`); await ctx.close();
+  ({ ctx, page } = await open(viewports[size], '/staff/email/opted-out'));
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByText('Staff recorded', { exact: true }).waitFor();
+  if (size === 'phone') await noOverflow(page);
+  await shot(page, `te4-email-opted-out-${mode}-${size}`); await ctx.close();
+  assert.equal(report.apiRequests.some(r => r.startsWith('POST') && r.includes('/communications/')), false, 'nothing saved or sent');
+});
 await check('Texts > Send starts from a template picked on Templates (TE3b)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, `/staff/texts/send?template=${id(981)}`);
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
@@ -718,6 +783,56 @@ await check('multi-school staff choose a named school; the dashboard reloads for
   await page.waitForFunction(() => document.querySelector('[data-phase] strong')?.textContent === 'Synthetic South Academy');
   await shot(page, 'u1-school-chosen-desktop'); await ctx.close();
 });
+for (const [mode, size] of [['modern', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`a click outside the Menu box closes it (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    const opener = size === 'phone' ? page.locator('nav[aria-label="Quick navigation"] button[aria-expanded]') : page.locator('button[aria-label="Open navigation"]').or(page.locator('[data-nav-more]')).first();
+    if (size !== 'phone' && !(await opener.isVisible())) await page.evaluate(() => document.querySelector('[data-nav-more]')?.click()); else await opener.click();
+    await page.waitForSelector('[role="dialog"][aria-label="Menu"]');
+    await page.waitForTimeout(150); await shot(page, `gs-menu-open-${mode}-${size}`);
+    const box = await page.locator('[role="dialog"][aria-label="Menu"]').boundingBox();
+    // Beside the box when there is room, else below it.
+    const x = box.x > 40 ? box.x / 2 : box.x + box.width / 2, y = box.x > 40 ? box.y + 200 : box.y + box.height + 15;
+    await page.mouse.click(x, y);
+    await page.waitForSelector('[role="dialog"][aria-label="Menu"]', { state: 'detached' });
+    await page.getByText('Call back trial family').waitFor();
+    await ctx.close();
+  });
+}
+for (const [mode, size] of [['modern', 'desktop'], ['classic', 'desktop'], ['big-button', 'desktop'], ['modern', 'phone']]) {
+  await check(`top-bar search finds contacts, leads, classes and pages (${mode} ${size})`, async () => {
+    theme = mode; multi = false; const { ctx, page } = await open(viewports[size], '/staff/work');
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByText('Call back trial family').waitFor();
+    await page.locator('[data-global-search-open]').click();
+    const input = page.getByRole('combobox', { name: 'Search contacts, leads, classes and pages' });
+    await input.waitFor();
+    await page.waitForTimeout(150); await shot(page, `gs-search-empty-${mode}-${size}`);
+    await input.fill('av');
+    await page.waitForSelector('[data-search-group="CONTACTS"] a');
+    await page.waitForSelector('[data-search-group="LEADS"] a');
+    assert.equal(await page.locator('[data-search-group="CONTACTS"] a').first().getAttribute('href'), `/staff/people?person=${id(850)}`);
+    await page.waitForTimeout(100); await shot(page, `gs-search-results-${mode}-${size}`);
+    await input.fill('invoi');
+    await page.waitForSelector('[data-search-group="PAGES"] a[href="/staff/billing/invoices"]');
+    await shot(page, `gs-search-pages-${mode}-${size}`);
+    await noOverflow(page);
+    // Esc closes and returns to the page; Ctrl+K opens again; a click outside closes.
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-global-search]', { state: 'detached' });
+    await page.keyboard.press('Control+k');
+    await input.waitFor();
+    await page.mouse.click(10, viewports[size].height - 10);
+    await page.waitForSelector('[data-global-search]', { state: 'detached' });
+    // Keyboard: arrows and Enter open the highlighted page.
+    await page.keyboard.press('Control+k'); await input.fill('planned abs');
+    await page.waitForSelector('[data-search-group="PAGES"] a');
+    await page.keyboard.press('ArrowDown');
+    await Promise.all([page.waitForURL(/\/staff\/attendance\/planned-absences/), page.keyboard.press('Enter')]);
+    await ctx.close();
+  });
+}
 await check('view switch saves the personal preference', async () => {
   theme = 'modern'; multi = false; const { ctx, page } = await open(viewports.desktop, '/staff/work');
   await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');

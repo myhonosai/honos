@@ -59,7 +59,9 @@ Functions only; no table changes.
   `hon.rank_setup_rules` stores them as the exact 0116 `promotionReadinessV1` policy (`minAttendanceCreditMilli = classes * 1000`,
   `minDaysInCurrentRank = days`), so Tests > Who is ready works for belts made here. Requirement, recommendation and document
   lists and the testing-window flag already on a policy are kept. Both zero with nothing else on the policy stores `{}` (no
-  rule), because 0116 treats an all-empty policy as a configuration error.
+  rule), because 0116 treats an all-empty policy as a configuration error. A rule in another shape (for example one saved
+  through the older rank API) is left as it is until a number is set here, and a number the school did not change keeps its exact
+  stored value (a part class such as 1500 milli).
 - Requirements and student placement keep using `hon.mutate_curriculum_progress` (REQUIREMENT_CREATE/UPDATE, ENROLL, SET_RANK),
   which already carries history, audit, outbox and the deferred evidence trigger.
 

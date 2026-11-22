@@ -268,11 +268,19 @@ try {
   let adult = (await success(() => post(OWNER, `/programs/${quick.id}/ranks/${qWhite.id}/versions`, { expectedVersion: 1, name: 'White', color: '#FFFFFF', classes: 0, days: 0 }), 'clear belt rules')).data;
   const kept = (await policyOf(qWhite.id)).promotionReadinessV1;
   ok(adult.ranks[0].classes === 0 && adult.ranks[0].days === 0 && kept.minAttendanceCreditMilli === 0 && kept.requiredRequirementIds.join() === keep, 'numbers cleared, the requirement list kept');
+  // A rule this page did not write survives a rename, and a part class (1500) survives while the number shown is unchanged.
+  await sql("UPDATE hon.curriculum_ranks SET promotion_requirement='{\"legacy\":{\"note\":\"kept\"}}'::jsonb WHERE id=$1", [qPurple.id]);
+  await success(() => post(OWNER, `/programs/${quick.id}/ranks/${qPurple.id}/versions`, { expectedVersion: 1, name: 'Purple', color: '#7C3AED', classes: 0, days: 0 }), 'recolor with a legacy rule');
+  ok(JSON.stringify(await policyOf(qPurple.id)) === '{"legacy":{"note":"kept"}}', 'a rule in another shape is left alone when no number is set');
+  await sql("UPDATE hon.curriculum_ranks SET promotion_requirement=jsonb_set(promotion_requirement,'{promotionReadinessV1,minAttendanceCreditMilli}','1500') WHERE id=$1", [qWhite.id]);
+  adult = (await success(() => post(OWNER, `/programs/${quick.id}/ranks/${qWhite.id}/versions`, { expectedVersion: 2, name: 'White', color: '#FFFFFF', classes: 1, days: 7 }), 'days changed, classes untouched')).data;
+  const part = (await policyOf(qWhite.id)).promotionReadinessV1;
+  ok(adult.ranks[0].classes === 1 && part.minAttendanceCreditMilli === 1500 && part.minDaysInCurrentRank === 7, 'an unchanged part-class value is kept exactly');
   // Removing a belt nothing depends on closes the gap; a belt in use is refused and loses nothing.
   await refused(() => post(OWNER, `/programs/${quick.id}/ranks/${qBlue.id}/remove`, { expectedVersion: 9 }), 409, 'VERSION_CONFLICT', 'stale remove');
   await refused(() => post(OTHER_SCHOOL, `/programs/${quick.id}/ranks/${qBlue.id}/remove`, { expectedVersion: 1 }), 404, undefined, 'other school cannot remove a belt');
   adult = (await success(() => post(OWNER, `/programs/${quick.id}/ranks/${qBlue.id}/remove`, { expectedVersion: 1 }), 'remove belt')).data;
-  ok(adult.ranks.map((k) => `${k.order}:${k.name}`).join(',') === '1:White,2:Purple' && adult.ranks[1].id === qPurple.id && adult.ranks[1].version === 2, 'belt removed and the order closed up');
+  ok(adult.ranks.map((k) => `${k.order}:${k.name}`).join(',') === '1:White,2:Purple' && adult.ranks[1].id === qPurple.id && adult.ranks[1].version === 3, 'belt removed and the order closed up');
   await refused(() => post(OWNER, `/programs/${kids.id}/ranks/${white.id}/remove`, { expectedVersion: 1 }), 409, 'RANK_IN_USE', 'a belt with a student on it cannot be removed');
   ok((await sql('SELECT count(*)::int n FROM hon.curriculum_requirements WHERE curriculum_rank_id=$1', [white.id])).rows[0].n === 1, 'a refused removal keeps the belt and what it needs');
 
@@ -303,8 +311,8 @@ try {
   // 12. Audit: one row per successful command, none for refusals or replays; receipts in the 0070 private table.
   const audits = (await sql("SELECT action_code, count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'curriculum.rank_setup.%' AND source='HUMAN_UI' GROUP BY 1 ORDER BY 1", [ids.organization])).rows;
   const count = (code) => audits.find((a) => a.action_code === `curriculum.rank_setup.${code}`)?.n ?? 0;
-  ok(count('program_create') === 1 && count('program_setup') === 1 && count('rank_add') === 4 && count('rank_update') === 2 && count('rank_move') === 1 && count('rank_remove') === 1 && count('program_rename') === 1, `one audit row per command: ${JSON.stringify(audits)}`);
-  ok((await sql('SELECT count(*)::int n FROM hon.curriculum_command_requests WHERE organization_id=$1', [ids.organization])).rows[0].n === 11, 'one receipt per command');
+  ok(count('program_create') === 1 && count('program_setup') === 1 && count('rank_add') === 4 && count('rank_update') === 4 && count('rank_move') === 1 && count('rank_remove') === 1 && count('program_rename') === 1, `one audit row per command: ${JSON.stringify(audits)}`);
+  ok((await sql('SELECT count(*)::int n FROM hon.curriculum_command_requests WHERE organization_id=$1', [ids.organization])).rows[0].n === 13, 'one receipt per command');
   ok((await sql('SELECT count(*)::int n FROM hon.curricula WHERE organization_id=$1', [ids.organization])).rows[0].n === 2, 'refused creates left nothing');
 
   // 13. Runtime ACL: the two entry points only; the projection helper is private; direct calls without the human session are refused.

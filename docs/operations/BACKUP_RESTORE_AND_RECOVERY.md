@@ -63,13 +63,13 @@ Production-shaped drill (owner-authorized, recommended monthly and before launch
 Migrations are forward-only. Every file is one `BEGIN … COMMIT` transaction, enforced by `pnpm db:check`. The runner:
 
 - refuses to start while another runner holds the advisory lock (`Another HON migration run holds the migration lock`);
-- applies each pending file in order, then records it in `hon.schema_migrations`;
+- applies each pending file in order and records it in `hon.schema_migrations` **inside that file's own transaction** (the in-memory text drops only the file's final `COMMIT;`, writes the ledger row, then commits both; the file bytes are unchanged);
 - stops at the first error.
 
 | Situation | Effect | Recovery |
 |---|---|---|
 | A migration's SQL fails | That file's transaction rolls back. Earlier files stay applied and recorded. | Fix forward with a **new** migration file. Never edit an applied file: `pnpm db:check` fails if a checksum-locked file changes. Redeploy the previous app build if the new code needs the failed migration. |
-| The process dies between a file's `COMMIT` and its ledger insert (rare) | Objects exist, but the ledger lacks the file. A re-run fails on "already exists". | Owner-reviewed manual step: confirm the file's objects exist as written, then `INSERT INTO hon.schema_migrations(filename) VALUES ('<file>')` as the migration owner. Re-run `pnpm db:status`. |
+| The process dies while a file is applying | The file's changes and its ledger row commit together, so either both exist or neither does. A re-run applies the file again from the start. | Re-run `pnpm db:migrate`, then `pnpm db:status`. No manual ledger step. (Older runners committed the file before the ledger insert; a database migrated by one of them can still show that gap, and needs the owner-reviewed manual step: confirm the objects exist as written, then insert the ledger row as the migration owner.) |
 | Lock refused | Another run is active (or a crashed session still holds it). | Wait. Check `pg_stat_activity` for `application_name`/state, and only terminate a session you have confirmed is dead. |
 | `db:status` shows **unknown applied** or **superseded CRM** history | The database was migrated by a different build. | Stop. Do not migrate or deploy. Needs an environment-specific reviewed baseline (see `docs/architecture/CRM_ADULT_DRAFT_MAIN_INTEGRATION.md`). |
 | `db:status` shows **out-of-order pending** (for example reserved 0179/0180 landing after 0189) | The file runs after newer ones. | Its PR must state that it is order-independent before it is deployed. |

@@ -17,19 +17,26 @@ DO $$ BEGIN
 END $$;
 
 -- R4: the 0116 policy for a belt. Both numbers zero and nothing else on the policy means "no rule" ({}), because 0116 treats
--- an all-empty policy as a configuration error. A policy that is not the exact 0116 shape is replaced by a fresh one.
+-- an all-empty policy as a configuration error. A policy that is not the 0116 shape is replaced only when a number is set.
 CREATE FUNCTION hon.rank_setup_rules(p_existing jsonb,p_classes integer,p_days integer) RETURNS jsonb LANGUAGE plpgsql IMMUTABLE SET search_path=pg_catalog,hon AS $$
-DECLARE policy jsonb:=p_existing->'promotionReadinessV1';
+DECLARE policy jsonb:=p_existing->'promotionReadinessV1'; milli bigint:=p_classes::bigint*1000; days integer:=p_days;
 BEGIN
  IF jsonb_typeof(p_existing) IS DISTINCT FROM 'object' OR jsonb_typeof(policy) IS DISTINCT FROM 'object'
   OR jsonb_typeof(policy->'requiredRequirementIds') IS DISTINCT FROM 'array' OR jsonb_typeof(policy->'instructorRecommendationRequirementIds') IS DISTINCT FROM 'array'
   OR jsonb_typeof(policy->'documentTemplateIds') IS DISTINCT FROM 'array' OR jsonb_typeof(policy->'requireOpenTestingWindow') IS DISTINCT FROM 'boolean' THEN
+  -- A rule this page did not write (for example one saved through the older rank API) is left as it is until the school
+  -- sets a number here.
+  IF p_classes=0 AND p_days=0 THEN RETURN coalesce(p_existing,'{}'::jsonb); END IF;
   policy:=jsonb_build_object('requiredRequirementIds','[]'::jsonb,'instructorRecommendationRequirementIds','[]'::jsonb,'documentTemplateIds','[]'::jsonb,'requireOpenTestingWindow',false);
+ ELSE
+  -- A number the school did not change keeps its exact stored value (a part class such as 1500, or one above this page's cap).
+  IF (policy->>'minAttendanceCreditMilli') ~ '^[0-9]{1,12}$' AND least((policy->>'minAttendanceCreditMilli')::bigint/1000,2000)=p_classes THEN milli:=(policy->>'minAttendanceCreditMilli')::bigint; END IF;
+  IF (policy->>'minDaysInCurrentRank') ~ '^[0-9]{1,5}$' AND least((policy->>'minDaysInCurrentRank')::integer,3650)=p_days THEN days:=(policy->>'minDaysInCurrentRank')::integer; END IF;
  END IF;
- policy:=jsonb_build_object('minAttendanceCreditMilli',p_classes::bigint*1000,'minDaysInCurrentRank',p_days,'requiredRequirementIds',policy->'requiredRequirementIds',
+ policy:=jsonb_build_object('minAttendanceCreditMilli',milli,'minDaysInCurrentRank',days,'requiredRequirementIds',policy->'requiredRequirementIds',
   'instructorRecommendationRequirementIds',policy->'instructorRecommendationRequirementIds','documentTemplateIds',policy->'documentTemplateIds',
   'documentAcknowledgementRule','CURRENT_CALLER_STAFF_CURRENT_PUBLICATION','requireOpenTestingWindow',policy->'requireOpenTestingWindow');
- IF p_classes=0 AND p_days=0 AND jsonb_array_length(policy->'requiredRequirementIds')=0 AND jsonb_array_length(policy->'instructorRecommendationRequirementIds')=0
+ IF milli=0 AND days=0 AND jsonb_array_length(policy->'requiredRequirementIds')=0 AND jsonb_array_length(policy->'instructorRecommendationRequirementIds')=0
   AND jsonb_array_length(policy->'documentTemplateIds')=0 AND NOT (policy->>'requireOpenTestingWindow')::boolean THEN RETURN '{}'::jsonb; END IF;
  RETURN jsonb_build_object('promotionReadinessV1',policy);
 END $$;

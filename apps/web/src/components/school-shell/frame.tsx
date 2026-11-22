@@ -27,6 +27,8 @@ export type SchoolShellFrameProps = {
   asleep?: boolean; onWake?: () => void;
   /** 0459: this school has demo data loaded (read for the verified school only). Presentation only. */
   demoLoaded?: boolean;
+  /** The top-bar search (field + pop-up). Without it the bar links to the Search page. */
+  search?: ReactNode;
 };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];
 const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVING: 'viewSaving', SAVED: 'viewSaved', ERROR: 'viewError' };
@@ -106,7 +108,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)}><ShellIcon name="close" /></button>
       {rail}
     </aside>
-    {menuOpen && <div className={styles.scrim} aria-hidden="true" onClick={() => onMenu(false)} />}
+    {/* A click anywhere outside the Menu box closes it (owner, 2026-11-21); on wide screens too, not only for the phone drawer. */}
+    {menuOpen && <div className={styles.scrim} aria-hidden="true" data-menu-scrim={!sidebar && tourStep === null ? 'panel' : 'drawer'} onClick={() => onMenu(false)} />}
     {asleep && <SchoolScreensaver language={language} schoolName={phase === 'READY' ? props.schoolName ?? t('READY') : t('brand')} onWake={onWake} />}
     {tourStep !== null && <div inert={asleep} style={{ display: 'contents' }}><div className={styles.tourScrim} aria-hidden="true" onClick={() => onTour(null)} />
       <SchoolTourDialog language={language} step={tourStep} verified={verified} onStep={onTour} onClose={() => onTour(null)} /></div>}
@@ -134,7 +137,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
           <small role="status">{t(VIEW_STATE[props.viewState])}</small>
         </div>
         {props.utility && <div className={styles.locale}>{props.utility}</div>}
-        <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>
+        {props.search ?? <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>}
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}
       {active?.steps && <nav className={styles.steps} aria-label={t('stepsNav')} data-shell-steps=""><ol>

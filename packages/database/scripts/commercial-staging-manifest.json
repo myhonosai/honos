@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "3d9107b0869e1e66039efb4220a3651c3c868abc2b67f2bdf14d8467178f9bc0",
+  "chainSha256": "0fc444c1697d9f1816acf2840803dd7ae31cdd7ab118f7b8963ed2ac7e2a7cbb",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -815,8 +815,28 @@
       "sha256": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7"
     },
     {
+      "file": "0615_shopify_commerce_review.sql",
+      "sha256": "59cbacf8a419bb6d82794ba0978c37ca9d36d0400b42288fe654aad6a88fbbdd"
+    },
+    {
+      "file": "0617_school_creative_designs.sql",
+      "sha256": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139"
+    },
+    {
       "file": "0622_rank_setup.sql",
-      "sha256": "2441a42fb36e716e26045435177d8c4e0b066ebd8943e6bfa67b60f37c1c3fb4"
+      "sha256": "36a16b58b9e9a3b90584973354e53f1a9d7721afb9915b80e1bd8b8a35b6e08c"
+    },
+    {
+      "file": "0629_crm_trial_authority_hold.sql",
+      "sha256": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043"
+    },
+    {
+      "file": "0630_invoice_insert_status_guard.sql",
+      "sha256": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec"
+    },
+    {
+      "file": "0631_class_booking_lock_identity_plane.sql",
+      "sha256": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe"
     }
   ]
 }

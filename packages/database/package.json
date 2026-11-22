@@ -174,6 +174,7 @@
     "db:test-pos": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-integrity.mjs",
     "db:test-pos-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-shopify-integrity.mjs",
     "db:test-pos-shopify-orders": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-shopify-orders-integrity.mjs",
+    "db:test-creative-designs": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-creative-designs-integrity.mjs",
     "db:test-attendance-cards": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-cards-integrity.mjs",
     "db:test-face-checkin": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-face-checkin-integrity.mjs",
     "db:test-membership-agreement": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-agreement-integrity.mjs",

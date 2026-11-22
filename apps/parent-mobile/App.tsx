@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import appConfig from './app.json';
-import { createParentApi } from './src/api/client';
+import { checkedBaseUrl, createParentApi } from './src/api/client';
 import { createSessionStore } from './src/session/session-store';
 import { base64url, pkceChallenge } from './src/session/pkce';
 import { signIn } from './src/session/sign-in';
@@ -47,7 +47,8 @@ export default function App() {
   }
   const onSignIn = web ? () => signIn({
     webOrigin: web,
-    apiBaseUrl: new URL(API).origin,
+    // Same base as every read, path included: the web only forwards /api/v1/* to the API.
+    apiBaseUrl: checkedBaseUrl(API),
     randomVerifier: async () => base64url(Crypto.getRandomBytes(32)),
     challengeFor: verifier => pkceChallenge(verifier, data => Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, data)),
     // Ephemeral: the browser keeps no HON web session or cookies after handing the code back.

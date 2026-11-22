@@ -227,6 +227,8 @@ export class SchoolPickersController {
     @Query('for') purpose: unknown, @Query('search') search: unknown, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
     response.setHeader('Cache-Control', 'private, no-store');
     if (typeof purpose !== 'string' || !Object.hasOwn(STUDENT_PURPOSES, purpose)) throw new BadRequestException({ code: 'PURPOSE_INVALID', detail: 'Say which screen this list is for.' });
+    // S1 HON Staff app: a native session may look students up only to mark attendance (attendance.record).
+    if (request.honChannel === 'MOBILE' && purpose !== 'attendance') throw new ForbiddenException({ code: 'MOBILE_SESSION_SCOPE', detail: 'This list is not available to the HON Staff app.' });
     const text = needle(search);
     const { context, subject } = await this.scope(request, organizationId, schoolId, STUDENT_PURPOSES[purpose as StudentPurpose]);
     return { data: await this.pickers.students(context, subject, purpose as StudentPurpose, text), meta: { requestId: context.requestId, correlationId: context.correlationId, limit: PICKER_LIMIT } };
