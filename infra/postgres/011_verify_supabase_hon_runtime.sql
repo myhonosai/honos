@@ -6298,3 +6298,21 @@ BEGIN
   END LOOP;
 END $$;
 -- End rank setup exact verification.
+
+-- Mobile hand-off single use exact verification (0655)
+DO $$ DECLARE t oid := to_regclass('hon.mobile_handoff_redemptions'); f oid := to_regprocedure('hon.redeem_mobile_handoff(text,uuid,timestamptz)');
+BEGIN
+  IF t IS NULL OR f IS NULL THEN RAISE EXCEPTION 'Mobile hand-off redemption ledger missing (0655)'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid=t AND relrowsecurity AND relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t) THEN RAISE EXCEPTION 'Mobile hand-off ledger must be forced RLS with no policies'; END IF;
+  IF EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=t AND a.grantee<>c.relowner) THEN
+    RAISE EXCEPTION 'Mobile hand-off ledger must have no table grants'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND p.provolatile='v' AND p.prorettype='boolean'::regtype AND md5(p.prosrc)='300e51f8eef239b6aad8a7d573800e9b'
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+    RAISE EXCEPTION 'Unsafe or drifted hon.redeem_mobile_handoff'; END IF;
+END $$;
+-- End mobile hand-off single use exact verification.
