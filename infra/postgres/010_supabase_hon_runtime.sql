@@ -5204,3 +5204,21 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
       hon.record_chad_lead_plan_step(text,uuid,integer,jsonb), hon.close_chad_lead_plan(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0638 Eian natural voice: one private table, two private helpers and five runtime entry points. The runtime gets no
+-- table privilege; the shared S4 functions it re-creates keep the grants set in their own sections above.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_eian_speech_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0638 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.eian_speech_limits()','hon.eian_speech_unavailable_reason(uuid,uuid,boolean)',
+      'hon.read_eian_speech_status(text,boolean)','hon.begin_eian_speech(text,text,text,integer)','hon.prepare_eian_speech(text,uuid,boolean)',
+      'hon.fail_eian_speech(text,uuid,text,text)','hon.record_eian_speech_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.eian_speech_clips FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.eian_speech_clips FROM %I',r); END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_eian_speech_status(text,boolean), hon.begin_eian_speech(text,text,text,integer),
+      hon.prepare_eian_speech(text,uuid,boolean), hon.fail_eian_speech(text,uuid,text,text), hon.record_eian_speech_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;

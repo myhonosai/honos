@@ -53,7 +53,9 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
-import { EianController, EianAskGuard, EianReadGuard } from './eian/eian.controller.js';
+import { EianController, EianAskGuard, EianReadGuard, EianSpeakGuard } from './eian/eian.controller.js';
+import { EianSpeechService, EIAN_SPEECH_COST_DELAYS, DEFAULT_COST_DELAYS_MS } from './eian/eian-speech.service.js';
+import { EIAN_SPEECH_RUNTIME, OpenRouterEianSpeechRuntime } from './eian/eian-speech-runtime.js';
 import { EianService } from './eian/eian.service.js';
 import { ParentInvoicePayCancelGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayController, ParentInvoicePayStartGuard } from './parent-pay/parent-invoice-pay.controller.js';
 import { ParentInvoicePayService } from './parent-pay/parent-invoice-pay.service.js';
@@ -768,6 +770,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
     // E-AI1: Eian family AI. The same OpenRouter rules: off until the key and the paid-call approval flag are both set.
     { provide: EIAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterEianRuntime() }, EianService, EianAskGuard, EianReadGuard,
+    // E-V2: Eian natural voice. Off until the key, the paid-call flag and HON_EIAN_NATURAL_VOICE_APPROVED are all set.
+    { provide: EIAN_SPEECH_RUNTIME, useFactory: () => new OpenRouterEianSpeechRuntime() }, { provide: EIAN_SPEECH_COST_DELAYS, useValue: DEFAULT_COST_DELAYS_MS },
+    EianSpeechService, EianSpeakGuard,
     ParentInvoicePayService, ParentInvoicePayStartGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayCancelGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
