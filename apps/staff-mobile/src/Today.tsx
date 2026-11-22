@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { MyTimeClock } from '@hon/contracts/staff-time-clock';
 import type { StaffApi, StaffCommandFailure, StaffFailureState, StaffSchool } from './api/client';
-import { ROSTER_MARKS, localTime, type ClassSessionRosterEntry, type CurrentSchoolClassSession, type RosterMark, type RosterPage, type TodayClasses } from './api/today';
+import { ROSTER_MARKS, localTime, type ClassSessionRosterEntry, type FoundStudent, type StudentSearch, type CurrentSchoolClassSession, type RosterMark, type RosterPage, type TodayClasses } from './api/today';
 import { T } from './ui/theme';
 
 /**
@@ -148,6 +148,49 @@ function ClassesCard({ api, school, onSignedOut, onOpen }: TodayProps & { onOpen
   );
 }
 
+/** Owner ask (2026-11-22): add a student who is not on the roster by searching, and mark them present as a walk-in. */
+function AddStudent({ api, school, onSignedOut, onPick, busy }: Pick<TodayProps, 'api' | 'school' | 'onSignedOut'> & { onPick: (student: FoundStudent) => Promise<boolean>; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [found, setFound] = useState<Section<StudentSearch> | null>(null);
+  const search = async () => {
+    if (text.trim().length < 2) return;
+    setFound({ kind: 'loading' });
+    const result = await api.findStudents(school, text);
+    if (result.ok) setFound({ kind: 'ready', data: result.data });
+    else if (result.state === 'signed-out') onSignedOut();
+    else setFound({ kind: 'failed', state: result.state });
+  };
+  if (!open) return <Button label="Add a student" tone="light" onPress={() => setOpen(true)} />;
+  return (
+    <View style={s.gap}>
+      <Text style={s.rowTitle}>Add a student</Text>
+      <View style={s.searchRow}>
+        <TextInput accessibilityLabel="Student name" placeholder="Search by name" placeholderTextColor={T.muted} value={text} onChangeText={setText}
+          onSubmitEditing={() => void search()} returnKeyType="search" autoCorrect={false} maxLength={120} style={s.input} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Search" disabled={text.trim().length < 2} onPress={() => void search()}
+          style={[s.searchButton, text.trim().length < 2 && s.disabled]}><Text style={s.buttonText}>Search</Text></Pressable>
+      </View>
+      {found?.kind === 'loading' ? <ActivityIndicator accessibilityLabel="Searching" color={T.ink} /> : null}
+      {found?.kind === 'failed' ? <Failed state={found.state} /> : null}
+      {found?.kind === 'ready' && found.data.students.length === 0 ? <Text style={s.muted}>No active student matches that name.</Text> : null}
+      {found?.kind === 'ready' ? found.data.students.map(student => {
+        const name = `${student.givenName} ${student.familyName}`;
+        return (
+          <View key={student.studentProfileId} style={s.foundRow}>
+            <Text style={[s.rowTitle, s.flex]}>{name}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Mark present: ${name}`} disabled={busy}
+              onPress={() => void onPick(student).then(done => { if (done) { setText(''); setFound(null); setOpen(false); } })}
+              style={[s.foundMark, busy && s.disabled]}><Text style={[s.markText, s.markTextOn]}>Mark present</Text></Pressable>
+          </View>
+        );
+      }) : null}
+      {found?.kind === 'ready' && found.data.more ? <Text style={s.muted}>Showing the first 50. Type more of the name to narrow it.</Text> : null}
+      <Button label="Close" tone="light" onPress={() => { setOpen(false); setFound(null); }} />
+    </View>
+  );
+}
+
 function Roster({ api, school, newKey, onSignedOut, session, timezone, onBack }: TodayProps & { session: CurrentSchoolClassSession; timezone: string; onBack: () => void }) {
   const [roster, setRoster] = useState<Section<RosterPage>>({ kind: 'loading' });
   const [busy, setBusy] = useState<string | null>(null);
@@ -161,7 +204,7 @@ function Roster({ api, school, newKey, onSignedOut, session, timezone, onBack }:
   }, [api, school, session.sessionId, onSignedOut]);
   useEffect(() => { void load(); }, [load]);
 
-  const mark = async (entry: ClassSessionRosterEntry, status: RosterMark) => {
+  const mark = async (entry: ClassSessionRosterEntry, status: RosterMark): Promise<boolean> => {
     const id = entry.studentProfileId;
     const signature = `${status}:${entry.attendance?.id ?? ''}:${entry.attendance?.version ?? 0}`;
     setBusy(id); setNotes(n => ({ ...n, [id]: '' }));
@@ -169,16 +212,28 @@ function Roster({ api, school, newKey, onSignedOut, session, timezone, onBack }:
     setBusy(null);
     if (result.ok) {
       keys.done(id);
-      setRoster(r => r.kind !== 'ready' ? r : { kind: 'ready', data: { ...r.data, entries: r.data.entries.map(e => e.studentProfileId === id ? { ...e, attendance: result.data } : e) } });
-      return;
+      const known = roster.kind === 'ready' && roster.data.entries.some(e => e.studentProfileId === id);
+      if (known) setRoster(r => r.kind !== 'ready' ? r : { kind: 'ready', data: { ...r.data, entries: r.data.entries.map(e => e.studentProfileId === id ? { ...e, attendance: result.data } : e) } });
+      else await load();
+      return true;
     }
-    if (result.state === 'signed-out') { onSignedOut(); return; }
+    if (result.state === 'signed-out') { onSignedOut(); return false; }
     const note = COMMAND_FAILED[result.state];
     setNotes(n => ({ ...n, [id]: note }));
     if (result.state === 'changed' || result.state === 'rejected' || result.state === 'no-staff-access') { keys.done(id); await load(); }
+    return false;
+  };
+  /** A searched student already on the roster is marked through their roster row (so a change keeps its version). */
+  const pick = (student: FoundStudent) => {
+    const onRoster = roster.kind === 'ready' ? roster.data.entries.find(e => e.studentProfileId.toLowerCase() === student.studentProfileId) : undefined;
+    const walkIn: ClassSessionRosterEntry = { studentProfileId: student.studentProfileId, personId: '', givenName: student.givenName, familyName: student.familyName, studentStatus: 'ACTIVE', booking: null, attendance: null };
+    return mark(onRoster ?? walkIn, 'PRESENT');
   };
 
   const when = `${localTime(session.startsAt, timezone)} – ${localTime(session.endsAt, timezone)}`;
+  // A failed walk-in mark has no roster row to show its note under.
+  const listed = new Set(roster.kind === 'ready' ? roster.data.entries.map(e => e.studentProfileId) : []);
+  const walkInNote = Object.entries(notes).find(([id, note]) => note && !listed.has(id))?.[1];
   return (
     <View style={s.stack}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back to Today" onPress={onBack} style={s.back}><Text style={s.backText}>‹ Today</Text></Pressable>
@@ -211,6 +266,8 @@ function Roster({ api, school, newKey, onSignedOut, session, timezone, onBack }:
           );
         }) : null}
         {roster.kind === 'ready' && roster.data.more ? <Text style={s.muted}>More students than fit here. See the full roster on the web.</Text> : null}
+        {roster.kind === 'ready' ? <AddStudent api={api} school={school} onSignedOut={onSignedOut} onPick={pick} busy={busy !== null} /> : null}
+        {walkInNote ? <Text accessibilityLiveRegion="polite" style={s.alert}>{walkInNote}</Text> : null}
       </View>
     </View>
   );
@@ -258,4 +315,9 @@ const s = StyleSheet.create({
   markOn: { backgroundColor: T.pill, borderColor: T.pill },
   markText: { color: T.ink, fontSize: 13, fontWeight: '600' },
   markTextOn: { color: T.pillText },
+  searchRow: { flexDirection: 'row', gap: 8 },
+  input: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: T.line, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, fontSize: 16, color: T.ink, backgroundColor: T.card },
+  searchButton: { flexShrink: 0, backgroundColor: T.pill, borderRadius: T.radius.pill, paddingHorizontal: 18, justifyContent: 'center' },
+  foundRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  foundMark: { flexShrink: 0, backgroundColor: T.pill, borderRadius: T.radius.pill, paddingVertical: 9, paddingHorizontal: 16 },
 });

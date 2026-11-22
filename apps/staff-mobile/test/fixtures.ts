@@ -68,3 +68,6 @@ export const clock = (open: unknown) => ({
   data: { approval: null, entries: open ? [open] : [], now: '2026-11-23T00:00:00.000Z', open, timezone: 'America/Los_Angeles', todayShifts: [], weekStart: '2026-11-16' },
   meta: { requestId: REQ, correlationId: REQ },
 });
+export const WALK_IN = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+export const FOUND = { data: [{ studentProfileId: WALK_IN, givenName: 'Walk', familyName: 'In' }, { studentProfileId: STUDENT_1, givenName: 'Test', familyName: 'Student' }],
+  meta: { requestId: REQ, correlationId: REQ, limit: 50 } };

@@ -16,7 +16,7 @@ function fakeSession(initial: string | null) {
 }
 let n = 0;
 const key = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
-const closedToday = { todayClasses: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), roster: jest.fn(), mark: jest.fn(),
+const closedToday = { todayClasses: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), roster: jest.fn(), mark: jest.fn(), findStudents: jest.fn(),
   clock: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), punch: jest.fn() };
 const api = (result: WhereIWork): StaffApi => ({ whereIWork: jest.fn(async () => result), ...closedToday });
 const one: WhereIWork = { ok: true, data: { kind: 'one', school: { organizationId: ORG, schoolId: SCHOOL_A, schoolName: null } } };

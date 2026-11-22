@@ -1,8 +1,8 @@
 import { verifyCurrentStaffReportingSchool, verifyStaffReportingSchools } from '@hon/contracts/staff-school-choice';
 import { verifyMyTimeClock, verifyTimeEntryReceipt, type MyTimeClock, type TimeClockAction, type TimeEntry } from '@hon/contracts/staff-time-clock';
 import {
-  CLASS_PAGE, ROSTER_PAGE, isUuid, rosterCategory, verifyAttendanceEnvelope, verifyRosterPage, verifyTodayClasses,
-  type ClassSessionRosterAttendance, type ClassSessionRosterEntry, type RosterMark, type RosterPage, type TodayClasses,
+  CLASS_PAGE, ROSTER_PAGE, isUuid, rosterCategory, verifyAttendanceEnvelope, verifyRosterPage, verifyStudentSearch, verifyTodayClasses,
+  type StudentSearch, type ClassSessionRosterAttendance, type ClassSessionRosterEntry, type RosterMark, type RosterPage, type TodayClasses,
 } from './today';
 
 /**
@@ -31,6 +31,8 @@ export interface StaffApi {
   todayClasses(school: StaffSchool): Promise<StaffRead<TodayClasses>>;
   /** The roster of one class (attendance.record). */
   roster(school: StaffSchool, sessionId: string): Promise<StaffRead<RosterPage>>;
+  /** Find active students of the school by name, to mark one who is not on the roster (attendance.record). */
+  findStudents(school: StaffSchool, search: string): Promise<StaffRead<StudentSearch>>;
   /** Mark one student. A change to an existing mark re-reads it first and sends its version, note and category back. */
   mark(school: StaffSchool, sessionId: string, entry: ClassSessionRosterEntry, status: RosterMark, key: string): Promise<StaffCommand<ClassSessionRosterAttendance>>;
   /** The person's own clock (staff.time.clock). */
@@ -149,6 +151,11 @@ export function createStaffApi(options: StaffApiOptions): StaffApi {
 
     roster(school, sessionId) {
       return get(`${sessionPath(school, sessionId)}/roster?limit=${ROSTER_PAGE}`, verifyRosterPage);
+    },
+
+    findStudents(school, search) {
+      const text = search.trim().slice(0, 120);
+      return get(`${schoolPath(school)}/pickers/students?${new URLSearchParams({ for: 'attendance', search: text })}`, verifyStudentSearch);
     },
 
     async mark(school, sessionId, entry, status, key) {

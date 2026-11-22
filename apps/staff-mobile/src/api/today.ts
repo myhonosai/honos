@@ -20,6 +20,9 @@ export interface TodayClasses {
   /** True when the first page ended inside today, so more classes may exist than shown. */
   more: boolean;
 }
+export const STUDENT_SEARCH_LIMIT = 50;
+export interface FoundStudent { studentProfileId: string; givenName: string; familyName: string }
+export interface StudentSearch { students: FoundStudent[]; more: boolean }
 export interface RosterPage { entries: ClassSessionRosterEntry[]; more: boolean }
 /** The exact attendance record the server holds for one student in one class. */
 export interface AttendanceRecord { id: string; status: string; category: string; note: string | null; recordedAt: string; version: number }
@@ -106,6 +109,20 @@ export function verifyRosterPage(value: unknown): RosterPage {
   });
   if (new Set(entries.map(e => e.studentProfileId.toLowerCase())).size !== entries.length) fail();
   return { entries, more: m.nextCursor !== null };
+}
+
+/** Active students of the school found by name (the attendance pick list): distinct, at most one page. */
+export function verifyStudentSearch(value: unknown): StudentSearch {
+  const body = closed(value, ['data', 'meta']);
+  const m = meta(body.meta, ['requestId', 'correlationId', 'limit']);
+  if (m.limit !== STUDENT_SEARCH_LIMIT || !Array.isArray(body.data) || body.data.length > STUDENT_SEARCH_LIMIT) fail();
+  const students = (body.data as unknown[]).map(item => {
+    const r = closed(item, ['studentProfileId', 'givenName', 'familyName']);
+    if (!isUuid(r.studentProfileId) || !text(r.givenName, 500) || !text(r.familyName, 500)) fail();
+    return { studentProfileId: (r.studentProfileId as string).toLowerCase(), givenName: r.givenName as string, familyName: r.familyName as string };
+  });
+  if (new Set(students.map(s => s.studentProfileId)).size !== students.length) fail();
+  return { students, more: students.length === STUDENT_SEARCH_LIMIT };
 }
 
 /** The exact record (or null on a read with none yet) for this class and student; a save always returns one. */

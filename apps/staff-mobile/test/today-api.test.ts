@@ -1,6 +1,6 @@
 import { createStaffApi } from '../src/api/client';
 import {
-  CLASS_1, CLASS_LIST, ENTRY, ORG, RECORD, REQ, ROSTER, SCHOOL_A, STUDENT_1, STUDENT_2, clock, entry, jsonResponse, record, routeFetch,
+  CLASS_1, CLASS_LIST, ENTRY, FOUND, WALK_IN, ORG, RECORD, REQ, ROSTER, SCHOOL_A, STUDENT_1, STUDENT_2, clock, entry, jsonResponse, record, routeFetch,
 } from './fixtures';
 
 const school = { organizationId: ORG, schoolId: SCHOOL_A, schoolName: null };
@@ -107,5 +107,29 @@ describe('Today: my clock', () => {
   it('a network failure on a punch is offline (same key may be retried)', async () => {
     const impl = jest.fn(async () => { throw new Error('down'); }) as unknown as typeof fetch;
     expect(await api(impl).punch(school, 'CLOCK_IN', 0, 'k')).toEqual({ ok: false, state: 'offline' });
+  });
+});
+
+describe('Today: find a student to add', () => {
+  const pickPath = path('/pickers/students');
+  it('asks the attendance pick list only, with the typed name', async () => {
+    const f = routeFetch({ [pickPath]: () => jsonResponse(200, FOUND) });
+    const result = await api(f.impl).findStudents(school, '  walk ');
+    expect(result.ok && result.data.students.map(s => s.studentProfileId)).toEqual([WALK_IN, STUDENT_1]);
+    const url = new URL(f.calls[0]!.url);
+    expect([...url.searchParams.entries()]).toEqual([['for', 'attendance'], ['search', 'walk']]);
+    expect(f.calls[0]!.init).toMatchObject({ method: 'GET', credentials: 'omit' });
+  });
+  it('refuses a list that does not verify', async () => {
+    for (const bad of [{ ...FOUND, meta: { ...FOUND.meta, limit: 10 } }, { ...FOUND, data: [FOUND.data[0], FOUND.data[0]] }, { ...FOUND, data: [{ ...FOUND.data[0], extra: 1 }] }]) {
+      const f = routeFetch({ [pickPath]: () => jsonResponse(200, bad) });
+      expect(await api(f.impl).findStudents(school, 'walk')).toEqual({ ok: false, state: 'unavailable' });
+    }
+  });
+  it('a walk-in mark is a plain attendance command with no version', async () => {
+    const f = routeFetch({ [path(`/schedule/sessions/${CLASS_1}/attendance`)]: () => jsonResponse(201, { data: record(WALK_IN, 'PRESENT', 1, { category: 'REGULAR_PARTICIPANT' }), meta: { requestId: REQ, correlationId: REQ, replayed: false } }) });
+    const walkIn = { studentProfileId: WALK_IN, personId: '', givenName: 'Walk', familyName: 'In', studentStatus: 'ACTIVE', booking: null, attendance: null };
+    expect((await api(f.impl).mark(school, CLASS_1, walkIn, 'PRESENT', 'k')).ok).toBe(true);
+    expect(JSON.parse(f.calls[0]!.init.body as string)).toEqual({ studentProfileId: WALK_IN, status: 'PRESENT', category: 'REGULAR_PARTICIPANT', note: '' });
   });
 });

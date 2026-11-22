@@ -2,9 +2,9 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { StaffApp } from '../src/StaffApp';
 import type { StaffApi } from '../src/api/client';
-import { verifyRosterPage, verifyTodayClasses } from '../src/api/today';
+import { verifyRosterPage, verifyStudentSearch, verifyTodayClasses } from '../src/api/today';
 import { verifyMyTimeClock } from '@hon/contracts/staff-time-clock';
-import { CLASS_1, CLASS_LIST, ORG, RECORD, ROSTER, SCHOOL_A, STUDENT_1, clock, entry } from './fixtures';
+import { CLASS_1, CLASS_LIST, FOUND, ORG, RECORD, ROSTER, SCHOOL_A, STUDENT_1, WALK_IN, clock, entry } from './fixtures';
 
 function fakeSession() {
   return { token: async () => 't', save: async () => {}, clear: jest.fn(async () => {}), subscribe: () => () => {} };
@@ -20,6 +20,7 @@ function fakeApi(patch: Partial<StaffApi> = {}): StaffApi {
     mark: jest.fn(async () => ({ ok: true as const, data: { id: RECORD, status: 'PRESENT' as const, category: 'REGULAR_PARTICIPANT', recordedAt: '2026-11-23T01:05:00.000Z', version: 1 } })),
     clock: jest.fn(async () => ({ ok: true as const, data: verifyMyTimeClock(clock(null).data) })),
     punch: jest.fn(async () => ({ ok: true as const, data: verifyMyTimeClock(clock(entry()).data).open! })),
+    findStudents: jest.fn(async () => ({ ok: true as const, data: verifyStudentSearch(FOUND) })),
     ...patch,
   };
 }
@@ -81,5 +82,37 @@ describe('Today screen', () => {
     await app(fakeApi({ clock: async () => ({ ok: false, state: 'signed-out' }) }), session);
     expect(await screen.findByText('Your session ended. Please sign in again.')).toBeTruthy();
     expect(session.clear).toHaveBeenCalled();
+  });
+  it('add a student by searching: a walk-in is marked present and the roster is read again', async () => {
+    const api = fakeApi();
+    await app(api);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Kids Fundamentals, 5:00 PM – 6:00 PM' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add a student' }));
+    await fireEvent.changeText(screen.getByLabelText('Student name'), 'wal');
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+    expect(api.findStudents).toHaveBeenCalledWith(school, 'wal');
+    await fireEvent.press(await screen.findByRole('button', { name: 'Mark present: Walk In' }));
+    expect(api.mark).toHaveBeenCalledWith(school, CLASS_1, expect.objectContaining({ studentProfileId: WALK_IN, booking: null, attendance: null }), 'PRESENT', expect.any(String));
+    expect(api.roster).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole('button', { name: 'Add a student' })).toBeTruthy();
+  });
+  it('a searched student already on the roster is marked through their roster row', async () => {
+    const api = fakeApi();
+    await app(api);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Kids Fundamentals, 5:00 PM – 6:00 PM' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add a student' }));
+    await fireEvent.changeText(screen.getByLabelText('Student name'), 'test');
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Mark present: Test Student' }));
+    expect(api.mark).toHaveBeenCalledWith(school, CLASS_1, expect.objectContaining({ studentProfileId: STUDENT_1, booking: expect.objectContaining({ kind: 'REGULAR' }) }), 'PRESENT', expect.any(String));
+  });
+  it('search needs at least two letters', async () => {
+    const api = fakeApi();
+    await app(api);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Kids Fundamentals, 5:00 PM – 6:00 PM' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Add a student' }));
+    await fireEvent.changeText(screen.getByLabelText('Student name'), 'w');
+    await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+    expect(api.findStudents).not.toHaveBeenCalled();
   });
 });
