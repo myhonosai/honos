@@ -37,7 +37,8 @@ let channel: 'SMS' | 'EMAIL' = 'SMS';
 let school: string | null = 'Sunrise Dojo';
 let locks: boolean[] = [];
 let initial = '';
-function render(): Element { hooks.cursor = 0; const tree = ComposeMessage({ scope, channel, schoolName: school, initialContent: initial, onLockChange: v => locks.push(v) }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
+let initialSubject = '';
+function render(): Element { hooks.cursor = 0; const tree = ComposeMessage({ scope, channel, schoolName: school, initialContent: initial, initialSubject, onLockChange: v => locks.push(v) }) as Element; hooks.effects.splice(0).forEach(run => run()); return tree; }
 function unmount(): void { for (const cell of hooks.cells) if (cell && typeof cell === 'object' && 'cleanup' in cell) (cell as { cleanup?: () => void }).cleanup?.(); }
 const all = () => elements(render());
 const field = (name: string, value?: string) => all().find(e => e.props.name === name && (value === undefined || e.props.value === value));
@@ -50,11 +51,12 @@ async function findAndPick(person = ana): Promise<void> {
   all().find(e => e.props['data-person'] === person.personId)!.props.onClick();
 }
 function write(value: string): void { field('composeContent')!.props.onChange({ target: { value } }); }
+function subject(value: string): void { field('composeSubject')!.props.onChange({ target: { value } }); }
 function confirm(): void { field('confirmCompose')!.props.onChange({ target: { checked: true } }); }
 function send(): void { forms().find(f => String(f.props['aria-label']).startsWith('Message to'))!.props.onSubmit({ preventDefault() {} }); }
 const calls = (fetcher: { mock: { calls: unknown[][] } }) => fetcher.mock.calls.map(c => ({ path: c[0], key: ((c[1] as RequestInit).headers as Record<string, string>)['Idempotency-Key'], body: JSON.parse(String((c[1] as RequestInit).body)) }));
 
-beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; people.search.mockReset(); channel = 'SMS'; school = 'Sunrise Dojo'; locks = []; initial = ''; });
+beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; people.search.mockReset(); channel = 'SMS'; school = 'Sunrise Dojo'; locks = []; initial = ''; initialSubject = ''; });
 afterEach(() => { unmount(); vi.restoreAllMocks(); });
 
 describe('New text or email: http (L4)', () => {
@@ -98,12 +100,63 @@ describe('Texts > Send: composer (TE3a)', () => {
     expect(all().find(e => e.type === 'button' && e.props.type === 'submit' && text(e) === 'Send')!.props.disabled).toBe(true);
   });
 
-  it('on the Email page, picks the email address and sends as EMAIL', async () => {
+  it('on the Email page, picks the email address and sends as EMAIL with its subject (TE4)', async () => {
     channel = 'EMAIL';
-    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', recipientPersonId: ben.personId }))).mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', recipientPersonId: ben.personId, lifecycle: 'QUEUED', version: 2 }), 200));
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', recipientPersonId: ben.personId, emailSubject: 'Saturday class, Ben' })))
+      .mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', recipientPersonId: ben.personId, lifecycle: 'QUEUED', version: 2 }), 200));
     await findAndPick(ben); write('See you Saturday'); confirm(); send(); await settle();
-    expect(calls(fetcher)[0]!.body).toEqual({ recipientPersonId: ben.personId, channel: 'EMAIL', content: 'See you Saturday' });
+    // No subject yet: nothing is sent.
+    expect(fetcher).not.toHaveBeenCalled();
+    subject('Saturday class, {{first_name}}');
+    expect(text(all().find(e => e.props['data-email-preview'] === ''))).toContain('Saturday class, Ben');
+    confirm(); send(); await settle();
+    expect(calls(fetcher)[0]!.body).toEqual({ recipientPersonId: ben.personId, channel: 'EMAIL', content: 'See you Saturday', emailSubject: 'Saturday class, Ben' });
     expect(text(render())).toContain('Queued to send to Ben Lee by email.');
+    expect(field('composeSubject')!.props.value).toBe('');
+  });
+
+  it('an email answer with another subject is never taken as this email, and a subject with an unknown tag is refused (TE4)', async () => {
+    channel = 'EMAIL';
+    await expect(createDraft(scope, ana.personId, 'EMAIL', 'Hi', id('e'))).rejects.toMatchObject({ reason: 'INVALID' });
+    await expect(createDraft(scope, ana.personId, 'SMS', 'Hi', id('e'), 'Subject')).rejects.toMatchObject({ reason: 'INVALID' });
+    await expect(createDraft(scope, ana.personId, 'EMAIL', 'Hi', id('e'), ' padded ')).rejects.toMatchObject({ reason: 'INVALID' });
+    await expect(createDraft(scope, ana.personId, 'EMAIL', 'Hi', id('e'), 'x'.repeat(151))).rejects.toMatchObject({ reason: 'INVALID' });
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', content: 'Hi', emailSubject: 'Other' })));
+    await expect(createDraft(scope, ana.personId, 'EMAIL', 'Hi', id('e'), 'Hello')).rejects.toBeInstanceOf(ComposeUncertain);
+    fetcher.mockReset();
+    hooks.cells = [];
+    await findAndPick(ana); subject('About {{program}}'); write('Hi'); confirm(); send(); await settle();
+    expect(text(render())).toContain('Not a merge tag: {{program}}');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('a template subject starts the email, and a retry sends the same subject under the same key (TE4)', async () => {
+    channel = 'EMAIL'; initial = 'Hi {{first_name}}'; initialSubject = 'Welcome, {{first_name}}';
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('network'))
+      .mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', content: 'Hi Ana', emailSubject: 'Welcome, Ana' }))).mockResolvedValueOnce(ok(msg({ channel: 'EMAIL', lifecycle: 'QUEUED', version: 2 }), 200));
+    await findAndPick(ana);
+    expect(field('composeSubject')!.props.value).toBe('Welcome, {{first_name}}');
+    confirm(); send(); await settle();
+    all().find(e => e.type === 'button' && text(e) === 'Retry the same message')!.props.onClick(); await settle();
+    const sent = calls(fetcher);
+    expect(sent[0]!.body.emailSubject).toBe('Welcome, Ana');
+    expect(sent[1]!.key).toBe(sent[0]!.key); expect(sent[1]!.body).toEqual(sent[0]!.body);
+  });
+
+  it('shows the message box, merge tags and preview before a contact is picked, and sends nothing until one is (owner ask 2026-11-21)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    render();
+    expect(field('composeQuery')).toBeDefined();
+    expect(field('composeContent')).toBeDefined();
+    expect(all().find(e => e.type === 'select' && e.props['aria-label'] === 'Insert a merge tag')).toBeDefined();
+    expect(field('confirmCompose')).toBeUndefined();
+    expect(text(render())).toContain('Pick a contact above to send.');
+    write('Hi {{first_name}}');
+    expect(text(all().find(e => e.props['aria-label'] === 'Preview'))).toContain('Hi {{first_name}}');
+    forms().find(f => f.props['aria-label'] === 'Message')!.props.onSubmit({ preventDefault() {} }); await settle();
+    expect(fetcher).not.toHaveBeenCalled();
+    channel = 'SMS'; hooks.cells = []; render();
+    expect(field('composeSubject')).toBeUndefined();
   });
 
   it('fills merge tags from the picked contact, shows that text in the preview, and sends exactly it', async () => {
@@ -271,7 +324,9 @@ describe('Texts > Send: composer (TE3a)', () => {
   });
 
   it('is the Send tab of Texts, the parent app page has no composer, and nothing is stored in the browser', () => {
-    expect(readFileSync('src/components/texts/texts-send.tsx', 'utf8')).toMatch(/<ComposeMessage[^>]*channel="SMS"/);
+    const send = readFileSync('src/components/texts/texts-send.tsx', 'utf8');
+    expect(send).toContain("ChannelSend({ channel: 'SMS', templateId })"); expect(send).toContain("ChannelSend({ channel: 'EMAIL', templateId })");
+    expect(send).toMatch(/<ComposeMessage[^>]*channel=\{channel\}[^>]*initialSubject=\{template\?\.subject \?\? ''\}/);
     expect(readFileSync('src/components/family-messages/staff-family-inbox.tsx', 'utf8')).not.toContain('ComposeMessage');
     for (const file of ['src/components/family-messages/compose.tsx', 'src/components/family-messages/compose-http.ts', 'src/components/texts/texts-send.tsx']) {
       expect(readFileSync(file, 'utf8')).not.toMatch(/localStorage|sessionStorage|setInterval|indexedDB|dangerouslySetInnerHTML/);

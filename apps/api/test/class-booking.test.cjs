@@ -55,6 +55,15 @@ test('saved generic receipts still require live in-transaction session-lock auth
  assert(calls.findIndex(([s])=>s.includes('FROM hon.idempotency_records'))<calls.findIndex(([s])=>s.includes('FROM hon.lock_class_booking_session')));
  const revoked=fixture({replay:true,lockError:'42501'});await assert.rejects(()=>revoked.service.create(context(),sessionId,input),status(403));
 });
+test('launch-readiness P2: a COMPLETED session refuses a new booking with nothing written, while an exact replay into it still returns the stored receipt',async()=>{
+ const refused=fixture({sessionStatus:'COMPLETED'});
+ await assert.rejects(()=>refused.service.create(context(),sessionId,input),e=>e.getStatus?.()===409&&e.getResponse().code==='SESSION_COMPLETED');
+ assert(!refused.calls.some(([sql])=>sql.includes('INSERT INTO hon.class_bookings')||sql.includes('INSERT INTO hon.audit_events')||sql.includes('INSERT INTO hon.outbox_events')));
+ const replay=fixture({replay:true,sessionStatus:'COMPLETED'});
+ assert.deepEqual(await replay.service.create(context(),sessionId,input),{booking:{id:'historical'},created:false,replayed:true});
+ const cancelled=fixture({sessionStatus:'CANCELLED'});
+ await assert.rejects(()=>cancelled.service.create(context(),sessionId,input),e=>e.getResponse().code==='SESSION_CANCELLED');
+});
 test('generic controller supplies only the verified external subject and exact human authority',async()=>{
  const calls=[];const controller=new ClassBookingController({resolveAuthorizedScope:async(...args)=>{calls.push(args);return scope;}},{create:async(c,id,body)=>{assert.equal(c.externalSubject,'verified-subject');assert.equal(c.principalId,principalId);assert.equal(c.principalType,'HUMAN_USER');assert.equal(c.source,'HUMAN_UI');assert(!c.actionRequestId&&!c.delegatedByPrincipalId);assert.equal(id,sessionId);assert.deepEqual(body,input);return{booking:{id:'receipt'},created:true,replayed:false};}});
  const request={honIdentity:{externalSubject:'verified-subject'},headers:{'external-subject':'forged'},query:{principalId:randomUUID()}};const response={status:n=>assert.equal(n,201)};

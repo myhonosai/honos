@@ -116,7 +116,7 @@ GRANT SELECT ON TABLE
   hon.promotion_decisions,
   hon.programs,
   hon.class_templates,
-  hon.class_sessions,
+  -- hon.class_sessions: no direct SELECT (0147 intent, #177 / 0632); reads go through named definer functions.
   hon.class_session_instructors,
   hon.attendance_records,
   hon.knowledge_articles,
@@ -4972,6 +4972,125 @@ BEGIN
     WHERE n.nspname='hon' AND (p.proname='guard_pos_shopify_order' OR p.oid::regprocedure::text=ANY(entry)) LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0615 Commerce review (CA1): the COMMERCE_REVIEW kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_shopify_commerce_review(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0615 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.shopify_review_clip(text,integer)','hon.shopify_review_focuses()','hon.shopify_review_areas()','hon.shopify_review_brief_ok(jsonb)','hon.shopify_review_ok(jsonb)',
+    'hon.shopify_review_facts(jsonb,uuid)','hon.shopify_review_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_shopify_commerce_review(text,jsonb,uuid), hon.plan_shopify_commerce_review(text,uuid),
+      hon.prepare_shopify_commerce_review(text,uuid,uuid,boolean), hon.fail_shopify_commerce_review(text,uuid,text,text),
+      hon.record_shopify_commerce_review(text,uuid,jsonb), hon.read_shopify_commerce_reviews(text,uuid), hon.close_shopify_commerce_review(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0617 Creative Studio design editor D1: six staff entry points (list, read, photo read, save, archive/restore, photo add).
+-- Both tables keep forced RLS with no runtime privilege; every helper stays migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_creative_designs(text,jsonb)','hon.read_school_creative_design(text,jsonb)',
+    'hon.read_school_creative_design_photo(text,jsonb)','hon.save_school_creative_design(text,jsonb,text,uuid,uuid)',
+    'hon.set_school_creative_design_status(text,jsonb,text,uuid,uuid)','hon.add_school_creative_design_photo(text,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.school_creative_designs') IS NULL OR to_regclass('hon.school_creative_design_photos') IS NULL THEN
+    RAISE EXCEPTION 'Apply migration 0617 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.school_creative_designs','hon.school_creative_design_photos'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_design_size(text)','hon.creative_design_name_ok(text)','hon.creative_design_num_ok(jsonb,numeric,numeric)',
+      'hon.creative_design_color_ok(jsonb,boolean)','hon.creative_design_document_ok(jsonb,text)','hon.guard_school_creative_design()',
+      'hon.guard_school_creative_design_photo()','hon.require_creative_design_actor(text,text)',
+      'hon.school_creative_design_summary(hon.school_creative_designs)','hon.school_creative_design_json(hon.school_creative_designs)',
+      'hon.school_creative_design_photo_json(hon.school_creative_design_photos)','hon.creative_design_command_begin(text,text,jsonb,text,uuid,uuid)',
+      'hon.creative_design_room_check(uuid,uuid,text,uuid,boolean)',
+      'hon.creative_design_command_finish(uuid,text,text,uuid,integer,jsonb,jsonb,text,uuid,uuid,jsonb)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0629 CRM trial authority hold (launch-readiness P1): one runtime entry point, no table access.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.hold_crm_trial_authority(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0629 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.hold_crm_trial_authority(text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.hold_crm_trial_authority(text) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.hold_crm_trial_authority(text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- #177 / 0632 class sessions are read only through named SECURITY DEFINER functions. The runtime keeps INSERT (class
+-- creation, without RETURNING) and gets no SELECT on hon.class_sessions; it gains EXECUTE on the operations-report counts
+-- and the parent schedule reads only. Their shared guard helper stays private.
+DO $$ DECLARE r text; f text; BEGIN
+  REVOKE SELECT ON TABLE hon.class_sessions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP
+    EXECUTE format('REVOKE SELECT ON TABLE hon.class_sessions FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.require_class_sessions_human_read()','hon.read_operations_report_session_counts(text,timestamptz,timestamptz)',
+    'hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_operations_report_session_counts(text,timestamptz,timestamptz),
+      hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];
+BEGIN
+  IF to_regclass('hon.school_checkout_links') IS NULL THEN RAISE EXCEPTION 'Apply migration 0620 first'; END IF;
+  REVOKE ALL ON TABLE hon.school_checkout_links FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.school_checkout_links FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_school_checkout_link()','hon.public_school_checkout(text)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0621 school blasts: two private tables reached only through six runtime entry points (save, send, cancel, list, read, audience preview).
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.save_school_blast(text,jsonb,text,uuid,uuid)','hon.send_school_blast(text,jsonb,text,uuid,uuid)',
+    'hon.cancel_school_blast(text,jsonb,text,uuid,uuid)','hon.read_school_blasts(text)','hon.read_school_blast(text,uuid)','hon.read_school_blast_audience(text,uuid)'];
+  helpers text[]:=ARRAY['hon.school_blast_text_ok(jsonb,integer,integer)','hon.school_blast_line_ok(jsonb,integer)','hon.school_blast_audience_ok(jsonb)',
+    'hon.guard_school_blast()','hon.require_school_blast_actor(text,text)','hon.school_blast_address(text,text,text)',
+    'hon.school_blast_resolve(uuid,uuid,text,jsonb)','hon.school_blast_render(text,text,text,text,text)','hon.school_blast_json(hon.school_blasts)',
+    'hon.school_blast_summary_json(hon.school_blasts)','hon.school_blast_begin(text,text,jsonb,text,uuid)',
+    'hon.school_blast_finish(text,text,uuid,text,hon.school_blasts,jsonb,uuid,uuid)'];
+  tables text[]:=ARRAY['hon.school_blasts','hon.school_blast_recipients'];
+BEGIN
+  IF to_regprocedure('hon.read_school_blast_audience(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0621 first'; END IF;
+  FOREACH t IN ARRAY tables LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN

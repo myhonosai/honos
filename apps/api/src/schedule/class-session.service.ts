@@ -187,24 +187,17 @@ export class ClassSessionService {
         });
       }
 
-      const created = await client.query<ClassSessionRow>(
+      // #177 (0632): the runtime has INSERT but no SELECT on hon.class_sessions, so the row is not read back with
+      // RETURNING. The id is chosen here, and the stored instants and creation time are normalized by PostgreSQL in
+      // this same transaction (the column defaults: status SCHEDULED, version 1, created_at now()).
+      const id = randomUUID();
+      await client.query(
         `INSERT INTO hon.class_sessions (
-           organization_id, school_id, program_id, name, room_name, starts_at, ends_at, capacity, booking_policy
+           id, organization_id, school_id, program_id, name, room_name, starts_at, ends_at, capacity, booking_policy
          )
-         VALUES ($1, $2, $3::uuid, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9)
-         RETURNING
-           id,
-           program_id AS "programId",
-           name,
-           room_name AS "roomName",
-           starts_at AS "startsAt",
-           ends_at AS "endsAt",
-           capacity,
-           booking_policy AS "bookingPolicy",
-           status::text AS status,
-           version,
-           created_at AS "createdAt"`,
+         VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, $7::timestamptz, $8::timestamptz, $9, $10)`,
         [
+          id,
           context.organizationId,
           context.schoolId,
           normalized.programId,
@@ -216,8 +209,25 @@ export class ClassSessionService {
           normalized.bookingPolicy,
         ],
       );
-      const row = created.rows[0];
-      if (!row) throw new Error('HON class session insert did not return a record.');
+      const stored = await client.query<{ startsAt: Date | string; endsAt: Date | string; createdAt: Date | string }>(
+        'SELECT $1::timestamptz AS "startsAt", $2::timestamptz AS "endsAt", now() AS "createdAt"',
+        [normalized.startsAt, normalized.endsAt],
+      );
+      const instants = stored.rows[0];
+      if (!instants) throw new Error('HON class session insert could not be confirmed.');
+      const row: ClassSessionRow = {
+        id,
+        programId: normalized.programId,
+        name: normalized.name,
+        roomName: normalized.roomName ?? null,
+        startsAt: instants.startsAt,
+        endsAt: instants.endsAt,
+        capacity: normalized.capacity,
+        bookingPolicy: normalized.bookingPolicy,
+        status: 'SCHEDULED',
+        version: 1,
+        createdAt: instants.createdAt,
+      };
 
       const classSession = toClassSessionSummary(row);
       const payload = {
