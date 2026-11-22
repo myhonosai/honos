@@ -5095,3 +5095,19 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
       hon.apply_jordan_follow_ups(text,uuid,jsonb,text,uuid,uuid), hon.close_jordan_follow_up(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0641 Marcus marketing review (P3): the MARCUS_MARKETING_REVIEW kind on the shared AI text proposals; seven runtime entry
+-- points and every helper closed. Text only; no tables.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_marcus_review(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0641 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.marcus_review_brief_ok(jsonb)','hon.marcus_review_ok(jsonb)','hon.marcus_review_actor(text)',
+    'hon.marcus_review_reader(text)','hon.marcus_review_facts(jsonb)','hon.marcus_review_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_marcus_review(text,jsonb,uuid), hon.plan_marcus_review(text,uuid), hon.prepare_marcus_review(text,uuid,uuid,boolean),
+      hon.fail_marcus_review(text,uuid,text,text), hon.record_marcus_review(text,uuid,jsonb), hon.read_marcus_reviews(text,uuid),
+      hon.close_marcus_review(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;

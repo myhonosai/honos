@@ -6287,3 +6287,38 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End Jordan follow-through exact verification.
+
+-- Marcus marketing review exact verification (0641): the MARCUS_MARKETING_REVIEW kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_marcus_review(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','2ad3a975099aaec3a4ec82cb18dbafd6671ebf4ef7cd20bbb0246298b6875212'),
+('hon.close_marcus_review(text,uuid,text)',true,true,'search_path=pg_catalog, hon','165c2276b3a5957f06ffd6825cc671308e92a7e06602bba1d42a4ea2b47c9645'),
+('hon.fail_marcus_review(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','d1ac39fd09bb62757a42b1abaa0ca9071bfd33e454d30a874e9a5abbcab7c487'),
+('hon.marcus_review_actor(text)',true,false,'search_path=pg_catalog, hon','97a653a441b6eb73720f65283fe701c2ac212b50eb0d76797ea45a430f4949e0'),
+('hon.marcus_review_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','626bf9f0cf6ed4d905eafba7b4488a52ca5662ea00420cd1a9947d477040f380'),
+('hon.marcus_review_facts(jsonb)',true,false,'search_path=pg_catalog, hon','d0adfa53cb92f83907972a63325862ecc2c0de7046e77f825c708c204d5cc430'),
+('hon.marcus_review_ok(jsonb)',false,false,'search_path=pg_catalog, hon','79b4e8efa0b207265f0976ce16f5b54c80ea12f10ab902ed2cb249ec7cf7b856'),
+('hon.marcus_review_reader(text)',true,false,'search_path=pg_catalog, hon','5f65e154600d5c17cdbddbc646f77ba1278dd26831f6ac0ead8cd583a1441b10'),
+('hon.marcus_review_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','041558bd5d70d30ea2e843d402d8521729c5a61137ef8c9f95cd7d3155f86389'),
+('hon.plan_marcus_review(text,uuid)',true,true,'search_path=pg_catalog, hon','b63cd8706d097b7d53cf586b0ca1231e080e939135f9d4d696e19dd9265f1ef4'),
+('hon.prepare_marcus_review(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','d4d3798d9eedec7821b719462edaad28bfc8718e9e6b912f235ca10a5210d50f'),
+('hon.read_marcus_reviews(text,uuid)',true,true,'search_path=pg_catalog, hon','3fece2d2ebc567e71a90ddb812d09161547fbeae870c539a4549ddad4b09bccb'),
+('hon.record_marcus_review(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','f60968161d8eac8492793035f2dc0956d8f156d5160a5f73e14ec3c97134c772'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Marcus marketing review function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MARCUS_MARKETING_REVIEW' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='MARKETING_REVIEW') THEN
+    RAISE EXCEPTION 'Marcus marketing review kind row missing or changed';
+  END IF;
+END $$;
+-- End Marcus marketing review exact verification.

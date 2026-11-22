@@ -90,7 +90,8 @@ BEGIN
   RETURN actor;
 END $$;
 
--- The facts Marcus sees: aggregate counts for the window, at most 12 sources, 12 campaigns and 10 forms (about 8 KB at most).
+-- The facts Marcus sees: aggregate counts for the window, at most 12 sources, 12 campaigns (active or paused, or archived and
+-- running inside the window; never a draft) and 10 forms that are not drafts (about 8 KB at most).
 CREATE FUNCTION hon.marcus_review_facts(p_brief jsonb) RETURNS jsonb LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   WITH w AS (
     SELECT s.id school, s.organization_id org, left(s.name,120) school_name, clock_timestamp() now_,
@@ -104,7 +105,7 @@ CREATE FUNCTION hon.marcus_review_facts(p_brief jsonb) RETURNS jsonb LANGUAGE sq
   ), camp AS (
     SELECT c.id, c.code, c.name, c.channel, c.status, c.starts_at, c.ends_at, c.planned_budget_minor, c.currency
     FROM w JOIN hon.marketing_campaigns c ON c.organization_id=w.org AND c.school_id=w.school
-    WHERE c.status IN ('ACTIVE','PAUSED') OR (c.ends_at>=w.since AND c.starts_at<=w.now_)
+    WHERE c.status IN ('ACTIVE','PAUSED') OR (c.status='ARCHIVED' AND c.ends_at>=w.since AND c.starts_at<=w.now_)
     ORDER BY (c.status='ACTIVE') DESC, c.ends_at DESC, c.id LIMIT 12
   )
   SELECT jsonb_build_object('brief',p_brief,'schoolName',w.school_name,'localToday',to_char(hon.membership_school_today(),'YYYY-MM-DD'),

@@ -116,7 +116,7 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Draft content for an existing school campaign', state: 'AVAILABLE', href: '/staff/marketing/assistant' },
       { label: 'Publish, advertise or spend', state: 'BACKEND_REQUIRED' },
-      { label: 'Marketing performance analysis', state: 'BACKEND_REQUIRED' },
+      { label: 'Marketing performance review of leads, sources, campaigns and forms (Marketing review with Marcus, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
