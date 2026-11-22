@@ -6,7 +6,6 @@ import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/pri
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { ShopifyError, shopifyApi, type Owned, type ShopifyApi } from './http';
 import { brandingApi, type BrandingApi } from '../school-branding/http';
-import { MakeShop } from './make-shop';
 import { merchAiApi, type MerchAiApi } from './merch-ai-http';
 import { reviewApi, type ReviewApi } from './review-http';
 import type { BrandState } from './studio';
@@ -251,10 +250,7 @@ export function SchoolShopify({ api = shopifyApi, branding = brandingApi, merchA
       changes={changes} onPropose={onPropose} onApprove={onApprove} onCancelChange={onCancelChange} onAllowEditing={() => { void onConnect('allowEditing'); }}
       finance={finance} onAllowFinance={() => { void onConnect('allowFinance'); }} onAllowOrders={() => { void onConnect('allowOrders'); }} onAllowStock={() => { void onConnect('allowStock'); }}
       storefront={storefront} storefrontOutcome={storefrontOutcome} onStorefrontCommand={(c) => { void onStorefrontCommand(c); }}
-      schoolName={shell.schoolName} brand={brand} merchAi={marcus} review={reviewer}
-      newShop={schoolId && overview.state === 'READY' && !overview.read.connection && overview.read.canManage
-        ? <MakeShop key={schoolId} schoolId={schoolId} schoolName={shell.schoolName ?? null} language={locale.preferences.language} locale={locale.formattingLocale}
-          onUseStore={(domain) => { if (!locked) { setShop(domain); setOutcome(null); } }} /> : undefined} />
+      schoolName={shell.schoolName} brand={brand} merchAi={marcus} review={reviewer} />
   </div>;
 }
 

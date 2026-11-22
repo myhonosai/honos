@@ -78,8 +78,6 @@ try{
   // 0615 Marcus commerce review (CA1).
   'begin_shopify_commerce_review','plan_shopify_commerce_review','prepare_shopify_commerce_review','fail_shopify_commerce_review','record_shopify_commerce_review',
   'read_shopify_commerce_reviews','close_shopify_commerce_review',
-  // 0655 "Make my shop" requests.
-  'read_shopify_store_request','request_shopify_store','cancel_shopify_store_request','read_hq_shopify_store_requests','settle_hq_shopify_store_request',
   // 0596 Marcus merch ideas (CS-M2).
   'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
   'read_shopify_merch_ideas','close_shopify_merch_ideas'];

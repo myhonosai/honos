@@ -342,8 +342,7 @@ export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
   |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance'
-  |'storefront'|'saveStorefront'|'beginStorefront'|'rotateStorefront'|'finishStorefront'
-  |'storeRequest'|'requestStore'|'cancelStoreRequest'|'hqStoreRequests'|'settleStoreRequest';
+  |'storefront'|'saveStorefront'|'beginStorefront'|'rotateStorefront'|'finishStorefront';
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1630,12 +1629,6 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       beginStorefront: {sql: 'SELECT hon.begin_shopify_storefront_publish($1,$2::jsonb) data',arity:2,readOnly:false},
       rotateStorefront: {sql: 'SELECT hon.rotate_shopify_storefront_credential($1,$2::jsonb) data',arity:2,readOnly:false},
       finishStorefront: {sql: 'SELECT hon.finish_shopify_storefront_publish($1,$2::jsonb) data',arity:2,readOnly:false},
-      // 0655 "Make my shop" requests: the school asks, HON HQ settles.
-      storeRequest: {sql: 'SELECT hon.read_shopify_store_request($1,$2::uuid) data',arity:2,readOnly:true},
-      requestStore: {sql: 'SELECT hon.request_shopify_store($1,$2::jsonb) data',arity:2,readOnly:false},
-      cancelStoreRequest: {sql: 'SELECT hon.cancel_shopify_store_request($1,$2::jsonb) data',arity:2,readOnly:false},
-      hqStoreRequests: {sql: 'SELECT hon.read_hq_shopify_store_requests($1) data',arity:1,readOnly:false},
-      settleStoreRequest: {sql: 'SELECT hon.settle_hq_shopify_store_request($1,$2::jsonb) data',arity:2,readOnly:false},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');

@@ -31,7 +31,6 @@ export const HQ_SCHOOLS = [
   { path: '/hq/schools/access/policy', title: 'Exception Policy', icon: 'settings' },
   { path: '/hq/schools/owners', title: 'School Owners', icon: 'team' },
   { path: '/hq/schools/attention', title: 'Needs Attention', icon: 'flag' },
-  { path: '/hq/schools/shopify-stores', title: 'Shopify Store Requests', icon: 'gift' },
 ] as const;
 export const HQ_REVENUE = [
   { path: '/hq/revenue', title: 'Subscriptions', icon: 'chart' },

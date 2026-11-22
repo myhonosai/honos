@@ -71,8 +71,6 @@ async function answer<T>(path: string, signal: AbortSignal, owned: Owned, verify
   if (status !== 200) throw shopifyErrorFor(status, codeOf(value));
   try { return verify(accountClosed(value, ['data']).data); } catch { throw new ShopifyError('UNKNOWN'); }
 }
-/** One verified answer from a HON Shopify route (a read, or a command when a body is given). */
-export const shopifyAnswer = answer;
 function input<T>(validate: (v: unknown) => T, v: unknown): T { try { return validate(v); } catch { throw new ShopifyError('INVALID'); } }
 
 export const shopifyApi = {

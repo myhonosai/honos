@@ -138,9 +138,23 @@ export interface ShopifyOverview {
   /** SH1b: HON syncs on its own (Shopify change reports, plus a full sync every six hours). */
   autoSync: boolean; connection: ShopifyConnection | null;
   counts: { products: number; variants: number; lowStock: number; provider: number; orders: number } | null; summary: ShopifySummary | null;
+  /** HON's own Shopify sign-up link for a school with no store yet (set by HON, never by a school); null when HON has none. */
+  newStoreUrl: string | null;
+}
+/** A sign-up link is https on Shopify's own site or Shopify's partner link host, with no sign-in part, port or fragment. Anything else is null. */
+export function shopifyNewStoreUrl(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length < 12 || v.length > 500 || v !== v.trim()) return null;
+  let u: URL; try { u = new URL(v); } catch { return null; }
+  const host = u.hostname.toLowerCase();
+  if (u.protocol !== 'https:' || u.username || u.password || u.port || u.hash) return null;
+  return host === 'shopify.com' || host.endsWith('.shopify.com') || host === 'shopify.pxf.io' ? u.toString() : null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
-  const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'], true);
+  // An API one release older does not send newStoreUrl yet: read that as "no link".
+  const base = ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'];
+  const o = closed(v, v && typeof v === 'object' && Object.hasOwn(v, 'newStoreUrl') ? [...base, 'newStoreUrl'] : base, true);
+  const newStoreUrl = o.newStoreUrl === undefined || o.newStoreUrl === null ? null : shopifyNewStoreUrl(o.newStoreUrl);
+  if (o.newStoreUrl !== undefined && o.newStoreUrl !== null && newStoreUrl !== o.newStoreUrl) fail(true);
   const connection = o.connection === null ? null : verifyShopifyConnection(o.connection);
   if ((connection === null) !== (o.counts === null) || (connection === null) !== (o.summary === null)) fail(true);
   let counts: ShopifyOverview['counts'] = null, summary: ShopifySummary | null = null;
@@ -154,7 +168,7 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
         return Object.freeze({ title: text(x.title, 255), quantity: int(x.quantity, 0, 1e9), sales: money(x.sales) }); })) });
     if (summary.coveredSales > summary.lineSales) fail(true);
   }
-  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary });
+  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary, newStoreUrl });
 }
 
 export interface ShopifyVariant {
@@ -516,60 +530,4 @@ export function verifyShopifyStorefrontPublishResult(v: unknown): ShopifyStorefr
   const outcome = oneOf(o.outcome, ['PUBLISHED', 'FAILED', 'UNKNOWN'] as const), failureCode = word(o.failureCode);
   if ((outcome === 'PUBLISHED') !== (failureCode === null)) fail(true);
   return Object.freeze({ outcome, failureCode, storefront: verifyShopifyStorefront(o.storefront) });
-}
-
-// ---- 0655 "Make my shop": a school with no Shopify store asks HON to make one; HON HQ creates and transfers it by hand ----
-export const SHOPIFY_STORE_REQUEST_STATUSES = ['REQUESTED', 'CREATED', 'DECLINED', 'CANCELLED'] as const;
-export type ShopifyStoreRequestStatus = typeof SHOPIFY_STORE_REQUEST_STATUSES[number];
-export interface ShopifyStoreRequest {
-  requestId: string; shopName: string; ownerEmail: string; note: string | null; status: ShopifyStoreRequestStatus;
-  /** The new store's address, once HON has made it. */
-  shopDomain: string | null; requestedAt: string; settledAt: string | null; version: number;
-}
-export interface ShopifyStoreRequestView { schoolId: string; request: ShopifyStoreRequest | null }
-export interface HqShopifyStoreRequest extends ShopifyStoreRequest { schoolId: string; schoolName: string }
-export interface HqShopifyStoreRequests { open: readonly HqShopifyStoreRequest[]; settled: readonly HqShopifyStoreRequest[] }
-export interface ShopifyStoreRequestInput { schoolId: string; shopName: string; ownerEmail: string; note: string | null }
-export interface ShopifyStoreRequestCancel { schoolId: string; requestId: string }
-export interface HqShopifyStoreRequestSettle { requestId: string; expectedVersion: number; outcome: 'CREATED' | 'DECLINED'; shopDomain: string | null }
-
-const REQUEST_KEYS = ['requestId', 'shopName', 'ownerEmail', 'note', 'status', 'shopDomain', 'requestedAt', 'settledAt', 'version'] as const;
-/** A lower-case email address as the database takes it, or null. */
-export function shopifyOwnerEmail(v: unknown): string | null {
-  return typeof v === 'string' && v.length <= 254 && v === v.toLowerCase() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? v : null;
-}
-function storeRequest(o: Record<string, unknown>): ShopifyStoreRequest {
-  const status = oneOf(o.status, SHOPIFY_STORE_REQUEST_STATUSES), email = shopifyOwnerEmail(o.ownerEmail);
-  const shopDomain = o.shopDomain === null ? null : shop(o.shopDomain), settledAt = maybeIso(o.settledAt);
-  if (email === null || (status === 'CREATED') !== (shopDomain !== null) || (status === 'REQUESTED') !== (settledAt === null)) fail(true);
-  return { requestId: id(o.requestId, true), shopName: editText(o.shopName, 60, true), ownerEmail: email, note: maybeEditText(o.note, 500, true, true),
-    status, shopDomain, requestedAt: iso(o.requestedAt), settledAt, version: int(o.version, 1, 1_000_000_000) };
-}
-export function verifyShopifyStoreRequestView(v: unknown): ShopifyStoreRequestView {
-  const o = closed(v, ['schoolId', 'request'], true);
-  return Object.freeze({ schoolId: id(o.schoolId, true), request: o.request === null ? null : Object.freeze(storeRequest(closed(o.request, REQUEST_KEYS, true))) });
-}
-export function verifyHqShopifyStoreRequest(v: unknown): HqShopifyStoreRequest {
-  const o = closed(v, [...REQUEST_KEYS, 'schoolId', 'schoolName'], true);
-  return Object.freeze({ ...storeRequest(o), schoolId: id(o.schoolId, true), schoolName: text(o.schoolName, 200) });
-}
-export function verifyHqShopifyStoreRequests(v: unknown): HqShopifyStoreRequests {
-  const o = closed(v, ['open', 'settled'], true);
-  const open = arr(o.open, 200).map(verifyHqShopifyStoreRequest), settled = arr(o.settled, 50).map(verifyHqShopifyStoreRequest);
-  if (open.some(r => r.status !== 'REQUESTED') || settled.some(r => r.status === 'REQUESTED')) fail(true);
-  return Object.freeze({ open: Object.freeze(open), settled: Object.freeze(settled) });
-}
-export function validateShopifyStoreRequestInput(v: unknown): ShopifyStoreRequestInput {
-  const o = closed(v, ['schoolId', 'shopName', 'ownerEmail', 'note'], false), email = shopifyOwnerEmail(o.ownerEmail);
-  if (email === null) fail(false);
-  return Object.freeze({ schoolId: id(o.schoolId, false), shopName: editText(o.shopName, 60, false), ownerEmail: email, note: maybeEditText(o.note, 500, false, true) });
-}
-export function validateShopifyStoreRequestCancel(v: unknown): ShopifyStoreRequestCancel {
-  const o = closed(v, ['schoolId', 'requestId'], false);
-  return Object.freeze({ schoolId: id(o.schoolId, false), requestId: id(o.requestId, false) });
-}
-export function validateHqShopifyStoreRequestSettle(v: unknown): HqShopifyStoreRequestSettle {
-  const o = closed(v, ['requestId', 'expectedVersion', 'outcome', 'shopDomain'], false), outcome = oneOf(o.outcome, ['CREATED', 'DECLINED'] as const, false);
-  const shopDomain = outcome === 'CREATED' ? shop(o.shopDomain, false) : o.shopDomain === null ? null : fail(false);
-  return Object.freeze({ requestId: id(o.requestId, false), expectedVersion: int(o.expectedVersion, 1, 1_000_000_000, false), outcome, shopDomain });
 }

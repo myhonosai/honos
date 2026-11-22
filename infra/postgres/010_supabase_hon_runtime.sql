@@ -5113,19 +5113,3 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
-
--- 0655 "Make my shop" requests: three school entry points and two HQ entry points; the JSON helper stays migration-owner only.
-DO $$ DECLARE r text; f text;
-  entry text[]:=ARRAY['hon.read_shopify_store_request(text,uuid)','hon.request_shopify_store(text,jsonb)',
-    'hon.cancel_shopify_store_request(text,jsonb)','hon.read_hq_shopify_store_requests(text)','hon.settle_hq_shopify_store_request(text,jsonb)'];
-BEGIN
-  IF to_regprocedure('hon.request_shopify_store(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0655 first'; END IF;
-  FOREACH f IN ARRAY entry||ARRAY['hon.shopify_store_request_json(hon.shopify_store_requests)'] LOOP
-    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
-    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
-      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
-  END LOOP;
-  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
-    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
-  END IF;
-END $$;

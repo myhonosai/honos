@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "2dd162cd7498ab3fc312d836228ea2c04f85a4245a4bc1fc1bdf4c047c792655",
+  "chainSha256": "a5a9843b3daaa08fa3d5728a56e384a7a6a930821e9eb2a015f991b1e4146d22",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -853,10 +853,6 @@
     {
       "file": "0644_booking_invoice_security_hygiene.sql",
       "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
-    },
-    {
-      "file": "0655_shopify_store_requests.sql",
-      "sha256": "133e806caedf96e69732262288d33da0a065aea9a6da49ea99728d2cde6a00e1"
     }
   ]
 }
