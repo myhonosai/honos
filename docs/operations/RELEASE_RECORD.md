@@ -14,16 +14,16 @@ what is launch-ready, or how HON is hosted. Facts that can drift carry the date 
 | Health of a running stack | `GET /api/readiness` on `hon-web` (Render health check since #604: sign-in configured **and** private API + runtime database ready; deploy hon-api before hon-web). `GET /api/identity/readiness` still answers sign-in configuration only |
 | Recovery | `docs/operations/BACKUP_RESTORE_AND_RECOVERY.md`. Its fresh-target restore steps are proven in CI by `test-restore-fresh-target-drill.mjs` (#603) |
 
-## Snapshot (checked 2026-11-22 08:20 UTC)
+## Snapshot (checked 2026-11-22 12:10 UTC)
 
 - **Hosting:** Render (`hon-web` public web service, `hon-api` private service) with Supabase Pro PostgreSQL, per
   `render.yaml`. Deploys are manual and owner-approved; commit-triggered deploys and previews are off.
-- **`main`:** `ea1b9c0d`. **381** migration files, highest **0632**. Migration numbers are allocated by the project
-  coordinator and merge in ascending order.
+- **`main`:** `04af91ab`. **382** migration files, highest **0644** (0644 merged early as an agreed security waiver;
+  0633-0643 are still open PRs). Migration numbers are allocated by the project coordinator and merge in ascending order.
 - **Deployed:** `bd8e1451` (database, `hon-api`, `hon-web`), database top 0632, as reported by the deploy thread on
-  2026-11-22 06:10 UTC. Later merges (launch-readiness fixes #593, #594, #601) are **not** deployed yet.
+  2026-11-22 06:10 UTC. Later merges (launch-readiness fixes #593 onward, including 0644) are **not** deployed yet.
 - **Launch readiness:** the external review of 2026-11-22 (pinned `0d476427`) found HON OS **not launch-ready**.
-  P1 is merged. P2 fixes are merging one PR per finding; see the "Fix launch-readiness review blockers" project thread.
+  P1 and every P2 fix are merged; P3 carries #608 and #611 are merged, #612 (0645) waits for its queue turn; see the "Fix launch-readiness review blockers" project thread.
   Commercial activation (live payments, paid AI, payment-controlled access) stays **off** by design.
 
 ## Superseded statements
