@@ -275,6 +275,8 @@ const expectedRlsTables = [
   'school_website_requests',
   'ai_text_kinds',
   'ai_text_proposals',
+  'alex_plan_staff_refs',
+  'alex_plan_created_tasks',
   'school_onboarding_profiles',
   'school_onboarding_requests',
   'school_support_requests',

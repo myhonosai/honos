@@ -6195,3 +6195,51 @@ DO $$ DECLARE f record; BEGIN
   END LOOP;
 END $$;
 -- End class sessions function-only reads exact verification.
+
+-- Alex delegation plans exact verification (0639): the ALEX_DELEGATION_PLAN kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.alex_plan_actor(text)',true,false,'search_path=pg_catalog, hon','22540944e18d1532801571e43641cdfba7ce511b82b4bbfb9ed3cbc67702debd'),
+('hon.alex_plan_areas()',false,false,'search_path=pg_catalog','b544cbcaeee47589e51d5085b9a2f129f259080e389a8381ddfb16049e5da5ec'),
+('hon.alex_plan_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6e25173e1aff182e791cb66833fbba01f7e589cefa6f3174de953a6664a92e21'),
+('hon.alex_plan_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','ace4e38b2e69f261eae603326cc7826632bd2a8c407a6cdabb67e619f10ff6dd'),
+('hon.alex_plan_fix_refs(uuid)',true,false,'search_path=pg_catalog, hon','748bb2493566563bafa034d07d4ab8ede2e8b19d1f8f6e1e6aa4fbe8dd9ea9af'),
+('hon.alex_plan_keys_are(jsonb,text[])',false,false,'search_path=pg_catalog','7556a96f17a68188dd305a64c9279afd187b13bee9774d8bbdfc6d7fd4a64547'),
+('hon.alex_plan_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','a94feea13748dbf9238ad9643bf8672aad450dde7b306ae1dee557fd2594df24'),
+('hon.alex_plan_ok(jsonb)',false,false,'search_path=pg_catalog, hon','080cf9284e2c960a52f37e4b90a2cf51edf7b5cf0a0727ec88ec8975bf3fb01c'),
+('hon.alex_plan_reader(text)',true,false,'search_path=pg_catalog, hon','b5727b67b28d305bf03e12a7d799419fce65e452131bbfd35074e4df8430a702'),
+('hon.alex_plan_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','06377522a66212c93123cbd99c9c6774eeebc1c9164b1a8e33a2913e3434a9a3'),
+('hon.begin_alex_plan(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','4321ac79a6e8a0af106cac30f8db481add9ddda646a48b3363bcfc0f28fcc24d'),
+('hon.close_alex_plan(text,uuid,text)',true,true,'search_path=pg_catalog, hon','ea8d36657128325bb03fa680e7507b15f54cce03433a44613275f11f2b6cab42'),
+('hon.create_alex_plan_tasks(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','78f3b2a285aef267191d32ed3617a68ccbe63c8ab9dde620b9ae66481b51c5ee'),
+('hon.fail_alex_plan(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','3c3dce1d6e5f49b7fff54234e6695be294819a105d426f638250b48ebc206e72'),
+('hon.guard_alex_plan_rows()',false,false,'search_path=pg_catalog','60c2ac1f79fdd66d9c79e5d5afcbdbe6d0e3a368a4fc9e62b48cf513972189b4'),
+('hon.plan_alex_plan(text,uuid)',true,true,'search_path=pg_catalog, hon','a794107e1e8f58044a6dbea8b9426f8f420ce1b94f76e3eaa72a1b2b4ad623c6'),
+('hon.prepare_alex_plan(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','27b8323521edc2bf33bf62a56968f3fa26f9f8d8c34179aa5cfeb1e0a7e64c23'),
+('hon.read_alex_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','46436f6c6499211686eefeada2c9088b6f1a25607c320cfdea1d42f39a425922'),
+('hon.record_alex_plan(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','ae4c53483ce5cbb80ee45853885f931213d9c2f58f2e963a7adf29d3554243f3'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Alex delegation plan function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='ALEX_DELEGATION_PLAN' AND k.agent_key='alex' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='GENERAL_MANAGEMENT') THEN
+    RAISE EXCEPTION 'Alex delegation plan kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.alex_plan_staff_refs','hon.alex_plan_created_tasks'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Alex delegation plan table is not closed: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Alex delegation plans exact verification.

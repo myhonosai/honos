@@ -1158,6 +1158,7 @@ export * from './school-pay-once.js';
 export * from './shopify.js';
 export * from './shopify-merch-ai.js';
 export * from './shopify-commerce-review.js';
+export * from './alex-delegation.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';
 export * from './membership-agreement.js';
