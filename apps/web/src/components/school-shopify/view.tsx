@@ -18,7 +18,7 @@ export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { 
 export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'finance', 'theme', 'inventory', 'admin', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
-export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowOrders' | 'propose' | 'approve' | 'cancelChange';
+export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowOrders' | 'allowStock' | 'propose' | 'approve' | 'cancelChange';
 /** `target` is the change a command was about; `change` is the server's verified answer for it. */
 export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult; change?: ShopifyProductChange; target?: string }>;
 
@@ -29,7 +29,7 @@ export type ShopifyViewProps = Readonly<{
   onPropose?: ((change: ProposeRequest) => void | Promise<boolean>) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   /** SH-F1: the Shopify Payments snapshot (managers only) and the switch that asks Shopify for it. */
-  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined; onAllowOrders?: (() => void) | undefined;
+  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined; onAllowOrders?: (() => void) | undefined; onAllowStock?: (() => void) | undefined;
   /** TB2: the storefront settings and theme editor links (managers only) and the last storefront command. */
   storefront?: StorefrontState | undefined; storefrontOutcome?: StorefrontOutcome | undefined; onStorefrontCommand?: ((c: StorefrontCommand) => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
@@ -463,6 +463,10 @@ function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyO
       {!c.ordersAllowed && read.canManage && c.status === 'CONNECTED' && <>
         <p className={styles.meta}>{t('allowOrdersHelp')}</p>
         <div className={styles.row}><button type="button" className={styles.secondary} data-allow-orders disabled={p.locked} onClick={p.onAllowOrders}>{p.locked && p.outcome?.action === 'allowOrders' ? t('connecting') : t('allowOrders')}</button></div></>}
+      {/* HON cannot see whether the store shows its locations, so this stays offered: pressing it again changes nothing. */}
+      {read.canManage && c.status === 'CONNECTED' && <>
+        <p className={styles.meta}>{t('allowStockHelp')}</p>
+        <div className={styles.row}><button type="button" className={styles.secondary} data-allow-stock disabled={p.locked} onClick={p.onAllowStock}>{p.locked && p.outcome?.action === 'allowStock' ? t('connecting') : t('allowStock')}</button></div></>}
     </div>
   </div>;
 }

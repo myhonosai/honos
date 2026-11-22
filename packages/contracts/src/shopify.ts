@@ -15,6 +15,8 @@ export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as cons
 export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts', 'read_shopify_payments_payouts'] as const;
 /** SH2b (0614): asked for only when the owner presses Allow orders. Lets the front desk create the Shopify order a print provider works from. */
 export const SHOPIFY_ORDER_SCOPES = ['write_orders'] as const;
+/** Front desk stock updates: a stock change must name the store's own location, which Shopify shows only with read_locations (seen on the test store 2026-11-22). Optional; asked for by Allow stock updates and with Allow orders. */
+export const SHOPIFY_STOCK_SCOPES = ['read_locations'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;
 export const SHOPIFY_CONNECTION_STATUSES = ['CONNECTED', 'NEEDS_RECONNECT', 'DISCONNECTED'] as const;
 export type ShopifyConnectionStatus = typeof SHOPIFY_CONNECTION_STATUSES[number];

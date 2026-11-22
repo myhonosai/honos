@@ -1,0 +1,44 @@
+/* Ranks & curriculum pages in the dark school look (docs/architecture/RANK_SETUP_AND_PLAIN_CURRICULUM_PAGES.md section 6).
+   Styles plain markup (section, article, label, button) so each page keeps its own structure. Tokens match look.module.css. */
+.page { --ok: #34d399; --bad: #f87171; --warn: #fbbf24; display: grid; gap: var(--hon-space-4, 16px); max-width: 1120px; margin: 0 auto;
+  padding: var(--hon-space-5, 24px) var(--hon-space-4, 16px) 72px; color: var(--hon-text, #eef3ff); }
+.page > header { display: grid; gap: 6px; }
+.page > header p:first-child { margin: 0; font-size: var(--hon-text-xs, 12px); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--hon-accent-2, #22d3ee); }
+.page h1 { margin: 0; font-size: clamp(26px, 4vw, 34px); line-height: 1.15; }
+.page h2 { margin: 0 0 8px; font-size: var(--hon-text-lg, 18px); }
+.page h3 { margin: 0; font-size: var(--hon-text-md, 15px); }
+.page p { margin: 0; line-height: 1.55; }
+.page > header p:not(:first-child), .muted { color: var(--hon-text-muted, #a9b8d6); }
+.page a { color: var(--hon-accent-2, #22d3ee); }
+.page section { display: grid; gap: 10px; padding: var(--hon-space-4, 16px); border: 1px solid var(--hon-border, #24405a); border-radius: var(--hon-radius-lg, 16px);
+  background: var(--hon-surface-solid, #0d1a38); overflow-wrap: anywhere; min-width: 0; }
+.page article { display: grid; gap: 6px; padding: 12px; border-radius: var(--hon-radius-md, 12px); background: var(--hon-surface-2, #13263a); }
+.page aside { padding: 12px 14px; border-left: 4px solid var(--hon-accent, #2f7bff); border-radius: var(--hon-radius-sm, 8px); background: var(--hon-surface-2, #13263a); line-height: 1.5; }
+.page fieldset { display: grid; gap: 10px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.page legend { padding: 0; margin-bottom: 4px; font-weight: 700; }
+.page label { display: grid; gap: 6px; font-size: var(--hon-text-sm, 13px); font-weight: 600; color: var(--hon-text-muted, #a9b8d6); }
+.page input:not([type='checkbox']):not([type='radio']), .page select, .page textarea { box-sizing: border-box; width: 100%; min-height: var(--hon-control-h, 40px); padding: 8px 12px;
+  border: 1px solid var(--hon-border, #24405a); border-radius: var(--hon-radius-sm, 8px); background: var(--hon-bg-raised, #08112a); color: var(--hon-text, #eef3ff); color-scheme: dark; font: inherit; }
+.page textarea { min-height: 80px; resize: vertical; }
+.page input:focus-visible, .page select:focus-visible, .page textarea:focus-visible, .page button:focus-visible { outline: 2px solid var(--hon-accent, #2f7bff); outline-offset: 2px; }
+.page input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--hon-accent, #2f7bff); }
+.page button { justify-self: start; min-height: var(--hon-control-h, 40px); padding: 0 16px; border: 1px solid var(--hon-border-strong, #3c6487); border-radius: var(--hon-radius-sm, 8px);
+  background: var(--hon-surface-2, #13263a); color: var(--hon-text, #eef3ff); font: inherit; font-weight: 600; cursor: pointer; margin-right: 6px; }
+.page button[type='submit'], .page button[data-primary] { border-color: transparent; background: var(--hon-accent, #2f7bff); color: #fff; }
+.page button[aria-pressed='true'] { border-color: var(--hon-accent, #2f7bff); background: color-mix(in srgb, var(--hon-accent, #2f7bff) 22%, transparent); }
+.page button:disabled { opacity: .5; cursor: not-allowed; }
+.page dl { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 4px 12px; margin: 0; }
+.page dt { color: var(--hon-text-muted, #a9b8d6); }
+.page dd { margin: 0; }
+.page small { color: var(--hon-text-muted, #a9b8d6); font-size: var(--hon-text-xs, 12px); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status { display: flex; flex-wrap: wrap; gap: 6px; }
+.meta { color: var(--hon-text-muted, #a9b8d6); font-size: var(--hon-text-sm, 13px); }
+.body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.check { display: flex !important; gap: 8px; align-items: center; }
+.error, .notice, .warning { padding: 10px 14px; border-radius: var(--hon-radius-md, 12px); border: 1px solid; }
+.error { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, transparent); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.notice { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.warning { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+@media (max-width: 650px) { .page { padding: 16px 12px 48px; } .page button { width: 100%; margin: 0 0 6px; } .page dl { grid-template-columns: 1fr; } }

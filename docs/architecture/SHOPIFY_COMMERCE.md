@@ -293,7 +293,14 @@ payouts were left out) the balance alone. `financeAllowed` still means
 the accounts scope. The Finance screen cannot tell "no payouts" from "payouts not allowed", so an empty payouts list
 shows an **Allow payouts** button that runs Allow finance again.
 The same log shows why the catalog read with stock locations is refused: it needs `read_locations`, which the app does
-not ask for; the catalog keeps using the plain read (no fulfilment source) until that scope is decided.
+not ask for; the catalog keeps using the plain read (no fulfilment source) without it.
+
+The first live front desk sale on the test store (2026-11-22) showed the same refusal on the stock send
+(`HonVariantStock`, `needs read_locations`): a stock change must name the store's own location, so without the scope no
+front desk sale can change Shopify's count (the task stays waiting; nothing is lost). The owner approved adding it
+(2026-11-22): `read_locations` is an optional scope in the app file (next app version, `hon-os-6`), granted by **Allow
+stock updates** in Settings and together with Allow orders. HON keeps no flag for it, so the button stays offered;
+pressing it again changes nothing. After it is granted a manager sends the waiting stock changes again from the Register.
 
 Settled on the test store on 2026-11-22: with managed installation, `/admin/oauth/authorize` with the scope in `scope=`
 does **not** grant an optional scope (the owner comes back connected, without it). Shopify's request address does

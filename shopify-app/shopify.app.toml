@@ -18,7 +18,7 @@ scopes = "read_inventory,read_orders,read_products,write_inventory,write_product
 # read_shopify_payments_payouts for the payouts list) or Allow orders (write_orders:
 # a made-to-order item sold at the front desk becomes a paid order). A store can decline either. Shopify does not
 # prompt anyone when this list changes.
-optional_scopes = [ "read_shopify_payments_accounts", "read_shopify_payments_payouts", "write_orders" ]
+optional_scopes = [ "read_locations", "read_shopify_payments_accounts", "read_shopify_payments_payouts", "write_orders" ]
 use_legacy_install_flow = false
 
 [auth]
