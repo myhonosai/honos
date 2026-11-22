@@ -133,6 +133,12 @@ try {
   await administrator.query('UPDATE hon.principal_role_grants SET revoked_at=NULL,revoked_by_principal_id=NULL WHERE id=$1', [ids.grant]);
   await allowedThenUndo('staff role restored');
 
+  // 0644 H2: a permission row that is no longer staff assignable confers no booking authority (the 0147 discovery rule).
+  await administrator.query("UPDATE hon.permissions SET is_staff_assignable=false WHERE code='schedule.booking.manage'");
+  try { await refused('schedule.booking.manage not staff assignable', 403); }
+  finally { await administrator.query("UPDATE hon.permissions SET is_staff_assignable=true WHERE code='schedule.booking.manage'"); }
+  await allowedThenUndo('staff assignable restored');
+
   // Lifecycle: a COMPLETED session refuses a new booking with nothing written.
   {
     const before = await bookingCount(); const evidenceBefore = await evidenceCount();
@@ -165,7 +171,7 @@ try {
   assert(section, 'Missing the 0631 011 section');
   await administrator.query(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', runtimeRole));
   checks += 1;
-  console.log(`Class booking identity plane (0631): ${checks} checks passed.`);
+  console.log(`Class booking identity plane (0631, 0644): ${checks} checks passed.`);
 } finally {
   try { await database.onModuleDestroy(); } finally {
     try { await cleanup(); } finally { await runtime.end(); await administrator.end(); }
