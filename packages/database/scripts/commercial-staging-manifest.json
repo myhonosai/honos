@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e05202fa3fe5c8b7b5355163f9fd93e26b56b699d0435e28905ad006d47cd31a",
+  "chainSha256": "49c201e1c7a5c25d076d6ddbddf417f9fb729ae24c9e9237f79ba897a9ccea98",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -829,6 +829,10 @@
     {
       "file": "0630_invoice_insert_status_guard.sql",
       "sha256": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec"
+    },
+    {
+      "file": "0631_class_booking_lock_identity_plane.sql",
+      "sha256": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe"
     }
   ]
 }
