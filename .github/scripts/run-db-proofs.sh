@@ -164,6 +164,10 @@ proof crm-lead-close test-platform-least-privilege.mjs "Platform least privilege
 proof crm-lead-close test-migration-runner-safety.mjs "Migration tooling: single-runner lock, read-only db:status (current, divergent history), TLS refusal before connecting, atomic migration + ledger commit (ledger failure, runner lost mid-window, split-transaction file refused)"
 proof crm-lead-close test-restore-drill.mjs "Backup/restore drill: pg_dump, total loss, pg_restore, identical data/ledger/security posture, verifiers pass on the restored database"
 
+# Human action approvals (review P3: this proof existed but was not run in CI), including the [21] durable expiry case.
+setup action-approval HON_ACTION_APPROVAL_VALIDATION_TARGET hon_approval_validation HON_ACTION_APPROVAL_ENV_FILE
+proof action-approval test-action-approvals-integrity.mjs "Human action approvals: approval authority, idempotent decisions and execution claims, and an approval that expires before execution is durably EXPIRED with its audit and outbox rows while the caller still gets 409 (launch-readiness [21])"
+
 # Fresh-target restore (review [23]) builds and destroys its own two private clusters (no fixture descriptor).
 echo "::group::Fresh-target restore drill: runbook dump, roles and extensions first, one-transaction restore (test-restore-fresh-target-drill.mjs)"
 "${clean_env[@]}" bash -c 'cd "$1" && node scripts/test-restore-fresh-target-drill.mjs' _ "$repo_root/packages/database"

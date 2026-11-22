@@ -135,6 +135,10 @@ test('SH-F1 lists refused (no read_shopify_payments_payouts): the read steps dow
   sent.length = 0; replies.push(denied('payouts'), denied('balanceTransactions'), denied('balance'));
   await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
   assert.equal(sent.length, 3);
+  // An answer Shopify gave but HON cannot read (a payout status HON does not know) is the failure: it does not step down to hide the lists.
+  sent.length = 0; replies.push({ data: { shopifyPaymentsAccount: { ...ACCOUNT, payouts: { nodes: ACCOUNT.payouts.nodes.map(p => ({ ...p, status: 'SOMETHING_NEW' })) } } } });
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  assert.equal(sent.length, 1);
 });
 
 test('SH-F1 the fake store keeps only the balance for a store that granted only the accounts scope', async () => {
