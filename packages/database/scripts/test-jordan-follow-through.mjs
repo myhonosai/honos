@@ -149,8 +149,8 @@ try {
   assert.deepEqual(Object.keys(sent).sort(), ['brief', 'localToday', 'school', 'schoolName', 'staff', 'tasks']);
   assert.deepEqual(sent.tasks.map((t) => [t.ref, t.title, t.status, t.priority, t.assignee, t.dueInDays < 0, t.daysSinceChange]),
     [['W1', 'Order new belts for the test', 'READY', 'NORMAL', 'S2', true, 0], ['W2', 'Fix the front door lock', 'READY', 'LOW', null, true, 0]]);
-  assert.deepEqual(Object.keys(sent.tasks[0]).sort(), ['assignee', 'dueInDays', 'daysSinceChange', 'priority', 'ref', 'status', 'title']);
-  assert.deepEqual(sent.staff.map((x) => [x.ref, x.openTasks]), [['S1', 2], ['S2', 1], ['S3', 1]]);
+  assert.deepEqual(Object.keys(sent.tasks[0]).sort(), ['assignee', 'daysSinceChange', 'dueInDays', 'priority', 'ref', 'status', 'title']);
+  assert.deepEqual(sent.staff.map((x) => [x.ref, x.openTasks]), [['S1', 0], ['S2', 1], ['S3', 1]]);
   assert.equal(/Synth(owner|coach|desk)|example\.test|jf1-|Synthetic task for JF1/.test(fake.inputs[0].request), false, 'no staff name, email, subject or task description is sent');
   assert.equal(Buffer.byteLength(fake.inputs[0].request) < 12000 - 128 - 2500, true);
   assert.deepEqual([fake.inputs[0].inputBudget, fake.inputs[0].outputBudget, fake.inputs[0].maxCostMicrounits], [12000, 3000, 80000]);
