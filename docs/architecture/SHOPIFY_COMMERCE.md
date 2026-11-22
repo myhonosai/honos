@@ -529,3 +529,14 @@ nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and
 - **Evidence.** `packages/database/scripts/test-shopify-commerce-review.mjs` (9 groups, fake provider, 0 network calls),
   `apps/api/test/commerce-review.test.cjs`, `apps/web/test/school-shopify-commerce-review.test.tsx`, and the 011 section
   "Shopify commerce review exact verification (0615)".
+
+## New-shop guide (schools with no Shopify store)
+
+Before a store is connected, a manager sees a "Set up your shop" guide above the connect form: start a store on Shopify, copy
+the `.myshopify.com` address, come back and connect, then fill the shop with Merch Studio. No app can create a Shopify store
+or accept Shopify's terms for a merchant, so the account is always made by the school on Shopify's own page.
+
+The guide's button opens `HON_SHOPIFY_NEW_STORE_URL` when hon-api has it (HON's Shopify Affiliate Program link, which keeps the school's free trial; https on
+`shopify.com`, a subdomain of it, or `shopify.pxf.io` only, otherwise ignored) and Shopify's public sign-up page when not. The
+link is HON-wide configuration, never school input, and reaches the page as `newStoreUrl` on the overview read. When HON's link
+is used the guide says HON may receive a referral fee. No migration; nothing is written.
