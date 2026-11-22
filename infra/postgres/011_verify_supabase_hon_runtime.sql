@@ -6174,3 +6174,24 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unexpected class booking lock overload'; END IF;
 END $$;
 -- End class booking lock identity plane exact verification.
+-- Class sessions function-only reads exact verification (0632, #177): no runtime SELECT on hon.class_sessions, two runtime reads, one private helper.
+DO $$ DECLARE f record; BEGIN
+  IF has_table_privilege('hon_runtime','hon.class_sessions','SELECT') OR has_any_column_privilege('hon_runtime','hon.class_sessions','SELECT')
+    OR NOT has_table_privilege('hon_runtime','hon.class_sessions','INSERT') THEN
+    RAISE EXCEPTION 'hon.class_sessions must be INSERT-only for the runtime (no table or column SELECT)'; END IF;
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.require_class_sessions_human_read()',false,false,'s','2feaa0b10eff965b23ad924d24053946'),
+    ('hon.read_operations_report_session_counts(text,timestamptz,timestamptz)',true,true,'s','8ea9cc990b7c068bc99be462370f75d1'),
+    ('hon.read_parent_family_schedule(text,uuid,timestamptz,timestamptz)',true,true,'v','a59962d8713cd5785ec8823e3792aa49')
+  ) x(signature,definer,runtime_execute,volatility,body) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure
+        AND p.prosecdef=f.definer AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile::text=f.volatility AND md5(p.prosrc)=f.body
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_execute
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (NOT f.runtime_execute OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')
+            OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe class sessions read function %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End class sessions function-only reads exact verification.
