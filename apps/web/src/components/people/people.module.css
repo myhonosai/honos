@@ -116,6 +116,12 @@
 .blockers ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
 .choice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .segment[data-segment="ARCHIVED"] { background: #1c2430; color: #b8c4d0; box-shadow: inset 0 0 0 1px #3b4a5c; }
+/* Membership actions on the contact card. */
+.membershipPanel { display: grid; gap: 0.5rem; margin-top: 0.5rem; }
+.membershipPanel fieldset { display: grid; gap: 0.75rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+.membershipPanel label { display: grid; gap: 0.25rem; }
+.membershipPanel input[type="date"], .membershipPanel textarea { max-width: 100%; }
+.row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .photoRow { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
 .photoFrame { width: 132px; height: 132px; flex: none; display: grid; place-items: center; overflow: hidden; border: 1px solid #35506d; border-radius: 14px; background: #0a1625; color: #cfe0f2; font-size: 34px; font-weight: 800; }
 .photoFrame img { width: 100%; height: 100%; object-fit: cover; }

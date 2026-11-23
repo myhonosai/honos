@@ -3767,6 +3767,26 @@ DO $$ DECLARE r text; f text;
   END IF;
 END $$;
 
+-- M-B 0624 new membership and renew from the contact card: two runtime entry points (start options read, start); the actor,
+-- facts, program group, overlap trigger and item helpers are private; the card-start table has no runtime privilege.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_person_membership_start(text,jsonb)','hon.start_person_membership(text,jsonb,text,uuid,uuid)'];
+  fns text[]:=ARRAY['hon.guard_person_membership_start()','hon.membership_program_group(uuid)','hon.guard_person_membership_overlap()',
+    'hon.require_person_membership_actor(text)','hon.person_membership_start_facts(uuid,date)','hon.person_membership_start_item(hon.memberships,text)']||entry; BEGIN
+  IF to_regprocedure('hon.start_person_membership(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0624 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  EXECUTE 'REVOKE ALL ON TABLE hon.person_membership_starts FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.person_membership_starts FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
 -- 0330 family messages: private helpers, two private tables and six runtime entry points (parent read/send; staff inbox, thread, mark read, reply).
 DO $$ DECLARE r text; f text; t text; BEGIN
   IF to_regprocedure('hon.reply_family_message(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0330 first'; END IF;

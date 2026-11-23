@@ -185,6 +185,8 @@ import { SchoolContactsController } from './people/school-contacts.controller.js
 import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
 import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
+import { PersonMembershipStartController } from './billing/person-membership-start.controller.js';
+import { PersonMembershipStartService } from './billing/person-membership-start.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
 import { MembershipActivationHumanUiGuard, SimpleInvoiceCreateHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
@@ -702,6 +704,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolReportsDashboardController,
     SchoolContactsController,
     SchoolContactAdminController,
+    PersonMembershipStartController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
     MembershipPlanController,
@@ -985,6 +988,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
+    PersonMembershipStartService,
     SchoolEventService,
     SchoolEventReadHumanUiGuard,
     SchoolEventSaveHumanUiGuard,

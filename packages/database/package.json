@@ -167,6 +167,7 @@
     "db:test-school-membership-list": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-membership-list-integrity.mjs",
     "db:test-class-session-pages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-session-pages-integrity.mjs",
     "db:test-membership-pause": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-pause-integrity.mjs",
+    "db:test-person-membership-start": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-person-membership-start-integrity.mjs",
     "db:test-student-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-student-import-integrity.mjs",
     "db:test-school-pickers": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-pickers-integrity.mjs",
     "db:test-staff-permissions-list": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-permissions-list-integrity.mjs",
