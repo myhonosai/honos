@@ -6448,3 +6448,29 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unexpected attendance report overload'; END IF;
 END $$;
 -- End attendance report exact verification.
+-- Intake contact consent exact verification (0634): one runtime entry point, owner-only helpers, read-only forced-RLS
+-- capture table, deferred lead trigger.
+DO $$ DECLARE f text;
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.record_staff_intake_consent(text,jsonb)'::regprocedure AND p.prosecdef
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe staff intake consent entry point'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.record_intake_consent(uuid,text,text,jsonb,uuid,boolean)','hon.intake_consent_after_lead()'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe intake consent helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class WHERE oid='hon.communication_consent_captures'::regclass AND relrowsecurity AND relforcerowsecurity)
+    OR NOT has_table_privilege('hon_runtime','hon.communication_consent_captures','SELECT')
+    OR has_table_privilege('hon_runtime','hon.communication_consent_captures','INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe intake consent capture table'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.crm_leads'::regclass AND tgname='crm_leads_intake_consent'
+      AND tgconstraint<>0 AND tgdeferrable AND tginitdeferred AND tgenabled='O' AND tgfoid='hon.intake_consent_after_lead()'::regprocedure) THEN
+    RAISE EXCEPTION 'Missing deferred intake consent trigger'; END IF;
+END $$;
+-- End intake contact consent exact verification.

@@ -184,6 +184,7 @@
     "db:test-face-checkin": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-face-checkin-integrity.mjs",
     "db:test-membership-agreement": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-agreement-integrity.mjs",
     "db:test-membership-agreement-link": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-agreement-link-integrity.mjs",
+    "db:test-intake-consent": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-intake-consent-integrity.mjs",
     "db:test-walk-in-kiosk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-integrity.mjs",
     "db:test-walk-in-kiosk-card-payment": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-card-payment-integrity.mjs",
     "db:test-school-calls": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && node scripts/test-school-calls.mjs",
