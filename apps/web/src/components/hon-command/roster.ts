@@ -60,7 +60,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Whole-school view and weekly priorities from verified facts (Ask HON → Alex)', state: 'AVAILABLE' },
-      { label: 'Coordinate and delegate work across the team', state: 'BACKEND_REQUIRED' },
+      { label: 'Turn a goal into tasks for your team (Plan with Alex, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'School Command Center', href: '/staff/command-center' },

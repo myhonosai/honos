@@ -256,3 +256,15 @@
   .dock, .dock[data-variant] { right: 10px; bottom: calc(76px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); height: min(640px, calc(100vh - 150px)); height: min(640px, calc(100dvh - 150px)); border-radius: 18px; }
   .dock[data-variant="big-button"] { bottom: calc(88px + env(safe-area-inset-bottom)); height: min(640px, calc(100dvh - 162px)); }
 }
+
+/* P1 (0639): Plan with Alex on Alex's page. */
+.alexPlan { margin: 16px 0; padding: 14px 16px; border: 1px solid var(--hon-line); border-radius: 14px; background: var(--hon-raised); }
+.alexPlan h4 { margin-top: 0; }
+.alexForm { display: grid; gap: 10px; margin: 10px 0; }
+.alexForm label { display: grid; gap: 4px; font-weight: 700; }
+.alexForm textarea { width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid var(--hon-line); border-radius: 10px; background: transparent; color: inherit; font: inherit; box-sizing: border-box; }
+.alexForm fieldset { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; border: 0; }
+.alexForm fieldset label { display: inline-flex; align-items: center; gap: 6px; min-height: var(--hon-target); font-weight: 600; }
+.alexForm legend { padding: 0; margin-bottom: 4px; font-weight: 700; }
+.alexActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.alexActions button.inlineLink { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; }

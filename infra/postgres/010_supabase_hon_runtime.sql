@@ -5074,6 +5074,27 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- 0639 Alex delegation plans (P1): the ALEX_DELEGATION_PLAN kind on the shared AI text proposals; eight runtime entry points,
+-- every helper closed, and no runtime access to the two evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_alex_plan(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0639 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_alex_plan_rows()','hon.alex_plan_areas()','hon.alex_plan_keys_are(jsonb,text[])','hon.alex_plan_line_ok(text,integer)',
+    'hon.alex_plan_brief_ok(jsonb)','hon.alex_plan_ok(jsonb)','hon.alex_plan_actor(text)','hon.alex_plan_reader(text)','hon.alex_plan_fix_refs(uuid)',
+    'hon.alex_plan_facts(text,uuid,jsonb)','hon.alex_plan_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.alex_plan_staff_refs','hon.alex_plan_created_tasks'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_alex_plan(text,jsonb,uuid), hon.plan_alex_plan(text,uuid), hon.prepare_alex_plan(text,uuid,uuid,boolean),
+      hon.fail_alex_plan(text,uuid,text,text), hon.record_alex_plan(text,uuid,jsonb), hon.read_alex_plans(text,uuid),
+      hon.create_alex_plan_tasks(text,uuid,jsonb,text,uuid,uuid), hon.close_alex_plan(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];

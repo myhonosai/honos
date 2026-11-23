@@ -134,6 +134,16 @@ describe('HON command roster', () => {
   });
 });
 
+describe('Plan with Alex in the team view', () => {
+  it('shows the Alex planning panel only on Alex, and only for a verified school', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'team', 'alex')).toContain('id="alex-plan"');
+    expect(view(snapshot, 'team', 'chad')).not.toContain('id="alex-plan"');
+    const unverified = (await loaded({ resolveScope: vi.fn(async () => ({ state: 'MANUAL_ENTRY_REQUIRED' as const })) }, null)).snapshot;
+    expect(view(unverified, 'team', 'alex')).not.toContain('id="alex-plan"');
+  });
+});
+
 describe('HON command data layer', () => {
   it('starts idle and loads only existing reads for a dashboard-verified school', async () => {
     expect(initialHonCommandSnapshot().scope.state).toBe('IDLE');

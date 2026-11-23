@@ -158,6 +158,9 @@ import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
 import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime, RANK_CHART_PROVIDER_RUNTIME, RANK_CHART_TEXT_PROFILE } from './commerce/shopify/merch-provider-runtime.js';
 import { CommerceReviewController } from './commerce/shopify/commerce-review.controller.js';
 import { CommerceReviewService } from './commerce/shopify/commerce-review.service.js';
+import { AlexPlanController } from './alex-delegation/alex-plan.controller.js';
+import { AlexPlanService } from './alex-delegation/alex-plan.service.js';
+import { ALEX_PLAN_PROVIDER_RUNTIME, ALEX_PLAN_TEXT_PROFILE } from './alex-delegation/alex-plan-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -676,6 +679,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteAiController,
     MerchAiController,
     CommerceReviewController,
+    AlexPlanController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -984,7 +988,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MerchAiService,
     { provide: MERCH_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime() },
     CommerceReviewService,
+    AlexPlanService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
+    { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
     { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,

@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "7b3e2d0ca5ea8be810f548fe76a7d1672717204c8c18baf963de84e1659631dd",
+  "chainSha256": "12d5548ce3e3b6d820f0815fd2b6cd6abe57dcf3bdfa61e2e1b05a59ff5555ec",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -889,6 +889,10 @@
     {
       "file": "0638_eian_natural_voice.sql",
       "sha256": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
+    },
+    {
+      "file": "0639_alex_delegation_plans.sql",
+      "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
     },
     {
       "file": "0644_booking_invoice_security_hygiene.sql",
