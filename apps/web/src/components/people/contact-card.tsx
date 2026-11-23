@@ -31,11 +31,23 @@ export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
 export type MembershipToolsSlot = (items: readonly MembershipItem[]) => React.ReactNode;
 /** The People page puts Send agreement here, in the membership tab (students only; the panel's own read decides access). */
 export type AgreementSlot = () => React.ReactNode;
-export function ContactCard({ language, card, initialTab = 'overview', membershipSlot, membershipTools, agreementSlot, onEditProfile }: { language: string; card: CardState; initialTab?: CardTab;
-  membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined; agreementSlot?: AgreementSlot | undefined;
+export type FamilyItem = SchoolContactCard['family'] extends infer F ? F extends { families: readonly (infer I)[] } ? I : never : never;
+/**
+ * Slots the People page fills (owner, 2026-11-16: one Contacts page): each family gets its app access and Messages gets
+ * this person's texts and family messages. Each slot does its own reads, which the server authorizes; the card only places them.
+ */
+export type CardSlots = Readonly<{ membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
+  familySlot?: ((family: FamilyItem) => React.ReactNode) | undefined; messagesSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined;
+  /** Send agreement in the membership tab (students only; the panel's own read decides access). */
+  agreementSlot?: AgreementSlot | undefined }>;
+export function ContactCard({ language, card, initialTab = 'overview', tab: shownTab, onTab, onEditProfile, ...slots }: { language: string; card: CardState; initialTab?: CardTab;
+  /** When given, the page owns the tab (it is kept in the address); otherwise the card keeps it. */
+  tab?: CardTab | undefined; onTab?: ((tab: CardTab) => void) | undefined;
   /** Opens the Edit profile pop-up; absent while the person's record cannot be edited or read yet. */
-  onEditProfile?: (() => void) | undefined }): React.ReactElement | null {
-  const [tab, setTab] = useState<CardTab>(initialTab);
+  onEditProfile?: (() => void) | undefined } & CardSlots): React.ReactElement | null {
+  const [ownTab, setOwnTab] = useState<CardTab>(initialTab);
+  const tab = shownTab ?? ownTab;
+  const setTab = (next: CardTab) => { setOwnTab(next); onTab?.(next); };
   const t: T = (key, vars) => cardText(language, key, vars);
   if (card.state === 'NONE') return null;
   if (card.state === 'LOADING') return <p className={styles.notice} role="status">{t('loading')}</p>;
@@ -55,12 +67,12 @@ export function ContactCard({ language, card, initialTab = 'overview', membershi
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
         onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
     </div>
-    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot} tools={membershipTools} agreement={agreementSlot}/></div>
+    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slots={slots}/></div>
   </article>;
 }
 
-function Body({ language, c, tab, t, slot, tools, agreement }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined;
-  tools?: MembershipToolsSlot | undefined; agreement?: AgreementSlot | undefined }): React.ReactElement {
+function Body({ language, c, tab, t, slots }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slots: CardSlots }): React.ReactElement {
+  const slot = slots.membershipSlot, tools = slots.membershipTools, agreement = slots.agreementSlot;
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -79,7 +91,8 @@ function Body({ language, c, tab, t, slot, tools, agreement }: { language: strin
       if (!c.family.families.length) return none;
       return <>{c.family.families.map(f => <Fold key={f.familyId} id={`family-${f.familyId}`} title={f.name} count={f.members.length}>
         <ul className={styles.plain}>{f.members.map(m => <li key={m.personId}>
-          <strong>{m.givenName} {m.familyName}</strong> · {t(`role_${m.role}` as CardKey)}{m.billingContact ? ` · ${t('billingContact')}` : ''}</li>)}</ul></Fold>)}</>;
+          <strong>{m.givenName} {m.familyName}</strong> · {t(`role_${m.role}` as CardKey)}{m.billingContact ? ` · ${t('billingContact')}` : ''}</li>)}</ul>
+        {slots.familySlot?.(f) ?? null}</Fold>)}</>;
     case 'appointments':
       if (!c.appointments.allowed) return denied;
       if (!c.appointments.items.length) return none;
@@ -109,8 +122,11 @@ function Body({ language, c, tab, t, slot, tools, agreement }: { language: strin
           {i.dueAt && i.status === 'ISSUED' ? ` · ${t('due', { date: day(language, i.dueAt) })}` : ''}</li>)}</ul> : none}</Fold>
       </>;
     case 'messages':
-      if (!c.messages.allowed) return denied;
-      return <ul className={styles.plain}><li>{t('directMessages', { n: c.messages.direct })}</li>{c.messages.family === null ? null : <li>{t('familyMessages', { n: c.messages.family })}</li>}</ul>;
+      // Each message section checks its own permission on the server, so the slot shows even when the counts are not allowed.
+      return <>
+        {c.messages.allowed ? <ul className={styles.plain}><li>{t('directMessages', { n: c.messages.direct })}</li>{c.messages.family === null ? null : <li>{t('familyMessages', { n: c.messages.family })}</li>}</ul> : denied}
+        {slots.messagesSlot?.(c) ?? null}
+      </>;
     case 'timeline':
       return <>
         <p className={styles.meta}>{t('timelineNote')}</p>
