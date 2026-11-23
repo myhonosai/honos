@@ -12,6 +12,7 @@ import { ParentApp } from './src/ParentApp';
 import { createSampleApi } from './src/sample/sample-api';
 import { createExpoPhonePush } from './src/push/expo-push';
 import { createExpoEianVoice } from './src/eian/expo-voice';
+import { createExpoClipPlayer } from './src/eian/expo-clip-player';
 import { useFonts, Nunito_400Regular, Nunito_600SemiBold, Nunito_700Bold, Nunito_800ExtraBold, Nunito_900Black } from '@expo-google-fonts/nunito';
 import { FontsReadyProvider } from './src/ui/text';
 
@@ -23,6 +24,8 @@ const SAMPLE = process.env.EXPO_PUBLIC_HON_SAMPLE_MODE === '1';
 // Announcement notifications (0601): the phone registers on sign-in; nothing is sent until the school server is approved to send.
 const PUSH = createExpoPhonePush(appConfig.expo.extra.eas.projectId);
 const VOICE = createExpoEianVoice();
+// Eian's natural voice (0638): plays a clip HON makes when the school has it on; otherwise the phone's own voice reads.
+const CLIPS = createExpoClipPlayer();
 
 function webOrigin(raw: string): string | null {
   try {
@@ -60,7 +63,7 @@ export default function App() {
   return (
     <FontsReadyProvider value={fontsLoaded}>
       <StatusBar style="auto" />
-      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} push={PUSH} voice={VOICE} />
+      <ParentApp api={api} session={session} version={appConfig.expo.version} onSignIn={onSignIn} sampleApi={SAMPLE ? () => createSampleApi() : undefined} newKey={() => Crypto.randomUUID()} push={PUSH} voice={VOICE} clipPlayer={CLIPS} />
     </FontsReadyProvider>
   );
 }

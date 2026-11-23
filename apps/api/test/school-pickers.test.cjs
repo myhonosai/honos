@@ -103,7 +103,7 @@ test('a school without an active, in-window entitlement lists nothing on every e
 });
 
 test('Teaching studio lists: students and ranks by name, checked against teaching.studio.read before and inside the read', async () => {
-  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read', achievements: 'achievement.award.read', attendance: 'attendance.record' });
+  assert.deepEqual(STUDENT_PURPOSES, { teaching: 'teaching.studio.read', achievements: 'achievement.award.read', attendance: 'attendance.record', curriculum: 'curriculum.progress.record' });
   assert.deepEqual(RANK_PURPOSES, { teaching: 'teaching.studio.read' });
   const f = fakeDb({ rows: [{ studentProfileId: 's' }] }); const res = response();
   const body = await controller(f).students(scope.organizationId, scope.schoolId, 'teaching', '  Kim_%  ', request, res);

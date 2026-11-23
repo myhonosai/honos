@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PUBLIC_FORM_CHOICES, type PublicFormResult } from '@hon/contracts';
 import { publicReferralApi, type PublicReferralApi, type PublicReferralRead } from './http';
+import { emailConsentWording, textConsentWording } from '../published-lead-form';
 import styles from '../campaign-workbench.module.css';
 
 /**
@@ -17,6 +18,7 @@ export const resultText = (r: PublicFormResult): string => r === 'accepted' ? 'T
 
 export type PublicReferralViewProps = Readonly<{
   read: PublicReferralRead | null; values: Readonly<Record<string, string>>; acknowledged: boolean; busy: boolean; status: string; done: boolean;
+  textOptIn?: boolean; onTextOptIn?: (v: boolean) => void;
   onValues?: (v: Record<string, string>) => void; onAck?: (v: boolean) => void; onSubmit?: () => void;
 }>;
 export function PublicReferralView(p: PublicReferralViewProps): React.ReactElement {
@@ -39,20 +41,23 @@ export function PublicReferralView(p: PublicReferralViewProps): React.ReactEleme
       {r.form.optionalFields.map(k => <label key={k}>{OPTIONAL_LABEL[k] ?? k}<select value={v[k] ?? ''} onChange={e => { const next = { ...v }; if (e.target.value) next[k] = e.target.value; else delete next[k]; p.onValues?.(next); }}>
         <option value="">Optional</option>{PUBLIC_FORM_CHOICES[k].map(c => <option key={c} value={c}>{c}</option>)}</select></label>)}
       <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px' }}><label>Website<input tabIndex={-1} autoComplete="off" value={v.website ?? ''} onChange={e => set('website', e.target.value)} /></label></div>
-      <label><input type="checkbox" required checked={p.acknowledged} onChange={e => p.onAck?.(e.target.checked)} />I understand the school saves this enquiry. This is not consent to marketing messages.</label>
+      <label><input type="checkbox" required checked={p.acknowledged} onChange={e => p.onAck?.(e.target.checked)} />I understand the school saves this enquiry.</label>
+      {/* IC1 (0634): the referral page submits the school's own lead form, so it shows the same consent wording. */}
+      <label><input type="checkbox" name="text-opt-in" checked={p.textOptIn === true} onChange={e => p.onTextOptIn?.(e.target.checked)} />{textConsentWording(r.schoolName)}</label>
+      <p>{emailConsentWording(r.schoolName)}</p>
       <button type="submit">{p.busy ? 'Sending…' : 'Send'}</button>
     </fieldset></form>}
   </>);
 }
 
 export function PublicReferralPage({ code, api = publicReferralApi }: { code: string; api?: PublicReferralApi }): React.ReactElement {
-  const [read, setRead] = useState<PublicReferralRead | null>(null), [values, setValues] = useState<Record<string, string>>(EMPTY), [ack, setAck] = useState(false);
+  const [read, setRead] = useState<PublicReferralRead | null>(null), [values, setValues] = useState<Record<string, string>>(EMPTY), [ack, setAck] = useState(false), [textOptIn, setTextOptIn] = useState(false);
   const [busy, setBusy] = useState(false), [status, setStatus] = useState(''), [done, setDone] = useState(false);
   const retry = useRef<{ fingerprint: string; key: string } | null>(null), gate = useRef(false), active = useRef(code);
   active.current = code;
   useEffect(() => {
     const abort = new AbortController();
-    setRead(null); setValues(EMPTY); setAck(false); setStatus(''); setDone(false); retry.current = null;
+    setRead(null); setValues(EMPTY); setAck(false); setTextOptIn(false); setStatus(''); setDone(false); retry.current = null;
     api.read(code, abort.signal).then(r => { if (!abort.signal.aborted) setRead(r); }, () => { if (!abort.signal.aborted) setRead('UNAVAILABLE'); });
     return () => abort.abort();
   }, [code, api]);
@@ -60,7 +65,7 @@ export function PublicReferralPage({ code, api = publicReferralApi }: { code: st
     if (gate.current || !read || typeof read === 'string') return;
     if (!ack) { setStatus('Tick the box to say you understand, then send.'); return; }
     const sent = code;
-    const input = { ...values, source: 'Family referral', acknowledged: ack }, fingerprint = JSON.stringify(input);
+    const input = { ...values, source: 'Family referral', acknowledged: ack, ...(textOptIn ? { textOptIn: true } : {}) }, fingerprint = JSON.stringify(input);
     if (retry.current?.fingerprint !== fingerprint) retry.current = { fingerprint, key: crypto.randomUUID() };
     gate.current = true; setBusy(true);
     const result = await api.submit(code, input, retry.current.key, new AbortController().signal);
@@ -69,5 +74,5 @@ export function PublicReferralPage({ code, api = publicReferralApi }: { code: st
     setStatus(resultText(result));
     if (result === 'accepted') { setDone(true); retry.current = null; }
   }
-  return <PublicReferralView read={read} values={values} acknowledged={ack} busy={busy} status={status} done={done} onValues={setValues} onAck={setAck} onSubmit={() => void submit()} />;
+  return <PublicReferralView read={read} values={values} acknowledged={ack} busy={busy} status={status} done={done} textOptIn={textOptIn} onTextOptIn={setTextOptIn} onValues={setValues} onAck={setAck} onSubmit={() => void submit()} />;
 }
