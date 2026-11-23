@@ -282,15 +282,24 @@ export interface PublicCheckoutOption {
   downPayment: { amountMinor: number; label: CheckoutText } | null; additionalParticipantMinor: number | null;
   mostPopular: boolean; placesLeft: number | null; inFamilyApp: boolean;
 }
+export interface PublicCheckoutQuestion { key: string; label: CheckoutText; kind: CheckoutFieldKind; required: boolean; options: CheckoutText[] }
 export interface PublicCheckoutPage {
-  publicId: string; schoolName: string; title: CheckoutText; description: CheckoutText | null; currency: string; maxParticipants: number;
-  blocks: CheckoutBlock[]; options: PublicCheckoutOption[]; addOns: { label: CheckoutText; amountMinor: number; required: boolean }[]; hasWaiver: boolean;
+  publicId: string; schoolName: string; version: number; title: CheckoutText; description: CheckoutText | null; currency: string; maxParticipants: number;
+  blocks: CheckoutBlock[]; options: PublicCheckoutOption[]; addOns: { key: string; label: CheckoutText; amountMinor: number; required: boolean }[];
+  /** 0627: the page's questions, asked once per participant. */
+  questions: PublicCheckoutQuestion[];
+  hasWaiver: boolean; waiver: CheckoutText | null; thankYou: CheckoutText | null;
+  /** 0627: the school can take a card payment on its processor's hosted page now (free orders need none). */
+  canPay: boolean;
+  /** Always true until live payments are approved: the page says no real money moves. */
+  testMode: true;
 }
 const MINOR = 99_999_999;
 /** Public: what one share link shows (0620 read_public_school_checkout). The link id must be the one asked for. */
 export function verifyPublicCheckoutPage(value: unknown, publicId: string): PublicCheckoutPage {
-  const row = record(value, ['publicId', 'schoolName', 'title', 'description', 'currency', 'maxParticipants', 'blocks', 'options', 'addOns', 'hasWaiver']);
-  if (row.publicId !== publicId || !CHECKOUT_PUBLIC_ID.test(publicId)) invalid();
+  const row = record(value, ['publicId', 'schoolName', 'version', 'title', 'description', 'currency', 'maxParticipants', 'blocks', 'options', 'addOns',
+    'questions', 'hasWaiver', 'waiver', 'thankYou', 'canPay', 'testMode']);
+  if (row.publicId !== publicId || !CHECKOUT_PUBLIC_ID.test(publicId) || row.testMode !== true) invalid();
   if (typeof row.schoolName !== 'string' || row.schoolName.length < 1 || row.schoolName.length > 200 || CONTROL.test(row.schoolName)) invalid();
   const currency = matching(row.currency, CURRENCY);
   const blocks = list(row.blocks, CHECKOUT_LIMITS.blocks).map(entry => {
@@ -316,9 +325,23 @@ export function verifyPublicCheckoutPage(value: unknown, publicId: string): Publ
   });
   distinct(options.map(o => o.key));
   const addOns = list(row.addOns, CHECKOUT_LIMITS.addOns).map(entry => {
-    const a = record(entry, ['label', 'amountMinor', 'required']);
-    return { label: translated(a.label, 80), amountMinor: count(a.amountMinor, 1, MINOR), required: bool(a.required) };
+    const a = record(entry, ['key', 'label', 'amountMinor', 'required']);
+    return { key: matching(a.key, KEY), label: translated(a.label, 80), amountMinor: count(a.amountMinor, 1, MINOR), required: bool(a.required) };
   });
-  return { publicId, schoolName: row.schoolName, title: translated(row.title, 120), description: nullable(row.description, v => translated(v, 2000, true)),
-    currency, maxParticipants: count(row.maxParticipants, 1, CHECKOUT_LIMITS.participants), blocks, options, addOns, hasWaiver: bool(row.hasWaiver) };
+  distinct(addOns.map(a => a.key));
+  const questions = list(row.questions, CHECKOUT_LIMITS.fields).map(entry => {
+    const q = record(entry, ['key', 'label', 'kind', 'required', 'options']);
+    const kind = oneOf(q.kind, CHECKOUT_FIELD_KINDS);
+    const choices = list(q.options, CHECKOUT_LIMITS.choiceOptions).map(option => translated(option, CHECKOUT_LIMITS.label));
+    if (kind === 'CHOICE' ? choices.length < 2 : choices.length !== 0) invalid();
+    return { key: matching(q.key, KEY), label: translated(q.label, CHECKOUT_LIMITS.question), kind, required: bool(q.required), options: choices };
+  });
+  distinct(questions.map(q => q.key));
+  const hasWaiver = bool(row.hasWaiver);
+  const waiver = nullable(row.waiver, v => translated(v, CHECKOUT_LIMITS.waiver, true));
+  if (hasWaiver !== (waiver !== null)) invalid();
+  return { publicId, schoolName: row.schoolName, version: count(row.version, 1, 999_999_999), title: translated(row.title, 120),
+    description: nullable(row.description, v => translated(v, 2000, true)), currency, maxParticipants: count(row.maxParticipants, 1, CHECKOUT_LIMITS.participants),
+    blocks, options, addOns, questions, hasWaiver, waiver, thankYou: nullable(row.thankYou, v => translated(v, CHECKOUT_LIMITS.note, true)),
+    canPay: bool(row.canPay), testMode: true };
 }

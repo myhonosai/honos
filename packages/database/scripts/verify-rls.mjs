@@ -221,6 +221,8 @@ const expectedRlsTables = [
   'school_creative_designs',
   'school_creative_design_photos',
   'school_checkout_links',
+  'public_checkout_orders',
+  'public_checkout_rates',
   'school_locations',
   'school_location_versions',
   'school_demo_data_sets',
