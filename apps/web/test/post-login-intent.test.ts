@@ -25,7 +25,7 @@ describe('post-login intent names', () => {
     expect(postLoginIntent('family-invitation')).toBe('family-invitation');
     expect(postLoginIntent('mobile')).toBe('mobile');
     // Exact set: adding an intent must be a reviewed change to this list.
-    expect(POST_LOGIN_INTENTS).toEqual({ parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish' });
+    expect(POST_LOGIN_INTENTS).toEqual({ parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish', 'staff-mobile': '/auth/staff-mobile/finish' });
     for (const bad of ['', 'Parent', '/parent', 'https://evil.example', 'toString', '__proto__', 'staff', 'hq']) expect(postLoginIntent(bad)).toBeNull();
     expect(postLoginIntentFromQuery(new URLSearchParams('for=parent'))).toBe('parent');
     for (const bad of ['for=parent&for=parent', 'for=parent&next=/hq', 'next=parent', 'for=/parent', '']) expect(postLoginIntentFromQuery(new URLSearchParams(bad))).toBeNull();
@@ -50,7 +50,7 @@ describe('sign-in from the parent portal returns there', () => {
     expect(cleared.cookies.get(POST_LOGIN_INTENT_COOKIE)?.value).toBe('');
   });
 
-  it.each([['parent', '/parent'], ['family-invitation', '/account/family-invitation'], ['mobile', '/auth/mobile/finish']])('continue sends a signed-in %s intent to its fixed page, without probing roles, and clears it', async (intent, path) => {
+  it.each([['parent', '/parent'], ['family-invitation', '/account/family-invitation'], ['mobile', '/auth/mobile/finish'], ['staff-mobile', '/auth/staff-mobile/finish']])('continue sends a signed-in %s intent to its fixed page, without probing roles, and clears it', async (intent, path) => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     const response = await continueRoute(at('/auth/continue', `${HON_SESSION_COOKIE}=${session()}; ${POST_LOGIN_INTENT_COOKIE}=${intent}`));
     expect(response.status).toBe(303);

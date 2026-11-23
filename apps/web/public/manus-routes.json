@@ -197,6 +197,10 @@
       "title": "HON | Creative Studio"
     },
     {
+      "path": "/staff/creative-studio/designs",
+      "title": "HON | Designs"
+    },
+    {
       "path": "/staff/people",
       "title": "HON | People"
     },
@@ -247,6 +251,10 @@
     {
       "path": "/staff/team/hours",
       "title": "HON | Hours"
+    },
+    {
+      "path": "/staff/marketing/blasts",
+      "title": "HON | Blasts"
     },
     {
       "path": "/staff/team/availability",
@@ -419,6 +427,22 @@
     {
       "path": "/staff/texts/opted-out",
       "title": "HON | Opted out of texts"
+    },
+    {
+      "path": "/staff/email",
+      "title": "HON | Send an email"
+    },
+    {
+      "path": "/staff/email/history",
+      "title": "HON | Email history"
+    },
+    {
+      "path": "/staff/email/templates",
+      "title": "HON | Email templates"
+    },
+    {
+      "path": "/staff/email/opted-out",
+      "title": "HON | Opted out of email"
     },
     {
       "path": "/staff/family-messages",
@@ -607,6 +631,10 @@
     {
       "path": "/staff/curriculum/library",
       "title": "Private curriculum library"
+    },
+    {
+      "path": "/staff/curriculum/ranks",
+      "title": "HON | Rank setup"
     },
     {
       "path": "/staff/curriculum/progress",

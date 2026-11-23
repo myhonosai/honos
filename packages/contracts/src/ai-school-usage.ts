@@ -14,7 +14,7 @@ export const AI_USAGE_SPEND_CLASSES = ['AGENT_INFERENCE', 'CREATIVE_MEDIA', 'HQ_
 export type AiUsageSpendClass = typeof AI_USAGE_SPEND_CLASSES[number];
 /** 0328: Alex, Jordan, Lena and Maya count under their own agents (the readiness names), like Claire since 0267. */
 export const AI_USAGE_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'HON_REPLY', 'BUSINESS_PERFORMANCE', 'GENERAL_MANAGEMENT', 'OPERATIONS',
-  'CREATIVE_COMMERCE', 'RETENTION', 'WEBSITE_EDIT', 'MERCH_IDEAS', 'UNATTRIBUTED'] as const;
+  'CREATIVE_COMMERCE', 'RETENTION', 'WEBSITE_EDIT', 'MERCH_IDEAS', 'COMMERCE_REVIEW', 'PAPER_READING', 'UNATTRIBUTED'] as const;
 export type AiUsageAgent = typeof AI_USAGE_AGENTS[number];
 
 export interface AiUsageAmount {

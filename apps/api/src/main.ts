@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost, NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
-import { json } from 'express';
+import { generalJsonTransport } from './foundation/general-json-transport.js';
 import { publicFormTransport } from './marketing/public-form-transport.js';
 import { publicReferralTransport } from './referrals/public-referral-transport.js';
 import { publicSiteTransport } from './website/public-site-transport.js';
@@ -45,7 +45,7 @@ async function bootstrap(): Promise<void> {
   app.use(paymentWebhookTransport());
   app.use(shopifyWebhookTransport());
   app.use(communicationWebhookTransport());
-  app.use(json({ limit: '2mb', strict: true }));
+  app.use(generalJsonTransport());
   app.use(transportErrorHandler());
   app.setGlobalPrefix('v1');
   app.useGlobalPipes(

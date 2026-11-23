@@ -61,7 +61,8 @@ END $$;
 CREATE TRIGGER school_checkout_links_guard BEFORE INSERT OR UPDATE OR DELETE ON hon.school_checkout_links
   FOR EACH ROW EXECUTE FUNCTION hon.guard_school_checkout_link();
 
--- L2: every page's link for staff, issuing the missing ones.
+-- L2: every page's link for staff, issuing the missing ones. Both 200 caps below are safe only because 0402
+-- (save_school_checkout) allows at most 200 pages per school, so no page is ever left without a link or left out.
 CREATE FUNCTION hon.issue_school_checkout_links(subject text) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE org uuid:=hon.current_organization_id(); school uuid:=hon.current_school_id(); actor uuid; request uuid:=gen_random_uuid(); l record; links jsonb;

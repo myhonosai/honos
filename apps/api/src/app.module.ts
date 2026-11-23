@@ -39,6 +39,8 @@ import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
 import { CurriculumLibraryService } from './curriculum/library.service.js';
 import { ParentAppCurriculumService } from './curriculum/parent-app-curriculum.service.js';
 import { StaffParentAppCurriculumController, ParentCurriculumAppController, ParentAppCurriculumHumanUiGuard } from './curriculum/parent-app-curriculum.controller.js';
+import { RankSetupService } from './curriculum/rank-setup.service.js';
+import { StaffRankSetupController, RankSetupHumanUiGuard } from './curriculum/rank-setup.controller.js';
 import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
 import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
@@ -149,7 +151,9 @@ import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
 import { MerchAiController } from './commerce/shopify/merch-ai.controller.js';
 import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
-import { MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime } from './commerce/shopify/merch-provider-runtime.js';
+import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime } from './commerce/shopify/merch-provider-runtime.js';
+import { CommerceReviewController } from './commerce/shopify/commerce-review.controller.js';
+import { CommerceReviewService } from './commerce/shopify/commerce-review.service.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -233,6 +237,9 @@ import { StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard } from './staff-
 import { StaffTimeController } from './staff-time/staff-time.controller.js';
 import { StaffTimeService } from './staff-time/staff-time.service.js';
 import { StaffTimeEntrySaveHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeReadHumanUiGuard, StaffTimesheetDecideHumanUiGuard } from './staff-time/staff-time-human-ui.guard.js';
+import { SchoolBlastController } from './school-blasts/school-blast.controller.js';
+import { SchoolBlastService } from './school-blasts/school-blast.service.js';
+import { SchoolBlastCancelHumanUiGuard, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard } from './school-blasts/school-blast-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
 import { SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard } from './school-demo-data/school-demo-data-human-ui.guard.js';
 import { BillingAccountController } from './billing/billing-account.controller.js';
@@ -314,6 +321,8 @@ import { SchoolMessageHistoryReadGuard, SchoolMessagesController, SchoolOptedOut
 import { SchoolMessagesService } from './communication/school-messages.service.js';
 import { SchoolMessageTemplatesController, SchoolTemplateSaveGuard, SchoolTemplateStatusGuard, SchoolTemplatesReadGuard } from './communication/school-message-templates.controller.js';
 import { SchoolMessageTemplatesService } from './communication/school-message-templates.service.js';
+import { CreativeDesignPhotoGuard, CreativeDesignSaveGuard, CreativeDesignStatusGuard, CreativeDesignsController, CreativeDesignsReadGuard } from './creative-studio/creative-designs.controller.js';
+import { CreativeDesignsService } from './creative-studio/creative-designs.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -526,7 +535,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   imports: [ClassPassModule, KioskModule],
   controllers: [HonOsSignupController,HonOsTrialController,HonOsAdmissionHqController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
-    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController,
+    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController, StaffRankSetupController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
     RetentionReviewController,
@@ -585,6 +594,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactMessagesController,
     SchoolMessagesController,
     SchoolMessageTemplatesController,
+    CreativeDesignsController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -655,6 +665,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteController,
     SchoolWebsiteAiController,
     MerchAiController,
+    CommerceReviewController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -681,6 +692,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolDemoDataController,
     StaffShiftController,
     StaffTimeController,
+    SchoolBlastController,
     CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -710,7 +722,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, SchoolPosService, SchoolPosHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard, FaceCheckInService, FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard, MembershipAgreementService, MembershipAgreementHumanGuard, MembershipAgreementLinkHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
-    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard,
+    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard, RankSetupService, RankSetupHumanUiGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
     RetentionReviewService, RetentionReviewHumanUiGuard,
@@ -817,6 +829,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ContactEmailResendGuard,
     SchoolMessagesService,
     SchoolMessageTemplatesService,
+    CreativeDesignsService,
+    CreativeDesignsReadGuard,
+    CreativeDesignSaveGuard,
+    CreativeDesignStatusGuard,
+    CreativeDesignPhotoGuard,
     SchoolMessageHistoryReadGuard,
     SchoolTemplatesReadGuard,
     SchoolTemplateSaveGuard,
@@ -949,6 +966,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: WEBSITE_PROVIDER_RUNTIME, useFactory: () => new OpenRouterWebsiteRuntime() },
     MerchAiService,
     { provide: MERCH_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime() },
+    CommerceReviewService,
+    { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
@@ -1024,6 +1043,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolDemoDataService, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard,
     StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
     StaffTimeService, StaffTimeReadHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeEntrySaveHumanUiGuard, StaffTimesheetDecideHumanUiGuard,
+    SchoolBlastService, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard, SchoolBlastCancelHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
     SchoolMembershipListHumanUiGuard,

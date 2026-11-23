@@ -72,7 +72,8 @@ export function classifyFailure(status: number, code: unknown): ParentFailureSta
   return 'unavailable';
 }
 
-function checkedBaseUrl(raw: string): string {
+/** The API base exactly as reads use it (origin + path, e.g. https://app.myhonos.com/api). Sign-in must use the same base. */
+export function checkedBaseUrl(raw: string): string {
   let url: URL;
   try { url = new URL(raw); } catch { throw new Error('The HON API address is not a valid URL.'); }
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '10.0.2.2';
