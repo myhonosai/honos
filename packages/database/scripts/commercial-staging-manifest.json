@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "383cb4478b53263c2258e8a622b91d41be08950a244668cd5bcc1011f85981a0",
+  "chainSha256": "7b3e2d0ca5ea8be810f548fe76a7d1672717204c8c18baf963de84e1659631dd",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -885,6 +885,10 @@
     {
       "file": "0637_creative_cost_basis.sql",
       "sha256": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e"
+    },
+    {
+      "file": "0638_eian_natural_voice.sql",
+      "sha256": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
     },
     {
       "file": "0644_booking_invoice_security_hygiene.sql",

@@ -30,7 +30,9 @@ const { RuntimeDatabaseService } = await load('foundation/runtime-database.servi
 const { HonIdentityGuard } = await load('foundation/hon-identity.guard.js');
 const { HonIdentityService } = await load('foundation/hon-identity.service.js');
 const { HonExceptionFilter } = await load('observability/http-telemetry.js');
-const { EianController, EianAskGuard, EianReadGuard } = await load('eian/eian.controller.js');
+const { EianController, EianAskGuard, EianReadGuard, EianSpeakGuard } = await load('eian/eian.controller.js');
+const { EianSpeechService, EIAN_SPEECH_COST_DELAYS } = await load('eian/eian-speech.service.js');
+const { EIAN_SPEECH_RUNTIME } = await load('eian/eian-speech-runtime.js');
 const { EianService } = await load('eian/eian.service.js');
 const { EIAN_PROVIDER_RUNTIME, EianProviderRuntimeError } = await load('eian/eian-provider-runtime.js');
 const { ParentClassBookingService } = await load('families/parent-class-booking.service.js');
@@ -75,7 +77,9 @@ let app, origin;
 async function startApp() {
   const module = await Test.createTestingModule({
     controllers: [EianController],
-    providers: [HonIdentityGuard, HonIdentityService, EianService, EianAskGuard, EianReadGuard,
+    providers: [HonIdentityGuard, HonIdentityService, EianService, EianSpeechService, EianAskGuard, EianReadGuard, EianSpeakGuard,
+      // The natural voice (0638) shares this controller; it is never ready here and has its own proof.
+      { provide: EIAN_SPEECH_RUNTIME, useValue: { readiness: () => 'CONFIGURATION_REQUIRED' } }, { provide: EIAN_SPEECH_COST_DELAYS, useValue: [0] },
       ParentClassBookingService, ParentSchoolBookingService, ParentBillingViewService, ParentClassPassViewService, FamilyMessagesService, ParentTestingStatusService, ParentFamilyKnowledgeService,
       { provide: EIAN_PROVIDER_RUNTIME, useValue: provider }, { provide: RuntimeDatabaseService, useValue: database }],
   }).compile();

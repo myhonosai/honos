@@ -19,6 +19,7 @@ import {
   type BookParentSchoolBookingTypeInput, type ParentSchoolBookingReceipt, type ParentSchoolBookings,
 } from '@hon/contracts/parent-school-bookings';
 import { verifyEianStatus, verifyEianTurn, type EianStatus, type EianTurn } from '@hon/contracts/eian';
+import { validateEianSpeechInput, verifyEianSpeechClip, verifyEianSpeechStatus, type EianSpeechClip, type EianSpeechStatus } from '@hon/contracts/eian-speech';
 import {
   verifyParentInvoicePayResult, verifyParentInvoicePayStart, verifyParentInvoicePayments,
   type ParentInvoicePayResult, type ParentInvoicePayStart, type ParentInvoicePayments,
@@ -282,6 +283,15 @@ export function createParentApi(options: ParentApiOptions) {
         return turn;
       }, ['EIAN_AI_UNAVAILABLE']);
     },
+    /** Whether Eian's answers are read by the natural voice (NATURAL) or by the phone's own voice (PHONE), with a closed reason. */
+    eianSpeechStatus: (): Promise<ParentRead<EianSpeechStatus>> => get('/v1/parent/eian/speech/status', dataOf(verifyEianSpeechStatus)),
+    /**
+     * One clip of Eian's natural voice for the exact words the phone's own voice would read. One fresh key per answer and
+     * never a retry: the sound is not kept by HON, so a lost or refused clip is read by the phone's own voice instead.
+     */
+    eianSpeak: (text: string, idempotencyKey: string): Promise<ParentWrite<EianSpeechClip>> =>
+      post('/v1/parent/eian/speech', 'parent.eian.speak', idempotencyKey, validateEianSpeechInput({ text }), verifyEianSpeechClip,
+        ['EIAN_SPEECH_UNAVAILABLE', 'EIAN_SPEECH_OUTCOME_UNKNOWN']),
     eianTurn: (turnId: string): Promise<ParentRead<EianTurn>> =>
       get(`/v1/parent/eian/turns/${encodeURIComponent(turnId)}`, body => {
         const turn = verifyEianTurn((body as { data?: unknown } | null)?.data);

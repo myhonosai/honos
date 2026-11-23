@@ -367,6 +367,7 @@ const expectedRlsTables = [
   'family_messages',
   'parent_family_selections',
   'eian_turns',
+  'eian_speech_clips',
   'parent_school_bookings',
   'school_conversations',
   'school_conversation_messages',

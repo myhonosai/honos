@@ -395,6 +395,7 @@
     "0634_intake_contact_consent.sql": "e87600b3df653f4f8fe13d3b71d720f8d296a13132fc632e7120b9588726b681",
     "0635_staff_ai_agent_switches.sql": "01835c17065d5e9a7a1d85b3e1d3dd3341b7d055e78e0a7c8a10577400d290fa",
     "0636_rank_chart_ai_draft.sql": "e0f524f44788b4650deda15e65e5954c66b23caef534de170b7a277883736627",
-    "0637_creative_cost_basis.sql": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e"
+    "0637_creative_cost_basis.sql": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e",
+    "0638_eian_natural_voice.sql": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
   }
 }

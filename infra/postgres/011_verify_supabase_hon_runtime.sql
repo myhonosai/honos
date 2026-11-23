@@ -5111,11 +5111,13 @@ END $$;
 -- Shared AI text proposals exact verification (0550): the kind table and the proposal table with its guards and four S4
 -- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
 -- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
+-- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips); the eight hashes below
+-- are the 0638 bodies.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','995b43d44309baa6b5c8cd0f7921070e3d720cbb36745bc21cd9d69b40a407d8'),
-('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','1eb41ff4957316b94c0f0ba09c869e68e1c213edd1026dc99061232af426880b'),
-('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','fe4b28b423fe81657a169efbda61a7229a40ffe3387ded4db5835bdf87e916a2'),
+('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','0ce8e55d537824e95478cab1044836ce32825dbc57c551d2728621fba3ae7420'),
+('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','3dd7094de974a0b8ab47550b5acaed84a51830a8eee316b86b6b9b93bc188c0a'),
+('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','4efa8c4c7361e5d99a01791901cf279c2968be6d25925e348e2f046e50fb25d2'),
 ('hon.ai_text_begin(text,uuid,text,uuid,integer,jsonb)',true,false,'search_path=pg_catalog, hon','6f82977de496d1ed4a4dc92344338141ac0a7e6a1b438aedcd3d8289883036aa'),
 ('hon.ai_text_close(uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','c7eb4e44d4c7e0b43356156e95e0575a3abefc205611d98e4606c81505e29010'),
 ('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
@@ -5124,18 +5126,18 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','8637c7fd7f7cf540513b939f44eceb5f6bf459e920159947e7984f53f7bcdde7'),
 ('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','1fa1f6af3987b11c06f6877ce9ddc836de24ac9e63a989618dca4d864ef0abd8'),
 ('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
-('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','2216fdb4756b4a1b5b179b5788445c8d4cacf1f747cb27ee3016b24eb84533e3'),
+('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','cbe5c59d888995653f5736925f6e57ff8253b6679f3d02c508c20a5dab76b416'),
 ('hon.begin_school_website_ai_edit(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','942cb067060413f3309465c5cd4c6f8d326b8c73a41d695a00dcd452f3465f69'),
 ('hon.close_school_website_ai_edit(text,uuid,text)',true,true,'search_path=pg_catalog, hon','cf273be12c4a99889369dad1feb7ecff0ae6d73edaecde2c82274d6054432298'),
 ('hon.fail_school_website_ai_edit(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','cec489c91805c02f0a460bc9f8401c295fc0efdf66637a86ac3f000703352688'),
 ('hon.guard_ai_text_proposals()',false,false,'search_path=pg_catalog, hon','431a2ad9c9a47028538a537910d2b2b40bef20e091af7b4e650963202671be75'),
 ('hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','8b78db60ef391b85adc83b5bcbfcfe2eae5c8097fde15fc7d96888adf8cba659'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','191edd80f8aa928f852627e7e174726053f555815b300b20fb755c55574c185d'),
-('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','b3045dc689e5d7f54d4854dfe43d7d4eb331869acc347454cf174eb1cf58c9af'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','a73fbbf439b5a15b83fb70c2fc5909d7e9b56df72e0c2a2b4ae78c0b7698b076'),
+('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','2b77dd1efdc51eea92ca2e19a4df1233aa40eb8d2404c3758af93ab09305f4dd'),
 ('hon.read_school_website_ai_edits(text,uuid)',true,true,'search_path=pg_catalog, hon','5bca23fda531a8d5ab1f1bbbed5d08b873ef8da848dea32ba893e4cbc335d99f'),
-('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','18a2f6af1ef95d5e91e890d7e70894ac589e4508fb774c70c61d28a5083d97a3'),
+('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','cdd7b650316c258da26e037d5021e737cbb25be55d886acb17746431f2a6a020'),
 ('hon.record_school_website_ai_edit(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','94284d3805916895a286633e8a81d58d4f7f56c0835e41217b68be4e9588f2f4'),
-('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4a97483f35d15de587ca3dce3fd24d309d2794c8aa93747bc4379e1d29edf52c'),
+('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d391d660d3823fa0ea7fd518116d706649e482482a03739928f1494732f4eca6'),
 ('hon.school_website_ai_actor(text)',true,false,'search_path=pg_catalog, hon','768224c8665725fe986a89512fbac5a3a69e54e6b6627fbb033d13b5ceb2e1c5'),
 ('hon.school_website_ai_edit_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','a649cd44c33edc3d00f17a46830ce3f632ff814b5274e760688186d49b7baa6d'),
 ('hon.school_website_ai_facts(jsonb,text)',false,false,'search_path=pg_catalog, hon','c6a2bfb758bca374c226adeb598d7e297fed6715b68e4a10788bebb71a078a14'),
@@ -6538,3 +6540,44 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End rank chart AI draft exact verification.
+
+-- Eian natural voice exact verification (0638): the private clip table (a digest and a length, never the words or the sound)
+-- with its four S4 triggers, two private helpers and five runtime entry points. The eight S4 shared functions that gained
+-- EIAN_SPEECH are pinned in the 0550 section above with their 0638 bodies.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.eian_speech_limits()',false,false,'search_path=pg_catalog','400ec3ced8cd50c551079690bacc49143cb47bad5857f4c3dea82fa0be992bc6'),
+('hon.eian_speech_unavailable_reason(uuid,uuid,boolean)',true,false,'search_path=pg_catalog, hon','439eaef626396c40760111b94dc598266c3d7b1d9ad981fe3ba61ece5b1dfa02'),
+('hon.read_eian_speech_status(text,boolean)',true,true,'search_path=pg_catalog, hon','98262cf43d01d38d743b6580d123e66134fa05486813dcad3e1daa640cfc6c05'),
+('hon.begin_eian_speech(text,text,text,integer)',true,true,'search_path=pg_catalog, hon','16a59b9628c46bf197323b0706a4e48a046e7ff92eaa837aca310e2e2478a0dc'),
+('hon.prepare_eian_speech(text,uuid,boolean)',true,true,'search_path=pg_catalog, hon','3f365faac243f48c42d3fd587ad87eea9bf5bcdfc1eee113003c6e5397612be1'),
+('hon.fail_eian_speech(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','e75f027981ce667f515b3511017ead43decf252383fd1ccb32e351c865e8227b'),
+('hon.record_eian_speech_result(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','77635b7af622cc820b435234937af77e9a38e36a6e1caa4a254c346e482c92db'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Eian natural voice function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.eian_speech_clips'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.eian_speech_clips'::regclass)
+    OR has_table_privilege('hon_runtime','hon.eian_speech_clips','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.eian_speech_clips','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Eian speech clip table';
+  END IF;
+  -- The table can hold no words and no sound: exactly these columns.
+  IF (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a WHERE a.attrelid='hon.eian_speech_clips'::regclass AND a.attnum>0 AND NOT a.attisdropped)
+     <> ARRAY['characters','created_at','family_id','held_at','id','idempotency_key','organization_id','provider_request_id','reason','requested_by','reserved_credits','school_id','status','text_digest','updated_at','usage_id'] THEN
+    RAISE EXCEPTION 'Eian speech clip columns changed';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger t WHERE t.tgrelid='hon.eian_speech_clips'::regclass AND t.tgenabled='O' AND (t.tgname, t.tgfoid) IN (
+      ('ai_spend_start_guard','hon.ai_spend_start_guard()'::regprocedure), ('ai_spend_reserve_guard','hon.ai_spend_reserve_guard()'::regprocedure),
+      ('ai_spend_reserve_guard_insert','hon.ai_spend_reserve_guard()'::regprocedure), ('zz_ai_hold_origin','hon.ai_stamp_hold_origin()'::regprocedure))) <> 4 THEN
+    RAISE EXCEPTION 'Eian speech clip S4 triggers missing';
+  END IF;
+END $$;
+-- End Eian natural voice exact verification.
