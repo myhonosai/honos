@@ -1177,5 +1177,6 @@ export * from './family-checkout.js';
 export * from './public-checkout.js';
 export * from './parent-attendance-streaks.js';
 export * from './journey-recommendations.js';
+export * from './person-membership-start.js';
 export * from './creative-designs.js';
 export * from './staff-school-choice.js';

@@ -388,6 +388,7 @@
     "0621_school_blasts.sql": "9ff3526327bdbd63aa232e46efc4d0356ab4e835f1333b1ff2927e60b7ad3738",
     "0623_school_contact_sort_filters.sql": "dff615a142e1a2da7f5eda6fa9ca79d0f18663ccf4cdbc2821e827076ccb8c0b",
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
+    "0624_person_membership_from_plan.sql": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1",
     "0627_public_checkout_orders.sql": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
   }
 }

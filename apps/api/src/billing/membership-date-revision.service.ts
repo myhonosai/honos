@@ -60,6 +60,8 @@ function translateDateError(error: unknown, forbidden: string): never {
   const known = DATE_ERRORS[message];
   if (known && ['22023', '42501', 'P0002', '40001', '23505'].includes(sqlState)) throw known(message);
   if (sqlState === '42501') throw new ForbiddenException({ code: forbidden });
+  // 0624: one membership per program; new dates would overlap another current membership in the same program.
+  if (sqlState === '23P01' && message === 'MEMBERSHIP_PROGRAM_OVERLAP') throw new ConflictException({ code: 'MEMBERSHIP_PROGRAM_OVERLAP' });
   if (['40001', '40P01', '55P03', '23505'].includes(sqlState)) throw new ConflictException({ code: 'MEMBERSHIP_LIFECYCLE_CONFLICT' });
   if (['22023', '22P02', '22003', '22007', '22008'].includes(sqlState)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
   throw new ServiceUnavailableException({ code: 'MEMBERSHIP_LIFECYCLE_UNAVAILABLE' });
