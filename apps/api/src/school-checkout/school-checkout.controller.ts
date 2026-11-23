@@ -57,6 +57,23 @@ export class SchoolCheckoutController {
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 
+  /** 0627: orders placed from the pages' share links, newest first (at most 200). */
+  @Get('public-orders')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolCheckoutOrdersReadHumanUiGuard)
+  async publicOrders(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, '');
+    const data = await this.checkout.publicOrders(context);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
   /** 0620: every page's share link (missing ones are issued). No body and no Idempotency-Key: running it again changes nothing. */
   @Post('links')
   @HttpCode(HttpStatus.OK)

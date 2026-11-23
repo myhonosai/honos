@@ -1,5 +1,6 @@
 /** People screen wording (en / ko / es). */
 const en = {
+  profileTitle: 'Edit profile', profileIntro: 'Review this person’s details, then save each part. Membership, billing and messages are not changed here.', profileClose: 'Close',
   title: 'People', intro: 'Find a student, parent or contact at your school and correct their name, email, phone or a child’s birth date.',
   refresh: 'Refresh', searchLabel: 'Search by name, email or phone', searchButton: 'Search', listTitle: 'People at this school',
   listNone: 'No one matches this search.', listCapped: 'Showing the first {n}. Search to narrow the list.', listLoading: 'Reading people…',
@@ -49,6 +50,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  profileTitle: '프로필 수정', profileIntro: '이 사람의 정보를 확인한 뒤 항목별로 저장하세요. 회원권, 결제, 메시지는 여기서 바뀌지 않습니다.', profileClose: '닫기',
   title: '사람', intro: '도장의 학생, 보호자 또는 연락처를 찾아 이름, 이메일, 전화번호 또는 자녀의 생년월일을 고칩니다.',
   refresh: '새로 고침', searchLabel: '이름, 이메일 또는 전화번호로 검색', searchButton: '검색', listTitle: '이 도장의 사람',
   listNone: '검색과 일치하는 사람이 없습니다.', listCapped: '처음 {n}명을 보여 줍니다. 검색으로 범위를 좁히세요.', listLoading: '사람을 읽는 중…',
@@ -97,6 +99,7 @@ const ko: Record<Key, string> = {
   waiting: '도장을 확인하는 중…', noSchool: '사람을 보려면 도장을 선택하세요.', concealed: '사람 목록이 숨겨졌습니다. 이 탭으로 돌아오면 도장을 다시 확인합니다.',
 };
 const es: Record<Key, string> = {
+  profileTitle: 'Editar perfil', profileIntro: 'Revise los datos de esta persona y guarde cada parte. La membresía, la facturación y los mensajes no cambian aquí.', profileClose: 'Cerrar',
   title: 'Personas', intro: 'Busca un estudiante, padre o contacto de tu escuela y corrige su nombre, correo, teléfono o la fecha de nacimiento de un niño.',
   refresh: 'Actualizar', searchLabel: 'Buscar por nombre, correo o teléfono', searchButton: 'Buscar', listTitle: 'Personas de esta escuela',
   listNone: 'Nadie coincide con esta búsqueda.', listCapped: 'Se muestran los primeros {n}. Busca para acotar la lista.', listLoading: 'Leyendo personas…',
