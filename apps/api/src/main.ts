@@ -13,6 +13,7 @@ import { walkInKioskTransport } from './walk-in-kiosk/walk-in-kiosk-transport.js
 import { publicCheckoutTransport } from './school-checkout/public-school-checkout.js';
 import { publicAgreementLinkTransport } from './membership-agreement/public-agreement-link-transport.js';
 import { kioskTransport } from './kiosk/kiosk-transport.js';
+import { publicMediaTransport, schoolMediaUploadTransport } from './school-media/school-media-transport.js';
 import { paymentWebhookTransport } from './payments/payment-webhook-transport.js';
 import { shopifyWebhookTransport } from './commerce/shopify/shopify-webhook.js';
 import { communicationWebhookTransport } from './communication/delivery/communication-webhook.controller.js';
@@ -42,6 +43,8 @@ async function bootstrap(): Promise<void> {
   app.use(walkInKioskTransport());
   app.use(publicAgreementLinkTransport());
   app.use(publicCheckoutTransport());
+  app.use(publicMediaTransport());
+  app.use(schoolMediaUploadTransport());
   app.use(paymentWebhookTransport());
   app.use(shopifyWebhookTransport());
   app.use(communicationWebhookTransport());

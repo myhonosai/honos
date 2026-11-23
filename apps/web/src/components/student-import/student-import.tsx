@@ -30,6 +30,7 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
   const [list, setList] = useState<ListState>({ state: 'LOADING' });
   const [detail, setDetail] = useState<DetailState>({ state: 'IDLE' });
   const [selected, setSelected] = useState<string | null>(null);
+  const [consent, setConsent] = useState(true);
   const [upload, setUpload] = useState<UploadState>({ phase: 'NONE' });
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [outcome, setOutcome] = useState<ImportOutcome>(null);
@@ -160,8 +161,8 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
   }, [ready, choices, start]);
   const onFinalize = useCallback(() => {
     if (!ready || ready.batch.status !== 'STAGED' || unsavedDecisions(ready, choices).length) return;
-    start('finalize', ready.batch.id, { expectedVersion: ready.batch.version, selectedIndices: ready.rows.filter((r) => r.choice === 'IMPORT').map((r) => r.index) });
-  }, [ready, choices, start]);
+    start('finalize', ready.batch.id, { expectedVersion: ready.batch.version, selectedIndices: ready.rows.filter((r) => r.choice === 'IMPORT').map((r) => r.index), ...(consent ? {} : { consentChannels: [] }) });
+  }, [ready, choices, consent, start]);
   const onRefresh = useCallback(() => setRefresh((n) => n + 1), []);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
 
@@ -171,6 +172,6 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
       hasSchool={!!schoolId} list={list} selected={selected} detail={detail} upload={upload} choices={choices} outcome={outcome}
       locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
       onRefresh={onRefresh} onOpen={onOpen} onFile={onFile} onMap={onMap} onCancelUpload={onCancelUpload} onStage={onStage}
-      onChoice={onChoice} onAll={onAll} onSave={onSave} onFinalize={onFinalize} onTryAgain={onTryAgain}/>
+      onChoice={onChoice} onAll={onAll} onSave={onSave} onFinalize={onFinalize} onTryAgain={onTryAgain} consent={consent} onConsent={setConsent}/>
   </div>;
 }

@@ -13,10 +13,25 @@ import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
 import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactFilters, type ContactsApi } from './contacts-http';
 import { ContactActions, type ContactChange } from './contact-actions';
-import type { CardState, CardTab, MembershipItem } from './contact-card';
+import type { CardState, CardTab, FamilyItem, MembershipItem } from './contact-card';
+import peopleStyles from './people.module.css';
 import { MembershipPanel } from './membership-panel';
 import { NewMembershipTools } from './new-membership';
 import { initialCardTarget } from './card-link';
+import { cardUrl, readCardMode, writeCardMode, type CardMode } from './card-panel';
+import { CardFamilyAccess } from './card-family-access';
+import { CardFamilyMessages } from './card-family-messages';
+import { panelText } from './panel-copy';
+
+/** Keeps the open card (or none) in the address without a navigation, so a reload or a shared link reopens it. */
+function showCardInAddress(target: { personId: string; tab: CardTab } | null): void {
+  try {
+    const location = globalThis.location, history = globalThis.history;
+    if (!location || !history) return;
+    const next = cardUrl(location.pathname, location.search, target);
+    if (next !== `${location.pathname}${location.search}`) history.replaceState(history.state, '', next);
+  } catch { /* the address is a convenience; the page works without it */ }
+}
 import { PersonPhoto } from './photo';
 import { AgreementLinkPanel } from '../agreement-link/send-panel';
 import { ContactMessageHistory } from '../contact-history/contact-history';
@@ -65,8 +80,10 @@ export function contactDeepLink(search: string): string | null {
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi }: { api?: PeopleApi; consents?: ConsentApi;
-  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi }): React.ReactElement {
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi;
+  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi;
+  /** The verified signed-in subject, for the family access checks inside the card (they re-check identity before each step). */
+  sessionSubject?: string | null }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -81,6 +98,9 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const [card, setCard] = useState<CardState>({ state: 'NONE' });
   const [cardTab, setCardTab] = useState<CardTab>('overview');
   const [cardRefresh, setCardRefresh] = useState(0);
+  // Side or full screen: remembered in this browser only, read after mount so the server render and the first paint agree.
+  const [cardMode, setCardMode] = useState<CardMode>('SIDE');
+  useEffect(() => { setCardMode(readCardMode()); }, []);
   const cardGeneration = useRef(0);
   // A card read again after a membership change keeps showing the card meanwhile, so the open panel and its answer stay.
   const quietCard = useRef(false);
@@ -110,7 +130,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const school = selection ? lower(selection.schoolId) : null;
   useEffect(() => {
     if (school !== null && lastSchool.current !== null && school !== lastSchool.current) {
-      selected.current = null; setSelectedId(null); setFilters(NO_CONTACT_FILTERS); setOptions(null); setOutcome(null); drop();
+      selected.current = null; setSelectedId(null); showCardInAddress(null); setFilters(NO_CONTACT_FILTERS); setOptions(null); setOutcome(null); drop();
     }
     if (school !== null) lastSchool.current = school;
   }, [school, drop]);
@@ -237,12 +257,21 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   }, [lock, selection?.schoolId, current, start]); // eslint-disable-line react-hooks/exhaustive-deps
   const onOpen = useCallback((personId: string) => {
     selected.current = personId; setSelectedId(personId); setCardTab('overview'); setOutcome(null); setActionNotice(null); drop(); setRecordRefresh(value => value + 1);
+    showCardInAddress({ personId, tab: 'overview' });
   }, [drop]);
+  // Closing puts the card away and drops any kept save for that person (a later save from a stale read is refused anyway).
+  const onClose = useCallback(() => {
+    selected.current = null; setSelectedId(null); setCardTab('overview'); setOutcome(null); setActionNotice(null); drop(); showCardInAddress(null);
+  }, [drop]);
+  const onCardMode = useCallback((mode: CardMode) => { setCardMode(mode); writeCardMode(mode); }, []);
+  const onCardTab = useCallback((tab: CardTab) => {
+    setCardTab(tab); if (selected.current) showCardInAddress({ personId: selected.current, tab });
+  }, []);
   // After a delete, restore or merge: read the list and the card again; a merge opens the person who was kept.
   const onContactChanged = useCallback((change: ContactChange, notice: string) => {
     if (!mounted.current) return;
     setListRefresh(n => n + 1);
-    if (change.kind === 'MERGED' && change.keepPersonId !== selected.current) { selected.current = change.keepPersonId; setSelectedId(change.keepPersonId); setOutcome(null); drop(); }
+    if (change.kind === 'MERGED' && change.keepPersonId !== selected.current) { selected.current = change.keepPersonId; setSelectedId(change.keepPersonId); showCardInAddress({ personId: change.keepPersonId, tab: 'overview' }); setCardTab('overview'); setOutcome(null); drop(); }
     setRecordRefresh(n => n + 1); setActionNotice(notice);
   }, [drop]);
   const actionsSlot = useCallback((c: SchoolContactCard) => selection ? <ContactActions key={`${lower(selection.schoolId)}:${c.person.personId}:${c.overview.segment}`}
@@ -254,7 +283,21 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const membershipSlot = useCallback((m: MembershipItem) => selection ? <MembershipPanel key={`${lower(selection.schoolId)}:${m.membershipId}`} language={preferences.language}
     scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+  const familySlot = useCallback((family: FamilyItem) => selection && sessionSubject ? <CardFamilyAccess key={`${lower(selection.schoolId)}:${family.familyId}`}
+    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} sessionSubject={sessionSubject} familyId={family.familyId}/> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, sessionSubject]); // eslint-disable-line react-hooks/exhaustive-deps
+  const messagesSlot = useCallback((c: SchoolContactCard) => selection ? <>
+    <section className={peopleStyles.subsection} data-testid="card-texts"><h3>{panelText(preferences.language, 'textsTitle')}</h3>
+      <a className={peopleStyles.secondary} href="/staff/texts">{panelText(preferences.language, 'textsOpen')}</a></section>
+    {c.family.allowed && c.family.families.length ? <CardFamilyMessages key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
+      scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} familyIds={c.family.families.map(f => f.familyId)}/> : null}
+  </> : null, [selection?.organizationId, selection?.schoolId, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
   // New membership and Renew (0624) at the top of the membership tab; the server decides who can have which plan.
+  // 0499: send the family a link to sign the membership agreement, in the card's membership tab (students only; its own read decides access).
+  const agreementRecord = record.state === 'READY' && selectedId && lower(record.record.personId) === lower(selectedId) && record.record.student ? record.record.personId : null;
+  const agreementSlot = useCallback(() => selection && agreementRecord ? <AgreementLinkPanel key={`agreement:${lower(selection.schoolId)}:${agreementRecord}`}
+    language={preferences.language} schoolId={selection.schoolId} personId={agreementRecord}/> : null,
+  [selection?.schoolId, agreementRecord, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
   const membershipTools = useCallback((items: readonly MembershipItem[]) => selection && selectedId ? <NewMembershipTools key={`${lower(selection.schoolId)}:${selectedId}`}
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
     onChanged={onMembershipChanged}/> : null,
@@ -284,8 +327,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
     {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
     <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
-    {/* 0499: send the family a link to sign the membership agreement (students only; its own read decides access). */}
-    {r.student ? <AgreementLinkPanel key={`agreement:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} personId={r.personId}/> : null}
   </> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -293,6 +334,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} agreementSlot={agreementSlot}
+      cardMode={cardMode} onCardMode={onCardMode} onClose={onClose} onCardTab={onCardTab} familySlot={familySlot} messagesSlot={messagesSlot} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }
