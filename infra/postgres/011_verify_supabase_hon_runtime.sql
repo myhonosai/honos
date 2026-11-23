@@ -6433,3 +6433,18 @@ BEGIN
     RAISE EXCEPTION 'School media permissions missing'; END IF;
 END $$;
 -- End school media library exact verification.
+
+-- Attendance report exact verification (AR1 0633): one stable read-only runtime entry point, fixed body and posture.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_attendance_report(text,jsonb)'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='s'
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='a9fa38de85db47bb077e2c3d8bfa79b2368cbf195e5f15e802f081549e6f8980'
+      AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+    RAISE EXCEPTION 'Unsafe attendance report read'; END IF;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname='read_attendance_report')<>1 THEN
+    RAISE EXCEPTION 'Unexpected attendance report overload'; END IF;
+END $$;
+-- End attendance report exact verification.
