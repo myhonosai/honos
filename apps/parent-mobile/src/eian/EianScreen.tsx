@@ -6,9 +6,9 @@ import { useFamily } from '../family/family-data';
 import { FamilyGate } from '../screens/FamilyStates';
 import { Button } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
-import { answer, classify, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianTab } from './eian-engine';
+import { answer, resolve, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianMemory, type EianTab } from './eian-engine';
 import { askEianAi } from './eian-ai';
-import { EianVoiceContext, KEEP_TALKING, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints } from './voice';
+import { EianVoiceContext, KEEP_TALKING, PHONE_VOICE_NOTE, SPEECH_SERVICE_NOTE, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints } from './voice';
 import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } from './avatar';
 
 type Turn = { id: number; question: string; reply: EianAnswer };
@@ -42,6 +42,8 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [turns, setTurns] = useState<Turn[]>([]);
+  /** What the last guided answer was about, for follow-up questions. In memory only; gone when Eian is closed. */
+  const memory = useRef<EianMemory | null>(null);
   const [draft, setDraft] = useState('');
   const [mood, setMood] = useState<EianMood>('ready');
   const [busy, setBusy] = useState(false);
@@ -107,7 +109,8 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
     setVoiceNote(null);
     quiet();
     setBusy(true);
-    const intent = classify(q);
+    const read_ = resolve(q, state.view, memory.current);
+    const intent = read_.intent;
     if (intent === 'help' && ai) {
       setMood('thinking');
       const key = pending.current?.question === q ? pending.current.key : newKey();
@@ -124,11 +127,12 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
     }
     const needs = NEEDS[intent];
     setMood(needs.length ? 'working' : 'thinking');
-    const facts: EianFacts = { journey: state.view, timeZone: state.timeZone, now: now() };
+    const facts: EianFacts = { journey: state.view, timeZone: state.timeZone, now: now(), last: memory.current };
     if (needs.includes('billing')) { const r = await api.billing(); facts.billing = r.ok ? r.data : null; }
     if (needs.includes('testing')) { const r = await api.testingStatus(); facts.testing = r.ok ? r.data : null; }
     if (needs.includes('messages')) { const r = await api.schoolMessages(); facts.messages = r.ok ? r.data : null; }
     const reply = answer(q, facts);
+    memory.current = read_.memory;
     setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply }]);
     setMood('speaking');
     setBusy(false);
@@ -262,8 +266,8 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
         ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
         : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
       {voice ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>{canListen
-        ? "The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. To hear names correctly, your children's names are also given to that speech service. HON gets only the text. Reading aloud uses your phone's own voice."
-        : "Reading aloud uses your phone's own voice."}</Text> : null}
+        ? `${"The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. To hear names correctly, your children's names are also given to that speech service. HON gets only the text."} ${voice.speechService ? SPEECH_SERVICE_NOTE : PHONE_VOICE_NOTE}`
+        : voice.speechService ? SPEECH_SERVICE_NOTE : PHONE_VOICE_NOTE}</Text> : null}
     </ScrollView>
   );
 }

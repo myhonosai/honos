@@ -20,9 +20,9 @@ const EMPTY: LeadForm = Object.freeze({ givenName: '', familyName: '', email: ''
 
 /**
  * One lead-create press whose answer was lost: the exact prepared request (path, school, body and Idempotency-Key),
- * the name it was for and the form as typed. It is immutable once made and is the only thing a retry may send.
+ * the name it was for and the form as typed, with the IC1 (0634) consent tick that went into the request. It is immutable once made and is the only thing a retry may send.
  */
-export type LeadCreateCapsule = Readonly<{ request: PreparedCrmLeadCreate; name: string; form: LeadForm }>;
+export type LeadCreateCapsule = Readonly<{ request: PreparedCrmLeadCreate; name: string; form: LeadForm; consent: boolean }>;
 /**
  * Where the capsule lives. The page that shows the form owns it, above every boundary that can unmount the form
  * (Close add, a board refresh, a concealed shell, a stage setup remount), so reopening the form after a lost answer
@@ -54,6 +54,8 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
   // A form mounted while its school still holds an unanswered press opens on that press, locked, with its retry.
   const [open, setOpen] = useState(held !== null);
   const [form, setForm] = useState<LeadForm>(held?.form ?? EMPTY);
+  // IC1 (0634): consent channels staff leave ticked (both by default); a held press shows the tick it was sent with.
+  const [consent, setConsent] = useState(held?.consent ?? true);
   const [stageId, setStageId] = useState<string | null>(null);
   const [save, setSave] = useState<SaveState>(held ? { state: 'UNCERTAIN' } : { state: 'IDLE' });
   const setupKey = useRef<string | null>(null), alive = useRef(true);
@@ -85,7 +87,7 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
     // A definite answer settles this capsule even if the form was closed meanwhile; it never clears a newer one.
     const settle = () => { if (custody.current === capsule) custody.current = null; };
     submit(capsule.request).then(
-      () => { settle(); if (!alive.current) return; setForm(EMPTY); setSave({ state: 'SAVED', name: capsule.name }); setOpen(false); onAdded?.(); },
+      () => { settle(); if (!alive.current) return; setForm(EMPTY); setConsent(true); setSave({ state: 'SAVED', name: capsule.name }); setOpen(false); onAdded?.(); },
       (error) => {
         if (error instanceof CrmLeadCreateUncertainError) { if (alive.current) setSave({ state: 'UNCERTAIN' }); return; }
         settle(); if (alive.current) setSave({ state: error instanceof CrmLeadCreateAccessError ? 'DENIED' : 'REJECTED' }); });
@@ -93,19 +95,19 @@ export function AddLead({ scope, language, onAdded, api = addLeadApi, submit = s
 
   const onSave = useCallback(() => {
     const choice = pipelines.state === 'READY' ? openStageChoices(pipelines.items).find((c) => c.stageId === stageId) ?? null : null;
-    const built = buildLeadInput(form, choice);
+    const built = buildLeadInput(form, choice, consent);
     if (!built.ok) { setSave({ state: 'PROBLEM', problem: built.problem }); return; }
     let request: PreparedCrmLeadCreate;
     try { request = prepareCrmLeadCreate(scope.organizationId, scope.schoolId, built.input, crypto.randomUUID()); } catch { setSave({ state: 'REJECTED' }); return; }
-    send(Object.freeze({ request, name: `${built.input.primaryContact.givenName} ${built.input.primaryContact.familyName}`, form: Object.freeze({ ...form }) }));
-  }, [pipelines, stageId, form, scope, send]);
+    send(Object.freeze({ request, name: `${built.input.primaryContact.givenName} ${built.input.primaryContact.familyName}`, form: Object.freeze({ ...form }), consent }));
+  }, [pipelines, stageId, form, consent, scope, send]);
 
   // Retry resends the held capsule exactly: same path, body and Idempotency-Key, whatever the fields show now.
   const onRetry = useCallback(() => { const capsule = custodyFor(custody, scope); if (capsule) send(capsule); }, [send, custody, scope]);
-  const onDiscard = useCallback(() => { custody.current = null; setForm(EMPTY); setSave({ state: 'IDLE' }); }, [custody]);
+  const onDiscard = useCallback(() => { custody.current = null; setForm(EMPTY); setConsent(true); setSave({ state: 'IDLE' }); }, [custody]);
   const onField = useCallback((field: keyof LeadForm, value: string) => { setForm((now) => ({ ...now, [field]: value })); setSave((now) => now.state === 'SAVING' || now.state === 'UNCERTAIN' ? now : { state: 'IDLE' }); }, []);
   const onOpen = useCallback((next: boolean) => { setOpen(next); if (next) setSave((now) => saveAfterOpen(now, custodyFor(custody, scope) !== null)); }, [custody, scope]);
 
   return <AddLeadView language={language} pipelines={pipelines} setup={setup} open={open} form={form} stageId={stageId} save={save}
-    onSetUp={onSetUp} onReload={() => setReload((n) => n + 1)} onOpen={onOpen} onField={onField} onStage={setStageId} onSave={onSave} onRetry={onRetry} onDiscard={onDiscard}/>;
+    onSetUp={onSetUp} onReload={() => setReload((n) => n + 1)} onOpen={onOpen} onField={onField} consent={consent} onConsent={setConsent} onStage={setStageId} onSave={onSave} onRetry={onRetry} onDiscard={onDiscard}/>;
 }

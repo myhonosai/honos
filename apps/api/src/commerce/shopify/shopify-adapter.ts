@@ -506,11 +506,13 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
 
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
     // Shopify refused part of the read (a list without its scope): the next smaller read. Refusing the balance alone is the failure.
+    // Only a refused call steps down. The answer is read once, outside the loop: one HON cannot read is a failure, never a smaller read.
+    let data: Record<string, unknown> | undefined;
     for (const [i, query] of FINANCE_QUERIES.entries()) {
-      try { return financeFromAccount((await this.graphql(shop, accessToken, query, {})).shopifyPaymentsAccount); }
+      try { data = await this.graphql(shop, accessToken, query, {}); break; }
       catch (e) { if (!(e instanceof ShopifyProviderError) || e.failure !== 'INVALID_RESPONSE' || i === FINANCE_QUERIES.length - 1) throw e; }
     }
-    return bad();
+    return financeFromAccount((data ?? bad()).shopifyPaymentsAccount);
   }
 
   async setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void> {
