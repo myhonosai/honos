@@ -62,6 +62,7 @@ test('SH-F1 the snapshot and view contracts are closed', () => {
   assert.equal(contracts.validateShopifyConnectInput({ ...base, allowOrders: true }).allowOrders, true);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowOrders: 1 }), /SHOPIFY_INPUT_INVALID/);
   assert.deepEqual([...contracts.SHOPIFY_ORDER_SCOPES], ['write_orders']);
+  assert.deepEqual([...contracts.SHOPIFY_STOCK_SCOPES], ['read_locations']);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowFinance: 'yes' }), /SHOPIFY_INPUT_INVALID/);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowPayouts: true }), /SHOPIFY_INPUT_INVALID/);
   assert.deepEqual([...contracts.SHOPIFY_FINANCE_SCOPES], ['read_shopify_payments_accounts', 'read_shopify_payments_payouts']);

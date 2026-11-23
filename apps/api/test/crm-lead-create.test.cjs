@@ -106,3 +106,36 @@ test('HTTP create still invokes only canonical lead service, not a second CRM or
  assert.match(source, /this\.leads\.create\(command, input\)/);
  assert.doesNotMatch(source, /ActionEngineService|Ai\w*Service|Payment\w*Service|Communication\w*Service|WorkItemService|fetch\(/);
 });
+
+test('IC1: a lead staff add records the consent channels they left ticked (both by default); other callers record nothing', async () => {
+ const valid = input();
+ validateCreateHumanCrmLeadInput({ ...valid, consentChannels: [] }); validateCreateHumanCrmLeadInput({ ...valid, consentChannels: ['SMS', 'EMAIL'] });
+ for (const consentChannels of [null, 'EMAIL', ['EMAIL', 'EMAIL'], ['PUSH'], ['EMAIL', 'SMS', 'EMAIL']]) assert.throws(() => validateCreateHumanCrmLeadInput({ ...valid, consentChannels }));
+ const run = async (context, body) => {
+  const calls = [], lead = summary(body);
+  const service = new LeadService({ withTenantTransaction: async (c, work) => work({ query: async (sql, args) => {
+   calls.push({ sql, args });
+   if (sql.includes('SELECT tier')) return { rows: [{ tier: 'CORE' }] };
+   if (sql.includes('INSERT INTO hon.idempotency_records')) return { rows: [{ id: randomUUID() }], rowCount: 1 };
+   if (sql.includes('FROM hon.crm_pipeline_stages')) return { rows: [{ id: body.pipelineStageId }], rowCount: 1 };
+   if (sql.includes('INSERT INTO hon.people')) return { rows: [{ id: lead.primaryPersonId }] };
+   if (sql.includes('INSERT INTO hon.crm_leads')) return { rows: [lead] };
+   if (sql.includes('record_staff_intake_consent')) return { rows: [{ result: { people: 1, recorded: 2 } }] };
+   return { rows: [], rowCount: 1 };
+  } }) });
+  await service.create(context, body);
+  return { calls: calls.filter(c => c.sql.includes('record_staff_intake_consent')), lead, all: calls };
+ };
+ const human = { ...scope, externalSubject: 'signed-subject', principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId: randomUUID(), correlationId: randomUUID(), idempotencyKey: randomUUID() };
+ let r = await run(human, input());
+ assert.deepEqual(r.calls.map(c => [c.args[0], JSON.parse(c.args[1])]), [['signed-subject', { method: 'STAFF_ADD', personId: r.lead.primaryPersonId, channels: ['EMAIL', 'SMS'] }]]);
+ assert(r.all.findIndex(c => c.sql.includes('record_staff_intake_consent')) > r.all.findIndex(c => c.sql.includes('INSERT INTO hon.crm_leads')), 'recorded after the lead, in the same transaction');
+ r = await run(human, input({ consentChannels: ['SMS'] }));
+ assert.deepEqual(JSON.parse(r.calls[0].args[1]).channels, ['SMS']);
+ r = await run(human, input({ consentChannels: [] }));
+ assert.equal(r.calls.length, 0, 'both unticked: nothing recorded');
+ for (const patch of [{ source: 'AI_ACTION_ENGINE' }, { principalType: 'AI_AGENT' }, { actionRequestId: randomUUID() }, { externalSubject: undefined }]) {
+  r = await run({ ...human, ...patch }, input());
+  assert.equal(r.calls.length, 0, `no automatic consent for ${JSON.stringify(patch)}`);
+ }
+});

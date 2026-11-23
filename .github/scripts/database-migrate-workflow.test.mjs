@@ -26,7 +26,9 @@ test('secrets come from the chosen environment and only reach database steps', (
   assert.deepEqual([...secretKeys].sort(), ['DATABASE_URL', 'HON_DATABASE_CA_CERT']);
   for (const step of steps) {
     if (!step.includes('secrets.')) continue;
-    assert.match(step, /run: pnpm (db:migrate|db:verify-rls|--filter @hon\/database db:status( --require-current)?)\n?$/, step.split('\n')[0]);
+    // Credential steps run already-compiled scripts directly: no pnpm script, no tsc, no install.
+    assert.match(step, /run: node packages\/database\/scripts\/(migrate|migration-status|verify-rls)\.mjs( --require-current)?\n?$/, step.split('\n')[0]);
+    assert.doesNotMatch(step, /\b(pnpm|npm|npx|tsc|install)\b/, step.split('\n')[0]);
   }
   assert.ok(!steps.some((step) => /install|checkout|setup|db:check/.test(step.split('\n')[0]) && step.includes('secrets.')));
 });
@@ -37,10 +39,10 @@ test('migrate needs the target typed again, runs after a checksum check, and mus
   assert.match(refuse, /if: inputs\.action == 'migrate' && inputs\.confirm != inputs\.target/);
   assert.match(refuse, /exit 1/);
   assert.ok(index('Refuse migrate') === 0, 'confirmation is checked before anything else');
-  assert.ok(index('db:check') < index('run: pnpm db:migrate'));
-  assert.match(steps[index('run: pnpm db:migrate')], /if: inputs\.action == 'migrate'/);
+  assert.ok(index('db:check') < index('scripts/migrate.mjs'));
+  assert.match(steps[index('scripts/migrate.mjs')], /if: inputs\.action == 'migrate'/);
   assert.match(steps[index('--require-current')], /if: inputs\.action == 'migrate'/);
-  assert.match(steps[index('db:verify-rls')], /if: inputs\.action == 'verify'/);
+  assert.match(steps[index('scripts/verify-rls.mjs')], /if: inputs\.action == 'verify'/);
 });
 
 test('one run per database, never cancelled mid-migration, no deploy', () => {
@@ -52,5 +54,22 @@ test('one run per database, never cancelled mid-migration, no deploy', () => {
 test('no other workflow reads a database secret', () => {
   for (const file of readdirSync(dir).filter((name) => /\.ya?ml$/.test(name) && name !== 'database-migrate.yml')) {
     assert.doesNotMatch(readFileSync(new URL(file, dir), 'utf8'), /secrets\.(DATABASE_URL|HON_DATABASE_CA_CERT|HON_RUNTIME_DATABASE_URL)/, file);
+  }
+});
+
+test('install and compile finish before the first step that receives a secret', () => {
+  const firstSecret = steps.findIndex((step) => step.includes('secrets.'));
+  const build = steps.findIndex((step) => step.includes('pnpm prepare:workspace'));
+  assert.ok(build >= 0 && firstSecret > build, 'prepare:workspace must run before any credential step');
+  assert.match(steps[build], /test -f packages\/database\/dist\/index\.js/);
+  for (const step of steps.slice(firstSecret)) assert.doesNotMatch(step, /^uses:|\n {8}uses:|pnpm install|tsc\b/, step.split('\n')[0]);
+});
+
+test('every action in every workflow is pinned to a full commit SHA', () => {
+  for (const file of readdirSync(dir).filter((name) => /\.ya?ml$/.test(name))) {
+    for (const [, ref] of readFileSync(new URL(file, dir), 'utf8').matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)) {
+      if (ref.startsWith('./')) continue;
+      assert.match(ref, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${file}: ${ref} must be pinned to a reviewed full SHA`);
+    }
   }
 });

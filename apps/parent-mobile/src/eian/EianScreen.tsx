@@ -8,7 +8,7 @@ import { Button } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
 import { answer, classify, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianTab } from './eian-engine';
 import { askEianAi } from './eian-ai';
-import { EianVoiceContext, KEEP_TALKING, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints } from './voice';
+import { EianVoiceContext, KEEP_TALKING, PHONE_VOICE_NOTE, SPEECH_SERVICE_NOTE, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints } from './voice';
 import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } from './avatar';
 
 type Turn = { id: number; question: string; reply: EianAnswer };
@@ -262,8 +262,8 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
         ? "Eian answers common family questions on your phone. Other questions are answered by AI from your school's records, and those answers are marked AI. Eian never pays, books or sends anything by itself."
         : "Eian understands common family questions and answers only from your school's records. It never pays, books or sends anything by itself."}</Text>
       {voice ? <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.sm }}>{canListen
-        ? "The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. To hear names correctly, your children's names are also given to that speech service. HON gets only the text. Reading aloud uses your phone's own voice."
-        : "Reading aloud uses your phone's own voice."}</Text> : null}
+        ? `${"The microphone opens when you tap it, and again after Eian answers a spoken question so you can keep talking. It closes when you go quiet, tap stop or leave Eian. Your phone's speech service (Apple or Google) may send your spoken question off the phone to turn it into text. To hear names correctly, your children's names are also given to that speech service. HON gets only the text."} ${voice.speechService ? SPEECH_SERVICE_NOTE : PHONE_VOICE_NOTE}`
+        : voice.speechService ? SPEECH_SERVICE_NOTE : PHONE_VOICE_NOTE}</Text> : null}
     </ScrollView>
   );
 }

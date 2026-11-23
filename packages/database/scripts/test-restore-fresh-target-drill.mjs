@@ -21,8 +21,9 @@ if (process.env.DATABASE_URL || process.env.HON_RUNTIME_DATABASE_URL) throw new 
 if (process.getuid?.() === 0) throw new Error('Run as an unprivileged OS user: initdb refuses root.');
 const bin = process.env.HON_POSTGRES_BIN ?? '/usr/lib/postgresql/16/bin';
 const safeEnv = { PATH: process.env.PATH ?? '/usr/bin:/bin', LANG: 'C.UTF-8', PAGER: 'cat' };
+// maxBuffer: the dump's table of contents (pg_restore --list) outgrew spawnSync's 1 MiB default at 389 migrations (ENOBUFS).
 const run = (binary, args, { input, env = {}, allowFail = false } = {}) => {
-  const result = spawnSync(binary, args, { encoding: 'utf8', env: { ...safeEnv, ...env }, stdio: ['pipe', 'pipe', 'pipe'], ...(input === undefined ? {} : { input }) });
+  const result = spawnSync(binary, args, { encoding: 'utf8', env: { ...safeEnv, ...env }, stdio: ['pipe', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024, ...(input === undefined ? {} : { input }) });
   if (result.status !== 0 && !allowFail) throw new Error(`${binary.split('/').at(-1)} failed: ${(result.stderr || result.stdout).slice(0, 600)}`);
   return result;
 };

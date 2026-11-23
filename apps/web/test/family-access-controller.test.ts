@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { FamilyAccessController } from '../src/components/family-access/controller';
 import { FamilyAccessError, type FamilyAccessApi } from '../src/components/family-access/http';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -6,7 +6,7 @@ const scope = { organizationId:id(1),schoolId:id(2) };
 const family = {id:id(3),displayName:'Private Family A',status:'ACTIVE' as const,version:1,memberCount:2,createdAt:'2026-11-04T00:00:00Z'};
 const invitation = { invitationId:id(4),schoolId:scope.schoolId,familyId:family.id,familyName:family.displayName,accessLevel:'PRIMARY_GUARDIAN' as const,email:'guardian@example.test',expiresAt:'2026-11-05T00:00:00Z',status:'PENDING' as const };
 const token = 'x'.repeat(43);
-let api: FamilyAccessApi, c: FamilyAccessController, key: ReturnType<typeof vi.fn>;
+let api: FamilyAccessApi, c: FamilyAccessController, key: Mock<() => string>;
 beforeEach(()=>{
  api={identity:vi.fn().mockResolvedValue(undefined),load:vi.fn().mockResolvedValue({families:[family],invitations:[invitation]}),send:vi.fn().mockResolvedValue(invitation)};
  key=vi.fn(()=>id(9));c=new FamilyAccessController('owner-a',scope,api,key,()=>token);

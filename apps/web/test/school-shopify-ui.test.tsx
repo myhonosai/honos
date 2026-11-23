@@ -19,7 +19,7 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as ShopifyError; } throw new Error('expected a failure'); };
 const connection = (over: Partial<ShopifyConnection> = {}): ShopifyConnection => ({ connectionId: cid, shopDomain: SHOP, shopName: 'Synthetic Dojo Store', currency: 'USD',
   status: 'CONNECTED', version: 2, connectedAt: at, endedAt: null, lastSyncAt: at, lastSyncOutcome: 'SUCCEEDED', syncRunning: false, ordersAllowed: false, ...over });
-const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, connection: connection(),
+const overview = (over: Partial<ShopifyOverview> = {}): ShopifyOverview => ({ schoolId: school, canManage: true, connectEnabled: true, autoSync: false, newStoreUrl: null, connection: connection(),
   counts: { products: 3, variants: 6, lowStock: 2, provider: 0, orders: 3 },
   summary: { days: 30, orders: 2, sales: 290.73, averageOrder: 145.37, itemsSold: 4, lineSales: 310, coveredSales: 175, estimatedGrossProfit: 99.75,
     topProducts: [{ title: 'Student uniform', quantity: 2, sales: 130 }] }, ...over });
@@ -104,6 +104,17 @@ it('says HON syncs on its own only when background sync is on and the store is c
   expect(renderToStaticMarkup(<ShopifyView {...props({ section: 'settings', overview: { state: 'READY', read: overview({ autoSync: true }) } })} />)).toContain('fully every six hours');
   const ended = overview({ autoSync: true, connection: { ...connection(), status: 'NEEDS_RECONNECT', endedAt: connection().connectedAt } });
   expect(renderToStaticMarkup(<ShopifyView {...props({ section: 'settings', overview: { state: 'READY', read: ended } })} />)).not.toContain('data-shopify-auto-sync');
+});
+
+it('a school with no store gets the set-up guide: the HON link when there is one, the Shopify sign-up page when not', () => {
+  let html = renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: empty() }, shop: '', schoolName: 'Synthetic Dojo' })} />);
+  expect(html).toContain('data-shopify-new-shop'); expect(html).toContain('href="https://www.shopify.com/free-trial"');
+  expect(html).toContain('use Synthetic Dojo'); expect(html).not.toContain('referral fee');
+  html = renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: empty({ newStoreUrl: 'https://shopify.pxf.io/synthetic' }) }, shop: '' })} />);
+  expect(html).toContain('href="https://shopify.pxf.io/synthetic"'); expect(html).toContain('referral fee'); expect(html).toContain('rel="noopener noreferrer"');
+  for (const over of [{ canManage: false }, { connectEnabled: false }])
+    expect(renderToStaticMarkup(<ShopifyView {...props({ overview: { state: 'READY', read: empty(over) } })} />)).not.toContain('data-shopify-new-shop');
+  expect(renderToStaticMarkup(<ShopifyView {...props({ section: 'settings' })} />)).not.toContain('data-shopify-new-shop');
 });
 
 it('connect form only for managers and only when connecting is turned on; reconnect when Shopify refused access', () => {

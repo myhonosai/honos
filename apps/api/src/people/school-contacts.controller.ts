@@ -12,7 +12,9 @@ export class SchoolContactsHumanUiGuard extends MembershipActivationHumanUiGuard
   protected override readonly command: string = 'people.school-contacts';
 }
 
-const KEYS = new Set(['segment', 'query', 'rankId', 'programId', 'planId', 'endsWithinDays', 'options', 'cursor']);
+const KEYS = new Set(['segment', 'query', 'rankId', 'programId', 'planId', 'endsWithinDays', 'options', 'cursor',
+  // C4 (0623): sort and the added filters.
+  'sort', 'membership', 'noBelt', 'endsFrom', 'endsTo', 'ageMin', 'ageMax', 'tag']);
 
 /**
  * C1 (0521): contacts with segment counts and filters. Route identifiers are never authority: the scope is resolved from
