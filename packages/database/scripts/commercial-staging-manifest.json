@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "113d68106edaec2c45f4300ba22388bc66a896cadb2b89dcc4b794046bc715de",
+  "chainSha256": "663391241169d87bf397f982fa1a1c13ed6d8b88888530cea09a661d8e47d4e6",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -841,6 +841,10 @@
     {
       "file": "0624_person_membership_from_plan.sql",
       "sha256": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1"
+    },
+    {
+      "file": "0627_public_checkout_orders.sql",
+      "sha256": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
     },
     {
       "file": "0629_crm_trial_authority_hold.sql",
