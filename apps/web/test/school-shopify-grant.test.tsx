@@ -39,6 +39,8 @@ it('keeps the owed second hop for ten minutes, for the same school and shop, and
   expect(takeGrant(id(3), SHOP, 2000)).toBeNull();
   rememberGrant('allowOrders', school, SHOP, 1000);
   expect(takeGrant(school, 'other.myshopify.com', 2000)).toBeNull();
+  rememberGrant('allowStock', school, SHOP, 1000);
+  expect(takeGrant(school, SHOP, 2000)).toBe('allowStock');
   rememberGrant('allowOrders', school, SHOP, 5000);
   expect(takeGrant(school, SHOP, 2000)).toBeNull();
   for (const raw of ['{', '[]', JSON.stringify({ action: 'connect', schoolId: school, shopDomain: SHOP, at: 1000 }), 'x'.repeat(500)]) {

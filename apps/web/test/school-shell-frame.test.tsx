@@ -193,7 +193,7 @@ describe('school shell frame', () => {
     const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
     const progress = render({ path: '/staff/curriculum/progress' });
     expect(progress).not.toContain('data-shell-groups');
-    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Achievements']);
+    expect(tabs(progress)).toEqual(['Rank setup', 'Curriculum progress', 'Videos and links', 'Teaching studio', 'Achievements']);
     expect(tabs(render({ path: '/staff/billing/invoices' }))).toEqual(['Invoices', 'Tuition balances']);
     expect(tabs(render({ path: '/staff/billing/checkout-pages' }))).toEqual(['Checkout pages', 'Checkout orders']);
     // A one-page item shows no tab row at all.

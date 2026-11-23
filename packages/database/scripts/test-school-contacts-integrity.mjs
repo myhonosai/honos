@@ -1,7 +1,8 @@
 /**
  * School contacts list proof (C1, 0521) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
  * ValidationPipe + HonExceptionFilter -> SchoolContactsController -> one protected definer function on the restricted runtime
- * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent or charged.
+ * role with forced RLS), on the guarded disposable CRM-close fixture only. C4 (0623): sort orders, membership state, no belt, age,
+ * end-date range and tag filters. Synthetic names only; nothing is sent or charged.
  */
 import pg from 'pg';
 import assert from 'node:assert/strict';
@@ -118,6 +119,17 @@ async function diagnose(actor, elapsed) {
     console.log(`DIAGNOSE direct read failed in ${Date.now() - started}ms: ${error.code} ${error.message}`);
   } finally { await runtime.query('ROLLBACK').catch(() => {}); }
 }
+// One read on the runtime role exactly as the API makes it; returns 'ok' or the SQLSTATE and message.
+async function direct(actor, input) {
+  try {
+    await runtime.query('BEGIN READ ONLY');
+    await runtime.query(`SELECT set_config('app.hon_organization_id',$1,true), set_config('app.hon_school_id',$2,true), set_config('app.hon_principal_id',$3,true),
+      set_config('app.hon_principal_type','HUMAN_USER',true), set_config('app.hon_request_id',$4,true)`, [actor.org, actor.school, actor.principal, randomUUID()]);
+    await runtime.query("SELECT set_config('app.hon_source','HUMAN_UI',true), set_config('app.hon_external_subject',$1,true), set_config('app.hon_action_request_id','',true), set_config('app.hon_delegated_by_principal_id','',true)", [actor.subject]);
+    await runtime.query('SELECT hon.read_school_contact_list($1,$2::jsonb)', [actor.subject, JSON.stringify(input)]);
+    return 'ok';
+  } catch (error) { return `${error.code} ${error.message}`; } finally { await runtime.query('ROLLBACK').catch(() => {}); }
+}
 // Disposable-fixture cleanup only (as in the 0239 proof).
 async function cleanup() {
   const tables = (await sql(`SELECT c.relname FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attname='organization_id' AND NOT a.attisdropped
@@ -215,7 +227,8 @@ async function records(org, school, tag) {
     return id;
   };
   const averyMembership = await membership(avery, 'ACTIVE', new Date(Date.now() + 20 * 86400000));
-  await membership(blake, 'ACTIVE', null);
+  // C4 (0623): Blake's membership is paused and ends in 15 days (before Avery's 20).
+  await membership(blake, 'FROZEN', new Date(Date.now() + 15 * 86400000));
   await membership(finn, 'EXPIRED', new Date(Date.now() - 5 * 86400000));
   await membership(gale, 'DRAFT', null);
 
@@ -248,12 +261,24 @@ async function records(org, school, tag) {
   await sql("INSERT INTO hon.curricula(id,organization_id,school_id,name,model_code) VALUES($1,$2,$3,'Karate','LINEAR')", [curriculum, org, school]);
   const rank = async (name, color, order) => { const id = randomUUID(); await raw('curriculum_ranks', 'INSERT INTO hon.curriculum_ranks(id,organization_id,school_id,curriculum_id,name,display_color,progression_order) VALUES($1,$2,$3,$4,$5,$6,$7)', [id, org, school, curriculum, name, color, order]); return id; };
   const white = await rank('White', '#ffffff', 1), yellow = await rank('Yellow', 'url(x)', 2);
-  const enroll = async (personId, rankId, status = 'ACTIVE') => {
+  // C4 (0623): birth dates 10 days past a birthday, so the age is the same in any time zone: Avery 9, Blake 30, Casey 6.
+  const born = { [avery]: '9 years 10 days', [blake]: '30 years 10 days', [casey]: '6 years 10 days' };
+  const profileOf = async (personId) => {
     const profile = randomUUID();
-    await sql('INSERT INTO hon.student_profiles(id,organization_id,school_id,person_id) VALUES($1,$2,$3,$4)', [profile, org, school, personId]);
+    await sql(`INSERT INTO hon.student_profiles(id,organization_id,school_id,person_id,birth_date) VALUES($1,$2,$3,$4,
+      CASE WHEN $5::text IS NULL THEN NULL ELSE (current_date - $5::interval)::date END)`, [profile, org, school, personId, born[personId] ?? null]);
+    return profile;
+  };
+  const enroll = async (personId, rankId, status = 'ACTIVE') => {
+    const profile = await profileOf(personId);
     await raw('student_curriculum_enrollments', 'INSERT INTO hon.student_curriculum_enrollments(organization_id,school_id,student_profile_id,curriculum_id,current_rank_id,status) VALUES($1,$2,$3,$4,$5,$6)', [org, school, profile, curriculum, rankId, status]);
   };
   await enroll(avery, white); await enroll(blake, yellow); await enroll(finn, yellow, 'ARCHIVED');
+  await profileOf(casey);
+  for (const [personId, tag] of [[blake, 'Black Belt Club'], [casey, 'black belt club'], [drew, 'Leadership']]) {
+    await sql("INSERT INTO hon.contact_tags(organization_id,school_id,person_id,tag,tag_key,added_by_principal_id,added_source) VALUES($1,$2,$3,$4,lower($4),$5,'HUMAN_UI')",
+      [org, school, personId, tag, OWN.principal]);
+  }
   return { avery, blake, casey, drew, eli, finn, gale, program, plan, white, yellow };
 }
 
@@ -299,7 +324,7 @@ try {
     && avery.email === 'avery.a@example.test' && avery.personId === A.avery && json(avery.ranks) === json([{ rank: 'White', color: '#ffffff' }])
     && Math.abs(Date.parse(avery.membershipEndsAt) - Date.now() - 20 * 86400000) < 3600000, `student row ${json(avery)}`);
   const blake = row(first, 'Blake');
-  ok(blake.segment === 'STUDENT' && blake.planName === null && blake.membershipEndsAt === null && blake.phoneE164 === '+15555550101'
+  ok(blake.segment === 'STUDENT' && blake.planName === null && blake.membershipEndsAt !== null && blake.phoneE164 === '+15555550101'
     && json(blake.ranks) === json([{ rank: 'Yellow', color: null }]), 'a student with an open lead stays a student; an unsafe colour is dropped');
   ok(row(first, 'Casey').segment === 'TRIAL' && row(first, 'Drew').segment === 'PROSPECT' && row(first, 'Eli').segment === 'PROSPECT'
     && row(first, 'Finn').segment === 'INACTIVE' && json(row(first, 'Finn').ranks) === '[]' && row(first, 'Gale').segment === 'OTHER', 'segments: trial, prospect, cancelled trial, former member, payer');
@@ -317,13 +342,61 @@ try {
   ok(json(names(await read('segment=PROSPECT', 'prospects'))) === json(['Drew Dunn', 'Eli East']), 'prospects');
   ok(json(names(await read('segment=INACTIVE', 'inactive'))) === json(['Finn Ford']), 'inactive');
   const soon = await read('endsWithinDays=30', 'ends within 30 days');
-  ok(json(names(soon)) === json(['Avery Able']) && json(soon.data.counts) === json({ ALL: 1, STUDENT: 1, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 }), 'ends within 30 days narrows the counts too');
+  ok(json(names(soon)) === json(['Avery Able', 'Blake Brown']) && json(soon.data.counts) === json({ ALL: 2, STUDENT: 2, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 }), 'ends within 30 days narrows the counts too');
   ok(json(names(await read('endsWithinDays=7', 'ends within 7 days'))) === '[]', 'nothing ends within 7 days');
   ok(json(names(await read(`planId=${A.plan}`, 'plan'))) === json(['Avery Able']) && json(names(await read(`programId=${A.program}`, 'program'))) === json(['Avery Able']), 'plan and program');
   ok(json(names(await read(`rankId=${A.yellow}`, 'rank'))) === json(['Blake Brown']), 'an archived enrollment never matches a rank');
   ok(json(names(await read('query=brown', 'name search'))) === json(['Blake Brown']) && json(names(await read('query=avery.a%40example', 'email search'))) === json(['Avery Able'])
     && json(names(await read('query=5550101', 'phone search'))) === json(['Blake Brown']), 'search by name, email or phone');
   ok(json(names(await read(`planId=${seeded.B.plan}`, 'another school plan'))) === '[]', 'another school plan matches nothing');
+
+  // 3b. C4 (0623): sort orders, people without the value last, and keyset paging that continues in the same order.
+  const first4 = async (query) => names(await read(query, query)).slice(0, 4);
+  ok(json(await first4('sort=ENDS_SOONEST')) === json(['Blake Brown', 'Avery Able', 'Casey Cole', 'Drew Dunn']), 'soonest end first, no end date last');
+  ok(json(await first4('sort=BELT_HIGH')) === json(['Blake Brown', 'Avery Able', 'Casey Cole', 'Drew Dunn']), 'highest belt first; an archived belt does not count');
+  ok(json(await first4('sort=BELT_LOW')) === json(['Avery Able', 'Blake Brown', 'Casey Cole', 'Drew Dunn']), 'lowest belt first');
+  ok(json(await first4('sort=AGE_YOUNGEST')) === json(['Casey Cole', 'Avery Able', 'Blake Brown', 'Drew Dunn']), 'youngest first');
+  ok(json(await first4('sort=AGE_OLDEST')) === json(['Blake Brown', 'Avery Able', 'Casey Cole', 'Drew Dunn']), 'oldest first');
+  ok(json(await first4('sort=NAME')) === json(['Avery Able', 'Blake Brown', 'Casey Cole', 'Drew Dunn']), 'NAME is the default order');
+  ok(names(await read('sort=NEWEST', 'newest'))[0] === 'Pat54 Zulu', 'newest added first');
+  for (const sort of ['AGE_YOUNGEST', 'NEWEST', 'ENDS_SOONEST']) {
+    const p1 = await read(`sort=${sort}`, `${sort} page 1`);
+    const p2 = await read(`sort=${sort}&cursor=${encodeURIComponent(p1.data.nextCursor)}`, `${sort} page 2`);
+    const all = [...names(p1), ...names(p2)];
+    ok(p1.data.rows.length === 50 && p2.data.rows.length === 12 && p2.data.nextCursor === null && new Set(all).size === 62, `${sort}: two pages, no repeats, no gaps`);
+    await refused(() => call(READER, `sort=NAME&cursor=${encodeURIComponent(p1.data.nextCursor)}`), 400, 'INVALID_CURSOR', `${sort} cursor reused with another order`);
+  }
+  { const byNewest = names(await read('sort=NEWEST', 'newest again')), p2 = await read(`sort=NEWEST&cursor=${encodeURIComponent((await read('sort=NEWEST', 'n')).data.nextCursor)}`, 'newest 2');
+    ok(json(names(p2).slice(-7)) === json(['Gale Gray', 'Finn Ford', 'Eli East', 'Drew Dunn', 'Casey Cole', 'Blake Brown', 'Avery Able']) && byNewest[49] === 'Pat05 Zulu', 'newest order continues across pages'); }
+
+  // 3c. C4 filters: membership state, no belt, age, end-date range in the school's zone, tag; rows carry age and state.
+  ok(json(names(await read('membership=PAUSED', 'paused'))) === json(['Blake Brown']) && json(names(await read('membership=ACTIVE', 'active'))) === json(['Avery Able'])
+    && json(names(await read('membership=HAS', 'has'))) === json(['Avery Able', 'Blake Brown']) && json(names(await read('membership=CANCELLING', 'cancelling'))) === '[]', 'membership state');
+  const none = await read('membership=NONE', 'no membership');
+  ok(none.data.counts.ALL === 60 && none.data.counts.STUDENT === 0 && none.data.counts.INACTIVE === 1, 'no current membership: everyone else, the former member included');
+  ok(json(names(await read('segment=STUDENT&noBelt=true', 'students without a belt'))) === '[]' && (await read('noBelt=true', 'no belt')).data.counts.ALL === 60, 'no belt');
+  ok(json(names(await read('ageMin=5&ageMax=10', 'age 5-10'))) === json(['Avery Able', 'Casey Cole']) && json(names(await read('ageMin=18', 'adults'))) === json(['Blake Brown'])
+    && json(names(await read('ageMax=6', 'six and under'))) === json(['Casey Cole']), 'age range; no birth date never matches');
+  { const day = (at) => new Intl.DateTimeFormat('en-CA', { timeZone: LA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(at));
+    const averyDay = day(avery.membershipEndsAt), blakeDay = day(blake.membershipEndsAt);
+    ok(json(names(await read(`endsFrom=${averyDay}&endsTo=${averyDay}`, 'ends on one day'))) === json(['Avery Able'])
+      && json(names(await read(`endsFrom=${blakeDay}`, 'ends from'))) === json(['Avery Able', 'Blake Brown'])
+      && json(names(await read(`endsTo=${blakeDay}`, 'ends to'))) === json(['Blake Brown']), 'end-date range in school days'); }
+  ok(json(names(await read('tag=BLACK%20BELT%20CLUB', 'tag'))) === json(['Blake Brown', 'Casey Cole']) && json(F.options.tags) === json(['Black Belt Club', 'Leadership']), 'tag filter and options');
+  ok(json(names(await read('segment=STUDENT&sort=AGE_YOUNGEST&ageMin=1&tag=black%20belt%20club', 'combined'))) === json(['Blake Brown']), 'filters and sort combine');
+  ok(blake.membershipState === 'PAUSED' && blake.age === 30 && avery.membershipState === 'ACTIVE' && avery.age === 9 && row(first, 'Casey').age === 6
+    && row(first, 'Casey').membershipState === null && row(first, 'Drew').age === null, 'rows carry age and membership state');
+  for (const query of ['sort=name', 'sort=RANDOM', 'membership=FROZEN', 'noBelt=false', `noBelt=true&rankId=${A.white}`, 'ageMin=121', 'ageMin=7&ageMax=6', 'ageMin=-1',
+    'endsFrom=2026-02-30', 'endsFrom=2026-12-02&endsTo=2026-12-01', 'endsFrom=2026-12-01&endsWithinDays=30', 'tag=a%2Cb', 'tag=%20x']) {
+    await refused(() => call(READER, query), 400, 'VALIDATION_FAILED', `C4 query ${query}`);
+  }
+  // The database refuses the same shapes on its own (C4-5), not only the API.
+  for (const input of [{ sort: 'name' }, { membership: 'FROZEN' }, { noBelt: false }, { noBelt: true, rankId: A.white }, { ageMin: 7, ageMax: 6 }, { ageMin: '7' },
+    { ageMin: 6.5 }, { ageMax: 121 }, { endsFrom: '2026-02-30' }, { endsFrom: '2026-12-02', endsTo: '2026-12-01' }, { endsTo: '2026-12-01', endsWithinDays: 30 },
+    { tag: 'a,b' }, { tag: 5 }, { sort: 'NAME', extra: 1 }]) {
+    ok(await direct(READER, input) === '22023 VALIDATION_FAILED', `database refuses ${json(input)}`);
+  }
+  ok(await direct(READER, { sort: 'AGE_OLDEST', ageMin: 0, ageMax: 120, endsFrom: '2000-01-01', tag: 'Leadership', noBelt: true }) === 'ok', 'a full valid input runs');
 
   // 4. Isolation: school B sees its own people only, and no school A data appears anywhere.
   const b = await success(() => call(OTHER_SCHOOL), 'school B');

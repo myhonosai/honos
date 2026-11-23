@@ -2,8 +2,8 @@ import {
   BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException, UnprocessableEntityException,
 } from '@nestjs/common';
 import {
-  validateSchoolDashboardQuery, validateSchoolReportsQuery, verifySchoolDashboard, verifySchoolReportLocations, verifySchoolReports,
-  type SchoolDashboard, type SchoolReportLocations, type SchoolReports,
+  validateAttendanceReportQuery, validateSchoolDashboardQuery, validateSchoolReportsQuery, verifyAttendanceReport, verifySchoolDashboard, verifySchoolReportLocations, verifySchoolReports,
+  type AttendanceReport, type SchoolDashboard, type SchoolReportLocations, type SchoolReports,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
@@ -48,6 +48,12 @@ export class SchoolReportsService {
   async readDashboard(context: MembershipLifecycleContext, value: unknown): Promise<SchoolDashboard> {
     return this.run(context, value, 'SELECT hon.read_school_reports_dashboard($1,$2::jsonb) AS data',
       (data, query) => verifySchoolDashboard(data, context.schoolId, query), validateSchoolDashboardQuery);
+  }
+
+  /** AR1 (0633): the attendance report (one week by class time, participation, class averages, programs, last check-ins). */
+  async readAttendance(context: MembershipLifecycleContext, value: unknown): Promise<AttendanceReport> {
+    return this.run(context, value, 'SELECT hon.read_attendance_report($1,$2::jsonb) AS data',
+      (data, query) => verifyAttendanceReport(data, context.schoolId, query), validateAttendanceReportQuery);
   }
 
   private async run<T, Q>(context: MembershipLifecycleContext, value: unknown, statement: string,

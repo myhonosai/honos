@@ -8,7 +8,7 @@ import {
   verifyShopifyStorefront, verifyShopifyStorefrontPublishResult, type ShopifyStorefront, type ShopifyStorefrontLinks, type ShopifyStorefrontPublishResult,
   type ShopifyStorefrontSettings, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
   verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
-  verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
+  verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, shopifyNewStoreUrl, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult,
   type ShopifyCatalog, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
   type ShopifySyncResult,
@@ -117,7 +117,8 @@ export class ShopifyService {
   async overview(req: HonRequest, schoolId: unknown): Promise<ShopifyOverview> {
     const school = this.school(schoolId);
     const raw = await this.call('read', [this.subject(req), school]);
-    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env) } : raw);
+    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env),
+      newStoreUrl: shopifyNewStoreUrl(process.env.HON_SHOPIFY_NEW_STORE_URL?.trim()) } : raw);
     if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     return out;
   }

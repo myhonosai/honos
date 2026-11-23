@@ -24,12 +24,23 @@ test('a failed ledger row rolls back and never commits', async () => {
 });
 
 test('files without one outer transaction, or with an inner boundary, and odd names are refused before running', async () => {
-  for (const sql of ['CREATE TABLE t();', 'BEGIN;\nSELECT 1;', 'BEGIN;\nSELECT 1;\nCOMMIT;\nBEGIN;\nSELECT 2;\nCOMMIT;', 'BEGIN;\nROLLBACK;\nCOMMIT;']) {
+  for (const sql of ['CREATE TABLE t();', 'BEGIN;\nSELECT 1;', 'BEGIN;\nSELECT 1;\nCOMMIT;\nBEGIN;\nSELECT 2;\nCOMMIT;', 'BEGIN;\nROLLBACK;\nCOMMIT;',
+    // Review P3 (#585): every other spelling of a top-level transaction boundary.
+    'BEGIN;\nABORT;\nCOMMIT;', 'BEGIN;\nabort work;\nCOMMIT;', 'BEGIN;\nCOMMIT AND CHAIN;\nCOMMIT;', 'BEGIN;\nCOMMIT WORK;\nCOMMIT;',
+    'BEGIN;\nCOMMIT TRANSACTION AND NO CHAIN;\nCOMMIT;', 'BEGIN;\nROLLBACK AND CHAIN;\nCOMMIT;', 'BEGIN;\nROLLBACK TRANSACTION;\nCOMMIT;',
+    "BEGIN;\nPREPARE TRANSACTION 'x';\nCOMMIT;", "BEGIN;\nCOMMIT PREPARED 'x';\nCOMMIT;", "BEGIN;\nROLLBACK PREPARED 'x';\nCOMMIT;",
+    'BEGIN;\nSTART TRANSACTION ISOLATION LEVEL SERIALIZABLE;\nCOMMIT;', 'BEGIN;\nBEGIN WORK;\nCOMMIT;', 'BEGIN;\nBEGIN TRANSACTION READ ONLY;\nCOMMIT;',
+    'BEGIN;\nBEGIN ISOLATION LEVEL REPEATABLE READ;\nCOMMIT;', 'BEGIN;\n  commit;\nCOMMIT;']) {
     const client = fakeClient();
     await assert.rejects(() => applyMigrationAtomically(client, '0001_x.sql', sql));
     assert.equal(client.calls.length, 0);
   }
   await assert.rejects(() => applyMigrationAtomically(fakeClient(), "0001_x'.sql", 'BEGIN;\nCOMMIT;'));
+});
+
+test('savepoints and PL/pgSQL blocks are not transaction boundaries', () => {
+  const sql = "BEGIN;\nSAVEPOINT a;\nROLLBACK TO SAVEPOINT a;\nROLLBACK TO a;\nRELEASE SAVEPOINT a;\nDO $$\nBEGIN\n  PERFORM 1;\nEND;\n$$;\nCREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN NULL; END $$;\nCOMMIT;\n";
+  assert.ok(withoutFinalCommit('0001_x.sql', sql).includes('ROLLBACK TO a;'));
 });
 
 test('every accepted migration file has exactly one outer transaction the runner can extend', async () => {

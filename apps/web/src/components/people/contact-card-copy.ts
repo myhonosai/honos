@@ -1,5 +1,6 @@
 /** Contact card wording (C2, 0522), en / ko / es. Labels only; nothing here is authority. */
 const en = {
+  editProfile: 'Edit profile', foldDetails: 'Details', foldMemberships: 'Memberships', foldStart: 'New or renew', foldAgreement: 'Membership agreement', foldInvoices: 'Invoices', foldEvents: 'Past events',
   tabsLabel: 'Contact sections', overview: 'Overview', family: 'Family', appointments: 'Appointments', tasks: 'Follow-ups', membership: 'Membership',
   billing: 'Billing', messages: 'Messages', timeline: 'Timeline', loading: 'Reading this contact…', unavailable: 'This contact’s card could not be loaded.',
   notAllowed: 'Your role doesn’t include this.', none: 'Nothing yet.', addedOn: 'Added {date}', openLead: 'Has an open lead',
@@ -13,6 +14,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  editProfile: '프로필 수정', foldDetails: '상세 정보', foldMemberships: '회원권', foldStart: '신규 또는 갱신', foldAgreement: '회원 계약서', foldInvoices: '청구서', foldEvents: '지난 활동',
   tabsLabel: '연락처 항목', overview: '개요', family: '가족', appointments: '예약', tasks: '후속 조치', membership: '회원권',
   billing: '결제', messages: '메시지', timeline: '활동 기록', loading: '연락처를 읽는 중…', unavailable: '이 연락처 카드를 불러오지 못했습니다.',
   notAllowed: '내 역할에는 이 항목이 포함되지 않습니다.', none: '아직 없습니다.', addedOn: '{date} 등록', openLead: '진행 중인 리드 있음',
@@ -25,6 +27,7 @@ const ko: Record<Key, string> = {
   timelineNote: '볼 수 있는 지난 활동을 최신순으로 보여 줍니다.', added: '등록', priority_HIGH: '높음', priority_NORMAL: '보통', priority_LOW: '낮음',
 };
 const es: Record<Key, string> = {
+  editProfile: 'Editar perfil', foldDetails: 'Detalles', foldMemberships: 'Membresías', foldStart: 'Nueva o renovación', foldAgreement: 'Contrato de membresía', foldInvoices: 'Facturas', foldEvents: 'Eventos pasados',
   tabsLabel: 'Secciones del contacto', overview: 'Resumen', family: 'Familia', appointments: 'Citas', tasks: 'Seguimientos', membership: 'Membresía',
   billing: 'Facturación', messages: 'Mensajes', timeline: 'Historial', loading: 'Leyendo este contacto…', unavailable: 'No se pudo cargar la ficha de este contacto.',
   notAllowed: 'Su rol no incluye esto.', none: 'Nada todavía.', addedOn: 'Agregado el {date}', openLead: 'Tiene un interesado abierto',
@@ -50,7 +53,7 @@ const CODES: Readonly<Record<string, readonly [string, string, string]>> = {
   SCHEDULED: ['Scheduled', '예정', 'Programada'], COMPLETED: ['Completed', '완료', 'Completada'], CANCELLED: ['Cancelled', '취소됨', 'Cancelada'], NO_SHOW: ['No-show', '불참', 'No asistió'],
   PRESENT: ['Present', '출석', 'Presente'], LATE: ['Late', '지각', 'Tarde'], EXCUSED_ABSENCE: ['Excused absence', '사유 결석', 'Ausencia justificada'],
   UNEXCUSED_ABSENCE: ['Absent', '결석', 'Ausente'], MAKEUP: ['Make-up class', '보강', 'Clase de recuperación'],
-  ACTIVE: ['Active', '활성', 'Activa'], FROZEN: ['Paused', '일시정지', 'En pausa'], CANCELLATION_PENDING: ['Cancelling', '취소 예정', 'Cancelación pendiente'], EXPIRED: ['Ended', '만료', 'Terminada'],
+  DRAFT: ['Not started yet', '아직 시작 전', 'Aún sin empezar'], ACTIVE: ['Active', '활성', 'Activa'], FROZEN: ['Paused', '일시정지', 'En pausa'], CANCELLATION_PENDING: ['Cancelling', '취소 예정', 'Cancelación pendiente'], EXPIRED: ['Ended', '만료', 'Terminada'],
   ISSUED: ['Open', '미결제', 'Pendiente'], PAID: ['Paid', '결제 완료', 'Pagada'], VOID: ['Void', '무효', 'Anulada'], UNCOLLECTIBLE: ['Written off', '회수 불가', 'Incobrable'],
 };
 export function codeLabel(language: string, code: string): string {
