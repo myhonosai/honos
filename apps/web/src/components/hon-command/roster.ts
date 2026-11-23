@@ -116,6 +116,7 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Draft content for an existing school campaign', state: 'AVAILABLE', href: '/staff/marketing/assistant' },
       { label: 'Publish, advertise or spend', state: 'BACKEND_REQUIRED' },
+      { label: 'Merchandise ideas and store presentation review in the Shopify Merch Studio', state: 'AVAILABLE', href: '/staff/billing/shopify' },
       { label: 'Marketing performance analysis', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
@@ -167,7 +168,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Campaign, plan catalog and Creative Studio analysis (Ask HON → Lena)', state: 'AVAILABLE' },
-      { label: 'Merchandise and commerce presentation drafts', state: 'BACKEND_REQUIRED' },
+      { label: 'Merchandise ideas and store presentation review (Marcus writes these in the Shopify Merch Studio)', state: 'AVAILABLE', href: '/staff/billing/shopify' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
@@ -242,7 +243,7 @@ export const HON_TEACHING_AI = {
   boundary: 'Kai will never mark student proficiency, promotions, testing results or curriculum completion. Those stay instructor decisions recorded in the existing workflows.',
   tools: [
     { label: 'Teaching Studio', href: '/staff/teaching-studio' },
-    { label: 'Curriculum library', href: '/staff/curriculum/library' },
+    { label: 'Videos and links', href: '/staff/curriculum/library' },
     { label: 'Curriculum progress', href: '/staff/curriculum/progress' },
     { label: 'Scheduled classes', href: '/staff/schedule/sessions' },
     { label: 'Teaching drafts', href: '/staff/teaching-assistant' },

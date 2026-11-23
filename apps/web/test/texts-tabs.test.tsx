@@ -84,7 +84,7 @@ describe('Texts tabs http (TE3b over TE1 0585 / TE2 0586)', () => {
     // A receipt for a different body is never shown as saved.
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(template('c', { name: 'Hi', body: 'Other' })));
     await expect(saveTemplate(scope, { templateId: null, expectedVersion: 0, channel: 'SMS', name: 'Hi', subject: null, body: 'Hello' }, 'key-2')).rejects.toBeInstanceOf(MessagesUnknown);
-    const status = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(ok(template('c', { status: 'ARCHIVED', version: 3 }), true));
+    const status = vi.spyOn(globalThis, 'fetch').mockClear().mockResolvedValueOnce(ok(template('c', { status: 'ARCHIVED', version: 3 }), true));
     expect((await setTemplateStatus(scope, id('c'), 2, 'ARCHIVED', 'key-3')).replayed).toBe(true);
     const sc = fetched(status)[0]!;
     expect(sc.path).toBe(`${base}/templates/${id('c')}/status`);

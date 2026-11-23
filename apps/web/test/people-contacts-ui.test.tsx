@@ -16,7 +16,7 @@ const signal = () => new AbortController().signal;
 const counts = { ALL: 62, STUDENT: 2, TRIAL: 1, PROSPECT: 2, INACTIVE: 1, ARCHIVED: 0 };
 const soon = new Date(Date.now() + 10 * 86_400_000).toISOString(), later = new Date(Date.now() + 80 * 86_400_000).toISOString();
 const row = (n: number, over: Record<string, unknown> = {}) => ({ personId: id(400 + n), version: 1, givenName: `Avery${n}`, familyName: 'Able', email: null, phoneE164: null,
-  segment: 'STUDENT', planName: 'Kids monthly', planCode: 'KIDS', programName: 'Little Tigers', membershipEndsAt: soon, ranks: [{ rank: 'White', color: '#ffffff' }], ...over });
+  segment: 'STUDENT', planName: 'Kids monthly', planCode: 'KIDS', programName: 'Little Tigers', membershipEndsAt: soon, membershipState: 'ACTIVE', age: 9, ranks: [{ rank: 'White', color: '#ffffff' }], ...over });
 const page = (over: Record<string, unknown> = {}) => ({ generatedAt: '2026-11-15T10:00:00.000Z', segment: 'ALL', counts, rows: [row(1)], hasMore: true, options: null, nextCursor: 'c1', ...over });
 
 it('sends only the closed query: empty filters are left out, the cursor rides along', async () => {
@@ -32,7 +32,7 @@ it('sends only the closed query: empty filters are left out, the cursor rides al
 
 it('refuses a page that does not match what was asked or carries an inconsistent cursor', async () => {
   for (const body of [page({ segment: 'TRIAL' }), page({ nextCursor: null }), page({ hasMore: false }), page({ rows: [row(1, { segment: 'BOSS' })] }),
-    page({ options: { ranks: [], programs: [], plans: [] } }), (({ nextCursor: _, ...rest }) => rest)(page())]) {
+    page({ options: { ranks: [], programs: [], plans: [], tags: [] } }), page({ rows: [row(1, { membershipState: 'FROZEN' })] }), page({ rows: [row(1, { age: 121 })] }), (({ nextCursor: _, ...rest }) => rest)(page())]) {
     stub(json({ data: body, meta: {} }));
     await expect(contactsApi.list(scope, NO_CONTACT_FILTERS, null, false, signal())).rejects.toMatchObject({ kind: 'UNKNOWN' });
   }
@@ -69,7 +69,7 @@ it('shows segment chips with counts, row facts for students only and a Show more
 
 it('shows the filter count, keeps filters open and offers Clear; an empty page says so', () => {
   const filters = { ...NO_CONTACT_FILTERS, segment: 'STUDENT' as const, endsWithinDays: '30' as const, planId: id(5) };
-  const options = { ranks: [{ rankId: id(6), curriculum: 'Karate', rank: 'White' }], programs: [], plans: [{ planId: id(5), name: 'Kids monthly' }] };
+  const options = { ranks: [{ rankId: id(6), curriculum: 'Karate', rank: 'White' }], programs: [], plans: [{ planId: id(5), name: 'Kids monthly' }], tags: [] };
   const html = view({ filters, options, list: { state: 'READY', filters, counts: { ...counts, STUDENT: 0 }, rows: [], nextCursor: null, more: 'IDLE' } });
   expect(html).toContain('Filters (2)'); expect(html).toMatch(/<details[^>]*open=""/); expect(html).toContain('Clear filters');
   expect(html).toContain('Karate: White'); expect(html).toMatch(/<option value="[^"]+" selected="">Kids monthly<\/option>/);
@@ -141,4 +141,50 @@ it('a membership-only role sees memberships but a not-allowed billing tab and no
 it('has the same card wording keys in every language', () => {
   const keys = Object.keys(CARD_COPY.en).sort();
   expect(Object.keys(CARD_COPY.ko).sort()).toEqual(keys); expect(Object.keys(CARD_COPY.es).sort()).toEqual(keys);
+});
+
+// C4 (0623): sort, membership state, no belt, age, end-date range, tag; deep link.
+it('C4: sends the sort and the added filters, leaves out the default order and refuses impossible ranges', async () => {
+  const { contactFiltersOk } = await import('../src/components/people/contacts-http');
+  expect(contactQuery({ ...NO_CONTACT_FILTERS, sort: 'NAME' }, false)).toEqual({});
+  expect(contactQuery({ ...NO_CONTACT_FILTERS, sort: 'AGE_YOUNGEST', membership: 'PAUSED', rankId: 'NONE', endsFrom: '2026-12-01', endsTo: '2026-12-31',
+    ageMin: '6', ageMax: '8', tag: 'Black Belt Club' }, false))
+    .toEqual({ sort: 'AGE_YOUNGEST', membership: 'PAUSED', noBelt: true, endsFrom: '2026-12-01', endsTo: '2026-12-31', ageMin: 6, ageMax: 8, tag: 'Black Belt Club' });
+  expect(contactQuery({ ...NO_CONTACT_FILTERS, ageMin: '18' }, false)).toEqual({ ageMin: 18 });
+  for (const bad of [{ ageMin: '9', ageMax: '6' }, { endsFrom: '2026-12-31', endsTo: '2026-12-01' }, { endsFrom: '2026-12-01', endsWithinDays: '30' as const },
+    { ageMin: '121' }, { ageMin: '6.5' }, { endsFrom: '2026-02-30' }, { tag: 'a,b' }]) {
+    expect(contactFiltersOk({ ...NO_CONTACT_FILTERS, ...bad })).toBe(false);
+  }
+  const fetch = stub(json({ data: page(), meta: {} }));
+  await contactsApi.list(scope, { ...NO_CONTACT_FILTERS, sort: 'BELT_HIGH', membership: 'HAS', ageMin: '3', ageMax: '5' }, null, false, signal());
+  expect((fetch.mock.calls[0] as unknown as [string])[0])
+    .toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts?sort=BELT_HIGH&membership=HAS&ageMin=3&ageMax=5`);
+  expect(activeFilterCount({ ...NO_CONTACT_FILTERS, sort: 'NEWEST', membership: 'NONE', ageMin: '3', ageMax: '5', endsFrom: '2026-12-01', endsTo: '2026-12-02', tag: 'x' })).toBe(4);
+});
+
+it('C4: shows the sort menu, the new filters with No belt yet and tags, age and paused / cancelling badges', () => {
+  const options = { ranks: [{ rankId: id(6), curriculum: 'Karate', rank: 'White' }], programs: [], plans: [], tags: ['Black Belt Club'] };
+  const filters = { ...NO_CONTACT_FILTERS, sort: 'ENDS_SOONEST' as const, rankId: 'NONE', ageMin: '6', ageMax: '8', membership: 'PAUSED' as const };
+  const html = view({ filters, options, list: { ...base.list, rows: [row(1, { membershipState: 'PAUSED', age: 7 }) as never, row(2, { membershipState: 'CANCELLING', age: null }) as never] } as never });
+  expect(html).toMatch(/<select[^>]*data-testid="contact-sort"[^>]*>/);
+  expect(html).toMatch(/<option value="ENDS_SOONEST" selected="">Membership ending soonest<\/option>/);
+  for (const label of ['Name A–Z', 'Highest belt first', 'Lowest belt first', 'Youngest first', 'Oldest first', 'Newest added']) expect(html).toContain(label);
+  expect(html).toMatch(/<option value="NONE" selected="">No belt yet<\/option>/);
+  expect(html).toMatch(/<option value="PAUSED" selected="">Paused<\/option>/);
+  expect(html).toMatch(/<option value="6-8" selected="">6 to 8<\/option>/); expect(html).toContain('18 and over');
+  expect(html).toContain('<option value="Black Belt Club">Black Belt Club</option>');
+  expect(html).toContain('Filters (3)');
+  expect(html).toContain('Age 7'); expect(html).toMatch(/data-state="PAUSED"[^>]*>Paused</); expect(html).toMatch(/data-state="CANCELLING"[^>]*>Cancelling</);
+  expect(html).not.toContain('contact-ends-range'); expect(html).not.toContain('contact-age-range');
+  const ranged = view({ filters: { ...NO_CONTACT_FILTERS, endsFrom: '2026-12-01', ageMin: '4', ageMax: '11' }, options });
+  expect(ranged).toContain('data-testid="contact-ends-range"'); expect(ranged).toMatch(/type="date" value="2026-12-01"/);
+  expect(ranged).toContain('data-testid="contact-age-range"'); expect(ranged).toMatch(/<option value="CUSTOM" selected="">/);
+  expect(view({ options: { ...options, tags: [] } })).not.toContain('>Tag<');
+  for (const lang of ['ko', 'es'] as const) for (const key of Object.keys(CONTACTS_COPY.en)) expect(CONTACTS_COPY[lang][key as keyof typeof CONTACTS_COPY.en]).toBeTruthy();
+});
+
+it('C4: the deep link takes exactly one person id', async () => {
+  const { contactDeepLink } = await import('../src/components/people/people');
+  expect(contactDeepLink(`?person=${id(9).toUpperCase()}`)).toBe(id(9));
+  for (const search of ['', '?person=', '?person=abc', `?person=${id(9)}&person=${id(8)}`, `?other=${id(9)}`]) expect(contactDeepLink(search)).toBeNull();
 });
