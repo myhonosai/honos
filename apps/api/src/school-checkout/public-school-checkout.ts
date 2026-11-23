@@ -109,6 +109,9 @@ export class PublicSchoolCheckoutService {
     let state = first.paymentState!;
     if (state === 'OPEN' || state === 'PROCESSING') state = (await this.guard(() => this.once.confirm(first.paymentId!))).state;
     if (state !== 'OPEN') return this.outcome(await this.orderAgain(publicId, key, first.order.orderId), state);
+    // An order stays reachable through its link (to check or cancel it), but a page that no longer opens (taken down, or a
+    // suspended school, organization or entitlement) hands out no processor page to pay on.
+    if (await this.call(READ, [publicId]) === null) return this.outcome(first.order, 'OPEN');
     const back = this.returnUrl(publicId);
     if (!back || !first.providerCode || !this.once.supports(first.providerCode, 'HOSTED')) return this.outcome(first.order, 'OPEN');
     const page = await this.guard(() => this.once.start(first.paymentId!, { surface: 'HOSTED', returnUrl: back }));

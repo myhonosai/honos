@@ -240,6 +240,20 @@ try {
   ok((await site.order(link[CAMP], { key: k1, order: order({ optionKey: 'day' }) })).result === 'INVALID', 'another order under the same key: INVALID');
   ok((await site.start(link[CAMP], { key: k1 })).url === o1.url, 'pay again: same page');
 
+  // 4b. A suspended school, organization or entitlement: the open order is still answered (to check or cancel it), but no
+  // processor page is handed out and no new order is taken.
+  for (const [label, table, column, id] of [['suspended school', 'schools', 'id', ids.school], ['suspended organization', 'organizations', 'id', ids.organization],
+    ['suspended entitlement', 'organization_entitlements', 'organization_id', ids.organization]]) {
+    await sql(`UPDATE hon.${table} SET status='SUSPENDED' WHERE ${column}=$1`, [id]);
+    const held = await site.start(link[CAMP], { key: k1 });
+    ok(held.result === 'ORDER' && held.order.orderId === o1.order.orderId && held.payState === 'OPEN' && held.url === null && held.expiresAt === null,
+      `${label}: the open order is answered with no page to pay on`);
+    ok((await site.status(link[CAMP], { key: k1 })).order.orderId === o1.order.orderId, `${label}: the order can still be checked`);
+    ok((await site.order(link[CAMP], { key: key(), order: order() })).result === 'INVALID', `${label}: no new orders`);
+    await sql(`UPDATE hon.${table} SET status='ACTIVE' WHERE ${column}=$1`, [id]);
+  }
+  ok((await site.start(link[CAMP], { key: k1 })).url === o1.url, 'active again: the same page to pay on');
+
   // 5. Places: the open order holds 2 of 3; a second order for 2 is FULL; the page shows 1 left.
   ok((await site.page(link[CAMP])).options.find((o) => o.key === 'week').placesLeft === 1, 'one place left');
   ok((await site.order(link[CAMP], { key: key(), order: order({ buyer: { name: 'Sam Lee', email: 'sam@example.test', mobile: '' } }) })).result === 'FULL', 'not enough places');
