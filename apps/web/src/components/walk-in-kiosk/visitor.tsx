@@ -209,6 +209,7 @@ export function WalkInVisitorView(p: VisitorViewProps): React.ReactElement {
         {WALKIN_HEARD_FROM.map(h => <option key={h} value={h}>{h ? t(`h${h}` as WalkInKey) : t('vHeardNone')}</option>)}</select></label>
       <label className={styles.check}><input type="checkbox" checked={d.marketingOptIn} onChange={e => set({ marketingOptIn: e.target.checked })}/>
         <span>{t('vNews')}<small>{t('vNewsHelp')}</small></span></label>
+      <p className={styles.hint}>{t('vEmailNote', { school: r.schoolName })}</p>
       {p.tried && !ok ? <p role="alert" className={styles.alert}>{t('vFix')}</p> : null}
       {nav('WHO', <button type="submit" className={styles.primary}>{t('vNext')}</button>)}</form></>, accent);
   }
