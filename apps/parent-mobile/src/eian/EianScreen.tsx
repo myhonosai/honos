@@ -6,7 +6,7 @@ import { useFamily } from '../family/family-data';
 import { FamilyGate } from '../screens/FamilyStates';
 import { Button } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
-import { answer, classify, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianTab } from './eian-engine';
+import { answer, resolve, NEEDS, SUGGESTIONS, type EianAnswer, type EianFacts, type EianMemory, type EianTab } from './eian-engine';
 import { askEianAi } from './eian-ai';
 import { EianVoiceContext, KEEP_TALKING, PHONE_VOICE_NOTE, SPEECH_SERVICE_NOTE, spokenText, TALK_LIMIT, TALK_PAUSED, VOICE_NOTE, voiceHints } from './voice';
 import { EIAN_STYLES, eianImage, STYLE_LABEL, type EianMood, type EianStyle } from './avatar';
@@ -42,6 +42,8 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
   const c = useColors();
   const insets = useSafeAreaInsets();
   const [turns, setTurns] = useState<Turn[]>([]);
+  /** What the last guided answer was about, for follow-up questions. In memory only; gone when Eian is closed. */
+  const memory = useRef<EianMemory | null>(null);
   const [draft, setDraft] = useState('');
   const [mood, setMood] = useState<EianMood>('ready');
   const [busy, setBusy] = useState(false);
@@ -107,7 +109,8 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
     setVoiceNote(null);
     quiet();
     setBusy(true);
-    const intent = classify(q);
+    const read_ = resolve(q, state.view, memory.current);
+    const intent = read_.intent;
     if (intent === 'help' && ai) {
       setMood('thinking');
       const key = pending.current?.question === q ? pending.current.key : newKey();
@@ -124,11 +127,12 @@ export function EianScreen({ onNavigate, initialStyle = 'chibi', focusTick = 0, 
     }
     const needs = NEEDS[intent];
     setMood(needs.length ? 'working' : 'thinking');
-    const facts: EianFacts = { journey: state.view, timeZone: state.timeZone, now: now() };
+    const facts: EianFacts = { journey: state.view, timeZone: state.timeZone, now: now(), last: memory.current };
     if (needs.includes('billing')) { const r = await api.billing(); facts.billing = r.ok ? r.data : null; }
     if (needs.includes('testing')) { const r = await api.testingStatus(); facts.testing = r.ok ? r.data : null; }
     if (needs.includes('messages')) { const r = await api.schoolMessages(); facts.messages = r.ok ? r.data : null; }
     const reply = answer(q, facts);
+    memory.current = read_.memory;
     setTurns(t => [...t.slice(-9), { id: ++counter.current, question: q, reply }]);
     setMood('speaking');
     setBusy(false);
