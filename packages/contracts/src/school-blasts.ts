@@ -19,7 +19,7 @@ export type SchoolBlastOutcome = typeof SCHOOL_BLAST_OUTCOMES[number];
 export const SCHOOL_BLAST_DELIVERY_STATES = ['WAITING', 'PENDING', 'SENDING', 'ACCEPTED', 'DELIVERED', 'BOUNCED', 'FAILED', 'SUPPRESSED', 'UNKNOWN', 'CANCELLED'] as const;
 export type SchoolBlastDeliveryState = typeof SCHOOL_BLAST_DELIVERY_STATES[number];
 export const SCHOOL_BLAST_LIMITS = {
-  name: 100, subject: 150, emailBody: 3500, smsBody: 1000, groups: 5, tags: 10, recipients: 2000, perDay: 10, scheduleDays: 60, list: 100,
+  name: 100, subject: 150, emailBody: 3500, smsBody: 1000, groups: 5, tags: 10, recipients: 2000, perDay: 10, scheduleDays: 60, list: 100, pictures: 10,
 } as const;
 export const SCHOOL_BLAST_COMMANDS = { save: 'marketing_blast.save', send: 'marketing_blast.send', cancel: 'marketing_blast.cancel' } as const;
 export const SCHOOL_BLAST_READ_COMMAND = 'marketing_blast.read';
@@ -78,6 +78,22 @@ const EDGE_SPACE = /^[ \t\n\r]|[ \t\n\r]$/;
 export function schoolBlastTextOk(v: unknown, min: number, max: number): v is string {
   return typeof v === 'string' && !EDGE_SPACE.test(v) && v.length >= min && v.length <= max && !CONTROL.test(v) && !/(\{\{|\}\})/.test(v.replace(MERGE, ''));
 }
+/**
+ * 0653: an email body may hold up to 10 picture lines, each a whole line {{picture:<assetId>}} (lower-case id). For the plain
+ * text rules each picture line counts as one character. Texts never hold pictures. Mirrors hon.school_blast_body_ok.
+ */
+const PICTURE_LINE = /^\{\{picture:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}\}$/;
+// Lines split on \n only, as the database does (a \r stays part of its line).
+const pictureMatches = (body: string) => body.split('\n').map(line => PICTURE_LINE.exec(line)).filter((m): m is RegExpExecArray => m !== null);
+export function schoolBlastPictureLine(assetId: string): string { return `{{picture:${assetId.toLowerCase()}}}`; }
+/** The distinct picture ids of a body's picture lines, in order of first use. */
+export function schoolBlastPictureIds(body: string): string[] { return [...new Set(pictureMatches(body).map(m => m[1]!))]; }
+export function schoolBlastPictureCount(body: string): number { return pictureMatches(body).length; }
+export function schoolBlastBodyOk(v: unknown, channel: SchoolBlastChannel): v is string {
+  if (channel === 'SMS') return schoolBlastTextOk(v, 1, SCHOOL_BLAST_LIMITS.smsBody);
+  return typeof v === 'string' && v.length <= SCHOOL_BLAST_LIMITS.emailBody && schoolBlastPictureCount(v) <= SCHOOL_BLAST_LIMITS.pictures
+    && schoolBlastTextOk(v.split('\n').map(line => PICTURE_LINE.test(line) ? 'x' : line).join('\n'), 1, SCHOOL_BLAST_LIMITS.emailBody);
+}
 export function schoolBlastNameOk(v: unknown): v is string {
   return typeof v === 'string' && !EDGE_SPACE.test(v) && v.length >= 1 && v.length <= SCHOOL_BLAST_LIMITS.name && !CONTROL.test(v) && !/[\n\r\t]/.test(v);
 }
@@ -102,7 +118,7 @@ export function validateSaveSchoolBlast(value: unknown): SaveSchoolBlastInput {
   if (!schoolBlastNameOk(row.name)) invalid();
   const channel = oneOf(row.channel, SCHOOL_BLAST_CHANNELS);
   if (channel === 'EMAIL' ? !schoolBlastTextOk(row.subject, 1, SCHOOL_BLAST_LIMITS.subject) || /[\n\r\t]/.test(row.subject as string) : row.subject !== null) invalid();
-  if (!schoolBlastTextOk(row.body, 1, schoolBlastBodyMax(channel))) invalid();
+  if (!schoolBlastBodyOk(row.body, channel)) invalid();
   return Object.freeze({ blastId, expectedVersion, name: row.name, channel, subject: row.subject as string | null, body: row.body, audience: audience(row.audience) });
 }
 export function validateSendSchoolBlast(value: unknown, now: number = Date.now()): SendSchoolBlastInput {
@@ -137,7 +153,7 @@ export function verifySchoolBlast(value: unknown): SchoolBlast {
   const row = record(value, BLAST_KEYS);
   const channel = oneOf(row.channel, SCHOOL_BLAST_CHANNELS);
   const status = oneOf(row.status, SCHOOL_BLAST_STATUSES);
-  if (!schoolBlastNameOk(row.name) || !schoolBlastTextOk(row.body, 1, schoolBlastBodyMax(channel))) invalid();
+  if (!schoolBlastNameOk(row.name) || !schoolBlastBodyOk(row.body, channel)) invalid();
   if (channel === 'EMAIL' ? !schoolBlastTextOk(row.subject, 1, SCHOOL_BLAST_LIMITS.subject) : row.subject !== null) invalid();
   const queuedAt = nullableInstant(row.queuedAt), cancelledAt = nullableInstant(row.cancelledAt), sendAt = nullableInstant(row.sendAt);
   const sent = status !== 'DRAFT' && queuedAt !== null;

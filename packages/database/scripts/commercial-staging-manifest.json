@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "04c458f56f8d0b256fc84345fdf49b8297efe8465e8fbe1e07fa02864a6fdab1",
+  "chainSha256": "c2bc3463875a82171f7c6b457de0b8725f22d271831fea679302cb1e2f43ca5b",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -869,6 +869,10 @@
     {
       "file": "0644_booking_invoice_security_hygiene.sql",
       "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
+    },
+    {
+      "file": "0653_school_blast_pictures.sql",
+      "sha256": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397"
     },
     {
       "file": "0655_mobile_handoff_single_use.sql",

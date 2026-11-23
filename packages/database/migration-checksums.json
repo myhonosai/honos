@@ -390,6 +390,7 @@
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
     "0624_person_membership_from_plan.sql": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1",
     "0627_public_checkout_orders.sql": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8",
-    "0628_school_media_library.sql": "d09b6edeadf89820b1fd6fe9cc75b3ad583be40cce15a66389892d7ccf14f78a"
+    "0628_school_media_library.sql": "d09b6edeadf89820b1fd6fe9cc75b3ad583be40cce15a66389892d7ccf14f78a",
+    "0653_school_blast_pictures.sql": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397"
   }
 }

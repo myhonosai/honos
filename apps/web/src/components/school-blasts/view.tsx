@@ -2,9 +2,10 @@ import React, { useRef } from 'react';
 import {
   SCHOOL_BLAST_AUDIENCE_GROUPS, SCHOOL_BLAST_DELIVERY_STATES, SCHOOL_BLAST_MERGE_FIELDS, SCHOOL_BLAST_OUTCOMES, schoolBlastBodyMax,
   type SchoolBlast, type SchoolBlastAudienceGroup, type SchoolBlastAudiencePreview, type SchoolBlastChannel, type SchoolBlastMergeField, type SchoolBlastSummary,
+  type SchoolMediaAsset,
 } from '@hon/contracts';
 import { blastCopy, type BlastCopy, type BlastOutcomeKind } from './copy';
-import type { BlastDraft, BlastField, BlastProblem } from './format';
+import { pictureIdsOf, type BlastDraft, type BlastField, type BlastProblem } from './format';
 import page from '../membership-changes/membership-changes.module.css';
 import styles from './school-blasts.module.css';
 
@@ -13,11 +14,16 @@ export type BlastRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } |
 export type PreviewRead = null | { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; preview: SchoolBlastAudiencePreview };
 export type BlastOutcome = null | Readonly<{ kind: BlastOutcomeKind }>;
 export type SendAsk = null | Readonly<{ sendAt: string | null; recipients: number }>;
+/** 0653: the school's ready pictures for the email picker (read with marketing.media.read). */
+export type PicturesRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; assets: readonly SchoolMediaAsset[] };
 export type SchoolBlastsViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   list: ListRead; selected: BlastRead; draft: BlastDraft | null; dirty: boolean; problems: readonly BlastProblem[];
   preview: PreviewRead; scheduleLocal: string; scheduleValid: boolean; ask: SendAsk;
   outcome: BlastOutcome; locked: boolean; canRetry: boolean; now?: number;
+  pictures?: PicturesRead; pickerOpen?: boolean;
+  onTogglePicker?: (() => void) | undefined;
+  onInsertPicture?: ((assetId: string, start: number, end: number) => void) | undefined; onRemovePicture?: ((assetId: string) => void) | undefined;
   onNew?: ((channel: SchoolBlastChannel) => void) | undefined; onOpen?: ((blastId: string) => void) | undefined;
   onEdit?: ((field: BlastField, value: string) => void) | undefined; onToggleGroup?: ((group: SchoolBlastAudienceGroup) => void) | undefined;
   onInsert?: ((target: 'subject' | 'body', field: SchoolBlastMergeField, start: number, end: number) => void) | undefined;
@@ -30,6 +36,49 @@ export type SchoolBlastsViewProps = Readonly<{
 const CALM: readonly BlastOutcomeKind[] = ['SAVING', 'SAVED', 'SENT', 'SCHEDULED', 'CANCELLED'];
 function when(language: string, iso: string): string {
   try { return new Date(iso).toLocaleString(language, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return iso; }
+}
+
+/** A body as text, with each picture line shown as its picture (or a plain marker when it is not in the library). */
+function BodyText({ body, pictures, c }: { body: string; pictures: PicturesRead | undefined; c: BlastCopy }): React.ReactElement {
+  const known = new Map((pictures?.state === 'READY' ? pictures.assets : []).map(a => [a.assetId, a]));
+  const out: React.ReactNode[] = [];
+  let text: string[] = [];
+  const flush = () => { if (text.length) { out.push(<span key={out.length}>{text.join('\n')}</span>); text = []; } };
+  for (const line of body.split('\n')) {
+    const id = pictureIdsOf(line)[0];
+    if (!id) { text.push(line); continue; }
+    flush();
+    const a = known.get(id);
+    out.push(a?.linkToken ? <img key={out.length} className={styles.picture} src={`/m/${a.linkToken}`} alt={a.title} referrerPolicy="no-referrer" loading="lazy" data-picture={id}/>
+      : <span key={out.length} className={page.meta} data-picture={id}>{c.pictureMarker}</span>);
+  }
+  flush();
+  return <>{out}</>;
+}
+
+function Pictures({ p, c, draft, body }: { p: SchoolBlastsViewProps; c: BlastCopy; draft: BlastDraft; body: React.RefObject<HTMLTextAreaElement | null> }): React.ReactElement {
+  const pictures = p.pictures ?? null;
+  const ready = pictures?.state === 'READY' ? pictures.assets.filter(a => a.state === 'READY' && a.linkToken) : [];
+  const byId = new Map(ready.map(a => [a.assetId, a]));
+  const used = pictureIdsOf(draft.body);
+  return <div className={page.field} role="group" aria-label={c.picturesTitle} data-testid="blast-pictures">
+    <span className={styles.tags}>{c.picturesTitle}:
+      <button type="button" className={styles.small} disabled={p.locked} aria-expanded={!!p.pickerOpen} onClick={() => p.onTogglePicker?.()} data-action="pictures">{c.insertPicture}</button></span>
+    {used.length ? <ul className={styles.used}>{used.map(id => { const a = byId.get(id); return <li key={id} data-used={id}>
+      {a ? <img className={styles.thumb} src={`/m/${a.linkToken}`} alt="" referrerPolicy="no-referrer" loading="lazy"/> : null}
+      <span>{a ? a.title : c.pictureMissing}</span>
+      <button type="button" className={styles.small} disabled={p.locked} onClick={() => p.onRemovePicture?.(id)} data-remove-picture={id}>{c.removePicture}</button>
+    </li>; })}</ul> : null}
+    {p.pickerOpen ? pictures?.state === 'READY' ? ready.length
+      ? <ul className={styles.picker} data-testid="blast-picker">{ready.map(a => <li key={a.assetId}>
+        <button type="button" className={styles.pick} disabled={p.locked} onMouseDown={(e) => e.preventDefault()}
+          onClick={() => p.onInsertPicture?.(a.assetId, body.current?.selectionStart ?? draft.body.length, body.current?.selectionEnd ?? draft.body.length)} data-pick={a.assetId}>
+          <img className={styles.thumb} src={`/m/${a.linkToken}`} alt="" referrerPolicy="no-referrer" loading="lazy"/><span>{a.title}</span></button>
+      </li>)}</ul>
+      : <p className={page.meta}>{c.noPictures}</p>
+      : <p className={page.meta}>{pictures?.state === 'DENIED' ? c.picturesDenied : pictures?.state === 'UNAVAILABLE' ? c.picturesUnavailable : c.reading}</p> : null}
+    <span className={page.meta}>{c.picturesHint}</span>
+  </div>;
 }
 
 function List({ p, c, blasts, current }: { p: SchoolBlastsViewProps; c: BlastCopy; blasts: readonly SchoolBlastSummary[]; current: string | null }): React.ReactElement {
@@ -85,7 +134,7 @@ function Composer({ p, c, draft }: { p: SchoolBlastsViewProps; c: BlastCopy; dra
       <textarea ref={body} rows={draft.channel === 'EMAIL' ? 10 : 5} value={draft.body} disabled={p.locked} onFocus={() => { target.current = 'body'; }}
         onChange={(e) => p.onEdit?.('body', e.target.value)} data-field="body"/>
       <p className={styles.counter} data-over={used > max ? 'true' : undefined} aria-live="polite">{c.characters(used, max)}</p></label>
-    {draft.channel === 'SMS' ? <p className={page.meta}>{c.smsNote}</p> : null}
+    {draft.channel === 'EMAIL' ? <Pictures p={p} c={c} draft={draft} body={body}/> : <p className={page.meta}>{c.smsNote}</p>}
     <fieldset className={page.form} disabled={p.locked}>
       <legend>{c.audienceTitle}</legend>
       <div className={page.grid}>{SCHOOL_BLAST_AUDIENCE_GROUPS.map(g => <label key={g} className={page.check}>
@@ -117,7 +166,7 @@ function SendPanel({ p, c }: { p: SchoolBlastsViewProps; c: BlastCopy }): React.
       {preview.preview.sample ? <div className={styles.sample} data-testid="blast-sample">
         <span className={page.meta}>{c.sample(preview.preview.sample.firstName)}</span>
         {preview.preview.sample.subject !== null ? <strong>{preview.preview.sample.subject}</strong> : null}
-        <span>{preview.preview.sample.body}</span>
+        <BodyText body={preview.preview.sample.body} pictures={p.pictures} c={c}/>
       </div> : <p className={page.warnText}>{c.nobody}</p>}
       {preview.preview.sample && !p.dirty ? <>
         <h3>{c.sendTitle}</h3>
@@ -159,7 +208,7 @@ function Detail({ p, c, blast }: { p: SchoolBlastsViewProps; c: BlastCopy; blast
     </span>
     <div className={styles.sample}>
       {blast.subject !== null ? <strong>{blast.subject}</strong> : null}
-      <span>{blast.body}</span>
+      <BodyText body={blast.body} pictures={p.pictures} c={c}/>
     </div>
     {blast.outcomes ? <dl className={styles.counts}>{SCHOOL_BLAST_OUTCOMES.map(o => <div key={o}><dt>{c.outcomes[o]}</dt><dd>{blast.outcomes![o].toLocaleString(p.language)}</dd></div>)}</dl> : null}
     {blast.deliveries ? <>
