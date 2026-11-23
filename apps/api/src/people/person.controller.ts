@@ -32,7 +32,7 @@ export class PersonController {
     const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'people.create');
     if (!scope || scope.organizationId !== organizationId) throw new ForbiddenException('HON person creation is not authorized for this school.');
     const requestId = randomUUID();
-    const context: CommandContext = { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey, source: 'HUMAN_UI' };
+    const context: CommandContext & { externalSubject: string } = { organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId, correlationId: requestId, idempotencyKey, source: 'HUMAN_UI', externalSubject: identity.externalSubject };
     const result = await this.people.create(context, input); response.status(result.replayed ? HttpStatus.OK : HttpStatus.CREATED);
     return { data: result.person, meta: { requestId, correlationId: requestId, replayed: result.replayed } };
   }

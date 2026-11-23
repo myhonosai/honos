@@ -88,6 +88,10 @@ it('public page: no credentials, closed answers, same text for every unavailable
   expect(await publicReferralApi.submit('0123456789abcdef', { name: 'Alex', website: 'spam', acknowledged: true }, key, signal())).toBe('invalid');
   const page = renderToStaticMarkup(<PublicReferralView read={got} values={{}} acknowledged={false} busy={false} status="" done={false} />);
   expect(page).toContain('Dojo'); expect(page).toContain('Free trial week'); expect(page).toContain('Age group');
+  // IC1 (0634): the friend's page submits the school's lead form, so it shows the same email wording and an unticked Text me box.
+  expect(page).toContain('may email you about your enquiry'); expect(page).toContain('Reply STOP to opt out');
+  expect(page).not.toContain('not consent to marketing'); expect(page).not.toMatch(/name="text-opt-in"[^>]*checked/);
+  expect(renderToStaticMarkup(<PublicReferralView read={got} values={{}} acknowledged={false} textOptIn busy={false} status="" done={false} />)).toMatch(/name="text-opt-in"[^>]*checked/);
   for (const r of ['GONE', 'UNAVAILABLE'] as const) expect(renderToStaticMarkup(<PublicReferralView read={r} values={{}} acknowledged={false} busy={false} status="" done={false} />)).toContain('available right now');
   expect(resultText('accepted')).toMatch(/Thanks/);
 });
