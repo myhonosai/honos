@@ -11,7 +11,7 @@ import { conversationsCopy, type ConversationsCopy } from '../conversations/copy
 import { panelText } from './panel-copy';
 import styles from './people.module.css';
 
-/** The server already narrows the list to the person (0532); this drops anything else that would ever come back. */
+/** The server already narrows the list to the person (0657); this drops anything else that would ever come back. */
 export function personConversations(rows: readonly ConversationRow[], personId: string): ConversationRow[] {
   const id = personId.toLowerCase();
   return rows.filter(r => r.personId?.toLowerCase() === id);
@@ -70,9 +70,9 @@ export function CardTextsView(props: CardTextsViewProps): React.ReactElement {
         {c.unread ? <> · <span className={styles.count}>{copy.newBadge(c.unread)}</span></> : null}</span>
       <small>{c.lastMessage ? `${c.lastMessage.direction === 'INBOUND' ? copy.theyWrote : copy.youReplied} ${c.lastMessage.preview} · ` : ''}{when(language, c.lastMessageAt)}</small>
     </button></li>)}</ul>
-    {state.more ? <p className={styles.meta}><a href="/staff/conversations">{panelText(language, 'textsMore')}</a></p> : null}</>;
+    {state.more ? <p className={styles.meta}><a href="/staff/texts">{panelText(language, 'textsMore')}</a></p> : null}</>;
   return <section className={styles.subsection} aria-label={panelText(language, 'textsTitle')} data-testid="card-texts">
-    <div className={styles.choice}><h3>{panelText(language, 'textsTitle')}</h3><a className={styles.secondary} href="/staff/conversations">{panelText(language, 'textsOpen')}</a></div>
+    <div className={styles.choice}><h3>{panelText(language, 'textsTitle')}</h3><a className={styles.secondary} href="/staff/texts">{panelText(language, 'textsOpen')}</a></div>
     {props.error ? <p className={styles.notice} role="alert">{props.error}</p> : null}
     {props.notice ? <p className={styles.notice} role="status">{props.notice}</p> : null}
     {body}
@@ -86,7 +86,7 @@ function problemText(problem: unknown, copy: ConversationsCopy): string {
 }
 
 /**
- * This person's texts (0364 + 0532) inside the contact card. The list asks the server for this person's conversations
+ * This person's texts (0364 + 0657) inside the contact card. The list asks the server for this person's conversations
  * of any status; the server checks conversation.read on every read and conversation.manage on mark read and reply, and the
  * 0243 worker re-checks consent, quiet hours and the sender before anything is sent. A reply whose outcome is unknown keeps
  * its key, so sending the same text again repeats the same command once.

@@ -917,7 +917,11 @@ export interface CreateCommunicationMessageInput {
   channel: CommunicationMessageChannel;
   content: string;
   scheduledAt?: string | undefined;
+  /** EMAIL only (TE1): the subject the email is sent with; without it the adapter uses the school's standard subject. */
+  emailSubject?: string | undefined;
 }
+/** The longest staff email subject (0423 column check). */
+export const COMMUNICATION_EMAIL_SUBJECT_MAX = 150;
 
 /** Queueing is a separate human confirmation against the current consent record. */
 export interface QueueCommunicationMessageInput {
@@ -934,6 +938,7 @@ export interface CommunicationMessageSummary {
   scheduledAt?: string | undefined;
   createdByPrincipalId: string;
   queuedByPrincipalId?: string | undefined;
+  emailSubject?: string | undefined;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -1103,8 +1108,11 @@ export * from './paper-imports.js';
 export * from './person-photos.js';
 export * from './attendance-cards.js';
 export * from './class-series.js';
+export * from './calendar-cards.js';
+export * from './calendar-settings.js';
 export * from './school-events.js';
 export * from './tuition-payments.js';
+export * from './simple-invoices.js';
 export * from './school-payments.js';
 export * from './school-checkout.js';
 export * from './school-pay-methods.js';
@@ -1123,6 +1131,8 @@ export * from './family-messages.js';
 export * from './school-conversations.js';
 export * from './conversation-ai.js';
 export * from './contact-message-history.js';
+export * from './school-message-history.js';
+export * from './school-message-templates.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
@@ -1134,19 +1144,39 @@ export * from './custom-tools.js';
 export * from './school-social.js';
 export * from './school-social-posts.js';
 export * from './school-number-orders.js';
+export * from './school-a2p-registrations.js';
 export * from './school-social-inbox.js';
 export * from './school-website.js';
 export * from './school-website-templates.js';
+export * from './pos.js';
+export * from './school-website-ai.js';
 export * from './school-contacts.js';
 export * from './school-contact-card.js';
 export * from './school-contact-admin.js';
 export * from './school-pay-charges.js';
+export * from './school-pay-once.js';
 export * from './shopify.js';
+export * from './shopify-merch-ai.js';
+export * from './shopify-commerce-review.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';
 export * from './membership-agreement.js';
 export * from './school-social-ads.js';
 export * from './staff-shifts.js';
 export * from './staff-time-clock.js';
+export * from './school-blasts.js';
 export * from './eian.js';
+export * from './parent-invoice-pay.js';
+export * from './parent-app-curriculum.js';
+export * from './rank-setup.js';
+export * from './school-announcements.js';
+export * from './parent-push.js';
+export * from './parent-pro-shop.js';
+export * from './family-referrals.js';
+export * from './family-checkout.js';
+export * from './public-checkout.js';
+export * from './parent-attendance-streaks.js';
+export * from './journey-recommendations.js';
 export * from './person-membership-start.js';
+export * from './creative-designs.js';
+export * from './staff-school-choice.js';

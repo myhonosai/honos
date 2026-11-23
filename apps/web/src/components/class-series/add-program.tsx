@@ -59,8 +59,8 @@ export const programApi = {
 export type ProgramApi = typeof programApi;
 
 const en = {
-  open: 'Add a program', title: 'Add a program', name: 'Program name', help: 'A program groups classes, for example "Little Dragons" or "Adult Karate". Every class series belongs to one.',
-  save: 'Add program', cancel: 'Cancel', tryAgain: 'Try again', sending: 'Saving. Keep this page open.', done: '"{name}" was added. You can now create a class series for it.',
+  open: 'Add a program', title: 'Add a program', name: 'Program name', help: 'A program groups classes, for example "Little Dragons" or "Adult Karate". Every roster belongs to one.',
+  save: 'Add program', cancel: 'Cancel', tryAgain: 'Try again', sending: 'Saving. Keep this page open.', done: '"{name}" was added. You can now create a roster for it.',
   SESSION: 'Your session ended. Sign in again; nothing was saved by this page after that.',
   DENIED: 'You are not allowed to add programs at this school. Nothing changed.',
   EXISTS: 'A program with that name already exists at this school. Nothing changed.',
@@ -71,8 +71,8 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
-  open: '프로그램 추가', title: '프로그램 추가', name: '프로그램 이름', help: '프로그램은 수업을 묶습니다. 예: "리틀 드래곤", "성인 가라테". 모든 반복 수업은 하나의 프로그램에 속합니다.',
-  save: '프로그램 추가', cancel: '취소', tryAgain: '다시 시도', sending: '저장 중입니다. 이 페이지를 열어 두세요.', done: '"{name}" 프로그램을 추가했습니다. 이제 이 프로그램의 반복 수업을 만들 수 있습니다.',
+  open: '프로그램 추가', title: '프로그램 추가', name: '프로그램 이름', help: '프로그램은 수업을 묶습니다. 예: "리틀 드래곤", "성인 가라테". 모든 로스터는 하나의 프로그램에 속합니다.',
+  save: '프로그램 추가', cancel: '취소', tryAgain: '다시 시도', sending: '저장 중입니다. 이 페이지를 열어 두세요.', done: '"{name}" 프로그램을 추가했습니다. 이제 이 프로그램의 로스터를 만들 수 있습니다.',
   SESSION: '세션이 종료되었습니다. 다시 로그인하세요. 그 이후 이 페이지에서 저장된 것은 없습니다.',
   DENIED: '이 학교에서 프로그램을 추가할 권한이 없습니다. 변경된 내용은 없습니다.',
   EXISTS: '이 학교에 같은 이름의 프로그램이 이미 있습니다. 변경된 내용은 없습니다.',
@@ -82,8 +82,8 @@ const ko: Record<Key, string> = {
   list: '프로그램: {names}',
 };
 const es: Record<Key, string> = {
-  open: 'Añadir un programa', title: 'Añadir un programa', name: 'Nombre del programa', help: 'Un programa agrupa clases, por ejemplo "Pequeños Dragones" o "Karate para adultos". Cada serie de clases pertenece a uno.',
-  save: 'Añadir programa', cancel: 'Cancelar', tryAgain: 'Intentar de nuevo', sending: 'Guardando. Mantén esta página abierta.', done: 'Se añadió "{name}". Ya puedes crear una serie de clases para él.',
+  open: 'Añadir un programa', title: 'Añadir un programa', name: 'Nombre del programa', help: 'Un programa agrupa clases, por ejemplo "Pequeños Dragones" o "Karate para adultos". Cada lista de clase pertenece a uno.',
+  save: 'Añadir programa', cancel: 'Cancelar', tryAgain: 'Intentar de nuevo', sending: 'Guardando. Mantén esta página abierta.', done: 'Se añadió "{name}". Ya puedes crear una lista de clase para él.',
   SESSION: 'Tu sesión terminó. Inicia sesión de nuevo; esta página no guardó nada después de eso.',
   DENIED: 'No tienes permiso para añadir programas en esta escuela. No cambió nada.',
   EXISTS: 'Ya existe un programa con ese nombre en esta escuela. No cambió nada.',

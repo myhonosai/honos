@@ -154,3 +154,22 @@
 .fileLabel { display: inline-flex; align-items: center; cursor: pointer; }
 .fileLabel input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .fileLabel:focus-within { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; border-radius: 10px; }
+/* Minimizable contact card sections (owner, 2026-11-21). */
+.fold { display: grid; gap: 6px; min-width: 0; padding: 8px 10px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; }
+.foldHead { margin: 0; font-size: 14px; }
+.foldButton { display: flex; width: 100%; min-height: 36px; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; border: 0; background: transparent; color: #eef6fc; font: inherit; font-weight: 800; text-align: start; cursor: pointer; }
+.foldButton:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; border-radius: 6px; }
+.foldButton > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
+.foldIcon { display: inline-grid; width: 24px; height: 24px; place-items: center; border-radius: 6px; background: #15283c; font-size: 16px; line-height: 1; }
+.foldBody { display: grid; gap: 8px; min-width: 0; }
+.foldBody[hidden] { display: none; }
+/* Edit profile pop-up, opened from the button next to the contact's name. */
+.headTools { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.editProfile { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px; border: 1px solid var(--hon-accent, #8de3d8); border-radius: 10px; background: #123047; color: #eef6fc; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.editProfile:focus-visible, .dialogClose:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: start center; overflow-y: auto; padding: 32px 16px; background: rgb(3 10 18 / 72%); }
+.dialog { display: grid; gap: 12px; width: min(720px, 100%); min-width: 0; padding: 18px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: #0b1828; box-shadow: 0 24px 60px rgb(0 0 0 / 45%); }
+.dialogHead { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.dialogHead h2 { margin: 0; font-size: 19px; }
+.dialogClose { min-width: 40px; min-height: 40px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px; background: #10243a; color: #eef6fc; font: inherit; font-size: 18px; cursor: pointer; }
+@media (max-width: 520px) { .backdrop { padding: 12px 8px; } .dialog { padding: 14px; } }

@@ -1,9 +1,11 @@
 import {
-  validateMoveCrmLeadStageInput, validateSaveCrmPipelineStagesInput, verifyCrmLeadStageMoveReceipt, verifyCrmPipelineBoard,
+  validateCrmPipelineTemplateInput, validateMoveCrmLeadStageInput, validateSaveCrmPipelineStagesInput, verifyCrmLeadStageMoveReceipt, verifyCrmPipelineBoard,
   verifyCrmPipelineStagesReceipt, type CrmBoardStatus, type CrmLeadStageMoveReceipt, type CrmPipelineBoard, type CrmPipelineStagesReceipt,
-  type SaveCrmPipelineStagesInput,
+  type CrmPipelineTemplateCode, type SaveCrmPipelineStagesInput,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
+import { StarterRefusedError, addLeadApi } from '../leads/add-lead-http';
+import { LeadsError } from '../leads/http';
 
 /**
  * 0417 lead pipeline board calls. The school is the one the shell verified; ids are selectors only and the API re-derives
@@ -52,7 +54,7 @@ export async function readBoard(scope: BoardScope, pipelineId: string | null, st
   } catch { throw new BoardError('UNAVAILABLE'); }
 }
 
-export type PreparedCommand = Readonly<{ path: string; key: string; body: string; command: 'crm.lead.stage.move' | 'crm.pipeline.stages.save'; target: string; stageId?: string }>;
+export type PreparedCommand = Readonly<{ path: string; key: string; body: string; command: 'crm.lead.stage.move' | 'crm.pipeline.stages.save' | 'crm-pipeline-template'; target: string; stageId?: string }>;
 
 export function prepareMove(scope: BoardScope, leadId: string, stageId: string, expectedVersion: number, key: string): PreparedCommand {
   if (!UUID.test(key)) throw new BoardCommandError('REJECTED');
@@ -66,7 +68,14 @@ export function prepareSave(scope: BoardScope, pipelineId: string, input: SaveCr
   return Object.freeze({ path: `${base(scope)}/pipelines/${id(pipelineId)}/stages`, key, body: JSON.stringify(checked), command: 'crm.pipeline.stages.save', target: id(pipelineId) });
 }
 
-async function send(request: PreparedCommand): Promise<unknown> {
+/** Adds a school pipeline template (server-defined stages) as another pipeline. */
+export function prepareTemplate(scope: BoardScope, template: CrmPipelineTemplateCode, key: string): PreparedCommand {
+  if (!UUID.test(key)) throw new BoardCommandError('REJECTED');
+  const input = validateCrmPipelineTemplateInput({ template });
+  return Object.freeze({ path: `${base(scope)}/pipelines/templates`, key, body: JSON.stringify(input), command: 'crm-pipeline-template', target: input.template });
+}
+
+async function send(request: PreparedCommand, okStatuses: readonly number[] = [200]): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(request.path, { method: 'POST', mode: 'same-origin', credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
@@ -81,7 +90,7 @@ async function send(request: PreparedCommand): Promise<unknown> {
     throw new BoardCommandError(response.status === 409 || response.status === 404 ? 'CONFLICT' : 'REJECTED', code);
   }
   try {
-    if (response.status !== 200 || response.redirected || !JSON_TYPE.test(response.headers.get('content-type') ?? '')) throw new Error('shape');
+    if (!okStatuses.includes(response.status) || response.redirected || !JSON_TYPE.test(response.headers.get('content-type') ?? '')) throw new Error('shape');
     const raw = await response.text(); if (raw.length > 200000) throw new Error('size');
     const body: unknown = JSON.parse(raw);
     if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).sort().join(',') !== 'data,meta') throw new Error('shape');
@@ -95,13 +104,45 @@ export async function submitMove(request: PreparedCommand): Promise<CrmLeadStage
   catch { throw new BoardCommandError('UNCERTAIN'); }
 }
 
+/** The new (or the school's existing) pipeline of that template: only its id and name are read here; the board read verifies the rest. */
+export async function submitTemplate(request: PreparedCommand): Promise<{ id: string; name: string }> {
+  const data = await send(request, [200, 201]);
+  const value = data && typeof data === 'object' && !Array.isArray(data) ? data as { id?: unknown; name?: unknown } : {};
+  if (typeof value.id !== 'string' || !UUID.test(value.id) || typeof value.name !== 'string' || !value.name.trim()) throw new BoardCommandError('UNCERTAIN');
+  return { id: value.id.toLowerCase(), name: value.name };
+}
+
+/** What a template answer means for the picker; only an unknown outcome keeps the press's key. */
+export type TemplateShow = 'DENIED' | 'FAILED' | 'UNKNOWN' | 'LIMIT';
+export function templateOutcome(error: unknown): { key: 'keep' | 'clear'; show: TemplateShow | null } {
+  if (!(error instanceof BoardCommandError) || error.kind === 'UNCERTAIN') return { key: 'keep', show: 'UNKNOWN' };
+  if (error.kind === 'SESSION') return { key: 'clear', show: null };
+  if (error.kind === 'DENIED') return { key: 'clear', show: 'DENIED' };
+  return { key: 'clear', show: error.code === 'CRM_PIPELINE_LIMIT' ? 'LIMIT' : 'FAILED' };
+}
+
 export async function submitSave(request: PreparedCommand): Promise<CrmPipelineStagesReceipt> {
   const data = await send(request);
   try { return verifyCrmPipelineStagesReceipt(data, { pipelineId: request.target }); }
   catch { throw new BoardCommandError('UNCERTAIN'); }
 }
 
+/**
+ * What a starter-stages answer means for the board: only an unknown outcome keeps the press's key for the same retry;
+ * a refusal, denial or ended session drops it. A session end shows nothing here because the shell takes over.
+ */
+export type StarterShow = 'DENIED' | 'FAILED' | 'UNKNOWN';
+export function starterOutcome(error: unknown): { key: 'keep' | 'clear'; show: StarterShow | null } {
+  if (error instanceof StarterRefusedError) return { key: 'clear', show: 'FAILED' };
+  if (error instanceof LeadsError && error.kind === 'DENIED') return { key: 'clear', show: 'DENIED' };
+  if (error instanceof LeadsError && error.kind === 'SESSION') return { key: 'clear', show: null };
+  return { key: 'keep', show: 'UNKNOWN' };
+}
+
 export interface BoardApi {
   read: typeof readBoard; submitMove: typeof submitMove; submitSave: typeof submitSave;
+  /** The existing server-defined starter-stages command (crm.pipeline.manage), so stages can be set up before any lead. */
+  setUpStarter: typeof addLeadApi.setUpStarter;
+  submitTemplate: typeof submitTemplate;
 }
-export const boardApi: BoardApi = { read: readBoard, submitMove, submitSave };
+export const boardApi: BoardApi = { read: readBoard, submitMove, submitSave, setUpStarter: addLeadApi.setUpStarter, submitTemplate };

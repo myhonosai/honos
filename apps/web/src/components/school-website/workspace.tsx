@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { applyWebsiteEdit, buildWebsiteFromTemplate, suggestWebsiteSlug, type SchoolWebsite, type WebsiteDocument, type WebsiteEdit } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
@@ -7,6 +7,8 @@ import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/pri
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { WebsiteError, keepForRetry, loadWebsiteChoices, websiteApi, type WebsiteApi, type WebsiteChoices, type WebsiteCommand, type WebsiteScope } from './http';
 import { WebsiteView, type Device, type Outcome, type ReadState, type StartForm } from './view';
+import { WebsiteAiPanel } from './ai-panel';
+import { websiteAiApi, type WebsiteAiApi } from './ai-http';
 
 /** A command whose outcome is not known: the exact input and key, in memory only, so Try again replays it. */
 type Pending = Readonly<{ key: string; command: WebsiteCommand; scope: WebsiteScope; input: unknown }>;
@@ -19,7 +21,7 @@ const NO_CHOICES: WebsiteChoices = { forms: [], bookings: [] };
  * tab, a school change or a session end hide the page and drop unsaved edits and any kept command. Every command answer
  * is followed by a fresh read.
  */
-export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices = loadWebsiteChoices }: { api?: WebsiteApi; choices?: typeof loadWebsiteChoices }): React.ReactElement {
+export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices = loadWebsiteChoices, aiApi = websiteAiApi }: { api?: WebsiteApi; choices?: typeof loadWebsiteChoices; aiApi?: WebsiteAiApi }): React.ReactElement {
   const locale = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -32,6 +34,9 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
   const [pageSlug, setPage] = useState('home'), [sectionId, setSection] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<null | 'unpublish' | number>(null), [note, setNote] = useState('');
   const [outcome, setOutcome] = useState<Outcome>(null), [lock, setLock] = useState<Lock>('NONE'), [refresh, setRefresh] = useState(0);
+  // WB5: while Marcus is asked, or a suggestion is applied or dismissed, the editor's own commands wait.
+  const [aiBusy, setAiBusy] = useState(false);
+  const scope = useMemo(() => (orgId && schoolId ? { organizationId: orgId, schoolId } : null), [orgId, schoolId]);
   const gen = useRef(0), privacy = useRef(0), mounted = useRef(false), sending = useRef(false), pending = useRef<Pending | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; gen.current++; pending.current = null; }; }, []);
 
@@ -84,26 +89,29 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
   }, [api, showSite]);
 
   const run = useCallback((command: WebsiteCommand, input: unknown) => {
-    if (lock !== 'NONE' || pending.current || sending.current || !orgId || !schoolId) return;
+    if (lock !== 'NONE' || aiBusy || pending.current || sending.current || !orgId || !schoolId) return;
     pending.current = { key: globalThis.crypto.randomUUID(), command, scope: { organizationId: orgId, schoolId }, input };
     void send();
-  }, [lock, orgId, schoolId, send]);
+  }, [lock, aiBusy, orgId, schoolId, send]);
 
   const site = read.state === 'READY' ? read.website : null;
   const dirty = !!site && !!draft && (JSON.stringify(draft) !== JSON.stringify(site.draft) || name !== site.name);
   const edit = useCallback((change: WebsiteEdit) => {
-    if (lock !== 'NONE') return;
+    if (lock !== 'NONE' || aiBusy) return;
     if (!draft) return;
     let next: WebsiteDocument;
     try { next = applyWebsiteEdit(draft, change); } catch { setOutcome({ kind: 'EDIT_REFUSED' }); return; }
     setDraft(next); setOutcome(null);
-  }, [lock, draft]);
+  }, [lock, aiBusy, draft]);
 
   return <div key={shell.phase} data-shell-private="">
     <WebsiteView language={locale.preferences.language} locale={locale.formattingLocale} mode={shell.mode}
       waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} hasSchool={!!schoolId} schoolName={schoolName || name}
       read={read} draft={draft} name={name} dirty={dirty} start={start} choices={choices} tab={tab} device={device} pageSlug={pageSlug} sectionId={sectionId}
-      confirming={confirming} note={note} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
+      confirming={confirming} note={note} outcome={outcome} locked={lock !== 'NONE' || aiBusy} canRetry={lock === 'KEPT'}
+      aiPanel={site && draft && scope && read.state === 'READY' ? <WebsiteAiPanel key={site.id} scope={scope} site={site} dirty={dirty} busy={lock !== 'NONE'}
+        language={locale.preferences.language} device={device} schoolName={schoolName || name} api={aiApi} onBusy={setAiBusy}
+        onApplied={(next) => { showSite(next); setOutcome(null); }} /> : null}
       origin={typeof window === 'undefined' ? '' : window.location.origin}
       on={{
         refresh: () => setRefresh((n) => n + 1), start: setStart,

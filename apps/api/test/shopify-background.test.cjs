@@ -183,5 +183,13 @@ test('0449 background sync is on only with the worker login and a valid poll int
     assert.equal((await new ShopifyService(db, null).overview({ honIdentity: { externalSubject: 'x' } }, SCHOOL)).autoSync, false, 'never without the app');
     delete process.env.HON_SHOPIFY_SYNC_POLL_SECONDS;
     assert.equal((await new ShopifyService(db, fakeApp()).overview({ honIdentity: { externalSubject: 'x' } }, SCHOOL)).autoSync, false);
+    // HON's sign-up link for a school with no store: only an https link on Shopify's own hosts, else none.
+    const link = async (v) => { if (v === undefined) delete process.env.HON_SHOPIFY_NEW_STORE_URL; else process.env.HON_SHOPIFY_NEW_STORE_URL = v;
+      return (await new ShopifyService(db, fakeApp()).overview({ honIdentity: { externalSubject: 'x' } }, SCHOOL)).newStoreUrl; };
+    assert.equal(await link(undefined), null);
+    assert.equal(await link(' https://shopify.pxf.io/synthetic '), 'https://shopify.pxf.io/synthetic');
+    assert.equal(await link('https://www.shopify.com/free-trial?ref=synthetic'), 'https://www.shopify.com/free-trial?ref=synthetic');
+    for (const bad of ['http://www.shopify.com/x', 'https://shopify.com.example.org/x', 'https://notshopify.com/x', 'https://a@shopify.com/x', 'https://shopify.com:8443/x', 'javascript:alert(1)', ''])
+      assert.equal(await link(bad), null, bad);
   } finally { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); }
 });

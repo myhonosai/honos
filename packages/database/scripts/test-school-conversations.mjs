@@ -149,7 +149,7 @@ try{
  assert.deepEqual((await list(a,{search:'ada'})).conversations.map(x=>x.conversationId),[convAda]);
  assert.deepEqual((await list(a,{search:'7777'})).conversations.map(x=>x.conversationId),[convNew]);
  assert.equal((await list(a,{status:'CLOSED'})).conversations.length,0);
- // 0532: one person's conversations for the contact card (any status); a person with none, or of another school, gets nothing.
+ // 0657: one person's conversations for the contact card (any status); a person with none, or of another school, gets nothing.
  assert.deepEqual((await list(a,{personId:ada,status:'ALL'})).conversations.map(x=>x.conversationId),[convAda]);
  assert.deepEqual((await list(a,{personId:twinA,status:'ALL'})).conversations,[]);
  assert.deepEqual((await list(b,{personId:ada,status:'ALL'})).conversations,[]);

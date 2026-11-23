@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 
 const { Client } = pg;
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for CRM trial appointment integrity tests.');
@@ -690,6 +691,146 @@ try {
     );
   }
 
+  // 0629 authority hold (launch-readiness P1). (a) A trial command that has passed its re-check and then waits on its
+  // idempotency reservation holds its authority rows: a grant revocation, a school suspension and an entitlement change
+  // each wait for it (probed with a short lock_timeout) instead of committing underneath it. (b) A revocation or school
+  // suspension that is already pending when the command reaches its hold makes the hold wait; once it commits the command
+  // is refused with 403 and writes nothing. Without the hold, (a) lets the revocation commit and (b) schedules the trial.
+  {
+    const waitForBlocked = async (what) => {
+      const deadline = Date.now() + 20000;
+      for (;;) {
+        const waiting = await administrator.query("SELECT count(*)::integer AS n FROM pg_locks WHERE NOT granted AND locktype IN ('transactionid', 'tuple')");
+        if (waiting.rows[0].n >= 1) return;
+        if (Date.now() > deadline) throw new Error(`The trial command never reached ${what}.`);
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    };
+    const settle = (promise) => promise.then((value) => ({ status: 'fulfilled', value }), (reason) => ({ status: 'rejected', reason }));
+    const countsFor = async (key) => (await administrator.query(`
+      SELECT
+        (SELECT count(*)::integer FROM hon.crm_appointments WHERE organization_id = $1) AS appointments,
+        (SELECT count(*)::integer FROM hon.audit_events WHERE organization_id = $1) AS audits,
+        (SELECT count(*)::integer FROM hon.outbox_events WHERE organization_id = $1) AS outbox,
+        (SELECT count(*)::integer FROM hon.idempotency_records WHERE organization_id = $1 AND idempotency_key = $2 AND request_fingerprint <> 'hold-proof-blocker') AS receipts`,
+    [ids.organization, key])).rows[0];
+    const probe = async (label, sql, values) => {
+      const prober = new Client(connectionOptions(process.env.DATABASE_URL));
+      await prober.connect();
+      try {
+        await prober.query('BEGIN');
+        await prober.query("SET LOCAL lock_timeout = '750ms'");
+        try {
+          await prober.query(sql, values);
+        } catch (error) {
+          if (error?.code === '55P03') return;
+          throw error;
+        }
+        throw new Error(`${label} committed underneath a trial command that holds its authority (no 0629 hold).`);
+      } finally {
+        await prober.query('ROLLBACK').catch(() => {});
+        await prober.end();
+      }
+    };
+
+    // (a) Held during the idempotency wait.
+    const heldKey = `crm-trial-hold-idempotency-wait-${randomUUID()}`;
+    const before = await countsFor(heldKey);
+    const blocker = new Client(connectionOptions(process.env.DATABASE_URL));
+    await blocker.connect();
+    let waited;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query(
+        `INSERT INTO hon.idempotency_records (organization_id, school_id, principal_id, idempotency_key, request_fingerprint, status, expires_at)
+         VALUES ($1, $2, $3, $4, 'hold-proof-blocker', 'IN_PROGRESS', now() + interval '1 hour')`,
+        [ids.organization, ids.schoolA, ids.principal, heldKey],
+      );
+      const pending = settle(controller.schedule(
+        ids.organization, ids.schoolA, ids.leadA4, heldKey, inputFor(laterStart, laterEnd), request, responseCapture(),
+      ));
+      await waitForBlocked('the idempotency reservation wait');
+      await probe('A role grant revocation', 'DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]);
+      await probe('A school suspension', "UPDATE hon.schools SET status = 'SUSPENDED' WHERE id = $1", [ids.schoolA]);
+      await probe('An entitlement suspension', "UPDATE hon.organization_entitlements SET status = 'SUSPENDED' WHERE organization_id = $1", [ids.organization]);
+      // The blocker commits a different command under the same key, so the waiting command ends as key reuse with no effect.
+      await blocker.query('COMMIT');
+      waited = await pending;
+    } finally {
+      await blocker.query('ROLLBACK').catch(() => {});
+      await blocker.end();
+    }
+    assert(waited.status === 'rejected' && waited.reason?.getStatus?.() === 409 && waited.reason.getResponse?.()?.code === 'IDEMPOTENCY_KEY_REUSED',
+      `The held trial command did not end as idempotency key reuse after its wait: ${waited.status} ${waited.reason?.getStatus?.() ?? ''}`);
+    const afterHeld = await countsFor(heldKey);
+    assert(JSON.stringify(afterHeld) === JSON.stringify(before), 'The held trial command left an appointment, audit, outbox or receipt.');
+    await administrator.query('DELETE FROM hon.idempotency_records WHERE organization_id = $1 AND idempotency_key = $2', [ids.organization, heldKey]);
+
+    // (b) A pending revocation or suspension makes the hold wait; once committed, the command is refused.
+    const pendingCases = [
+      { label: 'revocation', change: ['DELETE FROM hon.principal_role_grants WHERE principal_id = $1', [ids.principal]],
+        restore: () => administrator.query(
+          `INSERT INTO hon.principal_role_grants (organization_id, school_id, principal_id, role_id, granted_by_principal_id)
+           VALUES ($1, $2, $3, $4, $3)`, [ids.organization, ids.schoolA, ids.principal, ids.ownerRole]) },
+      { label: 'school suspension', change: ["UPDATE hon.schools SET status = 'SUSPENDED' WHERE id = $1", [ids.schoolA]],
+        restore: () => administrator.query("UPDATE hon.schools SET status = 'ACTIVE' WHERE id = $1", [ids.schoolA]) },
+    ];
+    for (const pendingCase of pendingCases) {
+      const key = `crm-trial-hold-pending-${pendingCase.label.replace(' ', '-')}-${randomUUID()}`;
+      const start = await countsFor(key);
+      const changer = new Client(connectionOptions(process.env.DATABASE_URL));
+      await changer.connect();
+      let result;
+      try {
+        await changer.query('BEGIN');
+        await changer.query(...pendingCase.change);
+        const pending = settle(controller.schedule(
+          ids.organization, ids.schoolA, ids.leadA4, key, inputFor(laterStart, laterEnd), request, responseCapture(),
+        ));
+        await waitForBlocked(`the authority hold behind a pending ${pendingCase.label}`);
+        await changer.query('COMMIT');
+        result = await pending;
+      } finally {
+        await changer.query('ROLLBACK').catch(() => {});
+        await changer.end();
+      }
+      assert(result.status === 'rejected' && result.reason?.getStatus?.() === 403,
+        `A trial command was not refused after a ${pendingCase.label} committed during its authority hold: ${result.status} ${result.reason?.getStatus?.() ?? ''}`);
+      assert(JSON.stringify(await countsFor(key)) === JSON.stringify(start),
+        `A trial command refused after a pending ${pendingCase.label} left an appointment, audit, outbox or receipt.`);
+      await pendingCase.restore();
+    }
+
+    // The hold refuses a subject that is not the transaction's own principal, and a non-human command, before any lock.
+    await runtime.query('BEGIN');
+    try {
+      await runtime.query(
+        `SELECT set_config('app.hon_organization_id', $1, true), set_config('app.hon_school_id', $2, true),
+                set_config('app.hon_principal_id', $3, true), set_config('app.hon_principal_type', 'HUMAN_USER', true),
+                set_config('app.hon_source', 'HUMAN_UI', true)`,
+        [ids.organization, ids.schoolA, ids.principal],
+      );
+      await runtime.query('SAVEPOINT other_subject');
+      await expectDatabaseError('42501', () => runtime.query('SELECT hon.hold_crm_trial_authority($1)', [staffSubject]),
+        'The authority hold accepted another person\'s subject.');
+      await runtime.query('ROLLBACK TO SAVEPOINT other_subject');
+      await runtime.query("SELECT set_config('app.hon_source', 'AI_AGENT', true)");
+      await expectDatabaseError('42501', () => runtime.query('SELECT hon.hold_crm_trial_authority($1)', [externalSubject]),
+        'The authority hold accepted a non-human command.');
+      await runtime.query('ROLLBACK');
+    } catch (error) {
+      await runtime.query('ROLLBACK');
+      throw error;
+    }
+
+    // The canonical 011 section for 0629 passes against this fixture (body, definer posture, search path, EXECUTE-only ACL).
+    const runtimeRole = (await runtime.query('SELECT current_user AS role')).rows[0].role;
+    const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+    const section = verify.split('-- CRM trial authority hold exact verification (0629')[1]?.split('-- End CRM trial authority hold exact verification.')[0];
+    assert(section, 'The 011 section for the 0629 authority hold is missing.');
+    await administrator.query(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', runtimeRole));
+  }
+
   // Revocation DURING the outcome row-lock wait: another session holds the trial row lock, an authorized outcome
   // command passes the controller and waits on it, the role grant is revoked, the lock is released. The command must
   // be refused with 403 and leave the appointment, audit, outbox and idempotency state unchanged.
@@ -1156,7 +1297,7 @@ try {
     && evidence.rows[0]?.ai_usage === 0 && evidence.rows[0]?.action_requests === 0,
   'Trial outcome mutated booking, student/family, enrollment, membership, CRM activity, or AI/action state.');
 
-  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), suspended-school refusal with records preserved (including suspension during the outcome lock wait) and restoration, organization/school ACTIVE->SUSPENDED refusal on the lead-list and trial-read routes including suspension or revocation committed between controller authorization and the query, verified-owner 90-day CRM read-only access during a recorded past-due suspension (audited, exact school, no mutations, revocation and entitlement-change races, server-side expiry, restoration), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
+  console.log('Verified one active trial per lead (new-key, cross-tab and concurrent duplicates refused with the existing trial; past unclosed trials do not block), exact-key replay before the clock rule, direct-human reconciliation reads, permission revocation (including revocation during the scheduling lock wait and the outcome row-lock wait), the 0629 authority hold (revocation, school suspension and entitlement change wait behind a command blocked on its idempotency reservation; a pending revocation or school suspension refuses the command once committed; foreign subject and non-human command refused), suspended-school refusal with records preserved (including suspension during the outcome lock wait) and restoration, organization/school ACTIVE->SUSPENDED refusal on the lead-list and trial-read routes including suspension or revocation committed between controller authorization and the query, verified-owner 90-day CRM read-only access during a recorded past-due suspension (audited, exact school, no mutations, revocation and entitlement-change races, server-side expiry, restoration), CRM trial appointment scheduling/outcome permission scope, forced RLS, exact runtime grants, locked tenant isolation, strict outcome validation, human-UI boundary, stale-version and terminal-state handling, idempotent replay, atomic audit/v1 outbox evidence, and no lead/pipeline/booking/student/family/enrollment/membership/AI/action mutation.');
 } finally {
   try {
     await database.onModuleDestroy();

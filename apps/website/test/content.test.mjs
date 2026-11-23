@@ -58,6 +58,11 @@ test('marks every AI specialist as launching, since all eight answer in the app'
   assert.match(agentCard('hon'), /launching with hon os/i);
 });
 
+test('orders the AI team with HON first and Kai last', () => {
+  const order = [...html.matchAll(/<article[^>]*data-agent="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ['hon', 'chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena', 'kai']);
+});
+
 test('marks features that are not built as coming soon', () => {
   for (const soon of [/Autopay[^<]*<em>soon/, /AI images and video<em>soon/, /lead ads[^<]*<em>soon/i, /Earn rewards for every school you refer[^<]*<em>soon/, /Event and sale-day slot booking<em>soon/]) {
     assert.match(html, soon);
@@ -112,10 +117,10 @@ test('has the basics a public page needs', () => {
   assert.match(html, /<meta name="description" content="[^"]{40,}"/);
   assert.match(html, /<meta name="robots" content="\{\{ROBOTS\}\}"/);
   for (const file of ['/fonts/geist-latin-400-normal.woff2']) assert.ok(existsSync(join(src, file)), `${file} exists`);
-  for (const face of readFileSync(join(src, 'styles.css'), 'utf8').matchAll(/url\("\/(fonts\/[^"]+)"\)/g)) {
+  for (const face of (readFileSync(join(src, 'styles.css'), 'utf8') + readFileSync(join(src, 'story.css'), 'utf8')).matchAll(/url\("\/(fonts\/[^"]+)"\)/g)) {
     assert.ok(existsSync(join(src, face[1])), `${face[1]} exists`);
   }
-  for (const file of ['styles.css', 'site.js', 'flow.js', 'favicon.svg']) {
+  for (const file of ['styles.css', 'story.css', 'boot.js', 'loader.js', 'story.js', 'site.js', 'favicon.svg']) {
     assert.ok(html.includes(file), `${file} is referenced`);
     assert.ok(existsSync(join(src, file)), `${file} exists`);
   }
@@ -185,7 +190,8 @@ test('photos are small WebP files with phone-sized copies', () => {
     assert.ok(entries.some(([, w]) => parseInt(w, 10) <= 800), `${srcAttr} has a phone-sized copy`);
     assert.match(img, /\ssizes="[^"]+"/, `${srcAttr} tells the browser its display size`);
   }
-  const jpgs = readdirSync(join(src, 'assets')).filter((f) => /\.jpe?g$/i.test(f));
+  // The link-preview card is a JPEG on purpose (every share preview reads it); no photo is.
+  const jpgs = readdirSync(join(src, 'assets')).filter((f) => /\.jpe?g$/i.test(f) && f !== 'og-hon-os-1200.jpg');
   assert.deepEqual(jpgs, [], 'no full-size JPEGs left in the site');
 });
 
@@ -197,12 +203,22 @@ test('the headline font is preloaded and no unused font is declared', () => {
   assert.doesNotMatch(css, /geist-latin-700/, 'unused Geist bold is not declared');
 });
 
-test('the background animation does less work on phones', () => {
-  const flow = readFileSync(join(src, 'flow.js'), 'utf8');
-  assert.match(flow, /N=small\?(\d+):200/, 'strand count is set per screen size');
-  assert.ok(Number(flow.match(/N=small\?(\d+):200/)[1]) <= 60, 'phones draw at most 60 strands');
-  assert.ok(Number(flow.match(/SEG=small\?(\d+):70/)[1]) <= 30, 'phones use at most 30 segments per strand');
-  assert.match(flow, /D=small\?1:/, 'phones draw the canvas at 1x pixel ratio');
-  assert.match(flow, /FRAME=small\?\d+:0/, 'phones cap the frame rate');
-  assert.match(flow, /visibilityState/, 'animation pauses while the page is hidden');
+test('the scroll story keeps to the site rules: no inline script, no blob media, works without motion', () => {
+  const boot = readFileSync(join(src, 'boot.js'), 'utf8');
+  const loader = readFileSync(join(src, 'loader.js'), 'utf8');
+  const story = readFileSync(join(src, 'story.js'), 'utf8');
+  const css = readFileSync(join(src, 'story.css'), 'utf8');
+  assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)[^>]*>/, 'every script is a file (CSP script-src self)');
+  assert.match(html, /<head>[\s\S]*<script src="\/boot\.js"><\/script>[\s\S]*<\/head>/, 'boot.js runs before first paint');
+  assert.doesNotMatch(loader + story, /createObjectURL|blob:/, 'no blob: media (CSP media falls back to self)');
+  assert.match(boot, /prefers-reduced-motion: reduce/, 'reduced motion shows every scene finished');
+  assert.match(boot, /setTimeout\([\s\S]*remove\('loading'\)/, 'page is never left covered if loader.js fails');
+  assert.match(loader, /12000/, 'loading screen lifts within 12 seconds');
+  assert.match(story, /classList\.contains\('story'\)/, 'scenes animate only when boot.js allowed motion');
+  assert.match(css, /#loader\{[^}]*display:none/, 'loading screen is hidden without JavaScript');
+  assert.match(css, /html\.story \.scene\{height:var\(--len/, 'scenes are tall only in story mode');
+  for (const v of ['story-door-1280.mp4', 'story-door-720.mp4']) {
+    assert.ok(html.includes(`/assets/${v}`), `${v} is used`);
+    assert.ok(statSync(join(src, 'assets', v)).size <= 4 * 1024 * 1024, `${v} is at most 4 MB`);
+  }
 });

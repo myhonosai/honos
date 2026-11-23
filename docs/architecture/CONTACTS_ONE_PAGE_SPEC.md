@@ -20,7 +20,7 @@ separate page.
 1. **Contacts tab row.** Search, Family access, Conversations and Family messages leave the Contacts tab row and the
    menu. Their routes stay (hidden, as `h()` entries) so old links and bookmarks still work. People stays and is the
    Contacts home. The other Contacts pages (achievements, retention, imports, staff pages) are unchanged.
-2. **Inboxes stay reachable.** The People header has two links: "Texts inbox" (`/staff/conversations`) and "Family
+2. **Inboxes stay reachable.** The People header has two links: "Texts inbox" (`/staff/texts`) and "Family
    messages inbox" (`/staff/family-messages`), for working through unanswered messages across all contacts. No counts
    are read for these links (no extra reads).
 3. **Slide-out card.** Clicking a contact opens the card panel.
@@ -32,10 +32,12 @@ separate page.
    - Below 900px wide the card is always full screen and the toggle is hidden.
    - The open person and tab are in the URL (`?person=&tab=`, from #399's `card-link.ts`), updated with
      `history.replaceState`, so a reload or shared link reopens the same card. Closing removes them.
-4. **Card tabs.** Overview · Details · Family · Messages · Membership · Billing · Appointments · Tasks · Timeline.
-   - **Details** (new): the existing edit form (name, email, phone), contact consents, child's birth date, and
-     Delete / Restore / Merge. These were below the card; they move inside it. Behaviour is unchanged, including
-     "Try again", the save lock, and the merge opening the kept person with its notice above the tabs.
+4. **Card tabs.** Overview · Family · Messages · Membership · Billing · Appointments · Tasks · Timeline.
+   - **Edit profile** (owner, 2026-11-21, #573): the edit form (name, email, phone), contact consents and child's birth
+     date open in a pop-up from the button beside the name; Delete / Restore / Merge sit under the card. Behaviour is
+     unchanged, including "Try again", the save lock, and the merge opening the kept person with its notice above the
+     tabs. If the card cannot be read, the forms stay inline in the panel. (Slice A first had a Details tab; it was
+     replaced by this pop-up when merging main.)
    - **Family**: members as today, then a **Family app access** section per family: the invitations for that family
      with Revoke / End, and an Invite form (email, access level, hours), using the existing family-access controller
      and endpoints with the shell's verified school and the family fixed by the card. No typed IDs.
@@ -54,7 +56,7 @@ separate page.
 - The person/family ids used by the card come from the server's card read, never typed.
 - Family messages: the school inbox read (max 200 threads, `FAMILY_MESSAGE_LIMITS.inbox`) is filtered in the browser
   to the card's family ids. Threads of other families are never rendered.
-- Slice B, migration **0532**: `hon.read_school_conversations` accepts an optional `personId` (uuid) filter, ANDed
+- Slice B, migration **0657**: `hon.read_school_conversations` accepts an optional `personId` (uuid) filter, ANDed
   with the existing filters, same caller check. The API controller accepts `personId` on the list query; the
   contract validates it as a lowercase UUID. The card asks for `status: 'ALL'` explicitly; the function's default
   (OPEN) is unchanged.
@@ -70,17 +72,17 @@ separate page.
 
 ## Slices
 
-- **A (frontend only, stacked on #399):** panel with Side/Full/Close + remembered mode + URL; Details tab; Family app
+- **A (frontend only, stacked on #399):** panel with Side/Full/Close + remembered mode + URL; Edit profile pop-up (from #573); Family app
   access section; Family messages section; Texts counts + inbox link; menu/tab change; inbox links; en/ko/es copy.
-- **B (0532 + API + frontend, stacked on A):** `personId` filter; Texts section inline with reply.
+- **B (0657 + API + frontend, stacked on A):** `personId` filter; Texts section inline with reply.
 
 ## Tests
 
 - `people-card-panel-ui.test.tsx`: opening a contact shows the panel in Side mode; toggle to Full hides the list and is
   remembered; storage throwing falls back to Side; Close and Escape close it and clear `?person`; narrow screen forces
   Full; another contact swaps the card.
-- Details tab holds the edit form, consents, birth date and actions; save/try-again and merge-opens-kept-person still
-  work (existing people tests moved to open the Details tab).
+- Edit profile (beside the name) opens the edit form, consents and birth date; delete/merge sit under the card;
+  save/try-again and merge-opens-kept-person still work.
 - Family messages section shows only the card's families' threads; reply sends with the thread's newest message id.
 - Family access section lists only that family's invitations; invite sends the fixed family id.
 - Catalog test: Search, Family access, Conversations and Family messages are hidden routes still owned by Contacts.

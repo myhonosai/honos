@@ -10,7 +10,7 @@ import { MembershipActivationHumanUiGuard } from './membership-activation-human-
 import type { MembershipLifecycleContext } from './membership.service.js';
 import { PersonMembershipStartService } from './person-membership-start.service.js';
 
-/** M-B (0531): the read and the start are separate browser commands, so neither replays as the other. */
+/** M-B (0624): the read and the start are separate browser commands, so neither replays as the other. */
 @Injectable()
 export class PersonMembershipStartReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = PERSON_MEMBERSHIP_START_READ_COMMAND;
@@ -28,7 +28,7 @@ function idempotencyKey(key: string | undefined): string {
 }
 
 /**
- * M-B (0531): New membership and Renew on a student's contact card. Route identifiers are never authority: the scope is
+ * M-B (0624): New membership and Renew on a student's contact card. Route identifiers are never authority: the scope is
  * resolved from the verified session for billing.membership.create, and the database re-proves it live.
  */
 @Controller('organizations/:organizationId/schools/:schoolId/billing/people/:personId')
