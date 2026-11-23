@@ -69,3 +69,12 @@ it('has the new words in every language and keeps minimized sections in this bro
   const src = readFileSync(new URL('../src/components/people/fold.tsx', import.meta.url), 'utf8');
   expect(src).toContain('localStorage'); expect(src).toMatch(/catch \{/); expect(src).not.toMatch(/fetch\(/);
 });
+
+it('puts Send agreement in the membership tab as its own fold, only when the page offers it', () => {
+  const html = renderToStaticMarkup(<ContactCard language="en" card={card} initialTab="membership" agreementSlot={() => <span data-testid="agreement-panel">send</span>}/>);
+  expect(html).toMatch(/aria-expanded="true"[^>]*>.*Membership agreement/);
+  expect(html).toContain('data-testid="agreement-panel"');
+  expect(html.indexOf('Memberships')).toBeLessThan(html.indexOf('Membership agreement'));
+  expect(renderToStaticMarkup(<ContactCard language="en" card={card} initialTab="membership" agreementSlot={() => null}/>)).not.toContain('Membership agreement');
+  expect(renderToStaticMarkup(<ContactCard language="ko" card={card} initialTab="membership" agreementSlot={() => <span>x</span>}/>)).toContain('회원 계약서');
+});

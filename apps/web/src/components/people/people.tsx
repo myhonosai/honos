@@ -255,6 +255,11 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
   // New membership and Renew (0624) at the top of the membership tab; the server decides who can have which plan.
+  // 0499: send the family a link to sign the membership agreement, in the card's membership tab (students only; its own read decides access).
+  const agreementRecord = record.state === 'READY' && selectedId && lower(record.record.personId) === lower(selectedId) && record.record.student ? record.record.personId : null;
+  const agreementSlot = useCallback(() => selection && agreementRecord ? <AgreementLinkPanel key={`agreement:${lower(selection.schoolId)}:${agreementRecord}`}
+    language={preferences.language} schoolId={selection.schoolId} personId={agreementRecord}/> : null,
+  [selection?.schoolId, agreementRecord, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
   const membershipTools = useCallback((items: readonly MembershipItem[]) => selection && selectedId ? <NewMembershipTools key={`${lower(selection.schoolId)}:${selectedId}`}
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
     onChanged={onMembershipChanged}/> : null,
@@ -284,8 +289,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
     {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
     <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
-    {/* 0499: send the family a link to sign the membership agreement (students only; its own read decides access). */}
-    {r.student ? <AgreementLinkPanel key={`agreement:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} personId={r.personId}/> : null}
   </> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -293,6 +296,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} agreementSlot={agreementSlot} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

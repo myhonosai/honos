@@ -29,8 +29,10 @@ export type MembershipItem = SchoolContactCard['membership'] extends infer M ? M
 export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
 /** The People page puts New membership and Renew here, at the top of the membership tab (shown even before the first membership). */
 export type MembershipToolsSlot = (items: readonly MembershipItem[]) => React.ReactNode;
-export function ContactCard({ language, card, initialTab = 'overview', membershipSlot, membershipTools, onEditProfile }: { language: string; card: CardState; initialTab?: CardTab;
-  membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
+/** The People page puts Send agreement here, in the membership tab (students only; the panel's own read decides access). */
+export type AgreementSlot = () => React.ReactNode;
+export function ContactCard({ language, card, initialTab = 'overview', membershipSlot, membershipTools, agreementSlot, onEditProfile }: { language: string; card: CardState; initialTab?: CardTab;
+  membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined; agreementSlot?: AgreementSlot | undefined;
   /** Opens the Edit profile pop-up; absent while the person's record cannot be edited or read yet. */
   onEditProfile?: (() => void) | undefined }): React.ReactElement | null {
   const [tab, setTab] = useState<CardTab>(initialTab);
@@ -53,12 +55,12 @@ export function ContactCard({ language, card, initialTab = 'overview', membershi
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
         onClick={() => setTab(k)}>{t(k)}{k === 'messages' && c.messages.allowed ? <span className={styles.count}>{c.messages.direct + (c.messages.family ?? 0)}</span> : null}</button>)}
     </div>
-    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot} tools={membershipTools}/></div>
+    <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slot={membershipSlot} tools={membershipTools} agreement={agreementSlot}/></div>
   </article>;
 }
 
-function Body({ language, c, tab, t, slot, tools }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined;
-  tools?: MembershipToolsSlot | undefined }): React.ReactElement {
+function Body({ language, c, tab, t, slot, tools, agreement }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slot?: MembershipSlot | undefined;
+  tools?: MembershipToolsSlot | undefined; agreement?: AgreementSlot | undefined }): React.ReactElement {
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -88,12 +90,15 @@ function Body({ language, c, tab, t, slot, tools }: { language: string; c: Schoo
       if (!c.tasks.items.length) return none;
       return <Fold id="tasks" title={t('tasks')} count={c.tasks.items.length}><ul className={styles.plain}>{c.tasks.items.map((a, i) => <li key={i}>
         <strong>{a.title}</strong> · {t(`priority_${a.priority}` as CardKey)}{a.dueAt ? ` · ${t('due', { date: day(language, a.dueAt) })}` : ''}</li>)}</ul></Fold>;
-    case 'membership':
+    case 'membership': {
       if (!c.membership.allowed) return denied;
+      const sign = agreement ? agreement() : null;
       return <>{tools ? <Fold id="membership-start" title={t('foldStart')}>{tools(c.membership.items)}</Fold> : null}
         <Fold id="membership-list" title={t('foldMemberships')} count={c.membership.items.length}>{c.membership.items.length ? <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
         <strong>{m.planName ?? m.planCode}</strong> · {codeLabel(language, m.state)}
-        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul> : none}</Fold></>;
+        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul> : none}</Fold>
+        {sign ? <Fold id="membership-agreement" title={t('foldAgreement')}>{sign}</Fold> : null}</>;
+    }
     case 'billing':
       if (!c.billing.allowed) return denied;
       return <>
