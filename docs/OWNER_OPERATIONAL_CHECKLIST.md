@@ -1,6 +1,8 @@
 # Owner operational checklist
 
-**Current checkpoint:** accepted main is `685e23ef43cd9a1f16333d144d5bf05f6a90822d` (#143 and #147 merged), with 201 locked migrations through 0209. #146 is the separate read-only Account & Usage increment awaiting final integrated verification, independent review and owner merge approval. **Do not merge verification-only #145.**
+> **Historical.** The current release state (main, migrations, deployed version, hosting, launch readiness) is in [`docs/operations/RELEASE_RECORD.md`](operations/RELEASE_RECORD.md). The checkpoint and journey notes below are kept as the record of the 2026-11 owner-acceptance round and are not current.
+
+**Checkpoint at the time (historical):** accepted main was `685e23ef43cd9a1f16333d144d5bf05f6a90822d` (#143 and #147 merged), with 201 locked migrations through 0209. #146 is the separate read-only Account & Usage increment awaiting final integrated verification, independent review and owner merge approval. **Do not merge verification-only #145.**
 
 Use the canonical [A–G owner journeys in issue #131](https://github.com/myhonosai/honos/issues/131#owner-seven-journey-acceptance-checklist). [Manus's real-environment report](https://github.com/myhonosai/honos/issues/131#issuecomment-6677969278) verifies normal OIDC entry and school isolation (A), plus CRM intake/persistence only (part of B). The approved temporary INTERNAL_TESTING grants apply to two synthetic schools, expire 2026-11-13T05:01:36.519Z and grant no AI credits. B follow-up/trial/close and C–G remain unaccepted. The operator boxes below are blank until the owner completes those actions; CI or independent QA is not owner-device acceptance.
 

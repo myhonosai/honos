@@ -95,8 +95,10 @@
     "bootstrap:hq-owner": "tsc -p tsconfig.json && node scripts/bootstrap-hq-owner.mjs",
     "db:status": "tsc -p tsconfig.json && node scripts/migration-status.mjs",
     "db:test-restore-drill": "node scripts/test-restore-drill.mjs",
+    "db:test-restore-fresh-target-drill": "node scripts/test-restore-fresh-target-drill.mjs",
     "check:migrations": "node scripts/verify-migrations.mjs",
     "db:test-crm-school-clock": "node scripts/test-crm-school-clock-integrity.mjs",
+    "db:test-invoice-insert-guard-roles": "node scripts/test-invoice-insert-guard-roles.mjs",
     "db:record-migration-checksums": "node scripts/verify-migrations.mjs --record-new",
     "db:test-staff-roles": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-role-integrity.mjs",
     "db:test-ai-plans": "pnpm --filter @hon/contracts build && pnpm --filter @hon/config build && pnpm --filter @hon/domain build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-ai-invocation-plans.mjs",
@@ -173,6 +175,7 @@
     "db:test-person-photo": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-person-photo-integrity.mjs",
     "db:test-pos": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-integrity.mjs",
     "db:test-pos-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-shopify-integrity.mjs",
+    "db:test-checkout-links": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-checkout-links-integrity.mjs",
     "db:test-pos-shopify-orders": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-shopify-orders-integrity.mjs",
     "db:test-creative-designs": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-creative-designs-integrity.mjs",
     "db:test-attendance-cards": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-cards-integrity.mjs",
@@ -190,6 +193,7 @@
     "db:test-school-location": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-location-integrity.mjs",
     "db:test-staff-shifts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-shifts-integrity.mjs",
     "db:test-staff-time-clock": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-time-clock-integrity.mjs",
+    "db:test-school-blasts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-blasts-integrity.mjs",
     "db:test-school-demo-data": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-demo-data-integrity.mjs",
     "db:test-lead-pipeline-board": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-lead-pipeline-board-integrity.mjs",
     "db:test-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-shopify-commerce-integrity.mjs",
@@ -206,7 +210,8 @@
     "db:test-school-pay-autopay": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-pay-autopay-integrity.mjs",
     "db:test-school-checkouts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-checkouts-integrity.mjs",
     "db:test-maya-at-risk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-maya-at-risk-integrity.mjs",
-    "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"
+    "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs",
+    "db:test-mobile-handoff-single-use": "node scripts/test-mobile-handoff-single-use.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

@@ -72,6 +72,7 @@ if (runtimeRoleName !== 'hon_runtime') {
 
 const expectedRlsTables = [
   'hq_entitlement_requests', 'hq_entitlement_audit', 'hq_entitlement_outbox',
+  'mobile_handoff_redemptions',
   ...ownerLaunchTables,
   ...curriculumLibraryTables,
   ...retentionAcknowledgementTables,
@@ -220,12 +221,15 @@ const expectedRlsTables = [
   'pos_shopify_orders',
   'school_creative_designs',
   'school_creative_design_photos',
+  'school_checkout_links',
   'school_locations',
   'school_location_versions',
   'school_demo_data_sets',
   'school_demo_data_rows',
   'staff_shifts',
   'staff_time_entries',
+  'school_blasts',
+  'school_blast_recipients',
   'staff_time_entry_revisions',
   'staff_timesheet_weeks',
   'biometric_jurisdiction_profiles',
@@ -595,6 +599,18 @@ try {
   `, [expectedRlsTables])).rows.map((row) => row.relname);
   if (missingTables.length || unforced.length || unexpected.length) {
     throw new Error(`RLS verification failed. Missing: ${missingTables.join(', ') || 'none'}; disabled/unforced: ${unforced.join(', ') || 'none'}; untracked RLS tables: ${unexpected.join(', ') || 'none'}.`);
+  }
+
+  // 0655: the mobile hand-off ledger is deny-all (no policies) with no table privilege for anyone but its owner;
+  // hon_runtime reaches it only through hon.redeem_mobile_handoff.
+  const handoffLedger = (await client.query(`
+    SELECT (SELECT count(*) FROM pg_policies WHERE schemaname='hon' AND tablename='mobile_handoff_redemptions')::int AS policies,
+      (SELECT count(*) FROM pg_class c, aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+        WHERE c.oid='hon.mobile_handoff_redemptions'::regclass AND a.grantee <> c.relowner)::int AS grants,
+      has_function_privilege($1, 'hon.redeem_mobile_handoff(text,uuid,timestamptz)', 'EXECUTE') AS runtime_execute
+  `, [runtimeRoleName])).rows[0];
+  if (handoffLedger.policies !== 0 || handoffLedger.grants !== 0 || handoffLedger.runtime_execute !== true) {
+    throw new Error('Mobile hand-off ledger (0655) requires deny-all forced RLS, no table grants and runtime EXECUTE on hon.redeem_mobile_handoff only.');
   }
 
   const appendOnlyPolicies = (await client.query(`

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { StaffApi, StaffFailureState, StaffSchool } from './api/client';
 import type { SessionStore } from './session/session-store';
@@ -20,8 +20,8 @@ type View_ =
   | { kind: 'loading' }
   | { kind: 'signed-out'; message?: string }
   | { kind: 'failed'; state: Exclude<StaffFailureState, 'signed-out'> }
-  | { kind: 'choose'; schools: StaffSchool[] }
-  | { kind: 'home'; school: StaffSchool; schools: StaffSchool[] | null };
+  | { kind: 'choose'; schools: StaffSchool[]; generation: number }
+  | { kind: 'home'; school: StaffSchool; schools: StaffSchool[] | null; generation: number };
 
 
 function Button({ label, onPress, quiet }: { label: string; onPress: () => void; quiet?: boolean }) {
@@ -53,17 +53,30 @@ const FAILED: Record<Exclude<StaffFailureState, 'signed-out'>, { title: string; 
  */
 export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppProps) {
   const [view, setView] = useState<View_>({ kind: 'loading' });
+  /**
+   * Session ownership. Every sign-out and every (re)load starts a new generation, and the screens of one generation
+   * may only end their own generation. A slow request started under session A that answers 401 after the person
+   * signed out and back in as B therefore cannot wipe B's session (security review 2026-11-22, staff mobile).
+   */
+  const generation = useRef(0);
+  const next = () => ++generation.current;
 
   const load = useCallback(async () => {
+    const mine = next();
     setView({ kind: 'loading' });
-    if (!(await session.token())) { setView({ kind: 'signed-out' }); return; }
+    const token = await session.token();
+    if (mine !== generation.current) return;
+    if (!token) { setView({ kind: 'signed-out' }); return; }
     const result = await api.whereIWork();
+    if (mine !== generation.current) return;
     if (!result.ok) {
-      if (result.state === 'signed-out') { await session.clear(); setView({ kind: 'signed-out' }); return; }
+      if (result.state === 'signed-out') { next(); await session.clear(); setView({ kind: 'signed-out' }); return; }
       setView({ kind: 'failed', state: result.state });
       return;
     }
-    setView(result.data.kind === 'one' ? { kind: 'home', school: result.data.school, schools: null } : { kind: 'choose', schools: result.data.schools });
+    setView(result.data.kind === 'one'
+      ? { kind: 'home', school: result.data.school, schools: null, generation: mine }
+      : { kind: 'choose', schools: result.data.schools, generation: mine });
   }, [api, session]);
 
   useEffect(() => { void load(); }, [load]);
@@ -74,8 +87,15 @@ export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppPr
     if (outcome === 'signed-in') await load();
     else setView({ kind: 'signed-out', message: outcome === 'failed' ? 'Sign-in did not finish. Please try again.' : undefined });
   };
-  const signOut = async () => { await session.clear(); setView({ kind: 'signed-out' }); };
-  const ended = useCallback(() => { void session.clear().then(() => setView({ kind: 'signed-out', message: 'Your session ended. Please sign in again.' })); }, [session]);
+  const signOut = async () => { next(); await session.clear(); setView({ kind: 'signed-out' }); };
+  /** "Your session ended", bound to one generation: a no-op once that generation is over. */
+  const endedFor = useCallback((owner: number) => () => {
+    if (owner !== generation.current) return;
+    next();
+    void session.clear().then(() => setView({ kind: 'signed-out', message: 'Your session ended. Please sign in again.' }));
+  }, [session]);
+  const homeGeneration = view.kind === 'home' ? view.generation : -1;
+  const ended = useMemo(() => endedFor(homeGeneration), [endedFor, homeGeneration]);
 
   let body: React.ReactNode;
   switch (view.kind) {
@@ -108,7 +128,7 @@ export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppPr
           <Text style={s.title}>Which school are you working at?</Text>
           {view.schools.map(school => (
             <Pressable key={school.schoolId} accessibilityRole="button" accessibilityLabel={school.schoolName ?? 'Your school'} style={s.row}
-              onPress={() => setView({ kind: 'home', school, schools: view.schools })}>
+              onPress={() => setView({ kind: 'home', school, schools: view.schools, generation: view.generation })}>
               <Text style={s.rowText}>{school.schoolName ?? 'Your school'}</Text>
               <Text style={s.rowArrow}>›</Text>
             </Pressable>
@@ -123,11 +143,11 @@ export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppPr
         <View style={s.stack}>
           <View style={s.topRow}>
             <Image source={require('../assets/hon-mark.png')} style={s.mark} accessibilityLabel="HON" />
-            {schools ? <Pill label="Switch school" onPress={() => setView({ kind: 'choose', schools })} /> : null}
+            {schools ? <Pill label="Switch school" onPress={() => setView({ kind: 'choose', schools, generation: view.generation })} /> : null}
           </View>
           <Text style={s.kicker}>Today</Text>
           <Text style={s.hero}>{view.school.schoolName ?? 'Your school'}</Text>
-          <Today key={view.school.schoolId} api={api} school={view.school} newKey={newKey} onSignedOut={ended} />
+          <Today key={`${view.generation}:${view.school.schoolId}`} api={api} school={view.school} newKey={newKey} onSignedOut={ended} />
           <View style={s.panel}>
             <Text style={s.panelTitle}>HON and your AI team</Text>
             <Text style={s.panelBody}>HON, Kai and the AI team come in the next update. Your owner chooses which ones you can use.</Text>
