@@ -396,6 +396,7 @@
     "0637_creative_cost_basis.sql": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e",
     "0638_eian_natural_voice.sql": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d",
     "0639_alex_delegation_plans.sql": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d",
+    "0640_jordan_follow_through.sql": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d",
     "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
   }

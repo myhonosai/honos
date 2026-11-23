@@ -6628,3 +6628,46 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END LOOP;
 END $$;
 -- End Alex delegation plans exact verification.
+-- Jordan follow-through exact verification (0640): the JORDAN_FOLLOW_UP kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.apply_jordan_follow_ups(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71580d68700d4344b4b923b43ecf421c14c7d8949bfeacc465e62282492f4db4'),
+('hon.begin_jordan_follow_up(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','c49dab6593b04a32d649f0f636747080716066c673ba40a55880de8f3a39cf54'),
+('hon.close_jordan_follow_up(text,uuid,text)',true,true,'search_path=pg_catalog, hon','61b3c4d269c9a6a3a94e38e72d6e1fbc305fb2f0b3cb88e639fe62de9c7bded4'),
+('hon.fail_jordan_follow_up(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','863eb8592e10c24ce5a5ea72ae325ebe8ed25f3ac07ff6479c06d7651313ae45'),
+('hon.jordan_follow_up_actor(text)',true,false,'search_path=pg_catalog, hon','a09db56bfae320bb92380bbdef7f958361f2f73c67fc2ba77e85043c28136036'),
+('hon.jordan_follow_up_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8f9505deae9d2b72d5b4f75746f8fda28804e2aeb70bef9637ba65c971354d30'),
+('hon.jordan_follow_up_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','3f18611dab685f303dc9feb71a96cfc7aa4cdb01c463880b47748868e9e428b0'),
+('hon.jordan_follow_up_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','45e96c1a62ab74e22933872de37195c0ec1bfb356cd05281819516e4dfc008ac'),
+('hon.jordan_follow_up_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8decd425e207f37e69cfea3df17b6b537ca08394c9e87d9ad4925950ca8ba385'),
+('hon.jordan_follow_up_reader(text)',true,false,'search_path=pg_catalog, hon','571180164c33b1583afc894dbadcbefe8069073f4602ef20d38487c2bd1745c4'),
+('hon.jordan_follow_up_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6a144ec30ecdd7c568e6ce5c33da850433ff0b89b580e62851cb86359c594feb'),
+('hon.plan_jordan_follow_up(text,uuid)',true,true,'search_path=pg_catalog, hon','6de64de3eab93acc85375285ade9b13f5e5954e6c955c6e03d6ece81eda736a3'),
+('hon.prepare_jordan_follow_up(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','c8fed74689159c3c4b7c23bec2f78c04c482eb1974abf5bb289f57187de2293b'),
+('hon.read_jordan_follow_ups(text,uuid)',true,true,'search_path=pg_catalog, hon','e61b0aafc840386e625d9e5e36eb2af211996c21a4be2294e90c13c8f1c7e0a9'),
+('hon.record_jordan_follow_up(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','8112c275ce565e9a9be551ee8e3141cd93d02829265ac3f8aa98fd1d3a9e5bed'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Jordan follow-through function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='JORDAN_FOLLOW_UP' AND k.agent_key='jordan' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='OPERATIONS') THEN
+    RAISE EXCEPTION 'Jordan follow-through kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.jordan_follow_up_refs','hon.jordan_follow_up_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Jordan follow-through table is not closed: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Jordan follow-through exact verification.
