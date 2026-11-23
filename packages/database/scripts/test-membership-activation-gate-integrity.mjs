@@ -682,7 +682,7 @@ try {
   // by it; it is read-only and grants no booking, attendance or check-in benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
   assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'automation_condition_holds', 'automation_date_candidates',
-    'automation_enrolled', 'automation_event_subject', 'begin_hon_turn', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
+    'automation_enrolled', 'automation_event_subject', 'begin_hon_turn_0284', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan',
     'draft_crm_guardian_child_membership_from_plan', 'draft_owner_launch_membership', 'eian_facts_ok', 'evaluate_membership_activation', 'evaluate_membership_date_revision',
     'guard_membership_date_revision_insert', 'guard_membership_pause', 'guard_person_membership_overlap', 'list_retention_review_members', 'membership_agreement_covered',
@@ -703,7 +703,8 @@ try {
   // confirmation queue and the status summary. None books, checks in or grants a benefit.
   // Five retention/health reads also read attendance as a signal; no reader of memberships books, checks in or records attendance.
   // 0284 (Maya M2) begin_hon_turn and read_specialist_school_facts only check that a Maya question's membership belongs to
-  // this school (an existence test); neither books, checks in or grants a benefit. begin_hon_turn matches the attendance
+  // this school (an existence test); neither books, checks in or grants a benefit. 0635 renamed that body
+  // begin_hon_turn_0284 behind a switch-check wrapper that reads no membership. It matches the attendance
   // pattern only through Chad's 'CHECK_IN' follow-up purpose text.
   // 0331 (R1) read_school_reports and school_report_periods are read-only aggregate reports: they count memberships (not
   // drafts) by term dates and recorded cancellations and count attendance marks; they book, check in and grant nothing.
@@ -732,7 +733,7 @@ try {
   // 0574 automation_date_candidates reads attendance marks only to find each active student's last attendance (MIA); it
   // books, checks in and grants nothing.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
-    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_date_candidates', 'automation_event_subject', 'begin_hon_turn', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
+    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_date_candidates', 'automation_event_subject', 'begin_hon_turn_0284', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
       'school_report_periods']);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(INSERT\\s+INTO|UPDATE)\\s+(hon\\.)?(class_bookings|attendance_records|class_pass\\w*|kiosk\\w*|check_in\\w*)'"))[0].n, 0);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_views WHERE definition ~* '\\mmemberships\\M'"))[0].n, 0);

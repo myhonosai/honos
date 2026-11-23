@@ -27,12 +27,12 @@ export interface StaffRoleMutationResult<T = CustomRoleSummary | StaffRoleGrantS
  * Reviewed "Teaching staff" role preset (owner blueprint 2026-11-06): instructors and teaching-only staff use Kai, the
  * Teaching & Curriculum assistant, plus the teaching studio and class schedule, with no CRM, people/family, billing,
  * revenue, reporting, marketing or approval permission. It is a bundle the owner may create as a custom role through
- * the existing staff-role commands (custom role codes must match CUSTOM_[A-Z][A-Z0-9_]{1,47}); it grants nothing by itself. AI-0 INV-27 creates it through StaffRoleService and grants it to a separate staff member.
+ * the existing staff-role commands (custom role codes must match CUSTOM_[A-Z][A-Z0-9_]{1,47}); it grants nothing by itself. AI-0 INV-27 creates it through StaffRoleService and grants it to a separate staff member. 0635: it also carries the HON and Kai agent switches (ai.agent.hon.use, ai.agent.kai.use), since an agent needs its switch as well as its capability.
  */
 export const TEACHING_STAFF_ROLE_PRESET = {
   code: 'CUSTOM_TEACHING_STAFF',
   name: 'Teaching staff',
-  permissionCodes: ['ai.invocation.plan', 'schedule.session.read', 'school.view', 'teaching.assistant.use', 'teaching.studio.read'],
+  permissionCodes: ['ai.agent.hon.use', 'ai.agent.kai.use', 'ai.invocation.plan', 'schedule.session.read', 'school.view', 'teaching.assistant.use', 'teaching.studio.read'],
 } as const satisfies CreateCustomRoleInput;
 /** Permissions the teaching-staff preset must never contain. */
 export const TEACHING_STAFF_ROLE_EXCLUDED_PREFIXES = ['crm.', 'people.', 'family.', 'billing.', 'reporting.', 'marketing.', 'action.approve', 'iam.', 'communication.', 'student.enroll'] as const;
