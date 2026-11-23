@@ -4,6 +4,15 @@ import {
   CLASS_PAGE, ROSTER_PAGE, isUuid, rosterCategory, verifyAttendanceEnvelope, verifyRosterPage, verifyStudentSearch, verifyTodayClasses,
   type StudentSearch, type ClassSessionRosterAttendance, type ClassSessionRosterEntry, type RosterMark, type RosterPage, type TodayClasses,
 } from './today';
+import { QUESTION_MAX, verifyConversation, verifyMyAgents, verifyTurnReceipt, type AskableAgent, type MyAgents } from './hon';
+import type { HonConversationSummary, HonTurnReceipt } from '@hon/contracts/hon-conversation';
+import { validateSchoolContactQuery, verifySchoolContactList, type SchoolContactRow } from '@hon/contracts/school-contacts';
+import { verifySchoolContactCard, type SchoolContactCard } from '@hon/contracts/school-contact-card';
+import {
+  CONVERSATION_LIMITS, CONVERSATION_MARK_READ_COMMAND, CONVERSATION_REPLY_COMMAND, conversationBodyOk, verifyConversationDetail, verifyConversationList,
+  verifyConversationReadMark, verifyConversationReplyReceipt, type ConversationDetail, type ConversationList, type ConversationReadMark,
+  type ConversationReplyReceipt,
+} from '@hon/contracts/school-conversations';
 
 /**
  * HON Staff app API client (S0b). Every call is a native bearer request: no cookies, no Origin. The server decides
@@ -25,6 +34,26 @@ export type WhereIWork = StaffRead<WorkPlace>;
 export type StaffCommandFailure = 'signed-out' | 'no-staff-access' | 'changed' | 'rejected' | 'unknown' | 'offline';
 export type StaffCommand<T> = { ok: true; data: T } | { ok: false; state: StaffCommandFailure };
 
+/**
+ * A HON question's outcome. `agent-off`: the owner has not turned this agent on for you (nothing recorded).
+ * `paused`: AI is paused or not included for the school right now. `full`: start a new conversation.
+ */
+export type HonAskFailure = StaffCommandFailure | 'agent-off' | 'paused' | 'full';
+export type HonAsk = { ok: true; data: HonTurnReceipt } | { ok: false; state: HonAskFailure };
+
+/** S4: one page of contacts matching a search (people.read). */
+export interface ContactSearch { rows: SchoolContactRow[]; hasMore: boolean }
+export const CONTACT_SEARCH_MAX = 100;
+
+/**
+ * A text reply's outcome. `blocked` carries the server's reason a person can act on (no consent, no texting number,
+ * not linked); nothing was sent. The other states are a command's.
+ */
+export const REPLY_BLOCKS = ['CONVERSATION_NOT_LINKED', 'CONVERSATION_ADDRESS_MISMATCH', 'CONVERSATION_NO_SENDER', 'CONVERSATION_CONSENT_REQUIRED',
+  'CONVERSATION_CHANNEL_UNSUPPORTED'] as const;
+export type ReplyBlock = typeof REPLY_BLOCKS[number];
+export type TextReply = { ok: true; data: ConversationReplyReceipt } | { ok: false; state: StaffCommandFailure } | { ok: false; state: 'blocked'; reason: ReplyBlock };
+
 export interface StaffApi {
   whereIWork(): Promise<WhereIWork>;
   /** S1 Today: today's classes at the school (schedule.session.read, re-decided by the server). */
@@ -39,6 +68,24 @@ export interface StaffApi {
   clock(school: StaffSchool): Promise<StaffRead<MyTimeClock>>;
   /** Clock in or out at the server's clock. */
   punch(school: StaffSchool, action: TimeClockAction, expectedVersion: number, key: string): Promise<StaffCommand<TimeEntry>>;
+  /** S2: the agents this person may ask at this school now (the server's 0635 switches and each agent's permission). */
+  myAgents(school: StaffSchool): Promise<StaffRead<MyAgents>>;
+  /** Start one conversation for this app session. */
+  startConversation(school: StaffSchool, key: string): Promise<StaffCommand<HonConversationSummary>>;
+  /** Ask HON or one analysis agent a question. The same key is reused for a retry of the same question. */
+  ask(school: StaffSchool, conversationId: string, agent: AskableAgent, text: string, key: string): Promise<HonAsk>;
+  /** S4 People: search contacts by name, phone or email (people.read). */
+  findContacts(school: StaffSchool, search: string): Promise<StaffRead<ContactSearch>>;
+  /** One contact's card; each section the person's role does not include comes back not allowed. */
+  contactCard(school: StaffSchool, personId: string): Promise<StaffRead<SchoolContactCard>>;
+  /** S4 Texts: the school inbox, newest first (conversation.read). */
+  inbox(school: StaffSchool): Promise<StaffRead<ConversationList>>;
+  /** One conversation with its latest messages, oldest first. */
+  conversation(school: StaffSchool, conversationId: string): Promise<StaffRead<ConversationDetail>>;
+  /** Mark read up to the newest message on screen (no key: marking twice is the same mark). */
+  markRead(school: StaffSchool, conversationId: string, throughMessageId: string): Promise<StaffCommand<ConversationReadMark>>;
+  /** Reply in a conversation (conversation.manage). The same key is reused for a retry of the same reply. */
+  reply(school: StaffSchool, conversationId: string, expectedVersion: number, text: string, key: string): Promise<TextReply>;
 }
 
 export interface StaffApiOptions {
@@ -105,9 +152,10 @@ export function createStaffApi(options: StaffApiOptions): StaffApi {
     try { return { ok: true, data: verify(answer.body) }; } catch { return { ok: false, state: 'unavailable' }; }
   }
 
-  const CHANGED = new Set(['VERSION_CONFLICT', 'VERSION_REQUIRED', 'TIME_CLOCK_STATE_CHANGED']);
-  async function post<T>(path: string, command: string, key: string, body: unknown, verify: (body: unknown) => T): Promise<StaffCommand<T>> {
-    const answer = await send('POST', path, { headers: { 'X-HON-Human-Command': command, 'Idempotency-Key': key }, body });
+  const CHANGED = new Set(['VERSION_CONFLICT', 'VERSION_REQUIRED', 'TIME_CLOCK_STATE_CHANGED', 'CONVERSATION_VERSION_CONFLICT']);
+  /** key null: a command the server refuses a key for (it is the same every time it is sent). */
+  async function post<T>(path: string, command: string, key: string | null, body: unknown, verify: (body: unknown) => T): Promise<StaffCommand<T>> {
+    const answer = await send('POST', path, { headers: { 'X-HON-Human-Command': command, ...(key !== null ? { 'Idempotency-Key': key } : {}) }, body });
     if (answer.kind !== 'answer') return { ok: false, state: answer.kind };
     const { status } = answer;
     if (status === 401) return { ok: false, state: 'signed-out' };
@@ -179,6 +227,86 @@ export function createStaffApi(options: StaffApiOptions): StaffApi {
 
     clock(school) {
       return get(`${schoolPath(school)}/staff/time/clock`, body => verifyMyTimeClock(envelopeData(body)));
+    },
+
+    myAgents(school) {
+      return get(`${schoolPath(school)}/hon/readiness`, verifyMyAgents);
+    },
+
+    startConversation(school, key) {
+      return post(`${schoolPath(school)}/hon/conversations`, 'hon-conversation', key, { title: 'HON Staff app' }, verifyConversation);
+    },
+
+    async ask(school, conversationId, agent, text, key) {
+      const question = text.trim();
+      if (!isUuid(conversationId) || question.length === 0 || question.length > QUESTION_MAX) return { ok: false, state: 'rejected' };
+      const answer = await send('POST', `${schoolPath(school)}/hon/conversations/${conversationId.toLowerCase()}/turns`, {
+        headers: { 'X-HON-Human-Command': 'hon-conversation', 'Idempotency-Key': key },
+        body: { text: question, delegation: agent === 'hon' ? null : { agentKey: agent } },
+      });
+      if (answer.kind !== 'answer') return { ok: false, state: answer.kind };
+      const { status } = answer, code = codeOf(answer.body);
+      if (status === 401) return { ok: false, state: 'signed-out' };
+      if (status === 403) return { ok: false, state: code === 'HON_AGENT_OFF' ? 'agent-off' : code === 'HON_AI_SPEND_REFUSED' ? 'paused' : 'no-staff-access' };
+      if (status === 409) return { ok: false, state: code === 'HON_CONVERSATION_FULL' ? 'full' : code === 'HON_IDEMPOTENCY_CONFLICT' ? 'rejected' : 'unknown' };
+      if (status === 400 || status === 404 || status === 422) return { ok: false, state: 'rejected' };
+      if (status < 200 || status > 299) return { ok: false, state: 'unknown' };
+      try { return { ok: true, data: verifyTurnReceipt(answer.body, conversationId, agent) }; } catch { return { ok: false, state: 'unknown' }; }
+    },
+
+    findContacts(school, search) {
+      const text = search.trim().slice(0, CONTACT_SEARCH_MAX);
+      let query;
+      try { query = validateSchoolContactQuery(text ? { query: text } : {}); } catch { return Promise.resolve({ ok: false as const, state: 'unavailable' as const }); }
+      const params = new URLSearchParams(query.query ? { query: query.query } : {}).toString();
+      return get(`${schoolPath(school)}/contacts${params ? `?${params}` : ''}`, body => {
+        const data = envelopeData(body);
+        if (!data || typeof data !== 'object' || Array.isArray(data) || !('nextCursor' in data)) throw new Error('shape');
+        const { nextCursor, ...rest } = data as { nextCursor: unknown };
+        const list = verifySchoolContactList(rest, query);
+        if ((nextCursor !== null) !== list.hasMore) throw new Error('cursor');
+        return { rows: list.rows, hasMore: list.hasMore };
+      });
+    },
+
+    contactCard(school, personId) {
+      if (!isUuid(personId)) return Promise.resolve({ ok: false as const, state: 'unavailable' as const });
+      return get(`${schoolPath(school)}/contacts/${personId.toLowerCase()}`, body => verifySchoolContactCard(envelopeData(body), personId.toLowerCase()));
+    },
+
+    inbox(school) {
+      return get(`${schoolPath(school)}/conversations`, body => verifyConversationList(envelopeData(body)));
+    },
+
+    conversation(school, conversationId) {
+      if (!isUuid(conversationId)) return Promise.resolve({ ok: false as const, state: 'unavailable' as const });
+      const id = conversationId.toLowerCase();
+      return get(`${schoolPath(school)}/conversations/${id}`, body => verifyConversationDetail(envelopeData(body), id));
+    },
+
+    markRead(school, conversationId, throughMessageId) {
+      if (!isUuid(conversationId) || !isUuid(throughMessageId)) return Promise.resolve({ ok: false as const, state: 'rejected' as const });
+      const id = conversationId.toLowerCase();
+      return post(`${schoolPath(school)}/conversations/${id}/read`, CONVERSATION_MARK_READ_COMMAND, null, { throughMessageId: throughMessageId.toLowerCase() },
+        body => verifyConversationReadMark(envelopeData(body), id));
+    },
+
+    async reply(school, conversationId, expectedVersion, text, key) {
+      const body = text.trim();
+      if (!isUuid(conversationId) || !conversationBodyOk(body) || body.length > CONVERSATION_LIMITS.bodyMax) return { ok: false, state: 'rejected' };
+      const id = conversationId.toLowerCase();
+      const answer = await send('POST', `${schoolPath(school)}/conversations/${id}/replies`, {
+        headers: { 'X-HON-Human-Command': CONVERSATION_REPLY_COMMAND, 'Idempotency-Key': key }, body: { expectedVersion, body },
+      });
+      if (answer.kind !== 'answer') return { ok: false, state: answer.kind };
+      const { status } = answer, code = codeOf(answer.body) ?? '';
+      if (status === 401) return { ok: false, state: 'signed-out' };
+      if (status === 403) return { ok: false, state: 'no-staff-access' };
+      if (status === 422 && (REPLY_BLOCKS as readonly string[]).includes(code)) return { ok: false, state: 'blocked', reason: code as ReplyBlock };
+      if (status === 409) return { ok: false, state: code === 'CONVERSATION_VERSION_CONFLICT' ? 'changed' : code === 'IDEMPOTENCY_KEY_REUSED' ? 'rejected' : 'unknown' };
+      if (status === 400 || status === 404 || status === 422) return { ok: false, state: 'rejected' };
+      if (status < 200 || status > 299) return { ok: false, state: 'unknown' };
+      try { return { ok: true, data: verifyConversationReplyReceipt(envelopeData(answer.body), { conversationId: id, body }) }; } catch { return { ok: false, state: 'unknown' }; }
     },
 
     punch(school, action, expectedVersion, key) {

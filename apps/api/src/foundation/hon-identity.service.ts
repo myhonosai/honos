@@ -44,6 +44,16 @@ const STAFF_MOBILE_ROUTES: readonly StaffMobileRoute[] = [
   { path: new RegExp(`^${SCHOOL}/hon/conversations$`), methods: ['GET', 'POST'] },
   { path: new RegExp(`^${SCHOOL}/hon/conversations/${UUID}$`), methods: ['GET'] },
   { path: new RegExp(`^${SCHOOL}/hon/conversations/${UUID}/turns$`), methods: ['POST'] },
+  // S4 People and Texts (docs/architecture/STAFF_MOBILE_PEOPLE_TEXTS.md): search contacts and read one contact card
+  // (people.read, each card section re-checked against its own permission), the texts inbox and one conversation
+  // (conversation.read), marking it read (conversation.read) and replying (conversation.manage, the consent-gated
+  // queue the web uses). Archive, merge, assign, tag, link and create-lead stay web-only.
+  { path: new RegExp(`^${SCHOOL}/contacts$`), methods: ['GET'] },
+  { path: new RegExp(`^${SCHOOL}/contacts/${UUID}$`), methods: ['GET'] },
+  { path: new RegExp(`^${SCHOOL}/conversations$`), methods: ['GET'] },
+  { path: new RegExp(`^${SCHOOL}/conversations/${UUID}$`), methods: ['GET'] },
+  { path: new RegExp(`^${SCHOOL}/conversations/${UUID}/read$`), methods: ['POST'] },
+  { path: new RegExp(`^${SCHOOL}/conversations/${UUID}/replies$`), methods: ['POST'] },
 ];
 const staffRouteAllowed = (method: string, path: string) =>
   STAFF_MOBILE_ROUTES.some(route => route.path.test(path) && (route.methods === undefined || route.methods.includes(method)));
