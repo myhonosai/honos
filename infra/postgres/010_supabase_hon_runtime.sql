@@ -3767,6 +3767,26 @@ DO $$ DECLARE r text; f text;
   END IF;
 END $$;
 
+-- M-B 0624 new membership and renew from the contact card: two runtime entry points (start options read, start); the actor,
+-- facts, program group, overlap trigger and item helpers are private; the card-start table has no runtime privilege.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_person_membership_start(text,jsonb)','hon.start_person_membership(text,jsonb,text,uuid,uuid)'];
+  fns text[]:=ARRAY['hon.guard_person_membership_start()','hon.membership_program_group(uuid)','hon.guard_person_membership_overlap()',
+    'hon.require_person_membership_actor(text)','hon.person_membership_start_facts(uuid,date)','hon.person_membership_start_item(hon.memberships,text)']||entry; BEGIN
+  IF to_regprocedure('hon.start_person_membership(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0624 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  EXECUTE 'REVOKE ALL ON TABLE hon.person_membership_starts FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.person_membership_starts FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
 -- 0330 family messages: private helpers, two private tables and six runtime entry points (parent read/send; staff inbox, thread, mark read, reply).
 DO $$ DECLARE r text; f text; t text; BEGIN
   IF to_regprocedure('hon.reply_family_message(text,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0330 first'; END IF;
@@ -5091,6 +5111,62 @@ BEGIN
   FOREACH f IN ARRAY helpers||entry LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0622 rank setup: the staff read and the closed command are the only runtime entry points; the program projection and
+-- belt rule helpers stay migration-owner only.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_staff_rank_setup(text)','hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0622 first'; END IF;
+  FOREACH f IN ARRAY entry||ARRAY['hon.rank_setup_program(uuid,uuid,uuid)','hon.rank_setup_rules(jsonb,integer,integer)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0655 native app sign-in codes are single use: the redemption ledger has no table privilege for anyone; hon_runtime may
+-- only EXECUTE hon.redeem_mobile_handoff.
+DO $$ DECLARE r text;
+BEGIN
+  IF to_regprocedure('hon.redeem_mobile_handoff(text,uuid,timestamptz)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0655 first'; END IF;
+  REVOKE ALL ON TABLE hon.mobile_handoff_redemptions FROM PUBLIC;
+  REVOKE ALL ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','authenticator','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.mobile_handoff_redemptions FROM %I',r);
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) FROM %I',r);
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0627 public checkout orders: two private tables, six private helpers (family_checkout_taken as replaced by 0627); three
+-- runtime entry points (public order, public order read, staff read); the 0620 public read as replaced by 0627.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.open_public_checkout_order(text,jsonb,text,boolean)','hon.read_public_checkout_order(text,text)',
+    'hon.read_school_public_checkout_orders(text)','hon.read_public_school_checkout(text)'];
+BEGIN
+  IF to_regclass('hon.public_checkout_orders') IS NULL THEN RAISE EXCEPTION 'Apply migration 0627 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.public_checkout_orders','hon.public_checkout_rates'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_public_checkout_order()','hon.take_public_checkout_rate(uuid,text,integer)','hon.public_checkout_intake_ok()',
+      'hon.public_checkout_order_for(uuid,text)','hon.public_checkout_order_json(hon.public_checkout_orders)','hon.settle_public_checkout_order()',
+      'hon.family_checkout_taken(uuid,text)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN

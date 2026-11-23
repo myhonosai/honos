@@ -13,7 +13,10 @@ import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
 import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactFilters, type ContactsApi } from './contacts-http';
 import { ContactActions, type ContactChange } from './contact-actions';
-import type { CardState } from './contact-card';
+import type { CardState, CardTab, MembershipItem } from './contact-card';
+import { MembershipPanel } from './membership-panel';
+import { NewMembershipTools } from './new-membership';
+import { initialCardTarget } from './card-link';
 import { PersonPhoto } from './photo';
 import { AgreementLinkPanel } from '../agreement-link/send-panel';
 import { ContactMessageHistory } from '../contact-history/contact-history';
@@ -51,6 +54,12 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
   return input.birthDate === record.student.birthDate ? 'UNCHANGED' : input;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The person id in ?person=<uuid>, lower-cased, or null for anything else. */
+export function contactDeepLink(search: string): string | null {
+  try { const v = new URLSearchParams(search).getAll('person'); return v.length === 1 && UUID.test(v[0]!) ? v[0]!.toLowerCase() : null; } catch { return null; }
+}
+
 /**
  * People for the school the shell verified: search, read one person, correct name and contact details, and correct
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
@@ -70,7 +79,13 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const [record, setRecord] = useState<RecordState>({ state: 'NONE' });
   const [recordRefresh, setRecordRefresh] = useState(0);
   const [card, setCard] = useState<CardState>({ state: 'NONE' });
+  const [cardTab, setCardTab] = useState<CardTab>('overview');
+  const [cardRefresh, setCardRefresh] = useState(0);
   const cardGeneration = useRef(0);
+  // A card read again after a membership change keeps showing the card meanwhile, so the open panel and its answer stay.
+  const quietCard = useRef(false);
+  // A People link (for example from the membership report) names a card to open, once, after the school is verified.
+  const linkHandled = useRef(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<SaveOutcome>(null);
   const [lock, setLock] = useState<Lock>('NONE');
@@ -147,9 +162,10 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
 
   // The contact card is read with the record and again after a save; a denied or missing person shows the record's own message.
   useEffect(() => {
-    const current = ++cardGeneration.current;
+    const current = ++cardGeneration.current, quiet = quietCard.current;
+    quietCard.current = false;
     if (!selectedId) { setCard({ state: 'NONE' }); return; }
-    setCard({ state: 'LOADING' });
+    if (!quiet) setCard({ state: 'LOADING' });
     if (!selection) return;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
     contacts.card({ organizationId: selection.organizationId, schoolId: selection.schoolId }, selectedId, signal).then(
@@ -160,7 +176,15 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
         setCard(kind === 'DENIED' || kind === 'MISSING' || kind === 'SESSION' ? { state: 'NONE' } : { state: 'UNAVAILABLE' });
       });
     return () => { abort.abort(); };
-  }, [selection?.organizationId, selection?.schoolId, selectedId, recordRefresh, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selection?.organizationId, selection?.schoolId, selectedId, recordRefresh, cardRefresh, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (linkHandled.current || !selection) return;
+    linkHandled.current = true;
+    const target = initialCardTarget(globalThis.location?.search ?? '');
+    if (!target) return;
+    selected.current = target.personId; setSelectedId(target.personId); setCardTab(target.tab); setRecordRefresh(value => value + 1);
+  }, [selection]);
 
   const send = useCallback(async () => {
     const request = pending.current;
@@ -212,7 +236,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     start({ schoolId: lower(selection.schoolId), personId: current.personId, key: newKey(), command: 'birthDate', input });
   }, [lock, selection?.schoolId, current, start]); // eslint-disable-line react-hooks/exhaustive-deps
   const onOpen = useCallback((personId: string) => {
-    selected.current = personId; setSelectedId(personId); setOutcome(null); setActionNotice(null); drop(); setRecordRefresh(value => value + 1);
+    selected.current = personId; setSelectedId(personId); setCardTab('overview'); setOutcome(null); setActionNotice(null); drop(); setRecordRefresh(value => value + 1);
   }, [drop]);
   // After a delete, restore or merge: read the list and the card again; a merge opens the person who was kept.
   const onContactChanged = useCallback((change: ContactChange, notice: string) => {
@@ -225,6 +249,26 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} card={c} onChanged={onContactChanged}
     api={admin} contacts={contacts}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onContactChanged, admin, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
+  // After a membership is started, paused, resumed, cancelled or a refund recorded: read the card and the list again.
+  const onMembershipChanged = useCallback(() => { if (!mounted.current) return; quietCard.current = true; setCardRefresh(n => n + 1); setListRefresh(n => n + 1); }, []);
+  const membershipSlot = useCallback((m: MembershipItem) => selection ? <MembershipPanel key={`${lower(selection.schoolId)}:${m.membershipId}`} language={preferences.language}
+    scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+  // New membership and Renew (0624) at the top of the membership tab; the server decides who can have which plan.
+  const membershipTools = useCallback((items: readonly MembershipItem[]) => selection && selectedId ? <NewMembershipTools key={`${lower(selection.schoolId)}:${selectedId}`}
+    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
+    onChanged={onMembershipChanged}/> : null,
+  [selection?.organizationId, selection?.schoolId, selectedId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Deep link /staff/people?person=<id> (global search): open that contact's card once the school is verified. Read once per mount;
+  // the id is never authority (the card and record reads re-check the person against the verified school).
+  const deepLink = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (deepLink.current === undefined) deepLink.current = contactDeepLink(typeof window === 'undefined' ? '' : window.location?.search ?? '');
+    if (!selection || !deepLink.current) return;
+    const personId = deepLink.current;
+    deepLink.current = null;
+    onOpen(personId);
+  }, [selection?.schoolId, onOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const onDiscard = useCallback(() => { setOutcome(null); drop(); setRecordRefresh(value => value + 1); }, [drop]);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
   const onFilters = useCallback((next: ContactFilters) => { setFilters({ ...next, query: next.query.trim() }); setListRefresh(n => n + 1); }, []);
@@ -249,6 +293,6 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
-      filters={filters} options={options} card={card} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
   </div>;
 }

@@ -1,5 +1,5 @@
 /**
- * Optional Shopify permissions (Allow finance, Allow orders).
+ * Optional Shopify permissions (Allow finance, Allow orders, Allow stock updates).
  *
  * HON's Shopify app uses Shopify managed installation, where the approval page HON builds (`/admin/oauth/authorize`)
  * grants only the app's required permissions and ignores extra ones. Optional permissions are granted on Shopify's own
@@ -9,7 +9,7 @@
  * So an Allow button takes two hops: Shopify's request page first, then HON's usual approval. A note in the browser's
  * session storage says the second hop is still owed. It holds no secret: the action, the school and the shop domain.
  */
-export type GrantAction = 'allowFinance' | 'allowOrders';
+export type GrantAction = 'allowFinance' | 'allowOrders' | 'allowStock';
 const KEY = 'hon.shopify.grant';
 /** As long as an unused HON approval lives. */
 export const GRANT_NOTE_MS = 10 * 60 * 1000;
@@ -38,6 +38,6 @@ export function takeGrant(schoolId: string, shopDomain: string, now: number = Da
   try {
     const v = JSON.parse(raw) as Record<string, unknown>;
     if (v.schoolId !== schoolId || v.shopDomain !== shopDomain || typeof v.at !== 'number' || now - v.at < 0 || now - v.at > GRANT_NOTE_MS) return null;
-    return v.action === 'allowFinance' || v.action === 'allowOrders' ? v.action : null;
+    return v.action === 'allowFinance' || v.action === 'allowOrders' || v.action === 'allowStock' ? v.action : null;
   } catch { return null; }
 }

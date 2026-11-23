@@ -39,6 +39,8 @@ import { OwnerLaunchService } from './owner-launch/owner-launch.service.js';
 import { CurriculumLibraryService } from './curriculum/library.service.js';
 import { ParentAppCurriculumService } from './curriculum/parent-app-curriculum.service.js';
 import { StaffParentAppCurriculumController, ParentCurriculumAppController, ParentAppCurriculumHumanUiGuard } from './curriculum/parent-app-curriculum.controller.js';
+import { RankSetupService } from './curriculum/rank-setup.service.js';
+import { StaffRankSetupController, RankSetupHumanUiGuard } from './curriculum/rank-setup.controller.js';
 import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
 import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
@@ -183,6 +185,8 @@ import { SchoolContactsController } from './people/school-contacts.controller.js
 import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
 import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
+import { PersonMembershipStartController } from './billing/person-membership-start.controller.js';
+import { PersonMembershipStartService } from './billing/person-membership-start.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
 import { MembershipActivationHumanUiGuard, SimpleInvoiceCreateHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
@@ -537,7 +541,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   imports: [ClassPassModule, KioskModule],
   controllers: [HonOsSignupController,HonOsTrialController,HonOsAdmissionHqController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
-    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController,
+    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController, StaffRankSetupController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
     RetentionReviewController,
@@ -706,6 +710,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolReportsDashboardController,
     SchoolContactsController,
     SchoolContactAdminController,
+    PersonMembershipStartController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
     MembershipPlanController,
@@ -726,7 +731,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, SchoolPosService, SchoolPosHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard, FaceCheckInService, FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard, MembershipAgreementService, MembershipAgreementHumanGuard, MembershipAgreementLinkHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
-    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard,
+    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard, RankSetupService, RankSetupHumanUiGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
     RetentionReviewService, RetentionReviewHumanUiGuard,
@@ -989,6 +994,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
+    PersonMembershipStartService,
     SchoolEventService,
     SchoolEventReadHumanUiGuard,
     SchoolEventSaveHumanUiGuard,

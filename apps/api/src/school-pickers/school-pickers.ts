@@ -19,7 +19,8 @@ export const RANK_LIMIT = 200;
 export const ENROLLMENT_PURPOSES = { progress: 'curriculum.progress.record', readiness: 'testing.promotion.readiness.read', testing: 'testing.manage' } as const;
 export const CANDIDATE_PURPOSES = { grade: 'testing.manage', decision: 'testing.promotion.decide' } as const;
 /** attendance: front-desk check-in by name, for any active student (a booking is never required to attend). */
-export const STUDENT_PURPOSES = { teaching: 'teaching.studio.read', achievements: 'achievement.award.read', attendance: 'attendance.record' } as const;
+/** curriculum: Rank setup places a student on a program's belt (0070 ENROLL needs curriculum.progress.record). */
+export const STUDENT_PURPOSES = { teaching: 'teaching.studio.read', achievements: 'achievement.award.read', attendance: 'attendance.record', curriculum: 'curriculum.progress.record' } as const;
 export const RANK_PURPOSES = { teaching: 'teaching.studio.read' } as const;
 /** Screens that assign or manage a teammate, each with the permission that screen's own command needs (0404 allow-list). */
 export const STAFF_PURPOSES = { followups: 'crm.follow_up.manage', work: 'work_item.manage', qualifications: 'staff.instructor_qualification.manage',

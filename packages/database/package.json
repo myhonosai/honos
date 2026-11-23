@@ -167,6 +167,7 @@
     "db:test-school-membership-list": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-membership-list-integrity.mjs",
     "db:test-class-session-pages": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-class-session-pages-integrity.mjs",
     "db:test-membership-pause": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-membership-pause-integrity.mjs",
+    "db:test-person-membership-start": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-person-membership-start-integrity.mjs",
     "db:test-student-import": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-student-import-integrity.mjs",
     "db:test-school-pickers": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-pickers-integrity.mjs",
     "db:test-staff-permissions-list": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-permissions-list-integrity.mjs",
@@ -176,6 +177,7 @@
     "db:test-pos": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-integrity.mjs",
     "db:test-pos-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-shopify-integrity.mjs",
     "db:test-checkout-links": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-checkout-links-integrity.mjs",
+    "db:test-public-checkout-orders": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-public-checkout-orders-integrity.mjs",
     "db:test-pos-shopify-orders": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-pos-shopify-orders-integrity.mjs",
     "db:test-creative-designs": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-creative-designs-integrity.mjs",
     "db:test-attendance-cards": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-attendance-cards-integrity.mjs",
@@ -210,7 +212,8 @@
     "db:test-school-pay-autopay": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-pay-autopay-integrity.mjs",
     "db:test-school-checkouts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-checkouts-integrity.mjs",
     "db:test-maya-at-risk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-maya-at-risk-integrity.mjs",
-    "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs"
+    "db:test-crm-close-proof-target": "node scripts/test-crm-close-proof-target.mjs",
+    "db:test-mobile-handoff-single-use": "node scripts/test-mobile-handoff-single-use.mjs"
   },
   "dependencies": {
     "@hon/contracts": "workspace:*",

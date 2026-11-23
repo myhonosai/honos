@@ -378,6 +378,7 @@
     "0614_pos_shopify_orders.sql": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7",
     "0615_shopify_commerce_review.sql": "59cbacf8a419bb6d82794ba0978c37ca9d36d0400b42288fe654aad6a88fbbdd",
     "0617_school_creative_designs.sql": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139",
+    "0622_rank_setup.sql": "36a16b58b9e9a3b90584973354e53f1a9d7721afb9915b80e1bd8b8a35b6e08c",
     "0629_crm_trial_authority_hold.sql": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043",
     "0630_invoice_insert_status_guard.sql": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec",
     "0631_class_booking_lock_identity_plane.sql": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe",
@@ -385,6 +386,10 @@
     "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
     "0620_school_checkout_public_links.sql": "c1cc459d28572039c8150eb3ea16881d325bebf64efdca528bd3b6e1434a4634",
     "0621_school_blasts.sql": "9ff3526327bdbd63aa232e46efc4d0356ab4e835f1333b1ff2927e60b7ad3738",
+    "0623_school_contact_sort_filters.sql": "dff615a142e1a2da7f5eda6fa9ca79d0f18663ccf4cdbc2821e827076ccb8c0b",
+    "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
+    "0624_person_membership_from_plan.sql": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1",
+    "0627_public_checkout_orders.sql": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8",
     "0628_school_media_library.sql": "d09b6edeadf89820b1fd6fe9cc75b3ad583be40cce15a66389892d7ccf14f78a"
   }
 }
