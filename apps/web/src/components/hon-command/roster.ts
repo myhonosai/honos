@@ -60,7 +60,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Whole-school view and weekly priorities from verified facts (Ask HON → Alex)', state: 'AVAILABLE' },
-      { label: 'Coordinate and delegate work across the team', state: 'BACKEND_REQUIRED' },
+      { label: 'Turn a goal into tasks for your team (Plan with Alex, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'School Command Center', href: '/staff/command-center' },
@@ -133,7 +133,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Class schedule, capacity, instructor coverage and attendance analysis (Ask HON → Jordan)', state: 'AVAILABLE' },
-      { label: 'Operational task follow-through', state: 'BACKEND_REQUIRED' },
+      { label: 'Follow through on open and overdue team tasks (Follow through with Jordan, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Class sessions', href: '/staff/schedule/sessions' },

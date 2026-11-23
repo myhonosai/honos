@@ -57,7 +57,9 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
-import { EianController, EianAskGuard, EianReadGuard } from './eian/eian.controller.js';
+import { EianController, EianAskGuard, EianReadGuard, EianSpeakGuard } from './eian/eian.controller.js';
+import { EianSpeechService, EIAN_SPEECH_COST_DELAYS, DEFAULT_COST_DELAYS_MS } from './eian/eian-speech.service.js';
+import { EIAN_SPEECH_RUNTIME, OpenRouterEianSpeechRuntime } from './eian/eian-speech-runtime.js';
 import { EianService } from './eian/eian.service.js';
 import { ParentInvoicePayCancelGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayController, ParentInvoicePayStartGuard } from './parent-pay/parent-invoice-pay.controller.js';
 import { ParentInvoicePayService } from './parent-pay/parent-invoice-pay.service.js';
@@ -156,6 +158,12 @@ import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
 import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime, RANK_CHART_PROVIDER_RUNTIME, RANK_CHART_TEXT_PROFILE } from './commerce/shopify/merch-provider-runtime.js';
 import { CommerceReviewController } from './commerce/shopify/commerce-review.controller.js';
 import { CommerceReviewService } from './commerce/shopify/commerce-review.service.js';
+import { AlexPlanController } from './alex-delegation/alex-plan.controller.js';
+import { AlexPlanService } from './alex-delegation/alex-plan.service.js';
+import { ALEX_PLAN_PROVIDER_RUNTIME, ALEX_PLAN_TEXT_PROFILE } from './alex-delegation/alex-plan-provider.js';
+import { JordanFollowUpController } from './jordan-follow-through/jordan-follow-up.controller.js';
+import { JordanFollowUpService } from './jordan-follow-through/jordan-follow-up.service.js';
+import { JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, JORDAN_FOLLOW_UP_TEXT_PROFILE } from './jordan-follow-through/jordan-follow-up-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -674,6 +682,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteAiController,
     MerchAiController,
     CommerceReviewController,
+    AlexPlanController,
+    JordanFollowUpController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -760,6 +770,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
     // E-AI1: Eian family AI. The same OpenRouter rules: off until the key and the paid-call approval flag are both set.
     { provide: EIAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterEianRuntime() }, EianService, EianAskGuard, EianReadGuard,
+    // E-V2: Eian natural voice. Off until the key, the paid-call flag and HON_EIAN_NATURAL_VOICE_APPROVED are all set.
+    { provide: EIAN_SPEECH_RUNTIME, useFactory: () => new OpenRouterEianSpeechRuntime() }, { provide: EIAN_SPEECH_COST_DELAYS, useValue: DEFAULT_COST_DELAYS_MS },
+    EianSpeechService, EianSpeakGuard,
     ParentInvoicePayService, ParentInvoicePayStartGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayCancelGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
@@ -979,7 +992,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MerchAiService,
     { provide: MERCH_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime() },
     CommerceReviewService,
+    AlexPlanService,
+    JordanFollowUpService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
+    { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
+    { provide: JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, JORDAN_FOLLOW_UP_TEXT_PROFILE) },
     { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,

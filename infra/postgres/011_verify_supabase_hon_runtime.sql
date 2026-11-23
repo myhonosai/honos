@@ -5111,11 +5111,13 @@ END $$;
 -- Shared AI text proposals exact verification (0550): the kind table and the proposal table with its guards and four S4
 -- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
 -- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
+-- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips); the eight hashes below
+-- are the 0638 bodies.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','995b43d44309baa6b5c8cd0f7921070e3d720cbb36745bc21cd9d69b40a407d8'),
-('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','1eb41ff4957316b94c0f0ba09c869e68e1c213edd1026dc99061232af426880b'),
-('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','fe4b28b423fe81657a169efbda61a7229a40ffe3387ded4db5835bdf87e916a2'),
+('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','0ce8e55d537824e95478cab1044836ce32825dbc57c551d2728621fba3ae7420'),
+('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','3dd7094de974a0b8ab47550b5acaed84a51830a8eee316b86b6b9b93bc188c0a'),
+('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','4efa8c4c7361e5d99a01791901cf279c2968be6d25925e348e2f046e50fb25d2'),
 ('hon.ai_text_begin(text,uuid,text,uuid,integer,jsonb)',true,false,'search_path=pg_catalog, hon','6f82977de496d1ed4a4dc92344338141ac0a7e6a1b438aedcd3d8289883036aa'),
 ('hon.ai_text_close(uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','c7eb4e44d4c7e0b43356156e95e0575a3abefc205611d98e4606c81505e29010'),
 ('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
@@ -5124,18 +5126,18 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','8637c7fd7f7cf540513b939f44eceb5f6bf459e920159947e7984f53f7bcdde7'),
 ('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','1fa1f6af3987b11c06f6877ce9ddc836de24ac9e63a989618dca4d864ef0abd8'),
 ('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
-('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','2216fdb4756b4a1b5b179b5788445c8d4cacf1f747cb27ee3016b24eb84533e3'),
+('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','cbe5c59d888995653f5736925f6e57ff8253b6679f3d02c508c20a5dab76b416'),
 ('hon.begin_school_website_ai_edit(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','942cb067060413f3309465c5cd4c6f8d326b8c73a41d695a00dcd452f3465f69'),
 ('hon.close_school_website_ai_edit(text,uuid,text)',true,true,'search_path=pg_catalog, hon','cf273be12c4a99889369dad1feb7ecff0ae6d73edaecde2c82274d6054432298'),
 ('hon.fail_school_website_ai_edit(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','cec489c91805c02f0a460bc9f8401c295fc0efdf66637a86ac3f000703352688'),
 ('hon.guard_ai_text_proposals()',false,false,'search_path=pg_catalog, hon','431a2ad9c9a47028538a537910d2b2b40bef20e091af7b4e650963202671be75'),
 ('hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','8b78db60ef391b85adc83b5bcbfcfe2eae5c8097fde15fc7d96888adf8cba659'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','191edd80f8aa928f852627e7e174726053f555815b300b20fb755c55574c185d'),
-('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','b3045dc689e5d7f54d4854dfe43d7d4eb331869acc347454cf174eb1cf58c9af'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','a73fbbf439b5a15b83fb70c2fc5909d7e9b56df72e0c2a2b4ae78c0b7698b076'),
+('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','2b77dd1efdc51eea92ca2e19a4df1233aa40eb8d2404c3758af93ab09305f4dd'),
 ('hon.read_school_website_ai_edits(text,uuid)',true,true,'search_path=pg_catalog, hon','5bca23fda531a8d5ab1f1bbbed5d08b873ef8da848dea32ba893e4cbc335d99f'),
-('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','18a2f6af1ef95d5e91e890d7e70894ac589e4508fb774c70c61d28a5083d97a3'),
+('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','cdd7b650316c258da26e037d5021e737cbb25be55d886acb17746431f2a6a020'),
 ('hon.record_school_website_ai_edit(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','94284d3805916895a286633e8a81d58d4f7f56c0835e41217b68be4e9588f2f4'),
-('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4a97483f35d15de587ca3dce3fd24d309d2794c8aa93747bc4379e1d29edf52c'),
+('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d391d660d3823fa0ea7fd518116d706649e482482a03739928f1494732f4eca6'),
 ('hon.school_website_ai_actor(text)',true,false,'search_path=pg_catalog, hon','768224c8665725fe986a89512fbac5a3a69e54e6b6627fbb033d13b5ceb2e1c5'),
 ('hon.school_website_ai_edit_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','a649cd44c33edc3d00f17a46830ce3f632ff814b5274e760688186d49b7baa6d'),
 ('hon.school_website_ai_facts(jsonb,text)',false,false,'search_path=pg_catalog, hon','c6a2bfb758bca374c226adeb598d7e297fed6715b68e4a10788bebb71a078a14'),
@@ -6538,6 +6540,137 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End rank chart AI draft exact verification.
+
+-- Eian natural voice exact verification (0638): the private clip table (a digest and a length, never the words or the sound)
+-- with its four S4 triggers, two private helpers and five runtime entry points. The eight S4 shared functions that gained
+-- EIAN_SPEECH are pinned in the 0550 section above with their 0638 bodies.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.eian_speech_limits()',false,false,'search_path=pg_catalog','400ec3ced8cd50c551079690bacc49143cb47bad5857f4c3dea82fa0be992bc6'),
+('hon.eian_speech_unavailable_reason(uuid,uuid,boolean)',true,false,'search_path=pg_catalog, hon','439eaef626396c40760111b94dc598266c3d7b1d9ad981fe3ba61ece5b1dfa02'),
+('hon.read_eian_speech_status(text,boolean)',true,true,'search_path=pg_catalog, hon','98262cf43d01d38d743b6580d123e66134fa05486813dcad3e1daa640cfc6c05'),
+('hon.begin_eian_speech(text,text,text,integer)',true,true,'search_path=pg_catalog, hon','16a59b9628c46bf197323b0706a4e48a046e7ff92eaa837aca310e2e2478a0dc'),
+('hon.prepare_eian_speech(text,uuid,boolean)',true,true,'search_path=pg_catalog, hon','3f365faac243f48c42d3fd587ad87eea9bf5bcdfc1eee113003c6e5397612be1'),
+('hon.fail_eian_speech(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','e75f027981ce667f515b3511017ead43decf252383fd1ccb32e351c865e8227b'),
+('hon.record_eian_speech_result(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','77635b7af622cc820b435234937af77e9a38e36a6e1caa4a254c346e482c92db'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Eian natural voice function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.eian_speech_clips'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.eian_speech_clips'::regclass)
+    OR has_table_privilege('hon_runtime','hon.eian_speech_clips','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.eian_speech_clips','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Eian speech clip table';
+  END IF;
+  -- The table can hold no words and no sound: exactly these columns.
+  IF (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a WHERE a.attrelid='hon.eian_speech_clips'::regclass AND a.attnum>0 AND NOT a.attisdropped)
+     <> ARRAY['characters','created_at','family_id','held_at','id','idempotency_key','organization_id','provider_request_id','reason','requested_by','reserved_credits','school_id','status','text_digest','updated_at','usage_id'] THEN
+    RAISE EXCEPTION 'Eian speech clip columns changed';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger t WHERE t.tgrelid='hon.eian_speech_clips'::regclass AND t.tgenabled='O' AND (t.tgname, t.tgfoid) IN (
+      ('ai_spend_start_guard','hon.ai_spend_start_guard()'::regprocedure), ('ai_spend_reserve_guard','hon.ai_spend_reserve_guard()'::regprocedure),
+      ('ai_spend_reserve_guard_insert','hon.ai_spend_reserve_guard()'::regprocedure), ('zz_ai_hold_origin','hon.ai_stamp_hold_origin()'::regprocedure))) <> 4 THEN
+    RAISE EXCEPTION 'Eian speech clip S4 triggers missing';
+  END IF;
+END $$;
+-- End Eian natural voice exact verification.
+-- Alex delegation plans exact verification (0639): the ALEX_DELEGATION_PLAN kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.alex_plan_actor(text)',true,false,'search_path=pg_catalog, hon','22540944e18d1532801571e43641cdfba7ce511b82b4bbfb9ed3cbc67702debd'),
+('hon.alex_plan_areas()',false,false,'search_path=pg_catalog','b544cbcaeee47589e51d5085b9a2f129f259080e389a8381ddfb16049e5da5ec'),
+('hon.alex_plan_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6e25173e1aff182e791cb66833fbba01f7e589cefa6f3174de953a6664a92e21'),
+('hon.alex_plan_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','ace4e38b2e69f261eae603326cc7826632bd2a8c407a6cdabb67e619f10ff6dd'),
+('hon.alex_plan_fix_refs(uuid)',true,false,'search_path=pg_catalog, hon','748bb2493566563bafa034d07d4ab8ede2e8b19d1f8f6e1e6aa4fbe8dd9ea9af'),
+('hon.alex_plan_keys_are(jsonb,text[])',false,false,'search_path=pg_catalog','7556a96f17a68188dd305a64c9279afd187b13bee9774d8bbdfc6d7fd4a64547'),
+('hon.alex_plan_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','a94feea13748dbf9238ad9643bf8672aad450dde7b306ae1dee557fd2594df24'),
+('hon.alex_plan_ok(jsonb)',false,false,'search_path=pg_catalog, hon','080cf9284e2c960a52f37e4b90a2cf51edf7b5cf0a0727ec88ec8975bf3fb01c'),
+('hon.alex_plan_reader(text)',true,false,'search_path=pg_catalog, hon','b5727b67b28d305bf03e12a7d799419fce65e452131bbfd35074e4df8430a702'),
+('hon.alex_plan_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','06377522a66212c93123cbd99c9c6774eeebc1c9164b1a8e33a2913e3434a9a3'),
+('hon.begin_alex_plan(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','4321ac79a6e8a0af106cac30f8db481add9ddda646a48b3363bcfc0f28fcc24d'),
+('hon.close_alex_plan(text,uuid,text)',true,true,'search_path=pg_catalog, hon','ea8d36657128325bb03fa680e7507b15f54cce03433a44613275f11f2b6cab42'),
+('hon.create_alex_plan_tasks(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','78f3b2a285aef267191d32ed3617a68ccbe63c8ab9dde620b9ae66481b51c5ee'),
+('hon.fail_alex_plan(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','3c3dce1d6e5f49b7fff54234e6695be294819a105d426f638250b48ebc206e72'),
+('hon.guard_alex_plan_rows()',false,false,'search_path=pg_catalog','60c2ac1f79fdd66d9c79e5d5afcbdbe6d0e3a368a4fc9e62b48cf513972189b4'),
+('hon.plan_alex_plan(text,uuid)',true,true,'search_path=pg_catalog, hon','a794107e1e8f58044a6dbea8b9426f8f420ce1b94f76e3eaa72a1b2b4ad623c6'),
+('hon.prepare_alex_plan(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','27b8323521edc2bf33bf62a56968f3fa26f9f8d8c34179aa5cfeb1e0a7e64c23'),
+('hon.read_alex_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','78a11d2f2019fdee42f498953ac3823ca8cf3f34700c8e8d7ddd2542d7bdd93b'),
+('hon.record_alex_plan(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','ae4c53483ce5cbb80ee45853885f931213d9c2f58f2e963a7adf29d3554243f3'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Alex delegation plan function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='ALEX_DELEGATION_PLAN' AND k.agent_key='alex' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='GENERAL_MANAGEMENT') THEN
+    RAISE EXCEPTION 'Alex delegation plan kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.alex_plan_staff_refs','hon.alex_plan_created_tasks'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Alex delegation plan table is not closed: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Alex delegation plans exact verification.
+-- Jordan follow-through exact verification (0640): the JORDAN_FOLLOW_UP kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.apply_jordan_follow_ups(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71580d68700d4344b4b923b43ecf421c14c7d8949bfeacc465e62282492f4db4'),
+('hon.begin_jordan_follow_up(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','c49dab6593b04a32d649f0f636747080716066c673ba40a55880de8f3a39cf54'),
+('hon.close_jordan_follow_up(text,uuid,text)',true,true,'search_path=pg_catalog, hon','61b3c4d269c9a6a3a94e38e72d6e1fbc305fb2f0b3cb88e639fe62de9c7bded4'),
+('hon.fail_jordan_follow_up(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','863eb8592e10c24ce5a5ea72ae325ebe8ed25f3ac07ff6479c06d7651313ae45'),
+('hon.jordan_follow_up_actor(text)',true,false,'search_path=pg_catalog, hon','a09db56bfae320bb92380bbdef7f958361f2f73c67fc2ba77e85043c28136036'),
+('hon.jordan_follow_up_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8f9505deae9d2b72d5b4f75746f8fda28804e2aeb70bef9637ba65c971354d30'),
+('hon.jordan_follow_up_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','3f18611dab685f303dc9feb71a96cfc7aa4cdb01c463880b47748868e9e428b0'),
+('hon.jordan_follow_up_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','45e96c1a62ab74e22933872de37195c0ec1bfb356cd05281819516e4dfc008ac'),
+('hon.jordan_follow_up_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8decd425e207f37e69cfea3df17b6b537ca08394c9e87d9ad4925950ca8ba385'),
+('hon.jordan_follow_up_reader(text)',true,false,'search_path=pg_catalog, hon','571180164c33b1583afc894dbadcbefe8069073f4602ef20d38487c2bd1745c4'),
+('hon.jordan_follow_up_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6a144ec30ecdd7c568e6ce5c33da850433ff0b89b580e62851cb86359c594feb'),
+('hon.plan_jordan_follow_up(text,uuid)',true,true,'search_path=pg_catalog, hon','6de64de3eab93acc85375285ade9b13f5e5954e6c955c6e03d6ece81eda736a3'),
+('hon.prepare_jordan_follow_up(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','c8fed74689159c3c4b7c23bec2f78c04c482eb1974abf5bb289f57187de2293b'),
+('hon.read_jordan_follow_ups(text,uuid)',true,true,'search_path=pg_catalog, hon','e61b0aafc840386e625d9e5e36eb2af211996c21a4be2294e90c13c8f1c7e0a9'),
+('hon.record_jordan_follow_up(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','8112c275ce565e9a9be551ee8e3141cd93d02829265ac3f8aa98fd1d3a9e5bed'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Jordan follow-through function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='JORDAN_FOLLOW_UP' AND k.agent_key='jordan' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='OPERATIONS') THEN
+    RAISE EXCEPTION 'Jordan follow-through kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.jordan_follow_up_refs','hon.jordan_follow_up_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Jordan follow-through table is not closed: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Jordan follow-through exact verification.
 
 -- Membership plan payment options exact verification (0642): three runtime entry points, six private helpers, two forced-RLS tables.
 DO $$ DECLARE f text; t text; c text; d boolean; s text;

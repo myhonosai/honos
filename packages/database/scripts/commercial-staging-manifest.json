@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e5acf92289d962cf500aa70d2a6c633f312b069224850b65d08f69befb055ecd",
+  "chainSha256": "00041ce9d9fbf5989b13cb37371896f2e2e10727c80b411d981ef570190b4cf2",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -885,6 +885,18 @@
     {
       "file": "0637_creative_cost_basis.sql",
       "sha256": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e"
+    },
+    {
+      "file": "0638_eian_natural_voice.sql",
+      "sha256": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
+    },
+    {
+      "file": "0639_alex_delegation_plans.sql",
+      "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
+    },
+    {
+      "file": "0640_jordan_follow_through.sql",
+      "sha256": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d"
     },
     {
       "file": "0642_membership_plan_payment_options.sql",
