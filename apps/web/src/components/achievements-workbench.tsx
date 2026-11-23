@@ -1,9 +1,8 @@
 'use client';
-import Link from 'next/link';
 import React, { useEffect, useRef, useState } from 'react';
 import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENT_AGE_BANDS, ACHIEVEMENT_VISUALS, type AchievementDefinitionInput, type AchievementAwardInput, type AchievementDefinition, type AchievementAward, type AchievementAccess } from '@hon/contracts';
 import { AchievementAccessError, achievementFingerprint, loadAchievementAccess, loadAchievementDefinitions, loadAchievementAwards, loadAchievementHistory, saveAchievement, type AchievementMutation } from './achievements-http';
-import s from './community-workbench.module.css';
+import s from './curriculum-look/plain-page.module.css';
 import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 import { IdFields, StudentPicker } from './school-pickers/pickers';
 const freshDefinition = (): AchievementDefinitionInput => ({ expectedVersion: 0, name: '', description: '', category: 'EFFORT', ageBand: 'CHILD', visualToken: null, status: 'ACTIVE' });
@@ -74,8 +73,7 @@ export function AchievementsWorkbench() {
   const canRetry = scope && pending && scope.school === pending.school && scope.student === pending.student && (pending.mutation.op === 'DEFINITION' ? access?.canManageDefinitions : access?.canRecordAwards);
   function describe(d: AchievementDefinition) { return <><h3>{d.name}</h3><p>{plain(d.category)} · {plain(d.ageBand)}{d.visualToken ? ` · ${plain(d.visualToken)}` : ''} · {d.status === 'ACTIVE' ? 'Active' : 'Archived'}</p><p className={s.body}>{d.description || 'No description.'}</p></>; }
   return <main className={s.page}>
-    <nav><Link href="/staff/dashboard">School workspace</Link><Link href="/parent/achievements">Separate family recognition view</Link></nav>
-    <header><p>Students &amp; families</p><h1>Achievements</h1><p>Create your school’s achievements and award them to students.</p></header>
+    <header><p>Ranks &amp; curriculum</p><h1>Achievements</h1><p>Make a list of awards your school gives, like Best effort or Perfect attendance, then give them to students. You choose if the family sees each one in the parent app.</p></header>
     <aside data-plain-note=""><strong>An achievement recognizes effort. It is not a grade, a test result or a promotion.</strong></aside>
     <section><h2>Student</h2><ManualSchoolFields current={school}><label>School UUID<input value={school} onChange={e => { changed(); setSchool(e.target.value); }}/></label></ManualSchoolFields>
       {pickerScope && access?.canReadAwards && <StudentPicker scope={pickerScope} purpose="achievements" value={student} disabled={busy || Boolean(pending)} onPick={item => pickStudent(item?.studentProfileId ?? '', item ? `${item.givenName} ${item.familyName}` : '')} />}
@@ -86,10 +84,10 @@ export function AchievementsWorkbench() {
     {access?.canManageDefinitions && <section><h2>{definitionId ? `Edit ${definition.name || 'achievement'}` : 'New achievement'}</h2><button disabled={busy || Boolean(pending)} onClick={() => { setDefinitionId(null); setDefinition(freshDefinition()); }}>Start a new one</button><fieldset disabled={busy || Boolean(pending)}>
       <label>Name<input maxLength={100} value={definition.name} onChange={e => setDefinition({ ...definition, name: e.target.value })}/></label>
       <label>Description (optional, plain text)<textarea maxLength={600} value={definition.description} onChange={e => setDefinition({ ...definition, description: e.target.value })}/></label>
-      <label>Category<select value={definition.category} onChange={e => setDefinition({ ...definition, category: e.target.value as AchievementDefinitionInput['category'] })}>{ACHIEVEMENT_CATEGORIES.map(x => <option key={x}>{x}</option>)}</select></label>
-      <label>Age group<select value={definition.ageBand} onChange={e => setDefinition({ ...definition, ageBand: e.target.value as AchievementDefinitionInput['ageBand'] })}>{ACHIEVEMENT_AGE_BANDS.map(x => <option key={x}>{x}</option>)}</select></label><p>Early childhood: 3–5. Child: 6–11. Teen: 12–17. Adult: 18+. Age is checked on the award date.</p>
-      <label>Badge style (optional)<select value={definition.visualToken ?? ''} onChange={e => setDefinition({ ...definition, visualToken: e.target.value ? e.target.value as AchievementDefinitionInput['visualToken'] : null })}><option value="">None</option>{ACHIEVEMENT_VISUALS.map(x => <option key={x}>{x}</option>)}</select></label>
-      <button onClick={() => void mutate({ op: 'DEFINITION', id: definitionId, input: definition })}>Save achievement</button>
+      <label>Category<select value={definition.category} onChange={e => setDefinition({ ...definition, category: e.target.value as AchievementDefinitionInput['category'] })}>{ACHIEVEMENT_CATEGORIES.map(x => <option key={x} value={x}>{plain(x)}</option>)}</select></label>
+      <label>Age group<select value={definition.ageBand} onChange={e => setDefinition({ ...definition, ageBand: e.target.value as AchievementDefinitionInput['ageBand'] })}>{ACHIEVEMENT_AGE_BANDS.map(x => <option key={x} value={x}>{plain(x)}</option>)}</select></label><p className={s.meta}>Early childhood: 3–5. Child: 6–11. Teen: 12–17. Adult: 18+. Age is checked on the award date.</p>
+      <label>Badge style (optional)<select value={definition.visualToken ?? ''} onChange={e => setDefinition({ ...definition, visualToken: e.target.value ? e.target.value as AchievementDefinitionInput['visualToken'] : null })}><option value="">None</option>{ACHIEVEMENT_VISUALS.map(x => <option key={x} value={x}>{plain(x)}</option>)}</select></label>
+      <button data-primary="" onClick={() => void mutate({ op: 'DEFINITION', id: definitionId, input: definition })}>Save achievement</button>
       {definitionId && <button onClick={() => { const current = definitions.find(d => d.id === definitionId); if (current) void mutate({ op: 'DEFINITION', id: current.id, input: { ...definitionDraft(current), status: 'ARCHIVED' } }); }}>Archive (stops new awards)</button>}
     </fieldset></section>}
     {access?.canReadAwards && scope?.student && <section><h2>{studentName ? `${studentName}’s achievements` : 'This student’s achievements'}</h2>{awards.length === 0 && <p>No achievements awarded yet.</p>}{awards.map(a => <article key={a.id}>{describe(a.definition)}<p>{a.awardedOn} · {a.status === 'AWARDED' ? 'Awarded' : 'Withdrawn'} · {a.visibleToFamily ? 'Family can see it' : 'Staff only'}</p><p>Staff note: {a.reason ?? 'None'}</p>{access.canRecordAwards && a.status === 'AWARDED' && <button disabled={busy || Boolean(pending)} onClick={() => { setAwardId(a.id); setAward(awardDraft(a)); }}>Edit note, date or family view</button>}<button disabled={busy} onClick={() => void showHistory('AWARD', a.id)}>History</button></article>)}{awardCursor && <button disabled={busy} onClick={() => void more('AWARD')}>More awards</button>}</section>}
@@ -99,9 +97,9 @@ export function AchievementsWorkbench() {
       <label>Award date<input type="date" value={award.awardedOn} onChange={e => setAward({ ...award, awardedOn: e.target.value })}/></label>
       <label>Staff note (optional, never shown to family)<textarea maxLength={1000} value={award.reason ?? ''} onChange={e => setAward({ ...award, reason: e.target.value || null })}/></label>
       <label><input type="checkbox" checked={award.visibleToFamily} onChange={e => setAward({ ...award, visibleToFamily: e.target.checked })}/>Let the family see it</label>
-      <button onClick={() => void mutate({ op: 'AWARD', id: awardId, student: scope.student, input: award })}>{awardId ? 'Save changes' : 'Give achievement'}</button>
+      <button data-primary="" onClick={() => void mutate({ op: 'AWARD', id: awardId, student: scope.student, input: award })}>{awardId ? 'Save changes' : 'Give achievement'}</button>
       {awardId && <button onClick={() => void mutate({ op: 'AWARD', id: awardId, student: scope.student, input: { ...award, status: 'WITHDRAWN', visibleToFamily: false } })}>Withdraw award</button>}
-    </fieldset><p>Withdrawing keeps the history and hides it from the family.</p></section>}
-    {history && <section><h2>{history.kind === 'AWARD' ? 'Award history' : 'Achievement history'}</h2>{history.items.map(v => <article key={v.version}><p>Version {v.version} · {v.status}</p>{'reason' in v ? <><p>{v.awardedOn} · {v.visibleToFamily ? 'Family visible' : 'Staff only'}</p><p>Saved {v.recordedAt.slice(0, 16).replace('T', ' ')} UTC</p><p>Staff note: {v.reason ?? 'None'}</p></> : describe(v)}</article>)}{history.nextBefore && <button disabled={busy} onClick={() => void showHistory(history.kind, history.id, history.nextBefore)}>Older revisions</button>}</section>}
+    </fieldset><p className={s.meta}>Withdrawing an award hides it from the family. Its history stays.</p></section>}
+    {history && <section><h2>{history.kind === 'AWARD' ? 'Earlier versions of this award' : 'Earlier versions of this achievement'}</h2>{history.items.map(v => <article key={v.version}><p className={s.meta}>{plain(v.status)}</p>{'reason' in v ? <><p>{v.awardedOn} · {v.visibleToFamily ? 'Family visible' : 'Staff only'}</p><p className={s.meta}>Saved {v.recordedAt.slice(0, 10)}</p><p>Staff note: {v.reason ?? 'None'}</p></> : describe(v)}</article>)}{history.nextBefore && <button disabled={busy} onClick={() => void showHistory(history.kind, history.id, history.nextBefore)}>Show older</button>}</section>}
   </main>;
 }

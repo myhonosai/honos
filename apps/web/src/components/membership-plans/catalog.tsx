@@ -79,7 +79,7 @@ export function SchoolMembershipCatalog(): React.ReactElement {
   }
   const selectedName = scope ? choices.find(c => c.schoolId === scope.schoolId)?.schoolName : null;
   return <main className={styles.page}>
-    <nav aria-label="Membership navigation"><a href="/staff/crm/leads">CRM leads and enrollment</a><a href="/staff/launch">School setup</a><a href="/staff/command-center">School Command Center</a></nav>
+    <nav aria-label="Membership navigation"><a href="/staff/crm/leads">CRM leads and enrollment</a><a href="/staff/launch">School setup</a><a href="/staff/command-center">School Command Center</a><a href="/staff/billing/membership-changes">Pause and cancel rules</a></nav>
     <header><p className={styles.kicker}>SCHOOL MEMBERSHIPS</p><h1>Membership plans</h1><p>Each plan is one membership type with the ways families can pay for it.</p></header>
     <aside className={styles.intro}><strong>Plans and payment options</strong><p>Add a plan, then add its payment options: monthly, a set number of payments, paid in full, with or without a down payment. Each student’s memberships are on their contact card. Changing a plan saves a new version; people already on it keep theirs. Nothing here charges anyone.</p></aside>
     <section className={styles.panel} aria-labelledby="catalog-school"><h2 id="catalog-school">{scope ? selectedName ?? 'Current authorized school' : 'Choose your school'}</h2>

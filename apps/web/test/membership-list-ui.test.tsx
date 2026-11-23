@@ -91,10 +91,11 @@ it('shows rows, school dates, counts, a partial note and links; dates are school
   const html = render({ timeZone: 'Pacific/Kiritimati', list: ready([member(1), member(2, { effectiveStatus: 'UNDATED', ...undated('2026-10-01T12:00:00.000Z') }), draft(3), member(4, { participant: null, ...confirmed('2026-11-01', null) })], { nextCursor: 'c' }) });
   expect(html).toContain('Mina1 Park'); expect(html).toContain('In effect'); expect(html).toContain('Nov 1, 2026 to Dec 1, 2026');
   expect(html).toContain('Active, dates not confirmed'); expect(html).toContain('Recorded start (not confirmed)'); expect(html).toContain('From Nov 1, 2026, no end date');
-  expect(html).toContain('Person not visible here'); expect(html).toContain('Draft');
+  expect(html).toContain('Person not visible here'); expect(html).toContain('Not started yet');
   expect(html).toContain('Dates are school dates (America/Los_Angeles). Today at the school is Nov 8, 2026.');
   expect(html).toContain('data-testid="membership-counts"'); expect(html).toContain('Counts cover the 4 memberships shown'); expect(html).toContain('>Show more</button>');
-  expect(html).toContain('href="/staff/billing/memberships"'); expect(html).toContain('href="/staff/billing/membership-dates"');
+  // Each row opens the person's card, where the membership's actions live; no activation link.
+  expect(html).toContain('href="/staff/people?person='); expect(html).not.toContain('href="/staff/billing/memberships"');
   expect(html).toContain('It shows no payments, invoices, payers or agreements');
   expect(html).not.toMatch(/<form|method="post"|\$\d/i);
   // Instants fall on the school's day (America/Los_Angeles), not the viewer's: 2026-11-28T05:00Z is Nov 27 at the school.
@@ -103,7 +104,7 @@ it('shows rows, school dates, counts, a partial note and links; dates are school
 
 it('the filter tabs mark the current filter; a page for another filter is never shown; list states are honest', () => {
   const html = render({ filter: 'DRAFT', list: ready([draft(1)], { filter: 'DRAFT' }) });
-  expect(html).toMatch(/aria-pressed="true"[^>]*>Draft</); expect(html).not.toContain('membership-counts');
+  expect(html).toMatch(/aria-pressed="true"[^>]*>Not started yet</); expect(html).not.toContain('membership-counts');
   expect(render({ filter: 'DRAFT', list: ready([member(1)]) })).not.toContain('Mina1');
   expect(render({ filter: 'EXPIRED', list: ready([], { filter: 'EXPIRED' }) })).toContain('No memberships in this state');
   expect(render({ list: ready([]) })).toContain('No memberships here');

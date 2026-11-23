@@ -15,6 +15,8 @@ import {
   type CommunicationConsentSource,
   type CommunicationConsentStatus,
   type CommunicationConsentSummary,
+  type IntakeConsentMethod,
+  INTAKE_CONSENT_METHODS,
   type RecordCommunicationConsentInput,
 } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -39,6 +41,7 @@ interface CommunicationConsentRow {
   updatedByPrincipalId: string;
   createdAt: Date | string;
   updatedAt: Date | string;
+  captureMethod?: IntakeConsentMethod | null;
 }
 
 interface IdempotencyRecord {
@@ -122,6 +125,7 @@ function toSummary(row: CommunicationConsentRow): CommunicationConsentSummary {
     capturedAt: asIso(row.capturedAt),
     version: row.version,
     updatedAt: asIso(row.updatedAt),
+    captureMethod: row.captureMethod && INTAKE_CONSENT_METHODS.includes(row.captureMethod) ? row.captureMethod : null,
   };
 }
 
@@ -330,8 +334,11 @@ export class CommunicationConsentService {
            version,
            updated_by_principal_id AS "updatedByPrincipalId",
            created_at AS "createdAt",
-           updated_at AS "updatedAt"
-         FROM hon.communication_consents
+           updated_at AS "updatedAt",
+           (SELECT k.method FROM hon.communication_consent_captures k
+             WHERE k.consent_id = c.id AND k.consent_version = c.version
+             ORDER BY k.captured_at DESC, k.id LIMIT 1) AS "captureMethod"
+         FROM hon.communication_consents c
          WHERE person_id = $1::uuid
          ORDER BY channel ASC`,
         [personId],
