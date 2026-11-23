@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "663391241169d87bf397f982fa1a1c13ed6d8b88888530cea09a661d8e47d4e6",
+  "chainSha256": "d0f15dc60be341d66daf0100eda387bd26bf308582475d5a59aad202fa962292",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -869,6 +869,10 @@
     {
       "file": "0655_mobile_handoff_single_use.sql",
       "sha256": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
+    },
+    {
+      "file": "0659_school_contact_membership_details.sql",
+      "sha256": "03d73e5b62f43192a5819022019506f1d468a6c0d4f7ffd334c1adc9684595d9"
     }
   ]
 }

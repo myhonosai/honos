@@ -91,8 +91,9 @@ function Body({ language, c, tab, t, slot, tools, agreement }: { language: strin
       return <Fold id="tasks" title={t('tasks')} count={c.tasks.items.length}><ul className={styles.plain}>{c.tasks.items.map((a, i) => <li key={i}>
         <strong>{a.title}</strong> · {t(`priority_${a.priority}` as CardKey)}{a.dueAt ? ` · ${t('due', { date: day(language, a.dueAt) })}` : ''}</li>)}</ul></Fold>;
     case 'membership': {
-      if (!c.membership.allowed) return denied;
+      // The agreement panel makes its own read, so a role that may send agreements sees it even without the membership section.
       const sign = agreement ? agreement() : null;
+      if (!c.membership.allowed) return <>{denied}{sign ? <Fold id="membership-agreement" title={t('foldAgreement')}>{sign}</Fold> : null}</>;
       return <>{tools ? <Fold id="membership-start" title={t('foldStart')}>{tools(c.membership.items)}</Fold> : null}
         <Fold id="membership-list" title={t('foldMemberships')} count={c.membership.items.length}>{c.membership.items.length ? <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
         <strong>{m.planName ?? m.planCode}</strong> · {codeLabel(language, m.state)}

@@ -21,6 +21,8 @@ import { PersonPhoto } from './photo';
 import { AgreementLinkPanel } from '../agreement-link/send-panel';
 import { ContactMessageHistory } from '../contact-history/contact-history';
 import { photoApi, type PhotoApi } from './photo-http';
+import { membershipDetailsApi, type MembershipDetailsApi } from './membership-details-http';
+import { MembershipFacts, type MembershipDetailsState } from './membership-facts';
 
 /**
  * A save whose outcome is not known yet: the exact request and key, in memory only, so "Try again" replays it.
@@ -33,6 +35,7 @@ type Pending = Readonly<{ schoolId: string; personId: string; key: string }
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 const newKey = () => globalThis.crypto.randomUUID();
 const lower = (v: string) => v.toLowerCase();
+const NO_DETAILS: MembershipDetailsState = { state: 'NONE' };
 
 /** Builds the closed edit body from the form, or says why it cannot be sent. Never sends an unchanged record. */
 export function contactInput(schoolId: string, record: PersonRecord, draft: ContactDraft): PersonRecordUpdateInput | 'INVALID' | 'UNCHANGED' {
@@ -65,8 +68,8 @@ export function contactDeepLink(search: string): string | null {
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi }: { api?: PeopleApi; consents?: ConsentApi;
-  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi }): React.ReactElement {
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, memberships = membershipDetailsApi }: { api?: PeopleApi; consents?: ConsentApi;
+  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi; memberships?: MembershipDetailsApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -81,6 +84,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   const [card, setCard] = useState<CardState>({ state: 'NONE' });
   const [cardTab, setCardTab] = useState<CardTab>('overview');
   const [cardRefresh, setCardRefresh] = useState(0);
+  const [memberDetails, setMemberDetails] = useState<MembershipDetailsState>({ state: 'NONE' });
   const cardGeneration = useRef(0);
   // A card read again after a membership change keeps showing the card meanwhile, so the open panel and its answer stay.
   const quietCard = useRef(false);
@@ -178,6 +182,19 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     return () => { abort.abort(); };
   }, [selection?.organizationId, selection?.schoolId, selectedId, recordRefresh, cardRefresh, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 0659: price, next payment, payer and (receivables readers only) paid and due, read once the card shows the membership tab.
+  // Read again with every card read, so a change made from the tab shows here too; a stale answer for another person is dropped.
+  const detailsFor = card.state === 'READY' && card.card.membership.allowed && card.card.membership.items.length ? card.card.person.personId : null;
+  useEffect(() => {
+    if (!selection || !detailsFor) { setMemberDetails({ state: 'NONE' }); return; }
+    const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    setMemberDetails(prior => prior.state === 'READY' && lower(prior.personId) === lower(detailsFor) ? prior : { state: 'LOADING' });
+    memberships.read({ organizationId: selection.organizationId, schoolId: selection.schoolId }, detailsFor, signal).then(
+      details => { if (!signal.aborted) setMemberDetails({ state: 'READY', personId: detailsFor, details }); },
+      () => { if (!signal.aborted) setMemberDetails({ state: 'UNAVAILABLE' }); });
+    return () => { abort.abort(); };
+  }, [selection?.organizationId, selection?.schoolId, detailsFor, card, memberships]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (linkHandled.current || !selection) return;
     linkHandled.current = true;
@@ -251,9 +268,12 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   [selection?.organizationId, selection?.schoolId, preferences.language, onContactChanged, admin, contacts]); // eslint-disable-line react-hooks/exhaustive-deps
   // After a membership is started, paused, resumed, cancelled or a refund recorded: read the card and the list again.
   const onMembershipChanged = useCallback(() => { if (!mounted.current) return; quietCard.current = true; setCardRefresh(n => n + 1); setListRefresh(n => n + 1); }, []);
-  const membershipSlot = useCallback((m: MembershipItem) => selection ? <MembershipPanel key={`${lower(selection.schoolId)}:${m.membershipId}`} language={preferences.language}
-    scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/> : null,
-  [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shownDetails: MembershipDetailsState = memberDetails.state === 'READY' && (!detailsFor || lower(memberDetails.personId) !== lower(detailsFor)) ? NO_DETAILS : memberDetails;
+  const membershipSlot = useCallback((m: MembershipItem) => selection ? <>
+    <MembershipFacts language={preferences.language} details={shownDetails} membershipId={m.membershipId}/>
+    <MembershipPanel key={`${lower(selection.schoolId)}:${m.membershipId}`} language={preferences.language}
+      scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/></> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged, shownDetails]); // eslint-disable-line react-hooks/exhaustive-deps
   // New membership and Renew (0624) at the top of the membership tab; the server decides who can have which plan.
   // 0499: send the family a link to sign the membership agreement, in the card's membership tab (students only; its own read decides access).
   const agreementRecord = record.state === 'READY' && selectedId && lower(record.record.personId) === lower(selectedId) && record.record.student ? record.record.personId : null;

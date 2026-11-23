@@ -6398,3 +6398,16 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
     RAISE EXCEPTION 'The public checkout order intake must be a code-owned service with no authority'; END IF;
 END $$;
 -- End public checkout orders exact verification.
+
+-- Contact card membership details exact verification (0659): one read-only runtime entry point.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND p.provolatile='s' AND p.prorettype='jsonb'::regtype
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='49d602c84403e8ffffed17c874a5520f7de948f5d41fff317e44e3ef042eff92'
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_school_contact_membership_details(text,jsonb)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe or drifted hon.read_school_contact_membership_details'; END IF;
+END $$;
+-- End contact card membership details exact verification.
