@@ -13,7 +13,13 @@ export interface CreativeInvocation extends CreativeProviderRoute {
 }
 export interface CreativeAvatarLook { name: string; style: CreativeAvatarStyle; description?: string }
 export interface CreativeResultAsset { mediaType: CreativeAssetMediaType; width: number; height: number; durationSeconds: number | null; providerAssetReference: string }
-export interface CreativeResult { finalUnits: number; providerCostMicrounits: number; assets: CreativeResultAsset[] }
+/**
+ * Where a cost came from (0637, review [22]): HON_ESTIMATE is HON's own rate times units, PROVIDER_REPORTED only when the
+ * provider's own answer stated the cost. An estimate is never recorded as the provider's actual cost.
+ */
+export type CreativeCostBasis = 'HON_ESTIMATE' | 'PROVIDER_REPORTED';
+export const CREATIVE_COST_BASES: readonly CreativeCostBasis[] = ['HON_ESTIMATE', 'PROVIDER_REPORTED'];
+export interface CreativeResult { finalUnits: number; providerCostMicrounits: number; providerCostBasis: CreativeCostBasis; assets: CreativeResultAsset[] }
 
 /**
  * Provider-neutral boundary for image and video generation. The provider gets the prompt and fixed parameters only: no
@@ -54,6 +60,7 @@ export class CreativeProviderRuntimeError extends Error {
     readonly outcome: 'PRE_SEND' | 'FAILED' | 'UNKNOWN',
     readonly reason: 'CONFIGURATION_REQUIRED' | 'INVALID_REQUEST' | 'PROVIDER_REJECTED' | 'PROVIDER_UNKNOWN',
     readonly providerCostMicrounits: number | null = null,
+    readonly providerCostBasis: CreativeCostBasis = 'HON_ESTIMATE',
   ) { super(reason); }
 }
 
@@ -98,7 +105,7 @@ export class SyntheticCreativeProviderRuntime implements CreativeProviderRuntime
     const assets = Array.from({ length: count }, (_, i) => ({ mediaType: video ? 'video/mp4' as const : 'image/png' as const, width, height,
       durationSeconds: video ? Math.min(input.units, 600) : null, providerAssetReference: `synthetic:${input.providerRequestId}:${i + 1}` }));
     // UNVERIFIED: claims more units than were reserved, which the API must refuse to trust.
-    return { finalUnits: this.behaviour === 'UNVERIFIED' ? input.units + 1 : input.units, providerCostMicrounits: cost, assets };
+    return { finalUnits: this.behaviour === 'UNVERIFIED' ? input.units + 1 : input.units, providerCostMicrounits: cost, providerCostBasis: 'HON_ESTIMATE', assets };
   }
 }
 
@@ -142,6 +149,6 @@ export class SyntheticAsyncCreativeProviderRuntime implements AsyncCreativeProvi
     const assets = Array.from({ length: video ? 1 : Math.min(job.units, 8) }, (_, i) => ({ mediaType: video ? 'video/mp4' as const : 'image/png' as const, width, height,
       durationSeconds: video ? Math.min(job.units, 600) : null, providerAssetReference: `async:${job.providerJobId}:${i + 1}` }));
     return { state: 'DONE', result: { finalUnits: step === 'UNVERIFIED' ? job.units + 1 : job.units,
-      providerCostMicrounits: job.units * (this.options.costMicrounitsPerUnit ?? 1000), assets } };
+      providerCostMicrounits: job.units * (this.options.costMicrounitsPerUnit ?? 1000), providerCostBasis: 'HON_ESTIMATE', assets } };
   }
 }
