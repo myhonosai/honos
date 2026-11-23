@@ -148,7 +148,7 @@
 .dialogClose { min-width: 40px; min-height: 40px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px; background: #10243a; color: #eef6fc; font: inherit; font-size: 18px; cursor: pointer; }
 @media (max-width: 520px) { .backdrop { padding: 12px 8px; } .dialog { padding: 14px; } }
 
-/* 0625 profile details: one other phone or email per row (value, label, remove). */
+/* 0656 profile details: one other phone or email per row (value, label, remove). */
 .fields legend { padding: 0; font-size: 13px; font-weight: 700; }
 .contactRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(96px, 30%) auto; gap: 8px; align-items: center; min-width: 0; }
 .contactRow input[aria-invalid="true"] { border-color: #e48aa0; }
