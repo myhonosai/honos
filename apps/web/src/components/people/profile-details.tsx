@@ -270,5 +270,5 @@ export function PersonProfileDetails({ language, schoolId, record, canEdit, stan
   return <DetailsCard language={language} canEdit={canEdit} read={read} draft={draft} primary={primary} standing={standing} outcome={outcome}
     locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} onDraft={next => { if (lock === 'NONE') { setDraft(next); if (outcome?.kind !== 'SENDING') setOutcome(null); } }}
     onSave={onSave} onReload={() => setRefresh(n => n + 1)} onTryAgain={() => { void send(); }}
-    onStop={() => { if (lock !== 'KEPT' || sending.current) return; pending.current = null; setLock('NONE'); setOutcome(null); setDraft(null); setRefresh(n => n + 1); }}/>;
+    onStop={() => { if (lock !== 'KEPT' || sending.current) return; pending.current = null; setLock('NONE'); setOutcome(null); }}/>;
 }

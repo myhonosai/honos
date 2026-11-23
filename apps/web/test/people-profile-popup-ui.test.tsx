@@ -27,7 +27,7 @@ const card = { state: 'READY', card: verifySchoolContactCard(cardBody, person) }
 const base: PeopleViewProps = { language: 'en', waiting: false, concealed: false, hasSchool: true,
   list: { state: 'READY', filters: NO_CONTACT_FILTERS, counts: { ALL: 1, STUDENT: 1, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 }, nextCursor: null, more: 'IDLE',
     rows: [{ personId: person, version: 1, givenName: 'Ana', familyName: 'Rivera', email: null, phoneE164: null, segment: 'STUDENT', planName: null,
-      planCode: null, programName: null, membershipEndsAt: null, ranks: [] }] },
+      planCode: null, programName: null, membershipEndsAt: null, membershipState: null, age: null, ranks: [] }] },
   filters: NO_CONTACT_FILTERS, options: null, record: { state: 'READY', record }, selectedId: person, outcome: null, locked: false, canRetry: false,
   onSaveContact: () => {}, onSaveBirth: () => {} };
 const view = (over: Partial<PeopleViewProps> = {}) => renderToStaticMarkup(<PeopleView {...base} {...over}/>);

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { attendanceCardCheckDigits, isAttendanceCardCode, normalizeAttendanceCardCode, type AttendanceCard, type AttendanceCardsRead, type AttendanceCheckInResult } from '@hon/contracts';
 import { code128cWidths, qrMatrix, qrNumericCodewords, reedSolomon } from '../src/components/attendance-cards/codes';
 import { CardsError, cardsApi, cardsErrorFor, keepForRetry } from '../src/components/attendance-cards/http';
-import { CardFace, CardsView, type CardsViewProps, type Look } from '../src/components/attendance-cards/cards';
+import { AVERY_PER_SHEET, CardFace, CardsView, averyPages, cardNameOf, type CardsViewProps, type Look, type PrintedCard } from '../src/components/attendance-cards/cards';
 import { ScanView, todaysSessions, type ScanViewProps } from '../src/components/attendance-cards/scan';
 import { cardsText } from '../src/components/attendance-cards/copy';
 import { id } from './account-status-fixtures';
@@ -95,7 +95,7 @@ it('a card face shows the logo, photo or initials, name and a QR or barcode with
 });
 
 const view = (over: Partial<CardsViewProps> = {}) => renderToStaticMarkup(<CardsView language="en" read={{ state: 'READY', read }} look={look} selected={new Set()} confirmCancel={null}
-  outcome={null} locked={false} canRetry={false} sheet={null} {...over}/>);
+  outcome={null} locked={false} canRetry={false} sheet={null} startAt={0} {...over}/>);
 it('the card maker lists students with their card and offers the owner choice of code', () => {
   const html = view();
   expect(html).toContain('Barcode'); expect(html).toContain('QR code'); expect(html).toContain('Not saved yet');
@@ -106,6 +106,26 @@ it('the card maker lists students with their card and offers the owner choice of
   expect(view({ outcome: { kind: 'REPLAYED' } })).toContain('shown only once');
   const sheet = view({ sheet: [{ studentProfileId: id(10), name: 'Kid10 Synthetic', initials: 'KS', code: CODE, photo: null }] });
   expect(sheet).toContain('Cards ready to print'); expect(sheet).toContain('data-testid="card-face"'); expect(sheet).not.toContain('Save look');
+});
+
+it('cards print as "Family, Given" like a class roster, and fall back to whichever name is on file', () => {
+  expect(cardNameOf('Miles', 'Kudo')).toBe('Kudo, Miles');
+  expect(cardNameOf('Miles', '')).toBe('Miles'); expect(cardNameOf('', 'Kudo')).toBe('Kudo');
+});
+
+it('the sheet is laid out on Avery business card pages (2 x 5), starting on any label of a used sheet', () => {
+  const cards: PrintedCard[] = Array.from({ length: 12 }, (_, i) => ({ studentProfileId: id(10 + i), name: `Kid${i}`, initials: 'K', code: CODE, photo: null }));
+  const pages = averyPages(cards, 3);
+  expect(AVERY_PER_SHEET).toBe(10); expect(pages).toHaveLength(2);
+  expect(pages.every(p => p.length === AVERY_PER_SHEET)).toBe(true);
+  expect(pages[0]!.slice(0, 3)).toEqual([null, null, null]); expect(pages[0]![3]).toBe(cards[0]);
+  expect(pages[1]!.filter(Boolean)).toHaveLength(5); expect(pages[1]!.slice(5)).toEqual([null, null, null, null, null]);
+  expect(averyPages(cards.slice(0, 2), 99)[0]![9]).toBe(cards[0]);
+  expect(averyPages(cards.slice(0, 2), -4)[0]![0]).toBe(cards[0]);
+  const html = view({ sheet: cards.slice(0, 3), startAt: 2 });
+  expect(html).toContain('data-avery="8371"'); expect(html.match(/data-testid="avery-page"/g)).toHaveLength(1);
+  expect(html.match(/data-testid="card-face"/g)).toHaveLength(3); expect(html.match(/data-empty="true"/g)).toHaveLength(7);
+  expect(html).toContain('Start on label'); expect(html).toContain('Avery 8371');
 });
 
 it('cards print only in the saved look', () => {

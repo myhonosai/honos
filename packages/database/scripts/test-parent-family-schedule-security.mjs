@@ -186,7 +186,21 @@ try {
   }
   assert(crossFamilyDenied, 'A parent could query a different family’s booking in the same school.');
 
-  console.log('Verified resolver-only parent schedule authorization, family-anchored booking projection, prohibited-field redaction, and same-school cross-family denial.');
+  // #177 (0632): the projection is now a definer read that re-proves the family for the transaction's own principal,
+  // so a forged scope or another person's subject is refused by the database even past the service's own family check.
+  const [resolved] = await database.resolveParentFamilyScopes(externalSubject, ids.school);
+  assert(resolved?.familyId === ids.familyA, 'Fixture parent scope did not resolve.');
+  const refusedBy = async (label, run) => {
+    let status;
+    try { await run(); } catch (error) { status = typeof error?.getStatus === 'function' ? error.getStatus() : error?.code; }
+    assert(status === 403, `${label} was not refused with 403 (got ${status ?? 'a schedule'}).`);
+  };
+  await refusedBy('A forged scope naming another same-school family', () => schedules.get({ ...resolved, familyId: ids.familyB }, ids.familyB, query, randomUUID(), externalSubject));
+  await refusedBy('Another person subject on a valid parent scope', () => schedules.get(resolved, ids.familyA, query, randomUUID(), `not-${externalSubject}`));
+  const direct = await schedules.get(resolved, ids.familyA, query, randomUUID(), externalSubject);
+  assert(JSON.stringify(direct.bookings) === JSON.stringify(allowed.data.bookings), 'The service and controller schedule projections differ.');
+
+  console.log('Verified resolver-only parent schedule authorization, family-anchored booking projection, prohibited-field redaction, same-school cross-family denial, and the 0632 definer read refusing a forged family scope or another subject.');
 } finally {
   try {
     await database.onModuleDestroy();

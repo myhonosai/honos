@@ -1203,11 +1203,11 @@ async function peopleApiRoute(route, path, method, url) {
     const q = (url.searchParams.get('query') ?? '').toLowerCase(), segment = url.searchParams.get('segment') ?? 'ALL';
     const all = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
       .map((r) => ({ personId: r.personId, version: r.version, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164,
-        segment: r.student ? 'STUDENT' : 'OTHER', planName: null, planCode: null, programName: null, membershipEndsAt: null, ranks: [] }));
+        segment: r.student ? 'STUDENT' : 'OTHER', planName: null, planCode: null, programName: null, membershipEndsAt: null, membershipState: null, age: null, ranks: [] }));
     const counts = { ALL: all.length, STUDENT: all.filter((r) => r.segment === 'STUDENT').length, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 };
     const rows = all.filter((r) => segment === 'ALL' || r.segment === segment);
     return json(route, 200, { data: { generatedAt: iso(0), segment, counts, rows, hasMore: false, nextCursor: null,
-      options: url.searchParams.get('options') === 'true' ? { ranks: [], programs: [], plans: [] } : null }, meta: { requestId: id(900), correlationId: id(900) } });
+      options: url.searchParams.get('options') === 'true' ? { ranks: [], programs: [], plans: [], tags: [] } : null }, meta: { requestId: id(900), correlationId: id(900) } });
   }
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase();
@@ -1228,7 +1228,7 @@ async function peopleApiRoute(route, path, method, url) {
   }
   const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
   if (read && method === 'GET') { ppl.recordReads = (ppl.recordReads ?? 0) + 1; const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
-  // 0625 profile details: version 0 until first saved; the save checks the human command, key replay and version like the server.
+  // 0656 profile details: version 0 until first saved; the save checks the human command, key replay and version like the server.
   const detailsRead = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})/details$`));
   if (detailsRead && method === 'GET') {
     if (!ppl.records.has(detailsRead[1])) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
@@ -2379,7 +2379,7 @@ for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], 
     await dialog.getByText('Saved. Changed: last name.').waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), false, 'the page re-rendering after the save does not pull focus back to Close');
     assert.equal(ppl.records.get(id(301)).familyName, 'Rivera-Lopez');
-    // 0625: more details in the same pop-up: gender, guardian, a second phone and email, saved with the person-record command.
+    // 0656: more details in the same pop-up: gender, guardian, a second phone and email, saved with the person-record command.
     const details = dialog.getByTestId('person-details');
     await details.getByTestId('details-gender').waitFor();
     await details.getByTestId('details-gender').selectOption('FEMALE');

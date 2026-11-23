@@ -1,5 +1,5 @@
 /**
- * Profile details on the contact card's Edit profile pop-up (0625) over signed HTTP (HON session cookie -> HonIdentityGuard + the
+ * Profile details on the contact card's Edit profile pop-up (0656) over signed HTTP (HON session cookie -> HonIdentityGuard + the
  * school-person-record human guard + HonExceptionFilter -> controller -> protected definer functions on the restricted runtime role
  * with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names and example.test addresses only; nothing is sent.
  */
@@ -157,7 +157,7 @@ try {
   await runtime.query('BEGIN'); await assert.rejects(runtime.query('SELECT count(*) FROM hon.person_profile_details'), /permission denied/); await runtime.query('ROLLBACK'); checks += 1;
   await runtime.query('BEGIN'); await assert.rejects(runtime.query("SELECT hon.person_profile_contact_list('[]'::jsonb,'PHONE',NULL)"), /permission denied/); await runtime.query('ROLLBACK'); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const section = verify.split('-- Profile details exact verification (0625)')[1]?.split('-- End profile details exact verification.')[0];
+    const section = verify.split('-- Profile details exact verification (0656)')[1]?.split('-- End profile details exact verification.')[0];
     ok(section, '011 section present');
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
@@ -235,7 +235,7 @@ try {
   // 11. Table guards: constraint shapes hold even for the owner.
   await sql('BEGIN'); await assert.rejects(sql("UPDATE hon.person_profile_details SET gender='OTHER' WHERE person_id=$1", [people.ana])); await sql('ROLLBACK'); checks += 1;
   await sql('BEGIN'); await assert.rejects(sql(`UPDATE hon.person_profile_details SET other_phones='${JSON.stringify(Array.from({ length: 6 }, () => ({})))}' WHERE person_id=$1`, [people.ana])); await sql('ROLLBACK'); checks += 1;
-  console.log(`PASS: person profile details (0625), ${checks} checks.`);
+  console.log(`PASS: person profile details (0656), ${checks} checks.`);
 } finally {
   await app?.close();
   await cleanup().catch((error) => console.error('cleanup failed', error.message));

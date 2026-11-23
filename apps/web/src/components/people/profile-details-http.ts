@@ -3,7 +3,7 @@ import { accountClosed, accountUuid, validatePersonDetails, validatePersonDetail
 import { PersonRecordError, codeOf, exchange, personErrorFor } from './http';
 
 /**
- * 0625 profile details of one person at the selected school: gender, parent/guardian name, notes, labels for the primary
+ * 0656 profile details of one person at the selected school: gender, parent/guardian name, notes, labels for the primary
  * phone and email, and up to five other phones and emails. The server decides authority from the verified session (people
  * read, plus people update to save); the browser names the school and person and sends one closed body with the person-record
  * human-command marker and an idempotency key. Nothing is sent to the other addresses.

@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0625 (allocated by the coordinator 2026-11-21): more profile details on the contact card's Edit profile pop-up.
+-- 0656 (first allocated 0625 on 2026-11-21; renumbered by the coordinator 2026-11-23): more profile details on the contact card's Edit profile pop-up.
 -- Owner (David, 2026-11-21): "it should handle more than just name and contact. needs rank, program, more than 1 contact
 -- both phone and email, date of birth, male or female and more."
 -- Name, primary email, primary phone and birth date keep their existing commands (0217/0218); rank and program stay with
@@ -193,11 +193,11 @@ DO $$ DECLARE r text; f text;
   fns text[]:=ARRAY['hon.person_profile_contact_list(jsonb,text,text)','hon.person_profile_details_json(uuid,text)']||entry; BEGIN
   FOREACH f IN ARRAY fns LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
-    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
   EXECUTE 'REVOKE ALL ON TABLE hon.person_profile_details FROM PUBLIC';
-  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
     EXECUTE format('REVOKE ALL ON TABLE hon.person_profile_details FROM %I',r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;

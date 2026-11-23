@@ -186,7 +186,11 @@ try {
     });
     await check(size + ': session signal removes visible receipt and details', async () => {
       await s.page.evaluate(() => window.dispatchEvent(new Event('hon:session-invalidated')));
-      assert(await s.page.locator('[data-hq-directory-facts]').evaluate(node => node.hidden && node.inert));
+      // Since the HQ shell lifecycle fix (launch-readiness [18]) the shell retires the whole page to its sign-in state,
+      // so the directory facts are unmounted rather than only hidden.
+      await s.page.getByRole('link', { name: 'Sign in to HON', exact: true }).waitFor();
+      const facts = s.page.locator('[data-hq-directory-facts]');
+      assert(await facts.count() === 0 || await facts.evaluate(node => node.hidden && node.inert));
       assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic Organization'));
       assert.equal(await s.panel.getByRole('heading', { name: 'School creation receipt', exact: true }).count(), 0);
       assert.equal(await s.panel.getByText(receipt.organizationId, { exact: true }).count(), 0); assert.equal(s.f.commands.length, 2);
@@ -206,9 +210,12 @@ try {
   });
   for (const status of ['401', '403']) await check(status + ' command refusal conceals all form data and blocks automatic retries', async () => {
     const s = await open('create-' + status, { width: 1440, height: 1000 }, f => { f.mode = status; });
-    await authorize(s); await fill(s); await submit(s); await idle(s);
+    await authorize(s); await fill(s); await submit(s);
+    // A 401 ends the session; since the HQ shell lifecycle fix (launch-readiness [18]) the shell retires the whole page
+    // to its sign-in state, so the form and directory facts are unmounted rather than only hidden.
+    if (status === '401') await s.page.getByRole('link', { name: 'Sign in to HON', exact: true }).waitFor(); else await idle(s);
     assert.equal(await s.panel.locator('input').count(), 0); assert.equal(s.f.commands.length, 1);
-    if (status === '401') { assert(await s.page.locator('[data-hq-directory-facts]').evaluate(node => node.hidden && node.inert)); assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic School')); }
+    if (status === '401') { const facts = s.page.locator('[data-hq-directory-facts]'); assert(await facts.count() === 0 || await facts.evaluate(node => node.hidden && node.inert)); assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic School')); }
     await s.context.close();
   });
   for (const mode of ['mismatch', 'wrong-actor']) await check(mode + ' never reveals a receipt or replaces the original principal/body/key', async () => {
@@ -257,8 +264,10 @@ try {
     const s = await open('create-pending-directory', { width: 390, height: 844 }, f => { f.mode = '401'; f.directoryGate = directoryGate; f.directoryStarted = started; });
     await directoryStarted;
     const failedRead = s.page.waitForEvent('requestfailed', { predicate: request => new URL(request.url()).pathname === '/api/v1/hq/schools' });
-    await authorize(s); await fill(s); await submit(s); await failedRead; release(); await idle(s);
-    assert(await s.page.locator('[data-hq-directory-facts]').evaluate(node => node.hidden && node.inert));
+    await authorize(s); await fill(s); await submit(s); await failedRead; release();
+    await s.page.getByRole('link', { name: 'Sign in to HON', exact: true }).waitFor(); // the 401 retires the HQ shell (launch-readiness [18])
+    const facts = s.page.locator('[data-hq-directory-facts]');
+    assert(await facts.count() === 0 || await facts.evaluate(node => node.hidden && node.inert));
     assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic School'));
     await s.context.close();
   });

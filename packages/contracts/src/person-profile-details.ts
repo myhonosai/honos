@@ -1,5 +1,5 @@
 /**
- * 0625: more profile details for one person at one exact school, edited from the contact card's Edit profile pop-up.
+ * 0656: more profile details for one person at one exact school, edited from the contact card's Edit profile pop-up.
  * Gender, parent/guardian name, notes, a label for the primary phone and email, and up to five other phones and emails.
  * Nothing is ever sent to the other addresses; consent stays with the primary address (0217). Never billing, family or access.
  */

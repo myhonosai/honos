@@ -108,11 +108,12 @@ try{
   for(const[i,[st,t,why='RECORDED']]of history.entries())
    await admin.query("INSERT INTO hon.saas_subscription_history(subscription_id,version,status,status_reason,actor_principal_id,occurred_at) VALUES($1,$2,$3,$4,$5,$6)",[id,i+1,st,why,P('owner'),t]);
  }
- async function trial(org,starts){
+ // days: 14 for a trial that has ended; C uses 60 so a trial started in the first third of this month is still running on any day of the month.
+ async function trial(org,starts,days=14){
   await admin.query(`INSERT INTO hon.hon_os_trial_enrollments(organization_id,school_id,registration_id,campaign_id,campaign_version_id,publication_id,policy_decision_id,capability_profile,duration_days,
    terms_reference,starts_at,ends_at,prior_entitlement,granted_entitlement_version,enrolled_by_principal_id,subject,idempotency_key,program_status,ai_budget)
-   VALUES($1,$2,$3,$4,$5,$6,$7,'CORE',14,'fixture',$8,$8::timestamptz+interval '14 days','{}',2,$9,$10,$11,'TEST_MODE','null')`,
-   [org,randomUUID(),randomUUID(),randomUUID(),randomUUID(),randomUUID(),randomUUID(),starts,P('owner'),`oidc:hqbiz-${randomUUID()}`,randomUUID()]);
+   VALUES($1,$2,$3,$4,$5,$6,$7,'CORE',$12,'fixture',$8,$8::timestamptz+make_interval(days=>$12),'{}',2,$9,$10,$11,'TEST_MODE','null')`,
+   [org,randomUUID(),randomUUID(),randomUUID(),randomUUID(),randomUUID(),randomUUID(),starts,P('owner'),`oidc:hqbiz-${randomUUID()}`,randomUUID(),days]);
  }
  async function registration(org,t){
   await admin.query(`INSERT INTO hon.hon_os_school_registrations(organization_id,school_id,owner_principal_id,owner_grant_id,subject,verified_email,terms_version_id,terms_accepted_at,program_status,idempotency_key,registered_at)
@@ -124,8 +125,9 @@ try{
  await trial(O.A,old2);
  // B: annual binding, 2,388.06 a year counts as 199.01 a month (rounded to the cent).
  await binding(O.B,'ACTIVE',{billingInterval:'ANNUAL',lockedPriceMinor:238806},cur);
- // C: v1 monthly subscription that started this month after a trial started this month.
- await trial(O.C,cur1);
+ // C: v1 monthly subscription that started this month after a trial started this month. The 60-day trial is still running
+ // (it started at most about 10.3 days into the month), so activeTrials is 1 on every day of the month, not only before the 22nd.
+ await trial(O.C,cur1,60);
  await subscription(O.C,{status:'IN_SERVICE',price:14900,started:cur,history:[['PENDING_ACTIVATION',cur1],['IN_SERVICE',cur]]});
  // D: lifetime purchase: counted, never added to MRR.
  await subscription(O.D,{status:'IN_SERVICE',interval:'LIFETIME',price:189600,started:cur,history:[['PENDING_ACTIVATION',cur1],['IN_SERVICE',cur]]});

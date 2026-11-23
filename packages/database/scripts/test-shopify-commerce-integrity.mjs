@@ -72,6 +72,9 @@ try{
   'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock',
   // 0614 POS Shopify orders for made-to-order items (SH2b).
   'begin_pos_shopify_order','finish_pos_shopify_order',
+  // 0615 Marcus commerce review (CA1).
+  'begin_shopify_commerce_review','plan_shopify_commerce_review','prepare_shopify_commerce_review','fail_shopify_commerce_review','record_shopify_commerce_review',
+  'read_shopify_commerce_reviews','close_shopify_commerce_review',
   // 0596 Marcus merch ideas (CS-M2).
   'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
   'read_shopify_merch_ideas','close_shopify_merch_ideas'];
@@ -106,7 +109,7 @@ try{
  const SHOP='ima-proof-'+K().slice(0,8)+'.myshopify.com';
 
  // 2. Before connecting: permissions and scope.
- assert.deepEqual(ok(await read(reader,A.schoolId)),{schoolId:A.schoolId,canManage:false,connectEnabled:true,autoSync:false,connection:null,counts:null,summary:null});
+ assert.deepEqual(ok(await read(reader,A.schoolId)),{schoolId:A.schoolId,canManage:false,connectEnabled:true,autoSync:false,connection:null,counts:null,summary:null,newStoreUrl:null});
  assert.equal(ok(await read(manager,A.schoolId)).canManage,true);
  assert.deepEqual(ok(await read(reader,A.schoolId,'/catalog')),{schoolId:A.schoolId,currency:null,products:[]});
  for(const who of [staff,outsider,managerB])await denied(()=>read(who,A.schoolId),403,'SHOPIFY_FORBIDDEN');

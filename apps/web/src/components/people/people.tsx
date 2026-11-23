@@ -56,6 +56,12 @@ export function birthDateInput(schoolId: string, record: PersonRecord, draft: Bi
   return input.birthDate === record.student.birthDate ? 'UNCHANGED' : input;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The person id in ?person=<uuid>, lower-cased, or null for anything else. */
+export function contactDeepLink(search: string): string | null {
+  try { const v = new URLSearchParams(search).getAll('person'); return v.length === 1 && UUID.test(v[0]!) ? v[0]!.toLowerCase() : null; } catch { return null; }
+}
+
 /**
  * People for the school the shell verified: search, read one person, correct name and contact details, and correct
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
@@ -255,6 +261,16 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId, personId: selectedId }} items={items}
     onChanged={onMembershipChanged}/> : null,
   [selection?.organizationId, selection?.schoolId, selectedId, preferences.language, onMembershipChanged]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Deep link /staff/people?person=<id> (global search): open that contact's card once the school is verified. Read once per mount;
+  // the id is never authority (the card and record reads re-check the person against the verified school).
+  const deepLink = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (deepLink.current === undefined) deepLink.current = contactDeepLink(typeof window === 'undefined' ? '' : window.location?.search ?? '');
+    if (!selection || !deepLink.current) return;
+    const personId = deepLink.current;
+    deepLink.current = null;
+    onOpen(personId);
+  }, [selection?.schoolId, onOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const onDiscard = useCallback(() => { setOutcome(null); drop(); setRecordRefresh(value => value + 1); }, [drop]);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
   const onFilters = useCallback((next: ContactFilters) => { setFilters({ ...next, query: next.query.trim() }); setListRefresh(n => n + 1); }, []);
@@ -266,7 +282,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   // The contact photo (0390) and contact consent each have their own reads and commands, mounted per person.
   const consentSlot = useCallback((r: PersonRecord) => selection ? <>
     <PersonPhoto key={`photo:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={photos}/>
-    {/* 0625: gender, guardian, notes and more phones and emails; program and rank come from the card read (0622 sets ranks up). */}
+    {/* 0656: gender, guardian, notes and more phones and emails; program and rank come from the card read (0622 sets ranks up). */}
     <PersonProfileDetails key={`details:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={details}
       standing={card.state === 'READY' && lower(card.card.person.personId) === lower(r.personId) ? { programName: card.card.overview.programName, ranks: card.card.overview.ranks } : null}/>
     <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}

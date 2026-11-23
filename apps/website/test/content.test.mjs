@@ -58,6 +58,11 @@ test('marks every AI specialist as launching, since all eight answer in the app'
   assert.match(agentCard('hon'), /launching with hon os/i);
 });
 
+test('orders the AI team with HON first and Kai last', () => {
+  const order = [...html.matchAll(/<article[^>]*data-agent="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ['hon', 'chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena', 'kai']);
+});
+
 test('marks features that are not built as coming soon', () => {
   for (const soon of [/Autopay[^<]*<em>soon/, /AI images and video<em>soon/, /lead ads[^<]*<em>soon/i, /Earn rewards for every school you refer[^<]*<em>soon/, /Event and sale-day slot booking<em>soon/]) {
     assert.match(html, soon);

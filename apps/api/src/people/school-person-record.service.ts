@@ -36,7 +36,7 @@ export class SchoolPersonRecordService {
     return validatePersonRecordUpdateResult(await this.run('update', [req.honIdentity!.externalSubject, JSON.stringify(input), key as string]));
   }
 
-  /** 0625: the extra profile details of one person (version 0 until first saved). */
+  /** 0656: the extra profile details of one person (version 0 until first saved). */
   async readDetails(req: HonRequest, schoolId: unknown, personId: unknown) {
     try { accountUuid(schoolId); accountUuid(personId); } catch { throw new BadRequestException({ code: 'PERSON_INPUT_INVALID' }); }
     return validatePersonDetails(await this.run('detailsRead', [req.honIdentity!.externalSubject, schoolId as string, personId as string]), personId as string);

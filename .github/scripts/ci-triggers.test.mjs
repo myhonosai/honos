@@ -16,9 +16,16 @@ test('CI runs on pull requests, on pushes to main and on manual dispatch only', 
   assert.doesNotMatch(workflow, /branches: \[[^\]]*['"]?\*/, 'no wildcard branch triggers');
 });
 
-test('docs-only changes are skipped for pushes as for pull requests', () => {
+test('docs-only pushes to main are skipped, but every pull request runs (required checks on main)', () => {
   const push = /^ {2}push:\n((?: {4,}.*\n)+)/m.exec(onBlock)[1];
   assert.match(push, /paths-ignore:\n {6}- 'docs\/\*\*'\n {6}- '\*\*\/\*\.md'/);
+  const pr = /^ {2}pull_request:\n((?: {4,}.*\n)+)/m.exec(onBlock)[1];
+  assert.doesNotMatch(pr, /paths(-ignore)?:/, 'a path filter on pull_request would leave required checks pending forever');
+});
+
+test('the two required job names stay stable (main ruleset requires them by name)', () => {
+  assert.match(workflow, /^ {4}name: Test, typecheck, build, migrations$/m);
+  assert.match(workflow, /^ {4}name: Disposable PostgreSQL security proofs$/m);
 });
 
 test('every job runs for push and dispatch, and still skips draft pull requests', () => {

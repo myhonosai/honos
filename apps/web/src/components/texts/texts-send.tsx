@@ -31,8 +31,13 @@ export function TemplatePicker({ scope, channel, chosen, onChoose, disabled = fa
     </select></label>;
 }
 
-/** Texts > Send (docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md): one person now; groups join here after blasts (TE5). */
-export function TextsSend({ templateId = null }: { templateId?: string | null }): React.ReactElement {
+const SEND_COPY = {
+  SMS: { title: 'Send a text', lead: 'Text one contact from the school number. Merge tags fill in from the contact you pick.', none: 'Choose a school to send a text.', data: 'data-texts-send' },
+  EMAIL: { title: 'Send an email', lead: 'Email one contact from the school. Merge tags in the subject and message fill in from the contact you pick.', none: 'Choose a school to send an email.', data: 'data-email-send' },
+} as const;
+
+/** Texts > Send and Email > Send (docs/architecture/SCHOOL_TEXTS_AND_EMAIL_PAGES.md): one person now; groups join here after blasts (TE5). */
+function ChannelSend({ channel, templateId }: { channel: 'SMS' | 'EMAIL'; templateId: string | null }): React.ReactElement {
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
   const [template, setTemplate] = useState<SchoolTemplate | null>(null);
@@ -42,12 +47,17 @@ export function TextsSend({ templateId = null }: { templateId?: string | null })
   const lock = (value: boolean) => { lockedNow.current = value; setLocked(value); };
   // A late template answer (the ?template= prefill) never replaces the message while a send is locked.
   const choose = (next: SchoolTemplate | null) => { if (!lockedNow.current) setTemplate(next); };
-  if (!selection) return <p role="status">Choose a school to send a text.</p>;
+  const copy = SEND_COPY[channel];
+  if (!selection) return <p role="status">{copy.none}</p>;
   const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
   const scopeKey = `${selection.organizationId}/${selection.schoolId}`;
-  return <main className={s.page} data-texts-send="">
-    <header className={s.head}><div><h1>Send a text</h1><p>Text one contact from the school number. Merge tags fill in from the contact you pick.</p></div></header>
-    <TemplatePicker key={scopeKey} scope={scope} channel="SMS" chosen={template?.templateId ?? templateId} onChoose={choose} disabled={locked} />
-    <ComposeMessage key={`${scopeKey}/${template?.templateId ?? ''}`} scope={scope} channel="SMS" schoolName={shell.schoolName} initialContent={template?.body ?? ''} onLockChange={lock} />
+  return <main className={s.page} {...{ [copy.data]: '' }}>
+    <header className={s.head}><div><h1>{copy.title}</h1><p>{copy.lead}</p></div></header>
+    <TemplatePicker key={scopeKey} scope={scope} channel={channel} chosen={template?.templateId ?? templateId} onChoose={choose} disabled={locked} />
+    <ComposeMessage key={`${scopeKey}/${template?.templateId ?? ''}`} scope={scope} channel={channel} schoolName={shell.schoolName}
+      initialContent={template?.body ?? ''} initialSubject={template?.subject ?? ''} onLockChange={lock} />
   </main>;
 }
+
+export function TextsSend({ templateId = null }: { templateId?: string | null }): React.ReactElement { return ChannelSend({ channel: 'SMS', templateId }); }
+export function EmailSend({ templateId = null }: { templateId?: string | null }): React.ReactElement { return ChannelSend({ channel: 'EMAIL', templateId }); }
