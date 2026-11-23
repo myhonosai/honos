@@ -62,7 +62,7 @@ export interface ShopifyAdapter {
   createDraft(shop: string, accessToken: string, input: ShopifyDraftInput): Promise<{ productId: string; variantId: string }>;
   updateProduct(shop: string, accessToken: string, productId: string, fields: ShopifyProductFields): Promise<void>;
   updateVariants(shop: string, accessToken: string, productId: string, variants: readonly ShopifyVariantFields[], sku?: string | null): Promise<void>;
-  /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts. */
+  /** SH-F1 read: the Shopify Payments balance, the latest 20 payouts and the latest 50 balance transactions. Needs read_shopify_payments_accounts; payouts and transactions also need read_shopify_payments_payouts (left out when refused). */
   finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot>;
   /**
    * TB2: the school's storefront settings as one app-data metafield on HON's own app installation, which HON's theme app
@@ -262,16 +262,20 @@ function tokensFrom(body: unknown, now: number): ShopifyTokens {
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-const VARIANTS_QUERY = `query HonVariants($after: String) {
+const STOCK_LOCATIONS = ' inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } }';
+const variantsQuery = (stockLocations: boolean) => `query HonVariants($after: String) {
   productVariants(first: 50, after: $after) {
     pageInfo { hasNextPage endCursor }
     nodes {
       id title sku barcode price compareAtPrice inventoryQuantity position
-      inventoryItem { tracked unitCost { amount } inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } } }
+      inventoryItem { tracked unitCost { amount }${stockLocations ? STOCK_LOCATIONS : ''} }
       product { id title status vendor productType handle featuredMedia { preview { image { url } } } }
     }
   }
 }`;
+const VARIANTS_QUERY = variantsQuery(true);
+/** The catalog read without the stock locations: what the sync falls back to when Shopify refuses the full read. */
+const VARIANTS_PLAIN_QUERY = variantsQuery(false);
 const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   orders(first: 10, after: $after, query: $q, sortKey: CREATED_AT, reverse: true) {
     pageInfo { hasNextPage endCursor }
@@ -286,10 +290,16 @@ const ORDERS_QUERY = `query HonOrders($after: String, $q: String) {
   }
 }`;
 const SHOP_QUERY = 'query HonShop { shop { name currencyCode } }';
-const FINANCE_QUERY = `query HonFinance { shopifyPaymentsAccount { activated balance { amount currencyCode }
-  payouts(first: 20, reverse: true) { nodes { id status transactionType issuedAt net { amount currencyCode } } }
+// SH-F1. Seen on the test store 2026-11-22 with read_shopify_payments_accounts alone: Shopify answers the balance but
+// refuses shopifyPaymentsAccount.payouts and, once those are left out, shopifyPaymentsAccount.balanceTransactions
+// (ACCESS_DENIED; it names one refused field per answer). Both lists need read_shopify_payments_payouts. So the read
+// steps down: everything, then without payouts, then the balance alone.
+type FinanceDepth = 'FULL' | 'PLAIN' | 'BALANCE';
+const financeQuery = (d: FinanceDepth) => `query ${d === 'FULL' ? 'HonFinance' : d === 'PLAIN' ? 'HonFinancePlain' : 'HonFinanceBalance'} { shopifyPaymentsAccount { activated balance { amount currencyCode }${d === 'FULL' ? `
+  payouts(first: 20, reverse: true) { nodes { id status transactionType issuedAt net { amount currencyCode } } }` : ''}${d === 'BALANCE' ? '' : `
   balanceTransactions(first: 50, reverse: true) { nodes { id type test transactionDate amount { amount currencyCode }
-    fee { amount currencyCode } net { amount currencyCode } associatedPayout { id } } } } }`;
+    fee { amount currencyCode } net { amount currencyCode }${d === 'FULL' ? ' associatedPayout { id }' : ''} } }`} } }`;
+const FINANCE_QUERIES = (['FULL', 'PLAIN', 'BALANCE'] as const).map(financeQuery);
 const PRODUCT_FIELDS = `id title status vendor productType handle featuredMedia { preview { image { url } } }
     variants(first: 100) { nodes { id title sku barcode price compareAtPrice inventoryQuantity position inventoryItem { tracked unitCost { amount } } } }`;
 const PRODUCT_QUERY = `query HonProduct($id: ID!) { product(id: $id) { ${PRODUCT_FIELDS} } }`;
@@ -337,13 +347,13 @@ export function financeFromAccount(v: unknown): ShopifyFinanceSnapshot {
   const seen = new Set<string>();
   const balances = list(a.balance).slice(0, 10).map(moneyV2).filter(b => !seen.has(b.currency) && !!seen.add(b.currency))
     .map(b => ({ currency: b.currency, amount: b.amount }));
-  const payouts = list(obj(a.payouts).nodes).slice(0, 20).map(n => {
+  const payouts = (a.payouts === undefined ? [] : list(obj(a.payouts).nodes)).slice(0, 20).map(n => {
     const p = obj(n), net = moneyV2(p.net);
     const status = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'].includes(p.status as string) ? p.status as ShopifyFinanceSnapshot['payouts'][number]['status'] : bad();
     const direction: 'DEPOSIT' | 'WITHDRAWAL' = p.transactionType === 'DEPOSIT' || p.transactionType === 'WITHDRAWAL' ? p.transactionType : bad();
     return { id: gidNumber(p.id, 'ShopifyPaymentsPayout'), status, direction, issuedAt: instant(p.issuedAt), currency: net.currency, net: net.amount };
   });
-  const transactions = list(obj(a.balanceTransactions).nodes).slice(0, 50).map(n => {
+  const transactions = (a.balanceTransactions === undefined ? [] : list(obj(a.balanceTransactions).nodes)).slice(0, 50).map(n => {
     const t = obj(n), amount = moneyV2(t.amount), fee = signedMoney(obj(t.fee).amount), net = signedMoney(obj(t.net).amount);
     const type = word(t.type); if (type === null) bad();
     if (typeof t.test !== 'boolean') bad();
@@ -419,10 +429,30 @@ export function ownStockLocation(variant: unknown): { inventoryItemId: string; l
   return { inventoryItemId: item.id, locationId: own[0]! };
 }
 
+/**
+ * One log line for a GraphQL answer Shopify refused, so the cause can be found afterwards. It names HON's own operation
+ * and, per error, only Shopify's machine code, the field names on the error's path and any access scope names. Never the
+ * shop, the message text, ids or values: field names and scope names come from HON's query and Shopify's public schema.
+ */
+export function refusalNote(query: string, errors: readonly unknown[]): string {
+  const operation = /^(?:query|mutation) ([A-Za-z]{1,40})/.exec(query)?.[1] ?? 'unknown';
+  const parts = errors.slice(0, 5).map((e) => {
+    const rec = (v: unknown): Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+    const o = rec(e), x = rec(o.extensions);
+    const code = typeof x.code === 'string' && /^[A-Z_]{1,40}$/.test(x.code) ? x.code : 'NO_CODE';
+    const path = Array.isArray(o.path) ? o.path.filter((s): s is string => typeof s === 'string' && /^[A-Za-z]{1,40}$/.test(s)).slice(0, 8).join('.') : '';
+    const scopes = [...new Set(`${typeof x.requiredAccess === 'string' ? x.requiredAccess : ''} ${typeof o.message === 'string' ? o.message : ''}`
+      .match(/\b(?:read|write)_[a-z_]{1,50}\b/g) ?? [])].slice(0, 6).join(',');
+    return `${code}${path ? ' at ' + path : ''}${scopes ? ' needs ' + scopes : ''}`;
+  });
+  return `shopify_graphql_refused operation=${operation} errors=${errors.length} [${parts.join('; ')}]`;
+}
+
 export class GraphqlShopifyAdapter implements ShopifyAdapter {
   readonly kind = 'SHOPIFY' as const;
   constructor(private readonly clientId: string, private readonly clientSecret: string, private readonly send: typeof fetch,
-    private readonly wait: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms))) {}
+    private readonly wait: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms)),
+    private readonly note: (line: string) => void = line => console.warn(line)) {}
 
   private async request(url: string, init: RequestInit): Promise<unknown> {
     for (let attempt = 0; ; attempt++) {
@@ -449,6 +479,7 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
       if (Array.isArray(body.errors) && body.errors.length) {
         const throttled = body.errors.some(e => obj(e).extensions && obj(obj(e).extensions).code === 'THROTTLED');
         if (throttled && attempt < 3) { await this.wait(1000 * 2 ** attempt); continue; }
+        if (!throttled) this.note(refusalNote(query, body.errors));
         throw new ShopifyProviderError(throttled ? 'RATE_LIMITED' : 'INVALID_RESPONSE');
       }
       return obj(body.data);
@@ -474,7 +505,14 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
   }
 
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
-    return financeFromAccount((await this.graphql(shop, accessToken, FINANCE_QUERY, {})).shopifyPaymentsAccount);
+    // Shopify refused part of the read (a list without its scope): the next smaller read. Refusing the balance alone is the failure.
+    // Only a refused call steps down. The answer is read once, outside the loop: one HON cannot read is a failure, never a smaller read.
+    let data: Record<string, unknown> | undefined;
+    for (const [i, query] of FINANCE_QUERIES.entries()) {
+      try { data = await this.graphql(shop, accessToken, query, {}); break; }
+      catch (e) { if (!(e instanceof ShopifyProviderError) || e.failure !== 'INVALID_RESPONSE' || i === FINANCE_QUERIES.length - 1) throw e; }
+    }
+    return financeFromAccount((data ?? bad()).shopifyPaymentsAccount);
   }
 
   async setStorefrontSettings(shop: string, accessToken: string, settings: ShopifyStorefrontSettings): Promise<void> {
@@ -508,9 +546,18 @@ export class GraphqlShopifyAdapter implements ShopifyAdapter {
 
   async catalog(shop: string, accessToken: string): Promise<{ products: MirrorProduct[]; complete: boolean }> {
     const nodes: unknown[] = [];
-    let after: string | null = null, complete = true;
+    let after: string | null = null, complete = true, query = VARIANTS_QUERY;
     for (;;) {
-      const page = obj((await this.graphql(shop, accessToken, VARIANTS_QUERY, { after })).productVariants);
+      let data: Record<string, unknown>;
+      try { data = await this.graphql(shop, accessToken, query, { after }); } catch (e) {
+        // Some stores refuse the stock-location part of the read (a location another app owns, for example), and Shopify
+        // then answers nothing for the whole page. The catalog matters more than who fulfils it: read the rest of this
+        // sync without that part. Variants then carry no fulfilledBy, so the mirror keeps what it had.
+        if (!(e instanceof ShopifyProviderError) || e.failure !== 'INVALID_RESPONSE' || query === VARIANTS_PLAIN_QUERY) throw e;
+        query = VARIANTS_PLAIN_QUERY;
+        continue;
+      }
+      const page = obj(data.productVariants);
       nodes.push(...list(page.nodes));
       const info = obj(page.pageInfo);
       if (info.hasNextPage !== true) break;
@@ -693,7 +740,11 @@ export class FakeShopify implements ShopifyAdapter {
   async finance(shop: string, accessToken: string): Promise<ShopifyFinanceSnapshot> {
     // Shopify refuses this read when the store never granted the scope (a top-level ACCESS_DENIED error).
     this.calls.push('finance:' + shop); this.check(shop, accessToken, 'access', 'read_shopify_payments_accounts');
-    return structuredClone(this.store(shop).finance);
+    const finance = structuredClone(this.store(shop).finance);
+    // Like Shopify: payouts and transactions need the payouts scope; without it the read has the balance only.
+    try { this.check(shop, accessToken, 'access', 'read_shopify_payments_payouts'); }
+    catch { return { ...finance, payouts: [], transactions: [] }; }
+    return finance;
   }
   async catalog(shop: string, accessToken: string) {
     this.calls.push('catalog:' + shop); this.check(shop, accessToken, 'access');

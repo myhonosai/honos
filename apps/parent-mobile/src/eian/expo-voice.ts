@@ -3,7 +3,22 @@ import * as Speech from 'expo-speech';
 import { ExpoSpeechRecognitionModule as Recognition } from 'expo-speech-recognition';
 import type { EianVoice, HeardResult } from './voice';
 
-const LANGUAGE = 'en-US';
+/** Eian's answers are English; an English phone keeps its own accent setting (en-GB, en-AU), any other phone uses en-US. */
+function language(): string {
+  try { const locale = Intl.DateTimeFormat().resolvedOptions().locale; return /^en-[A-Za-z]{2}$/.test(locale) ? locale : 'en-US'; } catch { return 'en-US'; }
+}
+/** Eian is drawn as a young boy, so the phone's best English voice is raised a little. Presentation only. */
+const EIAN_PITCH = 1.3;
+const EIAN_RATE = 1.0;
+let bestVoice: Promise<string | undefined> | undefined;
+function pickVoice(lang: string): Promise<string | undefined> {
+  bestVoice ??= Speech.getAvailableVoicesAsync().then(voices => {
+    const english = voices.filter(v => v.language?.toLowerCase().startsWith('en'));
+    const score = (v: (typeof voices)[number]) => (v.language?.toLowerCase() === lang.toLowerCase() ? 2 : 0) + (v.quality === Speech.VoiceQuality.Enhanced ? 1 : 0);
+    return english.sort((a, b) => score(b) - score(a))[0]?.identifier;
+  }).catch(() => undefined);
+  return bestVoice;
+}
 /** If the phone never reports the end of listening, stop anyway so the microphone is not left open. */
 const LISTEN_LIMIT_MS = 20_000;
 
@@ -16,14 +31,18 @@ export function createExpoEianVoice(): EianVoice | null {
   return {
     speak(text, onDone) {
       let told = false;
-      const done = () => { if (!told) { told = true; onDone(); } };
-      void Speech.stop().catch(() => undefined).then(() => {
-        try { Speech.speak(text.slice(0, Speech.maxSpeechInputLength), { language: LANGUAGE, onDone: done, onStopped: done, onError: done }); } catch { done(); }
+      const done = (finished: boolean) => { if (!told) { told = true; onDone(finished); } };
+      const lang = language();
+      void Speech.stop().catch(() => undefined).then(() => pickVoice(lang)).then(voice => {
+        try {
+          Speech.speak(text.slice(0, Speech.maxSpeechInputLength), { language: lang, voice, pitch: EIAN_PITCH, rate: EIAN_RATE,
+            onDone: () => done(true), onStopped: () => done(false), onError: () => done(false) });
+        } catch { done(false); }
       });
     },
     stopSpeaking() { void Speech.stop().catch(() => undefined); },
     canListen() { try { return Recognition.isRecognitionAvailable(); } catch { return false; } },
-    listen(on) {
+    listen(on, hints = []) {
       let over = false, silent = false, started = false, text = '', failure: string | null = null;
       const subscriptions: { remove(): void }[] = [];
       let limit: ReturnType<typeof setTimeout> | undefined;
@@ -48,7 +67,7 @@ export function createExpoEianVoice(): EianVoice | null {
           if (heard) return finish({ kind: 'heard', text: heard });
           finish({ kind: failure === 'not-allowed' ? 'denied' : failure === 'service-not-allowed' || failure === 'language-not-supported' ? 'unavailable' : 'nothing' });
         }));
-        try { started = true; Recognition.start({ lang: LANGUAGE, interimResults: true, continuous: false, maxAlternatives: 1 }); } catch { finish({ kind: 'unavailable' }); }
+        try { started = true; Recognition.start({ lang: language(), interimResults: true, continuous: false, maxAlternatives: 1, contextualStrings: [...hints] }); } catch { finish({ kind: 'unavailable' }); }
         limit = setTimeout(() => {
           try { Recognition.abort(); } catch { /* already ended */ }
           const heard = text.trim();

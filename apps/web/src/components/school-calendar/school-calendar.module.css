@@ -29,6 +29,10 @@
 .item[data-kind="event"] { border-left-color: #f0b75f; background: #2a2212; }
 .item[data-status="CANCELLED"] { opacity: .6; text-decoration: line-through; }
 .item[aria-current="true"] { border-color: var(--hon-accent, #8de3d8); background: #123047; }
+/* The class just added: a bright ring that fades, so it is found at once. */
+.item[data-new="true"] { box-shadow: 0 0 0 2px var(--hon-accent, #8de3d8); animation: calendarNew 2.4s ease-out 2; }
+@keyframes calendarNew { 0% { box-shadow: 0 0 0 6px rgba(141, 227, 216, .55); } 100% { box-shadow: 0 0 0 2px var(--hon-accent, #8de3d8); } }
+@media (prefers-reduced-motion: reduce) { .item[data-new="true"] { animation: none; } }
 .item small { color: var(--hon-muted, #9fb4c8); font-size: 12px; }
 .room { display: block; }
 .time { font-variant-numeric: tabular-nums; color: #a9d8ff; font-weight: 700; }

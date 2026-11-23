@@ -11,6 +11,14 @@ App only: no server change, no migration, no paid service, no new account.
   words in the question box as they are heard, then asks it through exactly the same path as a typed question (same
   300-character cap, same guided-or-AI choice, same idempotency key rule). The answer to a spoken question is read aloud;
   a typed question is not read until the parent asks.
+- **Keeps talking (2026-11-21, owner feedback).** When the answer to a spoken question has been read to the end, the
+  microphone opens again for a follow-up, with "I'm listening" shown. Silence simply ends it. It does not reopen after a
+  typed question, after the parent stops the reading, or after 10 spoken questions in a row (then one tap continues).
+- **Listening hints.** The recognizer is given the children's names and school words (`voiceHints`, at most 40) so they
+  are heard correctly. They go only to the phone's own speech service, with the audio, on every listen, and the screen
+  says so. A question typed during the reading is kept and the microphone does not reopen over it.
+- **Voice.** The phone's best English voice (the phone's own accent first, then enhanced quality when installed), raised in pitch because Eian is drawn as
+  a young boy. Still a phone voice; a natural character voice needs a paid service and the owner's decision.
 - **Stops by itself.** Asking again, leaving the Eian tab, signing out or closing the screen cancels listening and stops
   reading. Nothing listens in the background and there is no wake word.
 
@@ -24,7 +32,7 @@ App only: no server change, no migration, no paid service, no new account.
   unavailable: a plain note, and typing keeps working. A phone with no speech service shows no microphone button.
 - An answer that arrives after the parent left Eian or signed out is never read aloud; it waits on the screen.
 - If the phone never reports the end of listening, the app closes the microphone itself after 20 seconds.
-- English (`en-US`) only in this slice.
+- English only in this slice: an English phone keeps its own accent setting, any other phone uses `en-US`.
 - Answers are read aloud in the room and can include names and invoice amounts; reading is always the parent's tap or
   the parent's own spoken question.
 

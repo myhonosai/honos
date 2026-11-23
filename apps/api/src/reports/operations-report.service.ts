@@ -25,6 +25,17 @@ interface OperationsReportReadContext extends TenantTransactionContext {
 
 type CountValue = string | number;
 
+interface SessionCountRow {
+  sessionsScheduled: CountValue;
+  sessionsCompleted: CountValue;
+  sessionsCancelled: CountValue;
+  attendancePresent: CountValue;
+  attendanceLate: CountValue;
+  attendanceExcusedAbsence: CountValue;
+  attendanceUnexcusedAbsence: CountValue;
+  attendanceMakeup: CountValue;
+}
+
 interface OperationalSnapshotRow {
   generatedAt: Date | string;
   studentProfilesTotal: CountValue;
@@ -131,6 +142,7 @@ export class OperationsReportService {
   async read(
     context: OperationsReportReadContext,
     input: OperationsReportRangeInput,
+    externalSubject: string,
   ): Promise<OperationalSnapshot> {
     const range = normalizeOperationsReportRange(input);
     return this.database.withTenantTransaction(context, async (client) => {
@@ -143,7 +155,7 @@ export class OperationsReportService {
           detail: 'An active HON school operations entitlement is required for operations reports.',
         });
       }
-      const result = await client.query<OperationalSnapshotRow>(
+      const result = await client.query<Omit<OperationalSnapshotRow, keyof SessionCountRow>>(
         `WITH
            scoped_student_profiles AS MATERIALIZED (
              SELECT 1
@@ -154,21 +166,6 @@ export class OperationsReportService {
              SELECT status::text AS status
              FROM hon.crm_leads
              WHERE organization_id = $1::uuid AND school_id = $2::uuid
-           ),
-           ranged_sessions AS MATERIALIZED (
-             SELECT id, status::text AS status
-             FROM hon.class_sessions
-             WHERE organization_id = $1::uuid
-               AND school_id = $2::uuid
-               AND starts_at >= $3::timestamptz
-               AND starts_at < $4::timestamptz
-           ),
-           ranged_attendance AS MATERIALIZED (
-             SELECT attendance.status::text AS status
-             FROM hon.attendance_records AS attendance
-             JOIN ranged_sessions AS session ON session.id = attendance.class_session_id
-             WHERE attendance.organization_id = $1::uuid
-               AND attendance.school_id = $2::uuid
            ),
            scoped_memberships AS MATERIALIZED (
              SELECT state::text AS state
@@ -198,14 +195,6 @@ export class OperationsReportService {
            (SELECT COUNT(*) FILTER (WHERE status = 'WON') FROM scoped_leads) AS "leadWon",
            (SELECT COUNT(*) FILTER (WHERE status = 'LOST') FROM scoped_leads) AS "leadLost",
            (SELECT COUNT(*) FILTER (WHERE status = 'ARCHIVED') FROM scoped_leads) AS "leadArchived",
-           (SELECT COUNT(*) FILTER (WHERE status = 'SCHEDULED') FROM ranged_sessions) AS "sessionsScheduled",
-           (SELECT COUNT(*) FILTER (WHERE status = 'COMPLETED') FROM ranged_sessions) AS "sessionsCompleted",
-           (SELECT COUNT(*) FILTER (WHERE status = 'CANCELLED') FROM ranged_sessions) AS "sessionsCancelled",
-           (SELECT COUNT(*) FILTER (WHERE status = 'PRESENT') FROM ranged_attendance) AS "attendancePresent",
-           (SELECT COUNT(*) FILTER (WHERE status = 'LATE') FROM ranged_attendance) AS "attendanceLate",
-           (SELECT COUNT(*) FILTER (WHERE status = 'EXCUSED_ABSENCE') FROM ranged_attendance) AS "attendanceExcusedAbsence",
-           (SELECT COUNT(*) FILTER (WHERE status = 'UNEXCUSED_ABSENCE') FROM ranged_attendance) AS "attendanceUnexcusedAbsence",
-           (SELECT COUNT(*) FILTER (WHERE status = 'MAKEUP') FROM ranged_attendance) AS "attendanceMakeup",
            (SELECT COUNT(*) FILTER (WHERE state = 'DRAFT') FROM scoped_memberships) AS "membershipsDraft",
            (SELECT COUNT(*) FILTER (WHERE state = 'ACTIVE') FROM scoped_memberships) AS "membershipsActive",
            (SELECT COUNT(*) FILTER (WHERE state = 'FROZEN') FROM scoped_memberships) AS "membershipsFrozen",
@@ -226,8 +215,28 @@ export class OperationsReportService {
            (SELECT COUNT(*) FILTER (WHERE state = 'REFUNDED') FROM ranged_payment_attempts) AS "paymentsRefunded"`,
         [context.organizationId, context.schoolId, range.from, range.to],
       );
-      const row = result.rows[0];
-      if (!row) throw new Error('HON operations report aggregation did not return a result.');
+      // #177 (0632): the runtime has no SELECT on hon.class_sessions. Session and attendance counts come from the
+      // definer read, which re-proves reporting.view for this transaction's own principal.
+      let sessions: { rows: SessionCountRow[] };
+      try {
+        sessions = await client.query<SessionCountRow>(          `SELECT sessions_scheduled AS "sessionsScheduled", sessions_completed AS "sessionsCompleted",
+                  sessions_cancelled AS "sessionsCancelled", attendance_present AS "attendancePresent",
+                  attendance_late AS "attendanceLate", attendance_excused_absence AS "attendanceExcusedAbsence",
+                  attendance_unexcused_absence AS "attendanceUnexcusedAbsence", attendance_makeup AS "attendanceMakeup"
+           FROM hon.read_operations_report_session_counts($1, $2::timestamptz, $3::timestamptz)`,
+          [externalSubject, range.from, range.to],
+        );
+      } catch (error) {
+        const refused = error as { code?: string; message?: string } | null;
+        if (refused?.code === '42501' && refused.message === 'CLASS_SESSIONS_READ_FORBIDDEN') {
+          throw new ForbiddenException('HON operations reporting is not authorized for this school.');
+        }
+        throw error;
+      }
+      const aggregate = result.rows[0];
+      const sessionCounts = sessions.rows[0];
+      if (!aggregate || !sessionCounts) throw new Error('HON operations report aggregation did not return a result.');
+      const row: OperationalSnapshotRow = { ...aggregate, ...sessionCounts };
 
       return {
         organizationId: context.organizationId,

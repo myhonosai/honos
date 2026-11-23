@@ -85,6 +85,9 @@ try{
   'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock',
   // 0614 POS Shopify orders for made-to-order items (SH2b).
   'begin_pos_shopify_order','finish_pos_shopify_order',
+  // 0615 Marcus commerce review (CA1).
+  'begin_shopify_commerce_review','plan_shopify_commerce_review','prepare_shopify_commerce_review','fail_shopify_commerce_review','record_shopify_commerce_review',
+  'read_shopify_commerce_reviews','close_shopify_commerce_review',
   // 0596 Marcus merch ideas (CS-M2).
   'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
   'read_shopify_merch_ideas','close_shopify_merch_ideas'];
