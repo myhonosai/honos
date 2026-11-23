@@ -18,3 +18,8 @@ export class SchoolCheckoutSettingsSaveHumanUiGuard extends MembershipActivation
 export class SchoolCheckoutOrdersReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_checkout.orders.read';
 }
+/** 0620: issuing (and listing) the share links is its own browser command. */
+@Injectable()
+export class SchoolCheckoutLinksHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_checkout.links.issue';
+}

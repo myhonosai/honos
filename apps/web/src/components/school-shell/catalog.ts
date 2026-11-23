@@ -73,11 +73,11 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'shopify', titleKey: 'navShopify', section: 'finance', routes: [r('/staff/billing/shopify', 'routeShopify')] },
   { key: 'invoices', titleKey: 'navInvoices', section: 'finance', routes: [r('/staff/billing/invoices', 'routeInvoices'), r('/staff/billing/receivables', 'routeReceivables')] },
   { key: 'website', titleKey: 'navWebsite', section: 'marketing', routes: [r('/staff/marketing/website', 'routeWebsite'), r('/staff/marketing/forms', 'routeForms'), r('/staff/marketing/intake', 'routeIntake')] },
-  { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/referrals', 'routeReferrals'), r('/staff/champions-club', 'routeChampions')] },
+  { key: 'marketing', titleKey: 'navMarketing', section: 'marketing', routes: [r('/staff/marketing', 'routeMarketingHome'), r('/staff/marketing/campaigns', 'routeCampaigns'), r('/staff/marketing/referrals', 'routeReferrals'), r('/staff/marketing/blasts', 'routeBlasts'), r('/staff/marketing/media', 'routeMedia'), r('/staff/champions-club', 'routeChampions')] },
   // Owner ask (2026-11-17): Meta Ads and Google Ads are connected and set up from Marketing, with Marcus drafting each ad.
   { key: 'ads', titleKey: 'navAds', section: 'marketing', routes: [r('/staff/marketing/ads', 'routeAds')] },
   { key: 'creative', titleKey: 'navCreative', section: 'marketing', routes: [r('/staff/creative-studio', 'routeCreativeStudio'), r('/staff/creative-studio/designs', 'routeDesigns')] },
-  { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/library', 'routeCurriculumLibrary'), r('/staff/curriculum/progress', 'routeProgress'),
+  { key: 'ranks', titleKey: 'navRanks', section: 'ranks', routes: [r('/staff/curriculum/ranks', 'routeRankSetup'), r('/staff/curriculum/progress', 'routeProgress'), r('/staff/curriculum/library', 'routeCurriculumLibrary'),
     r('/staff/teaching-studio', 'routeTeachingStudio'), r('/staff/students/achievements', 'routeAchievements')] },
   // A belt test is one job in order (L3): who is ready, sign-ups, register, grade, scorecards, certificates.
   { key: 'testing', titleKey: 'navTesting', section: 'ranks', steps: true, routes: [r('/staff/testing/readiness', 'routeTestReady'), r('/staff/testing/registrations', 'routeTestSignups'),
@@ -85,7 +85,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'promotions', titleKey: 'navPromotions', section: 'ranks', routes: [r('/staff/testing/promotion-decisions', 'routePromotions')] },
   { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
-    r('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-dates', 'routeDates'), r('/staff/billing/membership-changes', 'routeChanges'),
+    // Owner (2026-11-16): a membership is started, paused and cancelled on the contact card; old links to these two still work.
+    h('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-dates', 'routeDates'), h('/staff/billing/membership-changes', 'routeChanges'),
     r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')] },
   { key: 'analytics', titleKey: 'navAnalytics', section: 'business', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'),
     r('/staff/planning/revenue', 'routeRevenuePlanning'), r('/staff/retention/review', 'routeRetention')] },

@@ -12,9 +12,11 @@ export const SHOPIFY_SCOPES = ['read_products', 'read_inventory', 'read_orders']
 /** SH4a: asked for only when the owner presses Allow editing. write_products edits products; write_inventory edits unit costs. */
 export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as const;
 /** SH-F1: asked for only when the owner presses Allow finance. Reads the Shopify Payments balance, payouts and balance transactions. */
-export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts'] as const;
+export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts', 'read_shopify_payments_payouts'] as const;
 /** SH2b (0614): asked for only when the owner presses Allow orders. Lets the front desk create the Shopify order a print provider works from. */
 export const SHOPIFY_ORDER_SCOPES = ['write_orders'] as const;
+/** Front desk stock updates: a stock change must name the store's own location, which Shopify shows only with read_locations (seen on the test store 2026-11-22). Optional; asked for by Allow stock updates and with Allow orders. */
+export const SHOPIFY_STOCK_SCOPES = ['read_locations'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;
 export const SHOPIFY_CONNECTION_STATUSES = ['CONNECTED', 'NEEDS_RECONNECT', 'DISCONNECTED'] as const;
 export type ShopifyConnectionStatus = typeof SHOPIFY_CONNECTION_STATUSES[number];
@@ -136,9 +138,20 @@ export interface ShopifyOverview {
   /** SH1b: HON syncs on its own (Shopify change reports, plus a full sync every six hours). */
   autoSync: boolean; connection: ShopifyConnection | null;
   counts: { products: number; variants: number; lowStock: number; provider: number; orders: number } | null; summary: ShopifySummary | null;
+  /** HON's own Shopify sign-up link for a school with no store yet (set by HON, never by a school); null when HON has none. */
+  newStoreUrl: string | null;
+}
+/** A sign-up link is https on Shopify's own site or Shopify's partner link host, with no sign-in part, port or fragment. Anything else is null. */
+const NEW_STORE_URL = /^https:\/\/(?:(?:[a-z0-9-]{1,63}\.){0,3}shopify\.com|shopify\.pxf\.io)(?:\/[A-Za-z0-9._~%\/?&=+-]*)?$/;
+export function shopifyNewStoreUrl(v: unknown): string | null {
+  return typeof v === 'string' && v.length <= 500 && NEW_STORE_URL.test(v) ? v : null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
-  const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'], true);
+  // An API one release older does not send newStoreUrl yet: read that as "no link".
+  const base = ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'];
+  const o = closed(v, v && typeof v === 'object' && Object.hasOwn(v, 'newStoreUrl') ? [...base, 'newStoreUrl'] : base, true);
+  const newStoreUrl = o.newStoreUrl === undefined || o.newStoreUrl === null ? null : shopifyNewStoreUrl(o.newStoreUrl);
+  if (o.newStoreUrl !== undefined && o.newStoreUrl !== null && newStoreUrl !== o.newStoreUrl) fail(true);
   const connection = o.connection === null ? null : verifyShopifyConnection(o.connection);
   if ((connection === null) !== (o.counts === null) || (connection === null) !== (o.summary === null)) fail(true);
   let counts: ShopifyOverview['counts'] = null, summary: ShopifySummary | null = null;
@@ -152,7 +165,7 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
         return Object.freeze({ title: text(x.title, 255), quantity: int(x.quantity, 0, 1e9), sales: money(x.sales) }); })) });
     if (summary.coveredSales > summary.lineSales) fail(true);
   }
-  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary });
+  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary, newStoreUrl });
 }
 
 export interface ShopifyVariant {

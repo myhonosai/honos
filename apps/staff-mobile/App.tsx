@@ -47,7 +47,7 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      <StaffApp api={api} session={session} onSignIn={onSignIn} version={appConfig.expo.version} />
+      <StaffApp api={api} session={session} onSignIn={onSignIn} version={appConfig.expo.version} newKey={() => Crypto.randomUUID()} />
     </>
   );
 }

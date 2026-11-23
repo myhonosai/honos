@@ -60,7 +60,7 @@ describe('/auth/staff-mobile/finish', () => {
     const location = new URL(response.headers.get('location')!);
     expect(`${location.protocol}//${location.host}${location.pathname}`).toBe('honstaff://auth');
     const code = location.searchParams.get('code')!;
-    const session = exchangeStaffMobileHandoff(code, verifier, sessionConfig());
+    const session = await exchangeStaffMobileHandoff(code, verifier, async () => true, sessionConfig());
     expect(verifyStaffMobileSession(session.token, sessionConfig())).toEqual(identity);
     expect(setCookie(response, STAFF_MOBILE_START_COOKIE)).toMatch(/Max-Age=0/);
   });
@@ -118,7 +118,7 @@ describe('staff and family hand-offs never cross', () => {
     expect((await finishPost(post(familyStart))).status).toBe(401);
     const staffStart = `${session()}; ${STAFF_MOBILE_START_COOKIE}=${issueStaffMobileStart(challenge, sessionConfig())}`;
     const code = new URL((await finishPost(post(staffStart))).headers.get('location')!).searchParams.get('code')!;
-    expect(() => exchangeMobileHandoff(code, verifier, sessionConfig())).toThrow();
+    await expect(exchangeMobileHandoff(code, verifier, async () => true, sessionConfig())).rejects.toThrow();
   });
   it('the staff page names the HON Staff app', async () => {
     const staffStart = `${session()}; ${STAFF_MOBILE_START_COOKIE}=${issueStaffMobileStart(challenge, sessionConfig())}`;

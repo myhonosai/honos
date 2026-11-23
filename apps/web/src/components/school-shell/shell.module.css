@@ -313,6 +313,7 @@
   background: linear-gradient(90deg, rgba(14, 40, 102, 0.96), rgba(10, 26, 66, 0.96)); border: 1px solid rgba(110, 170, 255, 0.55);
   box-shadow: 0 0 0 4px rgba(47, 123, 255, 0.12), 0 10px 30px rgba(20, 80, 220, 0.45);
 }
+.honLauncher[hidden] { display: none; }
 .honLauncher img { width: 44px; height: 44px; border-radius: 50%; }
 .honLauncher:hover { border-color: #9fd0ff; }
 @media (max-width: 760px) {
@@ -429,4 +430,15 @@
   .searchTriggerText, .searchTrigger kbd { display: none; }
   .searchPanel { top: 12px; max-height: calc(100vh - 110px); }
   .searchFoot { display: none; }
+}
+
+/* Phone bottom bar (owner 2026-11-22: icons and labels must line up). Every slot is the same box: a fixed icon row on
+   top and one single-line label under it, so no two-line label can push its icon up or out of line. */
+@media (max-width: 1099px) {
+  .mobileNav a, .mobileNav button, .shell[data-hon-mode='big-button'] .mobileNav a, .shell[data-hon-mode='big-button'] .mobileNav button {
+    grid-template-rows: 24px auto; align-content: center; justify-items: center; gap: 4px; min-width: 0; padding: 6px 2px; line-height: 1.2;
+  }
+  .mobileNav a svg, .mobileNav button svg { width: 22px; height: 22px; align-self: center; }
+  .mobileNav a span, .mobileNav button span { display: block; max-width: 100%; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+  .shell[data-hon-mode='big-button'] .mobileNav a span, .shell[data-hon-mode='big-button'] .mobileNav button span { font-size: 12px; font-weight: 600; }
 }

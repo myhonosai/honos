@@ -41,6 +41,7 @@ export class ParentFamilyScheduleService {
     requestedFamilyId: string,
     range: ParentFamilyScheduleRange,
     requestId: string,
+    externalSubject: string,
   ): Promise<ParentFamilySchedule> {
     if (resolvedScope.familyId !== requestedFamilyId) {
       throw new ForbiddenException('HON parent access is not authorized for this family.');
@@ -58,62 +59,37 @@ export class ParentFamilyScheduleService {
         requestId,
       },
       async (client) => ({
-        bookings: await this.selectBookings(client, requestedFamilyId, range),
+        bookings: await this.selectBookings(client, externalSubject, requestedFamilyId, range),
       }),
     );
   }
 
   private async selectBookings(
     client: PoolClient,
+    externalSubject: string,
     familyId: string,
     range: ParentFamilyScheduleRange,
   ): Promise<ParentFamilySchedule['bookings']> {
-    // The relation path is intentionally fixed: exact-family STUDENT
-    // membership -> its primary-family profile -> booking -> session ->
-    // program. It is not a school schedule or session roster query. The family
-    // predicate is repeated at the profile and membership links so a same-school
-    // profile cannot expand this result.
-    const result = await client.query<ParentFamilyScheduleRow>(
-      `SELECT
-         concat_ws(' ', person.given_name, person.family_name) AS "studentDisplayName",
-         booking.booking_kind AS "bookingKind",
-         booking.status::text AS "bookingStatus",
-         session.name AS "sessionName",
-         session.starts_at AS "sessionStartsAt",
-         session.ends_at AS "sessionEndsAt",
-         session.room_name AS "sessionRoomName",
-         session.status::text AS "sessionStatus",
-         program.name AS "programName"
-       FROM hon.family_members AS member
-       JOIN hon.student_profiles AS profile
-         ON profile.person_id = member.person_id
-        AND profile.organization_id = member.organization_id
-        AND profile.school_id = member.school_id
-        AND profile.primary_family_id = member.family_id
-        AND profile.primary_family_id = $1::uuid
-       JOIN hon.class_bookings AS booking
-         ON booking.student_profile_id = profile.id
-        AND booking.organization_id = profile.organization_id
-        AND booking.school_id = profile.school_id
-       JOIN hon.class_sessions AS session
-         ON session.id = booking.class_session_id
-        AND session.organization_id = booking.organization_id
-        AND session.school_id = booking.school_id
-       JOIN hon.programs AS program
-         ON program.id = session.program_id
-        AND program.organization_id = session.organization_id
-        AND program.school_id = session.school_id
-       JOIN hon.people AS person
-         ON person.id = member.person_id
-        AND person.organization_id = member.organization_id
-        AND person.school_id = member.school_id
-       WHERE member.family_id = $1::uuid
-         AND member.member_role = 'STUDENT'::hon.family_member_role
-         AND session.starts_at >= $2::timestamptz
-         AND session.starts_at < $3::timestamptz
-       ORDER BY session.starts_at ASC, session.id ASC, booking.id ASC`,
-      [familyId, range.from, range.to],
-    );
+    // #177 (0632): the runtime has no SELECT on hon.class_sessions. The definer read keeps the fixed relation path
+    // (exact-family STUDENT membership -> primary-family profile -> booking -> session -> program) and re-proves this
+    // family for this transaction's own principal through hon.resolve_parent_family_scope.
+    let result: { rows: ParentFamilyScheduleRow[] };
+    try {
+      result = await client.query<ParentFamilyScheduleRow>(
+        `SELECT student_display_name AS "studentDisplayName", booking_kind AS "bookingKind",
+                booking_status AS "bookingStatus", session_name AS "sessionName",
+                session_starts_at AS "sessionStartsAt", session_ends_at AS "sessionEndsAt",
+                session_room_name AS "sessionRoomName", session_status AS "sessionStatus", program_name AS "programName"
+         FROM hon.read_parent_family_schedule($1, $2::uuid, $3::timestamptz, $4::timestamptz)`,
+        [externalSubject, familyId, range.from, range.to],
+      );
+    } catch (error) {
+      const refused = error as { code?: string; message?: string } | null;
+      if (refused?.code === '42501' && refused.message === 'CLASS_SESSIONS_READ_FORBIDDEN') {
+        throw new ForbiddenException('HON parent access is not authorized for this family.');
+      }
+      throw error;
+    }
 
     return result.rows.map((row) => ({
       student: { displayName: row.studentDisplayName },
