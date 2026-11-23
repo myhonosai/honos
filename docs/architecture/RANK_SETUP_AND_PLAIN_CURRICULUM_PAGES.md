@@ -112,7 +112,7 @@ Quick setup gets a box above the built-in choices: the school describes its mart
 Kai drafts the belt list. It is a new kind `RANK_CHART` on the shared AI text proposals (docs/architecture/AI_TEXT_PROPOSALS.md),
 built like `COMMERCE_REVIEW` (0615), so the S4 spend controls, pause, budget lock and evidence apply unchanged.
 
-- **Who**: a signed-in person with `curriculum.manage`, `teaching.assistant.use` and `ai.invocation.plan` in a school on Complete.
+- **Who**: a signed-in person with `curriculum.manage`, `teaching.assistant.use`, Kai switched on for them (`ai.agent.kai.use`, 0635) and `ai.invocation.plan` in a school on Complete.
   Human UI only (`X-Hon-Human-Command: rank-chart-draft`, UUID `Idempotency-Key`). Otherwise `RANK_CHART_FORBIDDEN`.
 - **A conversation**: the person keeps talking and the list changes each time ("Add a stripe between every belt", "Make each belt
   36 classes"). Each message is its own request (`{description, current}`): `current` is null on the first turn and afterwards the

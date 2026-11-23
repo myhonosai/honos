@@ -245,11 +245,14 @@ try {
   await admin.query("UPDATE hon.organization_entitlements SET tier='CORE' WHERE organization_id=$1", [b.id]);
   assert.equal(code(await settle(ai.request(ctx(b), brief))), 'RANK_CHART_FORBIDDEN');
   await admin.query("UPDATE hon.organization_entitlements SET tier='COMPLETE' WHERE organization_id=$1", [b.id]);
-  const noKai = await addStaff(b, 'nokai', ['curriculum.manage', 'ai.invocation.plan']);
+  const noKai = await addStaff(b, 'nokai', ['curriculum.manage', 'ai.invocation.plan', 'ai.agent.kai.use']);
   assert.equal(code(await settle(ai.request(ctx(noKai), brief))), 'RANK_CHART_FORBIDDEN');
-  const noPlan = await addStaff(b, 'noplan', ['curriculum.manage', 'teaching.assistant.use']);
+  // 0635: Kai switched off for this staff member refuses, even with every other permission; switched on it is allowed.
+  const kaiOff = await addStaff(b, 'kaioff', ['curriculum.manage', 'teaching.assistant.use', 'ai.invocation.plan']);
+  assert.equal(code(await settle(ai.request(ctx(kaiOff), brief))), 'RANK_CHART_FORBIDDEN');
+  const noPlan = await addStaff(b, 'noplan', ['curriculum.manage', 'teaching.assistant.use', 'ai.agent.kai.use']);
   assert.equal(code(await settle(ai.request(ctx(noPlan), brief))), 'RANK_CHART_FORBIDDEN');
-  const noRanks = await addStaff(b, 'noranks', ['teaching.assistant.use', 'ai.invocation.plan', 'curriculum.progress.record']);
+  const noRanks = await addStaff(b, 'noranks', ['teaching.assistant.use', 'ai.invocation.plan', 'ai.agent.kai.use', 'curriculum.progress.record']);
   assert.equal((await settle(ai.request(ctx(noRanks), brief))).error?.getStatus(), 403);
   assert.equal((await settle(ai.list(readCtx(noRanks)))).error?.getStatus(), 403);
   assert.equal((await ai.list(readCtx(noKai))).length, 0, 'anyone who may set up ranks may read the list');

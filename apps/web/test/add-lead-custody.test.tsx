@@ -67,6 +67,31 @@ it('Close add after a lost answer keeps the exact request; the reopened form sho
   expect(custody.current).toBeNull();
 });
 
+it('IC1 (0634): an unticked consent travels in the capsule; the reopened form shows it unticked and retries the same request', async () => {
+  const custody = createLeadCreateCustody();
+  const submit = vi.fn<(r: PreparedCrmLeadCreate) => Promise<unknown>>().mockRejectedValueOnce(new CrmLeadCreateUncertainError('lost')).mockResolvedValueOnce({});
+  const first = mount(custody, submit);
+  let view = first.render(); await settle(); view = first.render();
+  expect(view.consent).toBe(true);
+  view.onOpen?.(true); view = first.render();
+  view.onField?.('givenName', 'Sample'); view = first.render();
+  view.onField?.('familyName', 'Parent'); view = first.render();
+  view.onConsent?.(false); view = first.render();
+  view.onSave?.(); await settle(); view = first.render();
+  expect(view.save).toEqual({ state: 'UNCERTAIN' });
+  const sent = submit.mock.calls[0]![0];
+  expect(JSON.stringify(sent)).toContain('consentChannels');
+  first.unmount();
+  expect(custody.current?.consent).toBe(false);
+  const reopened = mount(custody, submit);
+  view = reopened.render();
+  expect(view).toMatchObject({ open: true, consent: false, save: { state: 'UNCERTAIN' } });
+  view.onConsent?.(true); view = reopened.render();
+  view.onRetry?.(); await settle(); view = reopened.render();
+  expect(submit.mock.calls[1]![0]).toBe(sent);
+  expect(view).toMatchObject({ consent: true, save: { state: 'SAVED', name: 'Sample Parent' } });
+});
+
 it('an answer that arrives after the form closed still settles the custody; a lost one keeps it', async () => {
   const custody = createLeadCreateCustody();
   let answer!: (v: unknown) => void, refuse!: (e: unknown) => void;

@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { accountStatusApi } from '../src/components/account-status/http';
 import { parseAccountSelectors } from '../src/components/account-status/selectors';
 import { id, scope, rawAccount, rawStanding, rawWallet, reply } from './account-status-fixtures';
 const signal = () => new AbortController().signal;
-let invalidated: ReturnType<typeof vi.fn>;
+let invalidated: Mock<() => void>;
 beforeEach(() => { invalidated = vi.fn(); const w = new EventTarget(); w.addEventListener('hon:session-invalidated', invalidated); vi.stubGlobal('window', w); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it('uses only fixed GET paths with native same-origin options, actual closed validators and a minimal retained projection', async () => {

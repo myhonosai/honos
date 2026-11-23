@@ -257,6 +257,10 @@
       "title": "HON | Blasts"
     },
     {
+      "path": "/staff/marketing/media",
+      "title": "HON | Media"
+    },
+    {
       "path": "/staff/team/availability",
       "title": "Human Staff Availability and Qualifications"
     },
@@ -287,6 +291,10 @@
     {
       "path": "/staff/attendance/planned-absences",
       "title": "HON | Human Planned Absence Review"
+    },
+    {
+      "path": "/staff/attendance/report",
+      "title": "HON | Attendance report"
     },
     {
       "path": "/staff/attendance/cards",

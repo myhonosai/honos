@@ -4,8 +4,8 @@ BEGIN;
 -- in its own words and Kai drafts the belt list. It is a kind on the shared AI text proposals of 0550
 -- (docs/architecture/AI_TEXT_PROPOSALS.md), built like COMMERCE_REVIEW (0615): one kinds row and its own entry points.
 -- The 0550 core, every S4 function and 0622 are unchanged. Spec: docs/architecture/RANK_SETUP_AND_PLAIN_CURRICULUM_PAGES.md (5b).
---   R1 Who: a direct human with curriculum.manage (0070 hon.require_curriculum_actor), teaching.assistant.use and
---      ai.invocation.plan at the session school, and an active Complete entitlement. Only the requester prepares, records or
+--   R1 Who: a direct human with curriculum.manage (0070 hon.require_curriculum_actor), teaching.assistant.use, Kai switched
+--      on for them (0635 ai.agent.kai.use) and ai.invocation.plan at the session school, and an active Complete entitlement. Only the requester prepares, records or
 --      closes; anyone with curriculum.manage reads.
 --   R2 Facts: what the person said, the list on their screen when they ask Kai to change it (the same chart shape, at most
 --      8,000 bytes of compact JSON), and the names of the school's programs (at most 20, each cut to 60 bytes, so a new name does not clash).
@@ -25,8 +25,8 @@ DO $$ BEGIN
   END IF;
   IF to_regprocedure('hon.ai_text_begin(text,uuid,text,uuid,integer,jsonb)') IS NULL OR to_regprocedure('hon.shopify_merch_keys_are(jsonb,text[])') IS NULL
     OR to_regprocedure('hon.mutate_rank_setup(text,text,uuid,uuid,jsonb,text,uuid,uuid)') IS NULL OR to_regprocedure('hon.curriculum_app_name_ok(text,integer)') IS NULL
-    OR to_regprocedure('hon.shopify_review_clip(text,integer)') IS NULL OR to_regprocedure('hon.begin_rank_chart_draft(text,jsonb,uuid)') IS NOT NULL THEN
-    RAISE EXCEPTION 'Rank chart AI draft requires migrations through 0550, 0596, 0605, 0615 and 0622 and must apply once';
+    OR to_regprocedure('hon.shopify_review_clip(text,integer)') IS NULL OR to_regprocedure('hon.ai_agent_switch_permission(text)') IS NULL OR NOT EXISTS(SELECT 1 FROM hon.permissions WHERE code='ai.agent.kai.use') OR to_regprocedure('hon.begin_rank_chart_draft(text,jsonb,uuid)') IS NOT NULL THEN
+    RAISE EXCEPTION 'Rank chart AI draft requires migrations through 0550, 0596, 0605, 0615, 0622 and 0635 and must apply once';
   END IF;
 END $$;
 
@@ -68,6 +68,7 @@ BEGIN
   actor := hon.require_curriculum_actor(p_subject,'curriculum.manage');
   IF actor IS NULL OR NOT hon.principal_has_school_permission(actor,org,school,'teaching.assistant.use')
     OR NOT hon.principal_has_school_permission(actor,org,school,'ai.invocation.plan')
+    OR NOT coalesce(hon.principal_has_school_permission(actor,org,school,'ai.agent.kai.use'),false)
     OR NOT EXISTS(SELECT 1 FROM hon.organization_entitlements e WHERE e.organization_id=org AND e.tier='COMPLETE' AND e.status='ACTIVE'
       AND e.effective_from<=clock_timestamp() AND (e.effective_until IS NULL OR e.effective_until>clock_timestamp())) THEN
     RAISE EXCEPTION 'RANK_CHART_AI_FORBIDDEN' USING ERRCODE='42501';

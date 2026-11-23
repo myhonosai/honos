@@ -182,11 +182,13 @@ import { SchoolMembershipListService } from './billing/school-membership-list.se
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
 import { CrmSchoolClockService } from './crm/crm-school-clock.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
-import { SchoolReportsController, SchoolReportsDashboardController } from './reports/school-reports.controller.js';
+import { AttendanceReportController, SchoolReportsController, SchoolReportsDashboardController } from './reports/school-reports.controller.js';
 import { SchoolContactsController } from './people/school-contacts.controller.js';
 import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
 import { SchoolContactAdminService } from './people/school-contact-admin.service.js';
+import { PersonMembershipStartController } from './billing/person-membership-start.controller.js';
+import { PersonMembershipStartService } from './billing/person-membership-start.service.js';
 import { SchoolReportsService } from './reports/school-reports.service.js';
 import { MembershipActivationHumanUiGuard, SimpleInvoiceCreateHumanUiGuard, TuitionPaymentRecordHumanUiGuard, TuitionPaymentVoidHumanUiGuard, TuitionReadHumanUiGuard } from './billing/membership-activation-human-ui.guard.js';
 import { TuitionPaymentController } from './billing/tuition-payment.controller.js';
@@ -241,6 +243,10 @@ import { StaffTimeService } from './staff-time/staff-time.service.js';
 import { StaffTimeEntrySaveHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeReadHumanUiGuard, StaffTimesheetDecideHumanUiGuard } from './staff-time/staff-time-human-ui.guard.js';
 import { SchoolBlastController } from './school-blasts/school-blast.controller.js';
 import { SchoolBlastService } from './school-blasts/school-blast.service.js';
+import { PublicSchoolMediaController, SchoolMediaController } from './school-media/school-media.controller.js';
+import { SchoolMediaService } from './school-media/school-media.service.js';
+import { MediaStorage } from './school-media/media-storage.js';
+import { SchoolMediaDeleteHumanUiGuard, SchoolMediaReadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaUploadHumanUiGuard } from './school-media/school-media-human-ui.guard.js';
 import { SchoolBlastCancelHumanUiGuard, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard } from './school-blasts/school-blast-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
 import { SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard } from './school-demo-data/school-demo-data-human-ui.guard.js';
@@ -695,6 +701,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StaffShiftController,
     StaffTimeController,
     SchoolBlastController,
+    SchoolMediaController,
+    PublicSchoolMediaController,
     CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -702,8 +710,10 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipStatusReportController,
     SchoolReportsController,
     SchoolReportsDashboardController,
+    AttendanceReportController,
     SchoolContactsController,
     SchoolContactAdminController,
+    PersonMembershipStartController,
     CrmAdultMembershipDraftController,
     CrmAdultMembershipDraftFromPlanController,
     MembershipPlanController,
@@ -988,6 +998,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolReportsService,
     SchoolContactsService,
     SchoolContactAdminService,
+    PersonMembershipStartService,
     SchoolEventService,
     SchoolEventReadHumanUiGuard,
     SchoolEventSaveHumanUiGuard,
@@ -1046,6 +1057,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolDemoDataService, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard,
     StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
     StaffTimeService, StaffTimeReadHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeEntrySaveHumanUiGuard, StaffTimesheetDecideHumanUiGuard,
+    SchoolMediaService, MediaStorage, SchoolMediaReadHumanUiGuard, SchoolMediaUploadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaDeleteHumanUiGuard,
     SchoolBlastService, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard, SchoolBlastCancelHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,

@@ -383,9 +383,17 @@
     "0630_invoice_insert_status_guard.sql": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec",
     "0631_class_booking_lock_identity_plane.sql": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe",
     "0632_class_sessions_function_only_reads.sql": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e",
+    "0633_attendance_report.sql": "1aaee04ced78a32ad5f878834f00f55b2da151f816424bd905a3e1d1d0c9793c",
     "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
     "0620_school_checkout_public_links.sql": "c1cc459d28572039c8150eb3ea16881d325bebf64efdca528bd3b6e1434a4634",
     "0621_school_blasts.sql": "9ff3526327bdbd63aa232e46efc4d0356ab4e835f1333b1ff2927e60b7ad3738",
-    "0636_rank_chart_ai_draft.sql": "124371ba22fa85bf713509163587f377f69afce62b54585de145f8e4a2aefe7f"
+    "0623_school_contact_sort_filters.sql": "dff615a142e1a2da7f5eda6fa9ca79d0f18663ccf4cdbc2821e827076ccb8c0b",
+    "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
+    "0624_person_membership_from_plan.sql": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1",
+    "0627_public_checkout_orders.sql": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8",
+    "0628_school_media_library.sql": "d09b6edeadf89820b1fd6fe9cc75b3ad583be40cce15a66389892d7ccf14f78a",
+    "0634_intake_contact_consent.sql": "e87600b3df653f4f8fe13d3b71d720f8d296a13132fc632e7120b9588726b681",
+    "0635_staff_ai_agent_switches.sql": "01835c17065d5e9a7a1d85b3e1d3dd3341b7d055e78e0a7c8a10577400d290fa",
+    "0636_rank_chart_ai_draft.sql": "x"
   }
 }
