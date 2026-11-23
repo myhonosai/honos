@@ -14,6 +14,7 @@ import { EianScreen } from './eian/EianScreen';
 import { EianVoiceContext, type EianVoice } from './eian/voice';
 import { MoreScreen, type Area as MoreArea } from './more/MoreScreen';
 import { MessagesScreen } from './messages/MessagesScreen';
+import { MessageAlertOpenedContext } from './messages/opened-alert';
 import { Loading } from './ui/parts';
 import { Icon, type IconName } from './ui/icons';
 import { eianImage } from './eian/avatar';
@@ -58,9 +59,9 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
   const latest = useRef({ api, newKey });
   latest.current = { api, newKey };
   useEffect(() => { if (signedIn && push) void registerPhone(latest.current.api, push, latest.current.newKey); }, [signedIn, token, push]);
-  // Tapping an announcement notification opens Home and reads the latest.
-  const [opened, setOpened] = useState(0);
-  useEffect(() => (signedIn && push ? push.onOpenAnnouncement(() => setOpened(n => n + 1)) : undefined), [signedIn, push]);
+  // Tapping an announcement alert opens Home, a school message alert opens Messages; both read the latest.
+  const [opened, setOpened] = useState<{ count: number; tab: 'Home' | 'Messages' }>({ count: 0, tab: 'Home' });
+  useEffect(() => (signedIn && push ? push.onOpenAlert(alert => setOpened(o => ({ count: o.count + 1, tab: alert === 'message' ? 'Messages' : 'Home' }))) : undefined), [signedIn, push]);
 
   return (
     <EianVoiceContext.Provider value={voice}>
@@ -86,15 +87,16 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
   );
 }
 
-function Tabs({ onSignOut, version, opened = 0 }: { onSignOut: () => void; version: string; opened?: number }) {
+function Tabs({ onSignOut, version, opened = { count: 0, tab: 'Home' } }: { onSignOut: () => void; version: string; opened?: { count: number; tab: 'Home' | 'Messages' } }) {
   const navigation = useState(() => createNavigationContainerRef<Tabs>())[0];
   const { refresh } = useFamily();
   useEffect(() => {
-    if (!opened) return;
-    if (navigation.isReady()) navigation.navigate('Home');
+    if (!opened.count) return;
+    if (navigation.isReady()) navigation.navigate(opened.tab);
     refresh();
   }, [opened, navigation, refresh]);
   return (
+    <MessageAlertOpenedContext.Provider value={opened.tab === 'Messages' ? opened.count : 0}>
     <NavigationContainer ref={navigation}>
       <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={props => <TabBar {...props} />}>
         <Tab.Screen name="Home" children={() => <HomeFromTab />} />
@@ -104,6 +106,7 @@ function Tabs({ onSignOut, version, opened = 0 }: { onSignOut: () => void; versi
         <Tab.Screen name="More" children={() => <MoreFromTab onSignOut={onSignOut} version={version} />} />
       </Tab.Navigator>
     </NavigationContainer>
+    </MessageAlertOpenedContext.Provider>
   );
 }
 

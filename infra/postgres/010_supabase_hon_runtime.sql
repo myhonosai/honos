@@ -5129,3 +5129,17 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.redeem_mobile_handoff(text,uuid,timestamptz) TO hon_runtime;
   END IF;
 END $$;
+-- 0658 staff-chosen phone alerts: one private request table and private helpers; no new runtime or worker entry point
+-- (the staff commands and the worker claim keep their existing grants).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.request_parent_push(uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0658 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_parent_push_request()','hon.request_parent_push(uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,uuid)',
+    'hon.parent_push_choice(jsonb,text[])','hon.parent_push_principal_in_family(uuid,uuid,uuid,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.parent_push_requests FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.parent_push_requests FROM %I',r); END LOOP;
+END $$;

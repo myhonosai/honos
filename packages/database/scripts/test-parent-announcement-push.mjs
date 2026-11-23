@@ -1,5 +1,5 @@
 /**
- * Parent announcement push proof (0601) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards ->
+ * Parent announcement push proof (0601, with 0658 staff-chosen alerts for announcements and family-message replies) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guards ->
  * ParentPushController / SchoolAnnouncementsController -> protected definer functions on the restricted runtime role with
  * forced RLS), plus the 0601 worker functions and the API worker with a fake Expo transport, on the guarded disposable
  * CRM-close fixture only. Synthetic names and tokens only; nothing is sent anywhere.
@@ -35,6 +35,8 @@ const { SchoolAnnouncementsService } = await load('announcements/school-announce
 const P = await load('parent-push/parent-push.controller.js');
 const { ParentPushService } = await load('parent-push/parent-push.service.js');
 const { ParentPushWorker } = await load('parent-push/parent-push-worker.js');
+const FM = await load('families/family-messages.controller.js');
+const { FamilyMessagesService } = await load('families/family-messages.service.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -57,8 +59,9 @@ const database = new RuntimeDatabaseService();
 
 async function startApp() {
   const module = await Test.createTestingModule({
-    controllers: [P.ParentPushController, M.SchoolAnnouncementsController],
+    controllers: [P.ParentPushController, M.SchoolAnnouncementsController, FM.ParentFamilyMessagesController, FM.FamilyMessagesInboxController],
     providers: [HonIdentityGuard, HonIdentityService, SchoolAnnouncementsService, ParentPushService, P.ParentPushRegisterGuard, P.ParentPushUnregisterGuard, P.ParentPushStatusGuard,
+      FamilyMessagesService, FM.ParentFamilyMessagesReadGuard, FM.ParentFamilyMessagesSendGuard, FM.FamilyMessagesInboxReadGuard, FM.FamilyMessagesMarkReadGuard, FM.FamilyMessagesReplyGuard,
       M.SchoolAnnouncementsReadGuard, M.SchoolAnnouncementsPublishGuard, M.SchoolAnnouncementsWithdrawGuard, { provide: RuntimeDatabaseService, useValue: database }],
   }).compile();
   app = module.createNestApplication({ logger: false, bodyParser: false });
@@ -195,8 +198,9 @@ async function backdate(sqlText, values) {
   await sql('ALTER TABLE hon.parent_push_deliveries DISABLE TRIGGER parent_push_deliveries_guard');
   try { await sql(sqlText, values); } finally { await sql('ALTER TABLE hon.parent_push_deliveries ENABLE TRIGGER parent_push_deliveries_guard'); }
 }
-async function post(actor, title) {
-  return (await success(() => publish(actor, { title, body: `Secret body text for ${title}` }), `publish ${title}`, 201)).data.announcement;
+// 0658: staff tick "Also send as a phone alert"; every 0601 step below posts with the box ticked.
+async function post(actor, title, phoneAlert = true) {
+  return (await success(() => publish(actor, { title, body: `Secret body text for ${title}`, ...(phoneAlert === 'absent' ? {} : { phoneAlert }) }), `publish ${title}`, 201)).data.announcement;
 }
 const ours = (rows) => rows.filter((r) => r.title === 'Push Dojo' || r.title === 'Push Dojo B');
 
@@ -273,7 +277,7 @@ try {
   const claimed = ours(await claim());
   const live = (await sql("SELECT d.id FROM hon.parent_push_devices d WHERE d.school_id=$1 AND d.revoked_at IS NULL", [ids.school])).rows.map((r) => r.id);
   ok(live.length === 11 && claimed.length === 11, `one delivery per live phone at the school (guardian, viewer, 9 of many), got ${claimed.length}/${live.length}`);
-  ok(claimed.every((c) => c.title === 'Push Dojo' && c.body === 'Closed Monday' && c.announcement_id === A.announcementId && c.attempts === 1), 'school name and title only');
+  ok(claimed.every((c) => c.title === 'Push Dojo' && c.body === 'Closed Monday' && c.push_kind === 'school_announcement' && c.announcement_id === A.announcementId && c.thread_id === null && c.attempts === 1), 'school name and title only');
   ok(!JSON.stringify(claimed).includes('Secret body text') && !JSON.stringify(claimed).includes('Secret-Parent-Name'), 'no body text or names reach the worker');
   ok(!claimed.some((c) => c.expo_token === TB) && !claimed.some((c) => c.expo_token === manyTokens[0] || c.expo_token === manyTokens[1]), 'no other school and no let-go phones');
   ok(ours(await claim()).length === 0, 'fanned out exactly once');
@@ -391,7 +395,8 @@ try {
   const L = await post(COACH, 'Worker run');
   const store = {
     isConfigured: () => true,
-    claim: async (limit, lease) => (await claim(limit, lease)).filter((r) => r.title === 'Push Dojo').map((r) => ({ deliveryId: r.delivery_id, leaseToken: r.lease_token, expoToken: r.expo_token, title: r.title, body: r.body, announcementId: r.announcement_id, attempts: r.attempts })),
+    claim: async (limit, lease) => (await claim(limit, lease)).filter((r) => r.title === 'Push Dojo').map((r) => ({ deliveryId: r.delivery_id, leaseToken: r.lease_token, expoToken: r.expo_token, title: r.title, body: r.body,
+      attempts: r.attempts, ...(r.push_kind === 'school_message' ? { kind: 'school_message', threadId: r.thread_id } : { kind: 'school_announcement', announcementId: r.announcement_id }) })),
     recordSend: async (id, lease, outcome) => (await sql('SELECT hon.record_parent_push_send($1::uuid,$2::uuid,$3::jsonb) AS data', [id, lease, JSON.stringify(outcome)])).rows[0].data,
     claimReceipts: async () => [],
     recordReceipt: async () => ({ recorded: false }),
@@ -406,6 +411,84 @@ try {
   await post(COACH, 'Lost record');
   const lost = await new ParentPushWorker(lostStore, fake).runOnce(100, 30);
   ok(lost.claimed === 1 && lost.errors === 1, 'a lost record is counted, never retried by the worker');
+
+  // 13. 0658: staff choose. No tick (absent or false) is never pushed; a tick is recorded once with an audit row; the
+  // choice is part of the exact request; a ticked family-message reply goes to that family's live phones only, without its text.
+  for (const [label, phoneAlert] of [['absent', 'absent'], ['false', false]]) {
+    const quiet = await post(COACH, `Quiet ${label}`, phoneAlert);
+    { const got = ours(await claim()); ok(got.length === 0, `no tick (${label}): nothing claimed ${JSON.stringify(got.map((g) => [g.body, g.push_kind]))}`); }
+    ok((await sql('SELECT (SELECT count(*) FROM hon.parent_push_fanouts WHERE announcement_id=$1)+(SELECT count(*) FROM hon.parent_push_requests WHERE announcement_id=$1) n', [quiet.announcementId])).rows[0].n === '0',
+      `no tick (${label}): no request and never fanned out`);
+  }
+  for (const phoneAlert of ['true', 1, null]) await refused(() => publish(COACH, { title: 'Bad', body: 'x', phoneAlert }), 400, 'VALIDATION_FAILED', `phoneAlert must be a boolean (${JSON.stringify(phoneAlert)})`);
+  { const key = randomUUID();
+    await success(() => publish(COACH, { title: 'Same key', body: 'x' }, { key }), 'quiet post with a key', 201);
+    await refused(() => publish(COACH, { title: 'Same key', body: 'x', phoneAlert: true }, { key }), 409, 'IDEMPOTENCY_KEY_REUSED', 'the same key with a phone alert is another command');
+    const replay = await success(() => publish(COACH, { title: 'Same key', body: 'x', phoneAlert: false }, { key }), 'false replays the quiet post');
+    ok(replay.meta?.replayed === true || replay.data?.announcement, 'replayed'); }
+  const Q = await post(COACH, 'Ticked');
+  ok((await sql("SELECT count(*)::int n FROM hon.parent_push_requests WHERE announcement_id=$1 AND kind='ANNOUNCEMENT' AND requested_by_principal_id=$2", [Q.announcementId, COACH.principal])).rows[0].n === 1, 'a ticked post records one request');
+  ok((await sql("SELECT count(*)::int n FROM hon.audit_events a JOIN hon.parent_push_requests r ON r.id=a.entity_id WHERE a.action_code='parent_push.request' AND r.announcement_id=$1", [Q.announcementId])).rows[0].n === 1, 'and one audit row');
+  const q = ours(await claim());
+  ok(q.length === 1 && q[0].body === 'Ticked' && q[0].push_kind === 'school_announcement', 'a ticked post is pushed');
+  ok((await sql('SELECT fanned_out_at IS NOT NULL f FROM hon.parent_push_requests WHERE announcement_id=$1', [Q.announcementId])).rows[0].f, 'the request is marked fanned out');
+  await recordSend(q[0], { outcome: 'SENT', ticketId: 'ticket-q' });
+
+  // Family messages: GUARDIAN (family) has a live phone (T4); MANY's grant ended; register a phone for a guardian of the other family.
+  const FAM2 = await person('fam2-guardian'); await grant(FAM2, ids.otherFamily, 'PRIMARY_GUARDIAN');
+  const TF2 = tokenOf('other-family-phone');
+  await success(() => register(FAM2, { expoPushToken: TF2, platform: 'android' }), 'other family guardian registers');
+  const sentFamily = await success(() => call(GUARDIAN, 'POST', '/parent/messages/school', { body: { body: 'Secret family question' }, command: 'parent.family_messages.send' }), 'family writes', 201);
+  const threadId = sentFamily.data.threadId, familyMessageId = sentFamily.data.message.messageId;
+  const replies = `/organizations/${ids.organization}/schools/${ids.school}/family-messages/${threadId}/replies`;
+  const reply = (body, options = {}) => call(COACH, 'POST', replies, { body, command: 'family_messages.reply', ...options });
+  await success(() => reply({ body: 'Secret quiet reply', throughMessageId: familyMessageId }), 'quiet reply', 201);
+  ok(ours(await claim()).length === 0 && (await sql("SELECT count(*)::int n FROM hon.parent_push_requests WHERE thread_id=$1", [threadId])).rows[0].n === 0, 'a reply without the tick is never pushed');
+  await refused(() => reply({ body: 'x', throughMessageId: familyMessageId, phoneAlert: 'yes' }), 400, 'VALIDATION_FAILED', 'reply phoneAlert must be a boolean');
+  const loud = await success(() => reply({ body: 'Secret loud reply', throughMessageId: familyMessageId, phoneAlert: true }), 'ticked reply', 201);
+  const req = (await sql("SELECT * FROM hon.parent_push_requests WHERE thread_id=$1", [threadId])).rows;
+  ok(req.length === 1 && req[0].kind === 'FAMILY_MESSAGE' && req[0].message_id === loud.data.message.messageId && req[0].family_id === ids.family, 'one family-message request');
+  const fm = ours(await claim());
+  ok(fm.length === 1 && fm[0].expo_token === T4 && fm[0].push_kind === 'school_message' && fm[0].thread_id === threadId && fm[0].announcement_id === null,
+    `only the family's live phone, as a message alert (${JSON.stringify(fm.map((x) => x.expo_token))})`);
+  ok(fm[0].title === 'Push Dojo' && fm[0].body === 'You have a new message from the school.' && !JSON.stringify(fm).includes('Secret'), 'school name and a fixed line, never the message text');
+  ok(ours(await claim()).length === 0, 'a reply is fanned out once');
+  // The worker sends it with the thread only.
+  const msgSent = [];
+  const msgFake = { readiness: () => 'READY', send: async (messages) => { msgSent.push(...messages); return messages.map(() => ({ outcome: 'SENT', ticketId: 'fake-m' })); }, receipts: async () => new Map() };
+  await success(() => reply({ body: 'Secret second reply', throughMessageId: familyMessageId, phoneAlert: true }), 'second ticked reply', 201);
+  const run = await new ParentPushWorker(store, msgFake).runOnce();
+  ok(run.sent === 1 && JSON.stringify(msgSent[0].data) === JSON.stringify({ type: 'school_message', threadId }) && !JSON.stringify(msgSent).includes('Secret'), `worker: thread only (${JSON.stringify(run)})`);
+  // A family member whose grant to the family ended before the send is SKIPPED NOT_LIVE; a stale request is never fanned out.
+  await success(() => reply({ body: 'Secret third reply', throughMessageId: familyMessageId, phoneAlert: true }), 'third ticked reply', 201);
+  const third = (await sql("SELECT message_id FROM hon.parent_push_requests WHERE thread_id=$1 ORDER BY requested_at DESC LIMIT 1", [threadId])).rows[0].message_id;
+  await sql("UPDATE hon.parent_push_requests SET fanned_out_at=clock_timestamp() WHERE message_id=$1", [third]);
+  const t4Device = (await sql('SELECT id FROM hon.parent_push_devices WHERE expo_token=$1 AND revoked_at IS NULL', [T4])).rows[0].id;
+  const qm = (await sql('INSERT INTO hon.parent_push_deliveries(organization_id,school_id,message_id,device_id) VALUES($1,$2,$3,$4) RETURNING id', [ids.organization, ids.school, third, t4Device])).rows[0].id;
+  await sql("UPDATE hon.family_access_grants SET effective_until=clock_timestamp()-interval '1 second' WHERE principal_id=$1", [GUARDIAN.principal]);
+  ok(ours(await claim()).length === 0, 'nothing leased for someone no longer in the family');
+  row = await delivery(qm);
+  ok(row.status === 'SKIPPED' && row.failure_code === 'NOT_LIVE', 'message delivery SKIPPED NOT_LIVE');
+  await sql("UPDATE hon.family_access_grants SET effective_until=NULL WHERE principal_id=$1", [GUARDIAN.principal]);
+  await success(() => reply({ body: 'Secret old reply', throughMessageId: familyMessageId, phoneAlert: true }), 'old ticked reply', 201);
+  await sql('ALTER TABLE hon.parent_push_requests DISABLE TRIGGER parent_push_requests_guard');
+  await sql("UPDATE hon.parent_push_requests SET requested_at=clock_timestamp()-interval '25 hours' WHERE thread_id=$1 AND fanned_out_at IS NULL", [threadId]);
+  await sql('ALTER TABLE hon.parent_push_requests ENABLE TRIGGER parent_push_requests_guard');
+  ok(ours(await claim()).length === 0, 'a request older than 24 hours is never fanned out');
+  // Requests: never deleted, only marked fanned out once, never written by the runtime.
+  await assert.rejects(sql('DELETE FROM hon.parent_push_requests WHERE announcement_id=$1', [Q.announcementId])); checks += 1;
+  await assert.rejects(sql('UPDATE hon.parent_push_requests SET fanned_out_at=clock_timestamp() WHERE announcement_id=$1', [Q.announcementId])); checks += 1;
+  await assert.rejects(sql('UPDATE hon.parent_push_requests SET family_id=$2 WHERE announcement_id=$1', [Q.announcementId, ids.family])); checks += 1;
+  await assert.rejects(sql("INSERT INTO hon.parent_push_requests(organization_id,school_id,kind,announcement_id,requested_by_principal_id,fanned_out_at) VALUES($1,$2,'ANNOUNCEMENT',$3,$4,clock_timestamp())",
+    [ids.organization, ids.school, A.announcementId, COACH.principal])); checks += 1;
+  await assert.rejects(sql("INSERT INTO hon.parent_push_deliveries(organization_id,school_id,announcement_id,message_id,device_id) VALUES($1,$2,$3,$4,$5)", [ids.organization, ids.school, A.announcementId, third, t4Device])); checks += 1;
+  await assert.rejects(runtime.query('SELECT * FROM hon.parent_push_requests')); checks += 1;
+  await assert.rejects(runtime.query("SELECT hon.request_parent_push($1,$2,$3,'ANNOUNCEMENT',$4,NULL,NULL,NULL,$5,$5)", [ids.organization, ids.school, COACH.principal, A.announcementId, randomUUID()])); checks += 1;
+  { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
+    const startMark = '-- Staff-chosen phone alerts exact verification (0658)', endMark = '-- End staff-chosen phone alerts exact verification.';
+    const section = verify.split(startMark)[1]?.split(endMark)[0];
+    ok(section, startMark);
+    await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
   // 12. Rows never change except forward and are never deleted.
   const anyDevice = (await devices(GUARDIAN.principal))[0];
@@ -449,7 +532,7 @@ try {
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: parent announcement push (0601): ${checks} checks.`);
+  console.log(`PASS: parent announcement push (0601) with staff-chosen alerts (0658): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch(() => {});
