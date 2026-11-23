@@ -40,7 +40,7 @@ test('network target policy accepts only canonical loopback PostgreSQL, includin
 test('entire reviewed migration chain and every 0181–0655 checksum are pinned', async () => {
   const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 227); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0655');
   assert.equal(actual.entries.length, 399);
-  assert.deepEqual(actual.targets.slice(-5).map(t => t.file.slice(0, 4)), ['0638', '0639', '0640', '0644', '0655']);
+  assert.deepEqual(actual.targets.slice(-5).map(t => t.file.slice(0, 4)), ['0639', '0640', '0642', '0644', '0655']);
   const changed = structuredClone(actual.entries); changed[0].sha256 = '0'.repeat(64);
   assert.throws(() => validateMigrationEvidence(changed, actual));
   assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0656_unreviewed.sql', sha256: 'x' }], actual));
