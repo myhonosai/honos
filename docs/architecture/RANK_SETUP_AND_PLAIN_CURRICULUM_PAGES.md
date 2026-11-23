@@ -106,6 +106,40 @@ decision, because it uses a paid provider. Not in this change: a test fee per be
   the school shell, category and age labels in words).
 - Menu group `ranks` lists: Rank setup, Curriculum progress, Videos and links, Teaching studio, Achievements.
 
+### 5b. Set it up by talking to Kai (owner decision 2026-11-22 05:47Z "Yes, add it next"; 08:01Z "Let me talk to ai to set up rank system as well"; migration 0636)
+
+Quick setup gets a box above the built-in choices: the school describes its martial art and ranks in up to 600 characters and
+Kai drafts the belt list. It is a new kind `RANK_CHART` on the shared AI text proposals (docs/architecture/AI_TEXT_PROPOSALS.md),
+built like `COMMERCE_REVIEW` (0615), so the S4 spend controls, pause, budget lock and evidence apply unchanged.
+
+- **Who**: a signed-in person with `curriculum.manage`, `teaching.assistant.use`, Kai switched on for them (`ai.agent.kai.use`, 0635) and `ai.invocation.plan` in a school on Complete.
+  Human UI only (`X-Hon-Human-Command: rank-chart-draft`, UUID `Idempotency-Key`). Otherwise `RANK_CHART_FORBIDDEN`.
+- **A conversation**: the person keeps talking and the list changes each time ("Add a stripe between every belt", "Make each belt
+  36 classes"). Each message is its own request (`{description, current}`): `current` is null on the first turn and afterwards the
+  list on screen (`{name, ranks}`, hand edits included, at most 8,000 bytes of compact JSON). Kai answers with the whole chart, which
+  replaces the list. The page shows the last six turns; nothing about the conversation is stored beyond the request rows.
+- **What Kai sees**: what the person typed, the list on screen and up to 20 existing program names (each clipped to 60 bytes).
+  No student, family or staff data.
+- **What comes back**: exactly the 0622 quick setup input plus a one-line summary: `{name, summary, ranks[1..60]{name, color, classes, days}}`
+  (`hon.rank_chart_ok`, `validateRankChartDraft`). Lower-case colors and padded names are tidied; anything else that does not
+  fit is stored as `RESULT_REJECTED` and never shown. A link or an email address in the answer is rejected.
+- **Nothing is saved by the draft.** It fills the same editable list as the built-in choices. The person checks it and saves it
+  with the ordinary `PROGRAM_SETUP` command; the draft is then marked `APPLIED` (best effort).
+- **Budgets** (immutable kind row): 16,000 input / 5,000 output tokens, at most 150,000 micro-USD per message (the school's own
+  per-call policy still applies), 12,288-byte result.
+- **Off until real AI is on**: with no provider key or without `OPENROUTER_PAID_CALL_APPROVED=true`, `GET .../rank-setup/ai-drafts`
+  answers `aiAvailable: false`, the button stays off with a plain line, and a direct request ends `CONFIGURATION_REQUIRED` with
+  nothing sent. The built-in choices need no AI and always work.
+- **API**: `GET /staff/schools/:schoolId/rank-setup/ai-drafts` (`{aiAvailable, requests}`, newest 5), `POST` the same path
+  (`{description}`), `POST .../ai-drafts/:id/close` (`{status: APPLIED | DISMISSED}`).
+- **Voice** (owner 2026-11-22 09:03Z "I need voice"): a "Talk to Kai" button in the same box, built on the Ask HON voice controller
+  (docs/architecture/HON_VOICE_CONVERSATION.md, browser speech only, no paid provider). Tap, say it, and the sentence is sent
+  exactly as if typed (cut to 600 characters); Kai says its summary back in Kai's voice and listens about 8 seconds for the next
+  change ("thank you" ends it). No hands-free wake word here. The browser turns speech into text (on the browser maker's servers
+  in Chrome and Edge, as disclosed on screen); HON OS records and saves no audio. Shown only where the browser supports it.
+- **Not drafted**: requirements per belt, test fees, two-color swatches. Programs that are already saved are changed on the page
+  by hand, not by Kai.
+
 ## 6. Delivery
 
 - PR A: migration 0622 + API + contracts + Rank setup page + menu. Needs the coordinator's merge slot (after 0621).
@@ -118,3 +152,7 @@ decision, because it uses a paid provider. Not in this change: a test fee per be
   conflicts, name clashes, color validation, cross-school isolation, missing permission, lapsed entitlement, students hidden
   without `curriculum.progress.record`, audit rows.
 - API unit tests for input validation and error mapping; contract verifier tests; web UI tests for Rank setup and each rewritten page.
+
+- AI draft (0636): DB proof `test-rank-chart-ai-draft.mjs` (custody, one counted fake call per request, save through quick setup,
+  rejected/unknown/failed/configuration outcomes, HQ usage attribution, request size, gates, 011 section), API
+  `rank-chart-draft.test.cjs`, web tests for the box and its calls, browser check of describe, draft, check, create.

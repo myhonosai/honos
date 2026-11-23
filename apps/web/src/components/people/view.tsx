@@ -3,7 +3,7 @@ import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
 import { ContactsList } from './contacts-list';
-import { ContactCard as ContactCardTabs, type CardSlots, type CardState, type CardTab, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
+import { ContactCard as ContactCardTabs, type CardSlots, type CardState, type CardTab, type AgreementSlot, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
 import type { CardMode } from './card-panel';
 import { panelText, type PanelKey } from './panel-copy';
 import type { ContactFilters } from './contacts-http';
@@ -23,7 +23,7 @@ export type PeopleViewProps = Readonly<{
   /** The open person's contact card (C2, 0522), read beside the editable record. */
   card?: CardState | undefined;
   /** The tab the card opens on (a People link can ask for one), and the actions under each membership. */
-  cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
+  cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined; agreementSlot?: AgreementSlot | undefined;
   /** Owner (2026-11-16): the open card slides out beside the list (SIDE) or over it (FULL); Close (or Escape) puts it away. */
   cardMode?: CardMode | undefined; onCardMode?: ((mode: CardMode) => void) | undefined; onClose?: (() => void) | undefined;
   onCardTab?: ((tab: CardTab) => void) | undefined;
@@ -146,7 +146,7 @@ function ContactPanel(props: PeopleViewProps & { t: T }): React.ReactElement {
     </div>
     {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
     <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
-      membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} familySlot={props.familySlot} messagesSlot={props.messagesSlot}
+      membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} agreementSlot={props.agreementSlot} familySlot={props.familySlot} messagesSlot={props.messagesSlot}
       onEditProfile={canOpenProfile ? () => setProfileOpen(true) : undefined}/>
     {cardReady && props.actionsSlot ? props.actionsSlot(card.card) : null}
     {props.record.state === 'NONE' || (!cardReady && !cardLoading) ? <div data-testid="person-details">{recordPanel}</div> : null}

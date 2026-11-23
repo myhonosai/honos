@@ -50,6 +50,7 @@ const snapshot = (scope) => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 118, FAILED: 3, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 1 } },
 });
 
+const aiDraftCalls = [];
 // Rank setup (0622) synthetic fixtures: one program with three belts, two students. The mock keeps belts added in this run.
 const rsRank = (n, name, color, order, students, requirements = [], classes = 0, days = 0) => ({ id: id(700 + n), name, color, order, version: 1, classes, days, students, requirements });
 let rankSetupState = null;
@@ -218,6 +219,20 @@ function api(route) {
       rankSetup().programs.push(p);
       return json(route, 200, { data: p, meta: { requestId: id(752), correlationId: id(752), replayed: false } });
     }
+    // Talking to Kai (0636): fake answers; no provider is called in this check. A first turn drafts five belts; a later turn
+    // gets the list on screen and answers with it plus a green belt. Each answer only fills the list.
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/ai-drafts`) {
+      const m = { requestId: id(754), correlationId: id(754), replayed: false };
+      if (method === 'GET') return json(route, 200, { data: { aiAvailable: true, requests: [] }, meta: m });
+      const body = JSON.parse(route.request().postData() ?? '{}'); aiDraftCalls.push(body.current ? `${body.description} [${body.current.ranks.length} belts on screen]` : body.description);
+      const first = [['White belt', '#FFFFFF'], ['Yellow belt', '#FACC15'], ['Blue belt', '#2563EB'], ['Red belt', '#DC2626'], ['Black belt', '#111111']].map(([name, color], i) => ({ name, color, classes: i === 4 ? 0 : 30, days: i === 4 ? 0 : 90 }));
+      const draft = body.current ? { name: body.current.name, summary: 'I added a green belt after yellow with the same minimums. Check that it sits where you want it.', ranks: [...body.current.ranks.slice(0, 2), { name: 'Green belt', color: '#16A34A', classes: 30, days: 90 }, ...body.current.ranks.slice(2)] }
+        : { name: 'Hapkido', summary: 'Five belts from white to black with a modest minimum on each.', ranks: first };
+      return json(route, 200, { data: { id: id(693), status: 'RESULT_RECORDED', reason: null, brief: { description: body.description, current: body.current ?? null }, mine: true, problems: [], createdAt: '2026-11-22T00:00:00.000Z', updatedAt: '2026-11-22T00:00:00.000Z', draft }, meta: m });
+    }
+    if (method === 'POST' && path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/ai-drafts/${id(693)}/close`) { aiDraftCalls.push('closed');
+      return json(route, 200, { data: { id: id(693), status: 'APPLIED', reason: null, brief: { description: 'x', current: null }, mine: true, problems: [], createdAt: '2026-11-22T00:00:00.000Z', updatedAt: '2026-11-22T00:00:01.000Z',
+        draft: { name: 'Hapkido', summary: 'Saved.', ranks: [{ name: 'White belt', color: null, classes: 0, days: 0 }] } }, meta: { requestId: id(755), correlationId: id(755), replayed: false } }); }
     if (method === 'POST' && /\/rank-setup\/programs\/[0-9a-f-]{36}\/ranks\/[0-9a-f-]{36}\/remove$/.test(path)) {
       const [, pid, rid] = path.match(/programs\/([0-9a-f-]{36})\/ranks\/([0-9a-f-]{36})\/remove$/), p = rankSetup().programs.find((x) => x.id === pid);
       p.ranks = p.ranks.filter((k) => k.id !== rid).map((k, i) => ({ ...k, order: i + 1 }));
@@ -653,6 +668,46 @@ for (const size of ['desktop', 'phone']) await check(`Rank setup: belts in order
   await page.getByRole('button', { name: 'Yes, remove Blue belt' }).click();
   await page.getByText('Removed Blue belt.').waitFor();
   assert.equal(await page.getByRole('article', { name: 'Blue belt' }).count(), 0, 'the belt is gone');
+  // Talking to Kai (0636), typed and out loud: nothing can be sent before words are typed; the first answer fills the list, a second message changes
+  // that list (a hand edit made in between is sent along), and nothing is saved until the person creates the program.
+  // Voice uses fakes for the browser's speech services (a real one crashes headless Chromium): one sentence is "heard", then "thank you".
+  await page.evaluate(() => {
+    window.__spoken = [];
+    class FakeRecognition { constructor() { this.lang = ''; this.continuous = false; this.interimResults = false; }
+      start() { const say = window.__say ?? 'thank you'; window.__say = 'thank you'; setTimeout(() => { this.onresult?.({ resultIndex: 0, results: [Object.assign([{ transcript: say }], { isFinal: true, 0: { transcript: say } })] }); this.onend?.(); }, 30); }
+      stop() {} abort() {} }
+    for (const name of ['SpeechRecognition', 'webkitSpeechRecognition']) Object.defineProperty(window, name, { value: FakeRecognition, configurable: true, writable: true });
+    class FakeUtterance { constructor(text) { this.text = text; this.pitch = 1; this.rate = 1; this.onend = null; this.onerror = null; } }
+    Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, writable: true, value: FakeUtterance });
+    const synth = { getVoices: () => [], cancel() {}, speak(u) { window.__spoken.push(u.text); setTimeout(() => u.onend?.(), 10); } };
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, get: () => synth });
+  });
+  await page.getByRole('button', { name: 'Quick setup for a new program' }).click();
+  const draftButton = page.getByRole('button', { name: 'Draft my ranks with AI' });
+  assert.equal(await draftButton.isDisabled(), true, 'nothing can be asked before words are typed');
+  await page.getByLabel('Your martial art and ranks').fill('Hapkido for adults. White, yellow, blue, red, black. About 30 classes and 3 months per belt.');
+  aiDraftCalls.length = 0; const programsBefore = rankSetup().programs.length;
+  await draftButton.click();
+  await page.getByText('Five belts from white to black').waitFor();
+  await page.getByText('3. Check the list (5 belts, first to last)').waitFor();
+  await page.getByLabel('Name of belt 1', { exact: true }).fill('White belt (beginner)');
+  // The second turn is spoken: Kai hears it, changes the list and says back what it did.
+  await page.evaluate(() => { window.__say = 'Add a green belt after yellow.'; });
+  await page.getByRole('button', { name: 'Talk to Kai' }).click();
+  await page.getByText('I added a green belt after yellow').waitFor();
+  await page.waitForFunction(() => window.__spoken.some((t) => t.includes('I added a green belt after yellow')));
+  await page.getByText('Or say it out loud.').waitFor();
+  await page.getByText('3. Check the list (6 belts, first to last)').waitFor();
+  assert.equal(await page.getByLabel('Name of belt 1', { exact: true }).inputValue(), 'White belt (beginner)', 'the hand edit went to Kai and came back');
+  assert.equal(await page.getByLabel('Name of belt 3', { exact: true }).inputValue(), 'Green belt');
+  assert.equal(await page.getByRole('log', { name: 'Your conversation with Kai' }).getByRole('listitem').count(), 2, 'both turns are shown');
+  assert.equal(rankSetup().programs.length, programsBefore, 'talking to Kai creates nothing until the person saves it');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `rank-setup-ai-${size}.png`), fullPage: true }); report.screenshots.push(`rank-setup-ai-${size}.png`);
+  await page.getByRole('button', { name: 'Create Hapkido with 6 belts' }).click();
+  await page.getByText('Created Hapkido with 6 belts.').waitFor();
+  await page.waitForTimeout(300);
+  assert.deepEqual(aiDraftCalls, ['Hapkido for adults. White, yellow, blue, red, black. About 30 classes and 3 months per belt.', 'Add a green belt after yellow. [5 belts on screen]', 'closed'], 'one request per message, then the saved draft is marked used');
   await ctx.close();
 });
 for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {

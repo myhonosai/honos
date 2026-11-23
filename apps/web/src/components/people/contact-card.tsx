@@ -29,13 +29,17 @@ export type MembershipItem = SchoolContactCard['membership'] extends infer M ? M
 export type MembershipSlot = (item: MembershipItem) => React.ReactNode;
 /** The People page puts New membership and Renew here, at the top of the membership tab (shown even before the first membership). */
 export type MembershipToolsSlot = (items: readonly MembershipItem[]) => React.ReactNode;
+/** The People page puts Send agreement here, in the membership tab (students only; the panel's own read decides access). */
+export type AgreementSlot = () => React.ReactNode;
 export type FamilyItem = SchoolContactCard['family'] extends infer F ? F extends { families: readonly (infer I)[] } ? I : never : never;
 /**
  * Slots the People page fills (owner, 2026-11-16: one Contacts page): each family gets its app access and Messages gets
  * this person's texts and family messages. Each slot does its own reads, which the server authorizes; the card only places them.
  */
 export type CardSlots = Readonly<{ membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined;
-  familySlot?: ((family: FamilyItem) => React.ReactNode) | undefined; messagesSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined }>;
+  familySlot?: ((family: FamilyItem) => React.ReactNode) | undefined; messagesSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined;
+  /** Send agreement in the membership tab (students only; the panel's own read decides access). */
+  agreementSlot?: AgreementSlot | undefined }>;
 export function ContactCard({ language, card, initialTab = 'overview', tab: shownTab, onTab, onEditProfile, ...slots }: { language: string; card: CardState; initialTab?: CardTab;
   /** When given, the page owns the tab (it is kept in the address); otherwise the card keeps it. */
   tab?: CardTab | undefined; onTab?: ((tab: CardTab) => void) | undefined;
@@ -68,7 +72,7 @@ export function ContactCard({ language, card, initialTab = 'overview', tab: show
 }
 
 function Body({ language, c, tab, t, slots }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slots: CardSlots }): React.ReactElement {
-  const slot = slots.membershipSlot, tools = slots.membershipTools;
+  const slot = slots.membershipSlot, tools = slots.membershipTools, agreement = slots.agreementSlot;
   const denied = <p className={styles.meta} role="note">{t('notAllowed')}</p>;
   const none = <p className={styles.meta}>{t('none')}</p>;
   switch (tab) {
@@ -99,12 +103,15 @@ function Body({ language, c, tab, t, slots }: { language: string; c: SchoolConta
       if (!c.tasks.items.length) return none;
       return <Fold id="tasks" title={t('tasks')} count={c.tasks.items.length}><ul className={styles.plain}>{c.tasks.items.map((a, i) => <li key={i}>
         <strong>{a.title}</strong> · {t(`priority_${a.priority}` as CardKey)}{a.dueAt ? ` · ${t('due', { date: day(language, a.dueAt) })}` : ''}</li>)}</ul></Fold>;
-    case 'membership':
+    case 'membership': {
       if (!c.membership.allowed) return denied;
+      const sign = agreement ? agreement() : null;
       return <>{tools ? <Fold id="membership-start" title={t('foldStart')}>{tools(c.membership.items)}</Fold> : null}
         <Fold id="membership-list" title={t('foldMemberships')} count={c.membership.items.length}>{c.membership.items.length ? <ul className={styles.plain}>{c.membership.items.map(m => <li key={m.membershipId} data-testid="card-membership">
         <strong>{m.planName ?? m.planCode}</strong> · {codeLabel(language, m.state)}
-        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul> : none}</Fold></>;
+        {m.startedAt ? ` · ${day(language, m.startedAt)}` : ''}{m.endsAt ? ` – ${day(language, m.endsAt)}` : ''}{slot ? slot(m) : null}</li>)}</ul> : none}</Fold>
+        {sign ? <Fold id="membership-agreement" title={t('foldAgreement')}>{sign}</Fold> : null}</>;
+    }
     case 'billing':
       if (!c.billing.allowed) return denied;
       return <>

@@ -293,6 +293,10 @@
       "title": "HON | Human Planned Absence Review"
     },
     {
+      "path": "/staff/attendance/report",
+      "title": "HON | Attendance report"
+    },
+    {
       "path": "/staff/attendance/cards",
       "title": "HON | Attendance cards"
     },

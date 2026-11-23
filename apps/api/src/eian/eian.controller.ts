@@ -5,6 +5,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { EianService } from './eian.service.js';
+import { EianSpeechService } from './eian-speech.service.js';
 
 /** Reads take nothing from the caller: no query, no body and no x-hon-* header (as the parent billing read). */
 export function rejectEianReadInputs(request: Pick<Request, 'method' | 'headers' | 'body' | 'originalUrl'>, query: Record<string, unknown>): void {
@@ -30,11 +31,17 @@ export class EianAskGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'parent.eian.ask';
 }
 
+/** E-V2: each spoken answer is its own same-origin browser (or native app) command. */
+@Injectable()
+export class EianSpeakGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'parent.eian.speak';
+}
+
 /** E-AI1: the signed-in guardian's Eian. The family, school and organization come only from the verified session. */
 @Controller('parent/eian')
 @UseGuards(HonIdentityGuard)
 export class EianController {
-  constructor(private readonly eian: EianService) {}
+  constructor(private readonly eian: EianService, private readonly speech: EianSpeechService) {}
 
   @Get('status')
   @UseGuards(EianReadGuard)
@@ -67,5 +74,26 @@ export class EianController {
     rejectEianReadInputs(request, query);
     if (!request.honIdentity) throw new ForbiddenException({ code: 'IDENTITY_REQUIRED' });
     return { data: await this.eian.read(request.honIdentity.externalSubject, turnId) };
+  }
+
+  @Get('speech/status')
+  @UseGuards(EianReadGuard)
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async speechStatus(@Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    rejectEianReadInputs(request, query);
+    if (!request.honIdentity) throw new ForbiddenException({ code: 'IDENTITY_REQUIRED' });
+    return { data: await this.speech.status(request.honIdentity.externalSubject) };
+  }
+
+  /** One clip of Eian's natural voice for the exact words the app would otherwise give the phone's own voice. */
+  @Post('speech')
+  @HttpCode(201)
+  @UseGuards(EianSpeakGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async speak(@Query() query: Record<string, unknown>, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest) {
+    if (Object.keys(query ?? {}).length || request.originalUrl?.includes('?')) throw new BadRequestException({ code: 'EIAN_SELECTORS_NOT_ACCEPTED' });
+    if (!request.honIdentity) throw new ForbiddenException({ code: 'IDENTITY_REQUIRED' });
+    return { data: await this.speech.speak(request.honIdentity.externalSubject, body, key) };
   }
 }
