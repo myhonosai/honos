@@ -15,6 +15,9 @@ const web = issueSession(identity, config);
 const mobile = issueMobileSession(identity, config);
 const service = new HonIdentityService();
 const req = (headers, url = '/v1/parent/journey', method = 'GET') => ({ headers, originalUrl: url, method });
+const ledger = () => { const seen = new Set(); const calls = []; return { calls, redeemMobileHandoff: async (app, jti, expiresAt) => { calls.push({ app, jti, expiresAt }); if (seen.has(`${app}:${jti}`)) return false; seen.add(`${app}:${jti}`); return true; } }; };
+const astatus = async (fn) => { try { await fn(); return 200; } catch (e) { return e.getStatus?.() ?? 'throw'; } };
+const acode = async (fn) => { try { await fn(); return null; } catch (e) { return e.getResponse?.().code ?? null; } };
 const status = (fn) => { try { fn(); return 200; } catch (e) { return e.getStatus?.() ?? 'throw'; } };
 
 test('web cookie sessions authenticate exactly as before, on the WEB channel', () => {
@@ -81,18 +84,36 @@ test('browser POSTs keep the same-origin rule: no Origin is still refused on the
   assert.equal(status(() => guard.canActivate(ctx(post({ origin: 'https://evil.example' }, 'WEB')))), 403);
 });
 
-test('hand-off exchange returns a mobile session only for the verifier holder', () => {
+test('hand-off exchange returns a mobile session only for the verifier holder, and only once', async () => {
   const verifier = 'v'.repeat(43);
   const code = issueMobileHandoff(identity, pkceChallenge(verifier), config);
-  const controller = new MobileSessionController();
+  const runtime = ledger();
+  const controller = new MobileSessionController(runtime);
   const json = { 'content-type': 'application/json' };
-  const result = controller.exchange({ code, verifier }, { headers: json });
+  assert.equal(await astatus(() => controller.exchange({ code, verifier: 'w'.repeat(43) }, { headers: json })), 401);
+  assert.equal(runtime.calls.length, 0, 'a wrong verifier never reaches the ledger');
+  const result = await controller.exchange({ code, verifier }, { headers: json });
   assert.match(result.data.token, /^[\w-]+\.[\w-]+\.[\w-]+$/);
   assert.equal(service.authenticate(req({ authorization: `Bearer ${result.data.token}` })).externalSubject, identity.externalSubject);
-  assert.equal(status(() => controller.exchange({ code, verifier: 'w'.repeat(43) }, { headers: json })), 401);
-  assert.equal(status(() => controller.exchange({ code, verifier, extra: 1 }, { headers: json })), 400);
-  assert.equal(status(() => controller.exchange({ code, verifier }, { headers: { ...json, origin: 'https://evil.example' } })), 403);
-  assert.equal(status(() => controller.exchange({ code, verifier }, { headers: { 'content-type': 'text/plain' } })), 403);
+  assert.equal(runtime.calls.length, 1);
+  assert.equal(runtime.calls[0].app, 'family');
+  assert.match(runtime.calls[0].jti, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.ok(runtime.calls[0].expiresAt instanceof Date);
+  // The same code + verifier a second time is refused (security review 2026-11-22: single use).
+  assert.equal(await astatus(() => controller.exchange({ code, verifier }, { headers: json })), 401);
+  assert.equal(await acode(() => controller.exchange({ code, verifier }, { headers: json })), 'MOBILE_SIGN_IN_INVALID');
+  assert.equal(await astatus(() => controller.exchange({ code, verifier, extra: 1 }, { headers: json })), 400);
+  assert.equal(await astatus(() => controller.exchange({ code, verifier }, { headers: { ...json, origin: 'https://evil.example' } })), 403);
+  assert.equal(await astatus(() => controller.exchange({ code, verifier }, { headers: { 'content-type': 'text/plain' } })), 403);
+});
+
+test('hand-off exchange issues nothing when the single-use ledger cannot answer', async () => {
+  const verifier = 'v'.repeat(43);
+  const code = issueMobileHandoff(identity, pkceChallenge(verifier), config);
+  const controller = new MobileSessionController({ redeemMobileHandoff: async () => { throw new Error('db down'); } });
+  const json = { 'content-type': 'application/json' };
+  assert.equal(await astatus(() => controller.exchange({ code, verifier }, { headers: json })), 503);
+  assert.equal(await acode(() => controller.exchange({ code, verifier }, { headers: json })), 'MOBILE_SIGN_IN_UNAVAILABLE');
 });
 
 // M3: the real parent class booking guards extend MembershipActivationHumanUiGuard, which adds its own browser rules
@@ -108,4 +129,28 @@ test('parent class booking guards admit the native app and keep the extra browse
   for (const extra of [{ origin: 'https://hon.example' }, { 'sec-fetch-site': 'cross-site' }, { 'sec-fetch-site': 'same-origin' }, { 'x-hon-source': 'agent' }, { 'x-hon-action-request-id': 'a' }, { 'x-hon-delegated-by-principal-id': 'p' }]) {
     assert.equal(status(() => book.canActivate(ctx(native('parent.class_booking.book', extra)))), 403, JSON.stringify(extra));
   }
+});
+
+test('runtime redeemMobileHandoff: true/false from the function, a refused code (22023) is false, an outage rejects', async () => {
+  const { RuntimeDatabaseService } = require('../dist/foundation/runtime-database.service.js');
+  const make = (answer) => {
+    const sent = [];
+    const db = Object.create(RuntimeDatabaseService.prototype);
+    db.assertRuntimePosture = async () => {};
+    db.getPool = () => ({ connect: async () => ({
+      query: async (sql, args) => { sent.push([sql, args]); if (sql.startsWith('SELECT hon.redeem_mobile_handoff')) return answer(); return { rows: [] }; },
+      release: () => {},
+    }) });
+    return { db, sent };
+  };
+  const at = new Date(Date.now() + 60_000), jti = '11111111-1111-4111-8111-111111111111';
+  const ok = make(() => ({ rows: [{ fresh: true }] }));
+  assert.equal(await ok.db.redeemMobileHandoff('family', jti, at), true);
+  assert.deepEqual(ok.sent.find(([sql]) => sql.startsWith('SELECT hon.redeem_mobile_handoff'))[1], ['family', jti, at.toISOString()]);
+  assert.ok(ok.sent.some(([sql]) => sql === 'COMMIT'));
+  assert.equal(await make(() => ({ rows: [{ fresh: false }] })).db.redeemMobileHandoff('staff', jti, at), false);
+  const refused = make(() => { throw Object.assign(new Error('MOBILE_HANDOFF_INVALID'), { code: '22023' }); });
+  assert.equal(await refused.db.redeemMobileHandoff('family', jti, at), false);
+  assert.ok(refused.sent.some(([sql]) => sql === 'ROLLBACK'));
+  await assert.rejects(make(() => { throw Object.assign(new Error('down'), { code: '57P01' }); }).db.redeemMobileHandoff('family', jti, at));
 });

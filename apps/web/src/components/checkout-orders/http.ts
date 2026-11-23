@@ -1,4 +1,4 @@
-import { verifySchoolCheckoutOrders, type SchoolCheckoutOrders } from '@hon/contracts';
+import { verifySchoolCheckoutOrders, verifySchoolPublicCheckoutOrders, type SchoolCheckoutOrders, type SchoolPublicCheckoutOrders } from '@hon/contracts';
 
 /**
  * Family checkout orders (0598): one same-origin read. The server checks the shell's school scope again with
@@ -9,9 +9,9 @@ export type CheckoutOrdersScope = Readonly<{ organizationId: string; schoolId: s
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function invalid(): never { throw new Error('The answer could not be checked. Nothing is assumed. Refresh to try again.'); }
 
-export async function loadCheckoutOrders(scope: CheckoutOrdersScope): Promise<SchoolCheckoutOrders> {
+async function readOrders(scope: CheckoutOrdersScope, path: 'orders' | 'public-orders'): Promise<unknown> {
   if (!UUID.test(scope.organizationId) || !UUID.test(scope.schoolId)) invalid();
-  const url = `/api/v1/organizations/${scope.organizationId.toLowerCase()}/schools/${scope.schoolId.toLowerCase()}/payments/checkout-pages/orders`;
+  const url = `/api/v1/organizations/${scope.organizationId.toLowerCase()}/schools/${scope.schoolId.toLowerCase()}/payments/checkout-pages/${path}`;
   const response = await fetch(url, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
     headers: { Accept: 'application/json' } });
   if (!/^application\/json(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) invalid();
@@ -24,7 +24,15 @@ export async function loadCheckoutOrders(scope: CheckoutOrdersScope): Promise<Sc
     throw new Error('Checkout orders are unavailable right now. Refresh to try again.');
   }
   if (!Object.hasOwn(root, 'data')) invalid();
-  return verifySchoolCheckoutOrders(root.data);
+  return root.data;
+}
+
+export async function loadCheckoutOrders(scope: CheckoutOrdersScope): Promise<SchoolCheckoutOrders> {
+  return verifySchoolCheckoutOrders(await readOrders(scope, 'orders'));
+}
+/** 0627: sign-ups from a page's family link by people without an account, with the contact details they typed. */
+export async function loadPublicCheckoutOrders(scope: CheckoutOrdersScope): Promise<SchoolPublicCheckoutOrders> {
+  return verifySchoolPublicCheckoutOrders(await readOrders(scope, 'public-orders'));
 }
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {

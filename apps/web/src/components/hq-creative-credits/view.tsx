@@ -156,6 +156,7 @@ function Detail({ detail, name, language, t, onClose, ...c }: Commands & { detai
     <h3>{t('expenseTitle')}</h3>
     <dl className={styles.facts} data-testid="credits-expense">
       <div><dt>{t('actual')}</dt><dd>{usd(language, e.actualProviderCostMicrounits)}</dd></div>
+      {e.estimatedProviderCostMicrounits !== undefined && <div><dt>{t('estimated')}</dt><dd>{usd(language, e.estimatedProviderCostMicrounits)}</dd></div>}
       <div><dt>{t('finalized')}</dt><dd>{usd(language, e.finalizedProviderCostMicrounits)}</dd></div>
       <div><dt>{t('failed')}</dt><dd>{usd(language, e.failedOrNotChargedProviderCostMicrounits)}</dd></div>
       <div><dt>{t('consumed')}</dt><dd>{num(language, e.consumedCredits)}</dd></div>

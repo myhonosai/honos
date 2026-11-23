@@ -285,3 +285,128 @@ export function schoolDashboardWinRate(k: Pick<SchoolDashboardKpis, 'leadsWon' |
   const closed = k.leadsWon + k.leadsLost;
   return closed === 0 ? null : Math.round((100 * k.leadsWon) / closed);
 }
+
+/**
+ * AR1 (0633): the attendance report for one school. One week of check-ins by class time, 7 and 30 day participation,
+ * average check-ins per scheduled class, participation by program and each active student's last check-in.
+ */
+export interface AttendanceReportQuery { week?: string; month?: string }
+export interface AttendanceReportSession { date: string; time: string; checkIns: number }
+export interface AttendanceReportClass {
+  /** 1 = Monday ... 7 = Sunday, in school time. */
+  weekday: number; time: string; name: string; program: string; sessions: number; sessionsWithCheckIns: number; checkIns: number;
+}
+export interface AttendanceReportProgram { programId: string | null; name: string | null; activeStudents: number; attended30Days: number }
+export interface AttendanceReportStudent {
+  studentProfileId: string; personId: string; givenName: string; familyName: string; program: string | null; rank: string | null;
+  lastCheckIn: string | null; attended7Days: boolean; attended30Days: boolean;
+}
+export interface AttendanceReport {
+  schoolId: string; schoolName: string; timezone: string; generatedAt: string; localToday: string; savedCheckIns: number;
+  participation: { activeStudents: number; attended7Days: number; attended30Days: number };
+  week: { start: string; end: string; sessions: AttendanceReportSession[] };
+  classes: { month: string; truncated: boolean; rows: AttendanceReportClass[] };
+  programs: AttendanceReportProgram[];
+  /** visible is false when the reader lacks people.read: the counts stand, no student is named. */
+  students: { visible: boolean; truncated: boolean; items: AttendanceReportStudent[] };
+}
+
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Query string to input: only ?week=YYYY-MM-DD (any day of the week wanted) and ?month=YYYY-MM|ALL are accepted. */
+export function validateAttendanceReportQuery(value: unknown): AttendanceReportQuery {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('VALIDATION_FAILED');
+  const source = value as Record<string, unknown>;
+  if (Object.keys(source).some(key => key !== 'week' && key !== 'month')) throw new Error('VALIDATION_FAILED');
+  const query: AttendanceReportQuery = {};
+  if (source.week !== undefined) {
+    if (typeof source.week !== 'string' || !DAY.test(source.week) || Number.isNaN(Date.parse(`${source.week}T00:00:00Z`))
+      || new Date(`${source.week}T00:00:00Z`).toISOString().slice(0, 10) !== source.week) throw new Error('VALIDATION_FAILED');
+    query.week = source.week;
+  }
+  if (source.month !== undefined) {
+    if (typeof source.month !== 'string' || (source.month !== 'ALL' && !MONTH.test(source.month))) throw new Error('VALIDATION_FAILED');
+    query.month = source.month;
+  }
+  return query;
+}
+
+function optionalText(value: unknown, max: number): string | null { return value === null ? null : text(value, max); }
+function day(value: unknown): string { const d = text(value, 10); if (!DAY.test(d)) fail(); return d; }
+/** A person's name part: may be empty, never unsafe or over 200 characters. */
+function namePart(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 200 || UNSAFE.test(value)) fail();
+  return value;
+}
+
+export function verifyAttendanceReport(value: unknown, expectedSchoolId: string, query: AttendanceReportQuery): AttendanceReport {
+  const source = exact(value, ['schoolId', 'schoolName', 'timezone', 'generatedAt', 'localToday', 'savedCheckIns', 'participation', 'week', 'classes', 'programs', 'students']);
+  const schoolId = uuid(source.schoolId);
+  if (schoolId !== expectedSchoolId.toLowerCase()) fail();
+  const localToday = day(source.localToday);
+  const p = exact(source.participation, ['activeStudents', 'attended7Days', 'attended30Days']);
+  const participation = { activeStudents: count(p.activeStudents), attended7Days: count(p.attended7Days), attended30Days: count(p.attended30Days) };
+  if (participation.attended7Days > participation.attended30Days || participation.attended30Days > participation.activeStudents) fail();
+
+  const w = exact(source.week, ['start', 'end', 'sessions']);
+  const start = day(w.start), end = day(w.end);
+  const startAt = Date.parse(`${start}T00:00:00Z`);
+  if (new Date(startAt).getUTCDay() !== 1 || Date.parse(`${end}T00:00:00Z`) - startAt !== 6 * 86400000 || start > localToday) fail();
+  if (query.week !== undefined && (query.week < start || query.week > end)) fail();
+  if (query.week === undefined && (localToday < start || localToday > end)) fail();
+  if (!Array.isArray(w.sessions) || w.sessions.length > 500) fail();
+  let last = '';
+  const sessions = w.sessions.map(item => {
+    const x = exact(item, ['date', 'time', 'checkIns']);
+    const date = day(x.date), time = text(x.time, 5);
+    if (!CLOCK.test(time) || date < start || date > end || `${date} ${time}` <= last) fail();
+    last = `${date} ${time}`;
+    return { date, time, checkIns: count(x.checkIns) };
+  });
+
+  const c = exact(source.classes, ['month', 'truncated', 'rows']);
+  if (c.month !== (query.month ?? localToday.slice(0, 7)) || typeof c.truncated !== 'boolean' || !Array.isArray(c.rows) || c.rows.length > 300) fail();
+  const rows = c.rows.map(item => {
+    const x = exact(item, ['weekday', 'time', 'name', 'program', 'sessions', 'sessionsWithCheckIns', 'checkIns']);
+    const weekday = count(x.weekday), time = text(x.time, 5), held = count(x.sessions), withCheckIns = count(x.sessionsWithCheckIns), checkIns = count(x.checkIns);
+    if (weekday < 1 || weekday > 7 || !CLOCK.test(time) || held < 1 || withCheckIns > held || (withCheckIns === 0) !== (checkIns === 0) || checkIns < withCheckIns) fail();
+    return { weekday, time, name: text(x.name, 200), program: text(x.program, 200), sessions: held, sessionsWithCheckIns: withCheckIns, checkIns };
+  });
+
+  if (!Array.isArray(source.programs) || source.programs.length > 500) fail();
+  let programStudents = 0, programAttended = 0;
+  const seenPrograms = new Set<string>();
+  const programs = source.programs.map(item => {
+    const x = exact(item, ['programId', 'name', 'activeStudents', 'attended30Days']);
+    const programId = x.programId === null ? null : uuid(x.programId);
+    const active = count(x.activeStudents), attended = count(x.attended30Days);
+    if (active < 1 || attended > active || seenPrograms.has(programId ?? '')) fail();
+    seenPrograms.add(programId ?? '');
+    programStudents += active; programAttended += attended;
+    return { programId, name: optionalText(x.name, 200), activeStudents: active, attended30Days: attended };
+  });
+  if (programStudents !== participation.activeStudents || programAttended !== participation.attended30Days) fail();
+
+  const st = exact(source.students, ['visible', 'truncated', 'items']);
+  if (typeof st.visible !== 'boolean' || typeof st.truncated !== 'boolean' || !Array.isArray(st.items) || st.items.length > 2000) fail();
+  if (st.visible ? st.truncated !== (participation.activeStudents > 2000) || (!st.truncated && st.items.length !== participation.activeStudents)
+    : st.truncated || st.items.length !== 0) fail();
+  const seenStudents = new Set<string>();
+  const items = st.items.map(item => {
+    const x = exact(item, ['studentProfileId', 'personId', 'givenName', 'familyName', 'program', 'rank', 'lastCheckIn', 'attended7Days', 'attended30Days']);
+    const studentProfileId = uuid(x.studentProfileId);
+    const lastCheckIn = x.lastCheckIn === null ? null : day(x.lastCheckIn);
+    if (seenStudents.has(studentProfileId) || typeof x.attended7Days !== 'boolean' || typeof x.attended30Days !== 'boolean'
+      || (x.attended7Days && !x.attended30Days) || (x.attended30Days && lastCheckIn === null) || (lastCheckIn !== null && lastCheckIn > localToday)) fail();
+    seenStudents.add(studentProfileId);
+    return { studentProfileId, personId: uuid(x.personId), givenName: namePart(x.givenName), familyName: namePart(x.familyName),
+      program: optionalText(x.program, 200), rank: optionalText(x.rank, 200), lastCheckIn, attended7Days: x.attended7Days as boolean, attended30Days: x.attended30Days as boolean };
+  });
+
+  return { schoolId, schoolName: text(source.schoolName, 200), timezone: text(source.timezone, 64), generatedAt: instant(source.generatedAt), localToday,
+    savedCheckIns: count(source.savedCheckIns), participation, week: { start, end, sessions }, classes: { month: c.month as string, truncated: c.truncated, rows },
+    programs, students: { visible: st.visible as boolean, truncated: st.truncated as boolean, items } };
+}
+
+/** Whole percent of a over b; null when b is 0. */
+export function attendanceReportPercent(a: number, b: number): number | null { return b === 0 ? null : Math.round((100 * a) / b); }

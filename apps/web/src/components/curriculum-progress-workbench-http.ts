@@ -12,9 +12,9 @@ export class CurriculumProgressReadError extends Error {}
 export class CurriculumProgressRejectedError extends Error {}
 export class CurriculumProgressUncertainError extends Error {}
 export class CurriculumProgressAccessError extends Error {
-  constructor(readonly status: 401 | 403) { super('Current verified human session or curriculum progress access is unavailable. Inputs, snapshot, receipt and retry were cleared.'); }
+  constructor(readonly status: 401 | 403) { super('Your session ended or your access changed. Sign in again, then pick the student again.'); }
 }
-function invalid(): never { throw new Error('Unverified exact curriculum progress contract. No current progress or observation outcome is assumed.'); }
+function invalid(): never { throw new Error('The answer from the server could not be checked. Refresh and try again.'); }
 function closed(value: unknown, fields: readonly string[]): asserts value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== fields.length || fields.some(field => !Object.hasOwn(value, field))) invalid();
 }
@@ -124,18 +124,18 @@ async function json(response: Response): Promise<unknown> {
 export async function loadCurriculumEnrollment(ids: CurriculumProgressKnownIds): Promise<StaffCurriculumEnrollmentDetails> {
   const path = curriculumEnrollmentPath(ids); let response: Response;
   try { response = await fetch(path, { ...posture, method: 'GET', headers: { Accept: 'application/json' } }); }
-  catch { throw new CurriculumProgressReadError('Current enrollment could not be verified. No snapshot is shown; explicitly load again.'); }
+  catch { throw new CurriculumProgressReadError('That student could not be loaded. Try again.'); }
   if (response.status === 401 || response.status === 403) throw new CurriculumProgressAccessError(response.status);
   try { return parseCurriculumEnrollment(await json(response), ids); }
-  catch { throw new CurriculumProgressReadError('Current enrollment could not be verified within this bounded workbench. No snapshot is shown; explicitly load again.'); }
+  catch { throw new CurriculumProgressReadError('That student could not be loaded. Try again.'); }
 }
 /** No automatic retry and no alternative route. Replay still passes current server authorization. */
 export async function submitCurriculumObservation(command: PreparedCurriculumObservation): Promise<CurriculumObservationReceipt> {
   commandInput(command); let response: Response;
   try { response = await fetch(command.path, { ...posture, method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': command.key, 'X-HON-Human-Command': 'curriculum-progress' }, body: command.body }); }
-  catch { throw new CurriculumProgressUncertainError('Observation outcome is uncertain. Only the exact in-memory command may be retried by a separate human action.'); }
+  catch { throw new CurriculumProgressUncertainError('That save did not confirm. It may already be saved.'); }
   if (response.status === 401 || response.status === 403) throw new CurriculumProgressAccessError(response.status);
-  if ([400, 404, 409, 413, 415, 422].includes(response.status)) throw new CurriculumProgressRejectedError('Observation rejected or versions conflicted. Snapshot and retry were cleared; explicitly reload the current enrollment before a new command.');
+  if ([400, 404, 409, 413, 415, 422].includes(response.status)) throw new CurriculumProgressRejectedError('That was not saved. Someone else may have changed it a moment ago. Load the student again, then try again.');
   try { return parseCurriculumObservation(await json(response), command); }
-  catch { throw new CurriculumProgressUncertainError('No verified exact observation receipt was returned. Outcome is uncertain; only the unchanged in-memory command may be retried.'); }
+  catch { throw new CurriculumProgressUncertainError('That save did not confirm. It may already be saved.'); }
 }
