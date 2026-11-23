@@ -7,7 +7,7 @@ import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/pri
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { CheckoutError, checkoutApi, keepForRetry, type CheckoutApi, type CheckoutScope } from './http';
 import { draftFrom, draftProblems, duplicateDraft, editPage, newDraft, saveInputFrom, type PageDraft, type PageEdit } from './draft';
-import { SchoolCheckoutView, type CheckoutEditor, type CheckoutListState, type CheckoutOutcome, type EditorTab, type GroupDraft } from './view';
+import { SchoolCheckoutView, type CheckoutEditor, type CheckoutLinks, type CheckoutListState, type CheckoutOutcome, type EditorTab, type GroupDraft } from './view';
 
 /** A save whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
 type Pending = Readonly<{ key: string; scope: CheckoutScope } & ({ what: 'PAGE'; input: SaveCheckoutPageInput } | { what: 'SETTINGS'; input: SaveCheckoutSettingsInput })>;
@@ -54,6 +54,8 @@ export function SchoolCheckout({ api = checkoutApi }: { api?: CheckoutApi }): Re
   const [outcome, setOutcome] = useState<CheckoutOutcome>(null);
   const [lock, setLock] = useState<Lock>('NONE');
   const [refresh, setRefresh] = useState(0);
+  const [links, setLinks] = useState<CheckoutLinks>({ state: 'LOADING' });
+  const [copied, setCopied] = useState<string | null>(null);
   const gen = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; gen.current++; pending.current = null; }; }, []);
@@ -61,7 +63,7 @@ export function SchoolCheckout({ api = checkoutApi }: { api?: CheckoutApi }): Re
   const forget = useCallback(() => { setEditor(null); setGroups(null); setOutcome(null); }, []);
   useEffect(() => onShellPrivacyEvent((event) => {
     concealShellPrivateNow(); gen.current++; privacy.current++; pending.current = null;
-    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setList({ state: 'LOADING' });
+    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setList({ state: 'LOADING' }); setLinks({ state: 'LOADING' }); setCopied(null);
     if (event.type === HON_SESSION_INVALIDATED_EVENT || event.type === HON_SCHOOL_CONTEXT_CHANGED_EVENT) forget();
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), [forget]);
 
@@ -73,12 +75,20 @@ export function SchoolCheckout({ api = checkoutApi }: { api?: CheckoutApi }): Re
 
   useEffect(() => {
     const current = ++gen.current, shown = privacy.current;
-    setList({ state: 'LOADING' });
+    setList({ state: 'LOADING' }); setLinks({ state: 'LOADING' }); setCopied(null);
     if (!orgId || !schoolId) return;
     const owned = () => mounted.current && current === gen.current && shown === privacy.current;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
-    api.pages({ organizationId: orgId, schoolId }, signal, owned).then(
-      (read) => { if (owned()) setList({ state: 'READY', read }); },
+    const scope = { organizationId: orgId, schoolId };
+    api.pages(scope, signal, owned).then(
+      (read) => {
+        if (!owned()) return;
+        setList({ state: 'READY', read });
+        // 0620: the share links come after the pages, so a page created since then is issued its link too.
+        api.links(scope, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), owned).then(
+          (answer) => { if (owned()) setLinks({ state: 'READY', byPage: Object.fromEntries(answer.links.map((l) => [l.pageId, l.publicId])) }); },
+          () => { if (owned() && !abort.signal.aborted) setLinks({ state: 'UNAVAILABLE' }); });
+      },
       (error) => { if (owned() && !abort.signal.aborted) setList({ state: error instanceof CheckoutError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
     return () => { abort.abort(); };
   }, [api, orgId, schoolId, refresh]);
@@ -167,6 +177,12 @@ export function SchoolCheckout({ api = checkoutApi }: { api?: CheckoutApi }): Re
   const onGroupsClose = useCallback(() => { if (lock === 'NONE') setGroups(null); }, [lock]);
   const onRefreshList = useCallback(() => setRefresh((n) => n + 1), []);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  const onCopyLink = useCallback((pageId: string, url: string) => {
+    const clip = globalThis.navigator?.clipboard;
+    if (!clip) { setCopied(`failed:${pageId}`); return; }
+    clip.writeText(url).then(() => { if (mounted.current) setCopied(pageId); }, () => { if (mounted.current) setCopied(`failed:${pageId}`); });
+  }, []);
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
@@ -176,6 +192,6 @@ export function SchoolCheckout({ api = checkoutApi }: { api?: CheckoutApi }): Re
       onFilter={setFilter} onNew={onNew} onOpen={onOpen} onDuplicate={onDuplicate} onQuickStatus={onQuickStatus} onMove={onMove}
       onEdit={onEdit} onTab={onTab} onEditLanguage={setEditLanguage} onSave={onSave} onClose={onClose}
       onGroupsOpen={onGroupsOpen} onGroupsEdit={onGroupsEdit} onGroupsSave={onSaveGroups} onGroupsClose={onGroupsClose}
-      onRefreshList={onRefreshList} onTryAgain={onTryAgain}/>
+      onRefreshList={onRefreshList} onTryAgain={onTryAgain} links={links} origin={origin} copied={copied} onCopyLink={onCopyLink}/>
   </div>;
 }

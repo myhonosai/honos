@@ -1,11 +1,11 @@
-import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, expect, it, vi, type Mock } from 'vitest';
 import { staffInvitationApi, type StaffCommand } from '../src/components/staff-invitations/http';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { organizationId: id(1), schoolId: id(2) };
 const item = { invitationId: id(3), schoolId: id(2), roleId: id(4), roleName: 'Front desk', email: 'staff@example.test', status: 'PENDING', expiresAt: '2026-11-06T12:00:00Z' };
 const reply = (data: unknown, status = 200) => Response.json({ data }, { status });
 const signal = () => new AbortController().signal;
-let event: ReturnType<typeof vi.fn>;
+let event: Mock<() => void>;
 beforeEach(() => { event = vi.fn(); const w = new EventTarget(); w.addEventListener('hon:session-invalidated', event); vi.stubGlobal('window', w); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it('uses the canonical school-only list endpoint and closed exact-school results', async () => {

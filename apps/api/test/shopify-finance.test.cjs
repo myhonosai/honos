@@ -62,9 +62,10 @@ test('SH-F1 the snapshot and view contracts are closed', () => {
   assert.equal(contracts.validateShopifyConnectInput({ ...base, allowOrders: true }).allowOrders, true);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowOrders: 1 }), /SHOPIFY_INPUT_INVALID/);
   assert.deepEqual([...contracts.SHOPIFY_ORDER_SCOPES], ['write_orders']);
+  assert.deepEqual([...contracts.SHOPIFY_STOCK_SCOPES], ['read_locations']);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowFinance: 'yes' }), /SHOPIFY_INPUT_INVALID/);
   assert.throws(() => contracts.validateShopifyConnectInput({ ...base, allowPayouts: true }), /SHOPIFY_INPUT_INVALID/);
-  assert.deepEqual([...contracts.SHOPIFY_FINANCE_SCOPES], ['read_shopify_payments_accounts']);
+  assert.deepEqual([...contracts.SHOPIFY_FINANCE_SCOPES], ['read_shopify_payments_accounts', 'read_shopify_payments_payouts']);
 });
 
 async function syncWith(scopes, setup = () => {}) {
@@ -104,4 +105,45 @@ test('SH-F1 the worker records finance only through its lease function', async (
   const store = new ShopifyWorkerSql(async (sql, values) => { seen.push([sql, values]); return [{ data: { ok: true } }]; });
   await store.finance({ syncId: 's', leaseToken: 'l', finance: { paymentsActive: false, balances: [], payouts: [], transactions: [] } });
   assert.deepEqual(seen.map(s => s[0]), ['SELECT hon.record_shopify_background_finance($1::jsonb) AS data']);
+});
+
+test('SH-F1 lists refused (no read_shopify_payments_payouts): the read steps down to transactions without payouts, then to the balance alone', async () => {
+  const sent = [], replies = [];
+  const send = async (url, init) => { sent.push(JSON.parse(init.body).query); return new Response(JSON.stringify(replies.shift()), { status: 200 }); };
+  const a = new adapter.GraphqlShopifyAdapter('cid', 'csecret', send, () => undefined);
+  const denied = field => ({ errors: [{ message: 'Access denied.', path: ['shopifyPaymentsAccount', field], extensions: { code: 'ACCESS_DENIED' } }], data: null });
+  const { payouts, balanceTransactions, ...rest } = ACCOUNT;
+  const plain = { ...rest, balanceTransactions: { nodes: balanceTransactions.nodes.map(({ associatedPayout, ...t }) => t) } };
+  const shape = () => sent.map(q => [q.includes('payouts('), q.includes('associatedPayout'), q.includes('balanceTransactions'), q.includes('balance {')]);
+  // Payouts refused, transactions answered.
+  replies.push(denied('payouts'), { data: { shopifyPaymentsAccount: plain } });
+  let f = await a.finance(SHOP, 'shpat_1');
+  assert.deepEqual(f.balances, [{ currency: 'USD', amount: '245.18' }, { currency: 'CAD', amount: '-3.5' }]);
+  assert.deepEqual(f.payouts, []);
+  assert.deepEqual(f.transactions.map(t => [t.id, t.payoutId]), [['854848137', null], ['854848138', null]]);
+  assert.deepEqual(shape(), [[true, true, true, true], [false, false, true, true]]);
+  contracts.verifyShopifyFinanceSnapshot(f);
+  // As the test store answered on 2026-11-22: payouts refused, then transactions refused; the balance alone is kept.
+  sent.length = 0; replies.push(denied('payouts'), denied('balanceTransactions'), { data: { shopifyPaymentsAccount: rest } });
+  f = await a.finance(SHOP, 'shpat_1');
+  assert.deepEqual([f.paymentsActive, f.balances.length, f.payouts, f.transactions], [true, 2, [], []]);
+  assert.deepEqual(shape(), [[true, true, true, true], [false, false, true, true], [false, false, false, true]]);
+  contracts.verifyShopifyFinanceSnapshot(f);
+  // The full read is used as it is when Shopify answers it; a refused balance is the failure; throttling and auth are not stepped down.
+  sent.length = 0; replies.push({ data: { shopifyPaymentsAccount: ACCOUNT } });
+  assert.equal((await a.finance(SHOP, 'shpat_1')).payouts.length, 1);
+  assert.equal(sent.length, 1);
+  sent.length = 0; replies.push(denied('payouts'), denied('balanceTransactions'), denied('balance'));
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  assert.equal(sent.length, 3);
+  // An answer Shopify gave but HON cannot read (a payout status HON does not know) is the failure: it does not step down to hide the lists.
+  sent.length = 0; replies.push({ data: { shopifyPaymentsAccount: { ...ACCOUNT, payouts: { nodes: ACCOUNT.payouts.nodes.map(p => ({ ...p, status: 'SOMETHING_NEW' })) } } } });
+  await assert.rejects(a.finance(SHOP, 'shpat_1'), e => e.message === 'INVALID_RESPONSE');
+  assert.equal(sent.length, 1);
+});
+
+test('SH-F1 the fake store keeps only the balance for a store that granted only the accounts scope', async () => {
+  const r = await syncWith([...contracts.SHOPIFY_SCOPES, 'read_shopify_payments_accounts']);
+  assert.equal(r.recorded.length, 1);
+  assert.deepEqual([r.recorded[0].balances.length > 0, r.recorded[0].payouts, r.recorded[0].transactions], [true, [], []]);
 });

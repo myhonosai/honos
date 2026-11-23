@@ -86,7 +86,7 @@ export function ParentAppCurriculumPage(p: { view: StaffView | null; selected: s
     {p.notice && <p role="status" className={s.flash} data-tone="ok">{p.notice}</p>}
     {!p.hasSchool && <p className={s.muted}>Open this page from your school&apos;s menu to manage its curriculum.</p>}
     {p.loading && !p.view && <p role="status" className={s.muted}>Reading curriculum…</p>}
-    {p.view && !p.view.curricula.length && <div className={s.empty}><strong>No curriculum yet</strong><span>Create a curriculum and its ranks in Ranks first, then come back to choose what families see.</span></div>}
+    {p.view && !p.view.curricula.length && <div className={s.empty}><strong>No curriculum yet</strong><span>Set up a program and its belts in <a href="/staff/curriculum/ranks">Rank setup</a> first, then come back to choose what families see.</span></div>}
     {p.view && !!p.view.curricula.length && <div className={s.split}>
       <nav aria-label="Curricula" className={s.list}><ul>{p.view.curricula.map((c) => <li key={c.id}>
         <button type="button" className={s.row} aria-current={c.id === p.selected ? 'true' : undefined} onClick={() => p.onSelect(c.id)}>

@@ -55,7 +55,7 @@ export class ParentFamilyScheduleController {
     const range = normalizeParentFamilyScheduleRange(query);
     const requestId = randomUUID();
     return {
-      data: await this.schedules.get(resolvedScope, familyId, range, requestId),
+      data: await this.schedules.get(resolvedScope, familyId, range, requestId, identity.externalSubject),
       meta: {
         requestId,
         correlationId: requestId,

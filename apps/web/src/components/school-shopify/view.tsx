@@ -9,6 +9,8 @@ export { money, shopifyAdminUrl };
 import { Changes, DraftEditor, ProductEditor, changeFailure, changeOpen, type ProposeRequest } from './editor';
 import { MerchStudio, type BrandState } from './studio';
 import type { MerchAiApi, MerchAiScope } from './merch-ai-http';
+import { CommerceReview } from './review';
+import type { ReviewApi, ReviewScope } from './review-http';
 
 type T = (key: ShopifyKey, vars?: Record<string, string>) => string;
 export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: ShopifyOverview };
@@ -16,7 +18,7 @@ export type OverviewState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { 
 export const SHOPIFY_SECTIONS = ['overview', 'products', 'studio', 'changes', 'orders', 'finance', 'theme', 'inventory', 'admin', 'settings'] as const;
 export type ShopifySection = typeof SHOPIFY_SECTIONS[number];
 export type ListState<T> = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; value: T };
-export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowOrders' | 'propose' | 'approve' | 'cancelChange';
+export type ShopifyAction = 'connect' | 'sync' | 'disconnect' | 'allowEditing' | 'allowFinance' | 'allowOrders' | 'allowStock' | 'propose' | 'approve' | 'cancelChange';
 /** `target` is the change a command was about; `change` is the server's verified answer for it. */
 export type ShopifyOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | ShopifyErrorKind; action: ShopifyAction; sync?: ShopifySyncResult; change?: ShopifyProductChange; target?: string }>;
 
@@ -27,7 +29,7 @@ export type ShopifyViewProps = Readonly<{
   onPropose?: ((change: ProposeRequest) => void | Promise<boolean>) | undefined; onApprove?: ((change: ShopifyProductChange) => void) | undefined;
   onCancelChange?: ((change: ShopifyProductChange) => void) | undefined; onAllowEditing?: (() => void) | undefined;
   /** SH-F1: the Shopify Payments snapshot (managers only) and the switch that asks Shopify for it. */
-  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined; onAllowOrders?: (() => void) | undefined;
+  finance?: ListState<ShopifyFinanceView> | undefined; onAllowFinance?: (() => void) | undefined; onAllowOrders?: (() => void) | undefined; onAllowStock?: (() => void) | undefined;
   /** TB2: the storefront settings and theme editor links (managers only) and the last storefront command. */
   storefront?: StorefrontState | undefined; storefrontOutcome?: StorefrontOutcome | undefined; onStorefrontCommand?: ((c: StorefrontCommand) => void) | undefined;
   onRefresh?: (() => void) | undefined; onShop?: ((value: string) => void) | undefined; onConnect?: (() => void) | undefined;
@@ -37,6 +39,8 @@ export type ShopifyViewProps = Readonly<{
   schoolName?: string | null | undefined; brand?: BrandState | undefined; creativeHref?: string | undefined;
   /** CS-M2: asking Marcus for merch ideas, when the school scope is known. */
   merchAi?: Readonly<{ api: MerchAiApi; scope: MerchAiScope }> | undefined;
+  /** CA1: asking Marcus how the store is doing, when the school scope is known. */
+  review?: Readonly<{ api: ReviewApi; scope: ReviewScope }> | undefined;
 }>;
 
 const when = (locale: string, iso: string) => { try { return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)); } catch { return iso; } };
@@ -388,7 +392,10 @@ function Finance({ ctx, read, c, finance, locked, busy, onAllowFinance }: { ctx:
         </div>
         <div className={styles.card}>
           <h2>{t('fin_payouts')}</h2>
-          {snap.payouts.length === 0 ? <p className={styles.meta}>{t('fin_noPayouts')}</p>
+          {snap.payouts.length === 0 ? <><p className={styles.meta}>{t('fin_noPayouts')}</p>
+            {/* An empty list is also what a store without the payouts permission gets (the view cannot tell the two apart). */}
+            {snap.paymentsActive && c.status === 'CONNECTED' && <><p className={styles.meta}>{t('fin_payoutsHelp')}</p>
+              <div className={styles.row}><button type="button" className={styles.secondary} disabled={locked} onClick={onAllowFinance} data-action="allow-payouts">{busy ? t('connecting') : t('fin_allowPayouts')}</button></div></>}</>
             : <div className={styles.tableWrap}><table className={styles.table} data-shopify-payouts>
               <thead><tr><th>{t('col_date')}</th><th>{t('col_status')}</th><th>{t('fin_amount')}</th></tr></thead>
               <tbody>{snap.payouts.map(o => <tr key={o.id} data-payout={o.id}>
@@ -456,6 +463,10 @@ function Settings({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: ShopifyO
       {!c.ordersAllowed && read.canManage && c.status === 'CONNECTED' && <>
         <p className={styles.meta}>{t('allowOrdersHelp')}</p>
         <div className={styles.row}><button type="button" className={styles.secondary} data-allow-orders disabled={p.locked} onClick={p.onAllowOrders}>{p.locked && p.outcome?.action === 'allowOrders' ? t('connecting') : t('allowOrders')}</button></div></>}
+      {/* HON cannot see whether the store shows its locations, so this stays offered: pressing it again changes nothing. */}
+      {read.canManage && c.status === 'CONNECTED' && <>
+        <p className={styles.meta}>{t('allowStockHelp')}</p>
+        <div className={styles.row}><button type="button" className={styles.secondary} data-allow-stock disabled={p.locked} onClick={p.onAllowStock}>{p.locked && p.outcome?.action === 'allowStock' ? t('connecting') : t('allowStock')}</button></div></>}
     </div>
   </div>;
 }
@@ -474,6 +485,25 @@ function ConnectCard({ p, t, read, c }: { p: ShopifyViewProps; t: T; read: Shopi
         <span id="shopify-shop-hint" className={styles.meta}>{t('shopHint')}</span>
         <div className={styles.row}><button type="submit" className={styles.primary} disabled={p.locked}>{p.locked && o?.action === 'connect' ? t('connecting') : c ? t('reconnect') : t('connect')}</button></div>
       </form>}
+  </div>;
+}
+
+/** Shopify's own sign-up page, used when HON has no link of its own. */
+export const SHOPIFY_SIGNUP_URL = 'https://www.shopify.com/free-trial';
+
+/** For a school with no Shopify store yet: the steps from nothing to a connected shop. Shopify makes the account; HON does the rest. */
+function NewShopGuide({ p, t, read }: { p: ShopifyViewProps; t: T; read: ShopifyOverview }): React.ReactElement {
+  return <div className={styles.card} data-shopify-new-shop>
+    <h2>{t('newShopTitle')}</h2>
+    <p className={styles.meta}>{t('newShopIntro')}</p>
+    <ol className={styles.plainList}>
+      <li><strong>{t('newShopStep1')}</strong> {p.schoolName ? t('newShopStep1Name', { school: p.schoolName }) : t('newShopStep1Help')}</li>
+      <li><strong>{t('newShopStep2')}</strong> {t('newShopStep2Help')}</li>
+      <li><strong>{t('newShopStep3')}</strong> {t('newShopStep3Help')}</li>
+      <li><strong>{t('newShopStep4')}</strong> {t('newShopStep4Help')}</li>
+    </ol>
+    <div className={styles.row}><a className={styles.primary} data-new-shop-start href={read.newStoreUrl ?? SHOPIFY_SIGNUP_URL} target="_blank" rel="noopener noreferrer">{t('newShopStart')}</a></div>
+    <p className={styles.meta}>{t('newShopYours')}{read.newStoreUrl ? ` ${t('newShopReferral')}` : ''}</p>
   </div>;
 }
 
@@ -497,7 +527,8 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
   else if (o && o.kind !== 'SENDING') message = t(o.action === 'approve' && o.kind === 'UNKNOWN' ? 'done_unknown' : `e_${o.kind}` as ShopifyKey);
   const good = o?.kind === 'DONE' && (o.action === 'disconnect' || o.sync?.outcome === 'SUCCEEDED' || o.action === 'propose' || o.action === 'cancelChange' || o.change?.status === 'APPLIED');
   const notice = message && <div className={`${styles.notice} ${good ? '' : styles.warn}`} role={good ? 'status' : 'alert'} data-shopify-outcome={o?.kind}><p>{message}</p></div>;
-  if (!c) return <section className={styles.page}>{head}{notice}<ConnectCard p={p} t={t} read={read} c={null} /></section>;
+  if (!c) return <section className={styles.page}>{head}{notice}
+    {read.canManage && read.connectEnabled && <NewShopGuide p={p} t={t} read={read} />}<ConnectCard p={p} t={t} read={read} c={null} /></section>;
   const ctx: Ctx = { t, locale: p.locale, domain: c.shopDomain, currency: c.currency };
   const go = (s: ShopifySection) => p.onSection?.(s);
   const section = p.section;
@@ -518,7 +549,8 @@ export function ShopifyView(p: ShopifyViewProps): React.ReactElement {
     </nav>
     {notice}
     {connectable && section !== 'settings' && c.status === 'NEEDS_RECONNECT' && <p className={`${styles.notice} ${styles.warn}`}>{t('needsReconnect')}</p>}
-    {section === 'overview' ? <Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} changes={changes} go={go} />
+    {section === 'overview' ? <><Overview ctx={ctx} read={read} catalog={p.catalog} orders={p.orders} changes={changes} go={go} />
+        {p.review && c.status === 'CONNECTED' && <CommerceReview language={p.language} canManage={read.canManage} locked={p.locked} when={(iso) => when(p.locale, iso)} review={p.review} />}</>
       : section === 'products' ? <Products ctx={ctx} catalog={p.catalog} edit={editing} />
       : section === 'studio' ? <MerchStudio ctx={ctx} language={p.language} school={p.schoolName ?? c.shopName ?? null} brand={p.brand ?? { state: 'NONE' }}
         canEdit={editing.canEdit} locked={p.locked} onPropose={editing.onPropose} creativeHref={p.creativeHref ?? '/staff/creative-studio'} merchAi={c.status === 'CONNECTED' ? p.merchAi : undefined} />

@@ -109,3 +109,9 @@ export const CATEGORY_LABEL: Record<PosCategory | 'QUICK' | 'SHOPIFY', string> =
   TESTING: 'Testing & ranks', UNIFORMS: 'Uniforms', EQUIPMENT: 'Equipment', APPAREL: 'Apparel', EVENTS: 'Events', OTHER: 'Other', QUICK: 'Quick amount', SHOPIFY: 'Online store',
 };
 export const METHOD_LABEL: Record<PosMethod, string> = { CASH: 'Cash', CHECK: 'Check', CARD_TERMINAL: 'Card (our terminal)', OTHER: 'Other' };
+
+/** Search as you type in the customer box: what to look up for the letters typed so far, or null while there are too few. */
+export function customerQuery(typed: string): string | null {
+  const q = typed.trim().slice(0, 80);
+  return q.length >= 2 ? q : null;
+}
