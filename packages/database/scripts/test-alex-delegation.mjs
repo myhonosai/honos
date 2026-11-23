@@ -174,7 +174,7 @@ try {
   pass('create: a reports-only reader sees no one else\'s plan, a team task manager does; only the ticked tasks become human work items created by the requester, S2 is the coach, due 17:00 school time, "Suggested by Alex." appended, an exact retry replays, the plan is APPLIED and closed, the coach sees their task');
 
   // 4. Authority at create: a requester who may create tasks but not manage the team cannot give one to someone else; nothing is made.
-  const lead = await addStaff(a, 'lead', ['reporting.view', 'ai.invocation.plan', 'work_item.create', 'work_item.self_manage'], 'Morgan Synthlead', '12 hours');
+  const lead = await addStaff(a, 'lead', ['reporting.view', 'ai.invocation.plan', 'ai.agent.alex.use', 'work_item.create', 'work_item.self_manage'], 'Morgan Synthlead', '12 hours');
   const v2 = await alex.request(ctx(lead), brief);
   assert.equal(v2.status, 'RESULT_RECORDED', JSON.stringify(v2));
   const before = (await madeTasks(a)).length;
@@ -237,7 +237,7 @@ try {
   await admin.query("UPDATE hon.organization_entitlements SET tier='CORE' WHERE organization_id=$1", [b.id]);
   assert.equal(code(await settle(alex.request(ctx(b), brief))), 'ALEX_PLAN_FORBIDDEN');
   await admin.query("UPDATE hon.organization_entitlements SET tier='COMPLETE' WHERE organization_id=$1", [b.id]);
-  const noTasks = await addStaff(b, 'notasks', ['reporting.view', 'ai.invocation.plan'], 'Sam Synthviewer');
+  const noTasks = await addStaff(b, 'notasks', ['reporting.view', 'ai.invocation.plan', 'ai.agent.alex.use'], 'Sam Synthviewer');
   assert.equal(code(await settle(alex.request(ctx(noTasks), brief))), 'ALEX_PLAN_FORBIDDEN');
   const noAi = await addStaff(b, 'noai', ['reporting.view', 'work_item.create'], 'Pat Synthnoai');
   assert.equal(code(await settle(alex.request(ctx(noAi), brief))), 'ALEX_PLAN_FORBIDDEN');
