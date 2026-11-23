@@ -66,7 +66,18 @@ try{
   'begin_shopify_sync','rotate_shopify_credential','record_shopify_sync_page','finish_shopify_sync','disconnect_shopify',
   // 0496 product changes (SH4a).
   'read_shopify_product_changes','propose_shopify_product_change','cancel_shopify_product_change','approve_shopify_product_change',
-  'rotate_shopify_change_credential','record_shopify_product_change_result'];
+  'rotate_shopify_change_credential','record_shopify_product_change_result','read_shopify_finance','record_shopify_finance',
+  'read_shopify_storefront','save_shopify_storefront','begin_shopify_storefront_publish','rotate_shopify_storefront_credential','finish_shopify_storefront_publish',
+  // 0613 POS sells Shopify products (SH2).
+  'begin_pos_shopify_stock','rotate_pos_shopify_credential','finish_pos_shopify_stock',
+  // 0614 POS Shopify orders for made-to-order items (SH2b).
+  'begin_pos_shopify_order','finish_pos_shopify_order',
+  // 0615 Marcus commerce review (CA1).
+  'begin_shopify_commerce_review','plan_shopify_commerce_review','prepare_shopify_commerce_review','fail_shopify_commerce_review','record_shopify_commerce_review',
+  'read_shopify_commerce_reviews','close_shopify_commerce_review',
+  // 0596 Marcus merch ideas (CS-M2).
+  'begin_shopify_merch_ideas','plan_shopify_merch_ideas','prepare_shopify_merch_ideas','fail_shopify_merch_ideas','record_shopify_merch_ideas',
+  'read_shopify_merch_ideas','close_shopify_merch_ideas'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%shopify%')");
  for(const e of entries)assert(fns.some(f=>f.proname===e),e);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);
@@ -98,7 +109,7 @@ try{
  const SHOP='ima-proof-'+K().slice(0,8)+'.myshopify.com';
 
  // 2. Before connecting: permissions and scope.
- assert.deepEqual(ok(await read(reader,A.schoolId)),{schoolId:A.schoolId,canManage:false,connectEnabled:true,autoSync:false,connection:null,counts:null,summary:null});
+ assert.deepEqual(ok(await read(reader,A.schoolId)),{schoolId:A.schoolId,canManage:false,connectEnabled:true,autoSync:false,connection:null,counts:null,summary:null,newStoreUrl:null});
  assert.equal(ok(await read(manager,A.schoolId)).canManage,true);
  assert.deepEqual(ok(await read(reader,A.schoolId,'/catalog')),{schoolId:A.schoolId,currency:null,products:[]});
  for(const who of [staff,outsider,managerB])await denied(()=>read(who,A.schoolId),403,'SHOPIFY_FORBIDDEN');
@@ -146,7 +157,7 @@ try{
 
  // 4. Reads: counts, 30-day summary (the 40-day-old order is outside it), margins, orders.
  const view=ok(await read(reader,A.schoolId));
- assert.deepEqual(view.counts,{products:3,variants:6,lowStock:2,orders:3});
+ assert.deepEqual(view.counts,{products:3,variants:6,lowStock:2,provider:1,orders:3});
  assert.deepEqual({...view.summary,topProducts:view.summary.topProducts.length},{days:30,orders:2,sales:290.73,averageOrder:145.37,itemsSold:4,lineSales:310,coveredSales:175,
   estimatedGrossProfit:99.75,topProducts:3});
  const catalog=ok(await read(reader,A.schoolId,'/catalog'));
@@ -155,6 +166,28 @@ try{
  assert.deepEqual(uni.map(v=>[v.sku,v.price,v.unitCost,v.margin,v.marginPercent,v.inventoryQuantity,v.lowStock]),
   [['UNI-1',65,28,37,56.9,8,false],['UNI-2',65,28,37,56.9,2,true],['UNI-3',70,30,40,57.1,0,true]]);
  assert.equal(catalog.products[0].variants[0].tracked,false);assert.equal(catalog.products[0].variants[0].lowStock,false);
+ // PD1 (0611): who fulfils each variant. The sample hoodie is stocked by a third-party service; school stock has none.
+ assert.equal(catalog.products[0].variants[0].fulfilledBy,'Sample Print Co');assert.deepEqual(uni.map(v=>v.fulfilledBy),[null,null,null]);
+ {const hood=(await q("SELECT v.connection_id,v.shopify_id,v.product_shopify_id FROM hon.shopify_variants v JOIN hon.shopify_connections c ON c.id=v.connection_id WHERE c.school_id=$1 AND c.status='CONNECTED' AND v.sku='HOOD-BK-M' AND NOT v.removed",[A.schoolId]))[0];
+  const item=by=>JSON.stringify({id:String(hood.product_shopify_id),title:'School hoodie',status:'ACTIVE',vendor:null,productType:'Apparel',handle:'school-hoodie',imageUrl:null,
+   variants:[{id:String(hood.shopify_id),title:'Black / M',sku:'HOOD-BK-M',barcode:null,price:'45.00',compareAtPrice:null,unitCost:'19.25',tracked:true,inventoryQuantity:0,...by}]});
+  const okItem=async by=>(await q('SELECT hon.shopify_product_item_ok($1::jsonb) ok',[item(by)]))[0].ok;
+  const by=async()=>(await q('SELECT fulfilled_by,tracked,inventory_quantity FROM hon.shopify_variants WHERE connection_id=$1 AND shopify_id=$2',[hood.connection_id,hood.shopify_id]))[0];
+  for(const bad of [{fulfilledBy:''},{fulfilledBy:' x'},{fulfilledBy:'x'.repeat(65)},{fulfilledBy:'a\nb'},{fulfilledBy:7},{madeBy:'x'}])assert.equal(await okItem(bad),false,JSON.stringify(bad));
+  for(const good of [{},{fulfilledBy:null},{fulfilledBy:'Printful'}])assert.equal(await okItem(good),true);
+  // A read-back that did not ask Shopify (no key) keeps the name; tracked stock at zero is still not low for a provider's variant.
+  await q('SELECT hon.shopify_mirror_product($1,$2::jsonb,gen_random_uuid())',[hood.connection_id,item({})]);
+  assert.deepEqual(await by(),{fulfilled_by:'Sample Print Co',tracked:true,inventory_quantity:0});
+  let again=ok(await read(reader,A.schoolId,'/catalog')).products[0].variants[0];
+  assert.deepEqual([again.fulfilledBy,again.tracked,again.lowStock],['Sample Print Co',true,false]);
+  assert.equal(ok(await read(reader,A.schoolId)).counts.lowStock,2);
+  // Shopify saying the school now stocks it clears the name, and the zero count becomes low stock.
+  await q('SELECT hon.shopify_mirror_product($1,$2::jsonb,gen_random_uuid())',[hood.connection_id,item({fulfilledBy:null})]);
+  again=ok(await read(reader,A.schoolId,'/catalog')).products[0].variants[0];
+  assert.deepEqual([again.fulfilledBy,again.lowStock],[null,true]);
+  assert.deepEqual(ok(await read(reader,A.schoolId)).counts,{products:3,variants:6,lowStock:3,provider:0,orders:3});
+  await q('SELECT hon.shopify_mirror_product($1,$2::jsonb,gen_random_uuid())',[hood.connection_id,item({fulfilledBy:'Sample Print Co',tracked:false,inventoryQuantity:null})]);
+  assert.deepEqual(await by(),{fulfilled_by:'Sample Print Co',tracked:false,inventory_quantity:null});}
  const orders=ok(await read(reader,A.schoolId,'/orders'));
  assert.deepEqual(orders.orders.map(o=>o.name),['#1001','#1002','#1003']);assert.equal(orders.orders[1].lines.length,2);
  for(const who of [staff,managerB])await denied(()=>read(who,A.schoolId,'/catalog'),403,'SHOPIFY_FORBIDDEN');

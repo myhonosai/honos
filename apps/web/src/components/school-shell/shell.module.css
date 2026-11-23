@@ -27,9 +27,7 @@
 .brand strong { display: block; font-family: var(--hon-font-display); font-size: var(--hon-text-xl); font-weight: 800; letter-spacing: 0.01em; }
 .brand small { display: block; color: var(--hon-text-subtle); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
 .brandMark {
-  width: 34px; height: 34px; flex: none; border-radius: 10px; transform: rotate(45deg) scale(0.82);
-  background: radial-gradient(circle at 35% 30%, #9fe8ff 0, #3a8bff 38%, #1446c8 70%);
-  box-shadow: 0 0 18px rgba(64, 150, 255, 0.65), inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+  width: 36px; height: 36px; flex: none; display: block;
 }
 
 .school {
@@ -311,10 +309,11 @@
 /* HON waits in the corner on every page except the dashboard and HON's own workspace. */
 .honLauncher {
   position: fixed; right: 20px; bottom: 20px; z-index: 22; display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 16px 4px 4px; border-radius: 999px; color: #fff; font-weight: 700; text-decoration: none;
+  padding: 4px 16px 4px 4px; border-radius: 999px; color: #fff; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
   background: linear-gradient(90deg, rgba(14, 40, 102, 0.96), rgba(10, 26, 66, 0.96)); border: 1px solid rgba(110, 170, 255, 0.55);
   box-shadow: 0 0 0 4px rgba(47, 123, 255, 0.12), 0 10px 30px rgba(20, 80, 220, 0.45);
 }
+.honLauncher[hidden] { display: none; }
 .honLauncher img { width: 44px; height: 44px; border-radius: 50%; }
 .honLauncher:hover { border-color: #9fd0ff; }
 @media (max-width: 760px) {
@@ -387,3 +386,59 @@
 @keyframes screensaverBreathe { 0%, 100% { opacity: 0.55; transform: translate(-50%, -62%) scale(0.92); } 50% { opacity: 1; transform: translate(-50%, -62%) scale(1.06); } }
 @keyframes screensaverFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 @media (prefers-reduced-motion: reduce) { .screensaverGlow, .screensaverMark { animation: none; } }
+
+/* The Menu pop-up's backdrop on wide screens too: a click beside the box returns to the page (owner, 2026-11-21). */
+.scrim[data-menu-scrim='panel'] { display: block; position: fixed; inset: 0; z-index: 35; background: rgba(0, 3, 12, 0.55); backdrop-filter: blur(2px); cursor: default; }
+
+/* Top-bar search (owner, 2026-11-21): one field on every page, opening a pop-up over the page. */
+.searchTrigger {
+  display: inline-flex; align-items: center; gap: var(--hon-space-2); flex: 0 1 340px; min-width: 0; min-height: var(--hon-control-h); padding: 0 6px 0 12px;
+  border-radius: 999px; border: 1px solid var(--hon-border); background: var(--hon-surface); color: var(--hon-text-subtle); font: inherit; font-size: var(--hon-text-sm); cursor: pointer; text-align: left;
+}
+.searchTrigger:hover { border-color: var(--hon-border-strong); color: var(--hon-text-muted); }
+.searchTrigger:focus-visible { outline: 2px solid var(--hon-accent); outline-offset: 2px; }
+.searchTrigger svg { flex: none; }
+.searchTriggerText { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchTrigger kbd { flex: none; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hon-border); color: var(--hon-text-subtle); font: inherit; font-size: 11px; }
+.searchLayer { position: fixed; inset: 0; z-index: 60; }
+.searchScrim { position: absolute; inset: 0; background: rgba(0, 3, 12, 0.6); backdrop-filter: blur(2px); }
+.searchPanel {
+  position: absolute; top: 72px; left: 50%; transform: translateX(-50%); width: min(640px, calc(100vw - 32px)); max-height: min(560px, calc(100vh - 96px));
+  display: flex; flex-direction: column; overflow: hidden; border-radius: var(--hon-radius-lg); border: 1px solid var(--hon-border-strong);
+  background: var(--hon-surface-solid); box-shadow: var(--hon-shadow-2); color: var(--hon-text);
+}
+.searchField { display: flex; align-items: center; gap: var(--hon-space-2); padding: var(--hon-space-3) var(--hon-space-4); border-bottom: 1px solid var(--hon-border); color: var(--hon-text-subtle); }
+.searchField input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--hon-text); font: inherit; font-size: var(--hon-text-md); }
+.searchPanel .searchField input:focus, .searchPanel .searchField input:focus-visible { outline: none; box-shadow: none; }
+.searchField:focus-within { color: var(--hon-accent); }
+.searchField input::placeholder { color: var(--hon-text-subtle); }
+.searchField input::-webkit-search-cancel-button { display: none; }
+.searchEsc { flex: none; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--hon-border); background: transparent; color: var(--hon-text-subtle); font: inherit; font-size: 11px; cursor: pointer; }
+.searchResults { flex: 1 1 auto; overflow-y: auto; padding: var(--hon-space-2); }
+.searchResults section + section { margin-top: var(--hon-space-2); }
+.searchResults h2 { margin: var(--hon-space-2) var(--hon-space-2) 4px; color: var(--hon-text-subtle); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.searchResults a { display: flex; align-items: center; gap: var(--hon-space-3); padding: 8px var(--hon-space-2); border-radius: var(--hon-radius-sm); color: var(--hon-text); text-decoration: none; }
+.searchResults a[aria-selected='true'] { background: var(--hon-surface-2); box-shadow: inset 0 0 0 1px var(--hon-accent); }
+.searchResults a > span:last-child { display: grid; min-width: 0; }
+.searchResults a strong { font-size: var(--hon-text-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchResults a small { color: var(--hon-text-subtle); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchIcon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; color: #fff; background: linear-gradient(135deg, var(--hon-accent-strong), #6a4dff); }
+.searchNote { margin: var(--hon-space-2); color: var(--hon-text-subtle); font-size: var(--hon-text-sm); }
+.searchFoot { display: flex; justify-content: space-between; gap: var(--hon-space-3); padding: 8px var(--hon-space-4); border-top: 1px solid var(--hon-border); color: var(--hon-text-subtle); font-size: 11px; }
+@media (max-width: 760px) {
+  .searchTrigger { flex: none; width: var(--hon-control-h); padding: 0; justify-content: center; }
+  .searchTriggerText, .searchTrigger kbd { display: none; }
+  .searchPanel { top: 12px; max-height: calc(100vh - 110px); }
+  .searchFoot { display: none; }
+}
+
+/* Phone bottom bar (owner 2026-11-22: icons and labels must line up). Every slot is the same box: a fixed icon row on
+   top and one single-line label under it, so no two-line label can push its icon up or out of line. */
+@media (max-width: 1099px) {
+  .mobileNav a, .mobileNav button, .shell[data-hon-mode='big-button'] .mobileNav a, .shell[data-hon-mode='big-button'] .mobileNav button {
+    grid-template-rows: 24px auto; align-content: center; justify-items: center; gap: 4px; min-width: 0; padding: 6px 2px; line-height: 1.2;
+  }
+  .mobileNav a svg, .mobileNav button svg { width: 22px; height: 22px; align-self: center; }
+  .mobileNav a span, .mobileNav button span { display: block; max-width: 100%; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+  .shell[data-hon-mode='big-button'] .mobileNav a span, .shell[data-hon-mode='big-button'] .mobileNav button span { font-size: 12px; font-weight: 600; }
+}

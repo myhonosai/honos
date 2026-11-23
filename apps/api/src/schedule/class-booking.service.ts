@@ -195,6 +195,14 @@ export class ClassBookingService {
           detail: 'Cancelled class sessions cannot accept bookings.',
         });
       }
+      // Launch-readiness P2: a finished class takes no new booking either. The exact
+      // idempotent replay above returns before this check, so history stays replayable.
+      if (session.status === 'COMPLETED') {
+        throw new ConflictException({
+          code: 'SESSION_COMPLETED',
+          detail: 'Completed class sessions cannot accept bookings.',
+        });
+      }
 
       // This is intentionally a separate RLS-scoped lookup: a foreign-school
       // student ID is indistinguishable from a non-existent student ID.

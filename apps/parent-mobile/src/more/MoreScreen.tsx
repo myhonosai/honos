@@ -1,21 +1,37 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import type { ParentRead, ParentWrite } from '../api/client';
 import type { ParentInvoicePayOutcome, ParentPayableInvoice } from '@hon/contracts/parent-invoice-pay';
 import { useFamily } from '../family/family-data';
-import { Body, Button, Card, Loading, Pill, Section, StateMessage, Title } from '../ui/parts';
-import { radius, space, TOUCH, type, useColors } from '../ui/theme';
+import { Body, Button, Card, Loading, Pill, Section, StateMessage, Title, BackButton } from '../ui/parts';
+import { Icon, type IconName } from '../ui/icons';
+import { radius, space, TOUCH, type, useColors, EDGE, type Colors } from '../ui/theme';
+import { CheckoutArea } from './CheckoutArea';
+import { CurriculumArea } from './CurriculumArea';
+import { EventsArea } from './EventsArea';
+import { ProShopArea } from './ProShopArea';
+import { ReferArea } from './ReferArea';
 import { CANDIDATE_LABEL, formatDay, formatMoney, INTEREST_LABEL, INVOICE_LABEL, MEMBERSHIP_LABEL, PASS_LABEL } from './more-model';
 
-type Area = 'billing' | 'passes' | 'testing' | 'library';
-const AREAS: { key: Area; title: string; blurb: string }[] = [
-  { key: 'billing', title: 'Membership & billing', blurb: 'Memberships and invoices' },
-  { key: 'passes', title: 'Class passes', blurb: 'Passes and uses left' },
-  { key: 'testing', title: 'Belt testing', blurb: 'Upcoming tests and results' },
-  { key: 'library', title: 'Learning library', blurb: 'Videos and links from your school' },
+export type Area = 'events' | 'checkout' | 'billing' | 'passes' | 'testing' | 'shop' | 'library' | 'refer';
+const AREAS: { key: Area; title: string; blurb: string; icon: IconName; tone: Tone }[] = [
+  { key: 'events', title: 'Events & bookings', blurb: 'School events and family bookings', icon: 'ticket', tone: 'violet' },
+  { key: 'checkout', title: 'Sign up & pay', blurb: 'Camps, events and more from your school', icon: 'check', tone: 'lime' },
+  { key: 'billing', title: 'Membership & billing', blurb: 'Memberships and invoices', icon: 'card', tone: 'accent' },
+  { key: 'passes', title: 'Class passes', blurb: 'Passes and uses left', icon: 'pass', tone: 'cyan' },
+  { key: 'testing', title: 'Belt testing', blurb: 'Upcoming tests and results', icon: 'trophy', tone: 'sun' },
+  { key: 'shop', title: 'Pro shop', blurb: 'Gear and uniforms from your school', icon: 'bag', tone: 'coral' },
+  { key: 'library', title: 'Curriculum', blurb: 'What your child is learning now', icon: 'book', tone: 'pink' },
+  { key: 'refer', title: 'Refer a friend', blurb: 'Share your link and see your rewards', icon: 'gift', tone: 'sun' },
 ];
+type Tone = 'violet' | 'lime' | 'accent' | 'cyan' | 'sun' | 'coral' | 'pink';
+function toneColors(c: Colors, t: Tone): [string, string] {
+  return t === 'violet' ? [c.violetSoft, c.violet] : t === 'lime' ? [c.successSoft, c.success] : t === 'accent' ? [c.accentSoft, c.accent]
+    : t === 'cyan' ? [c.cyanSoft, c.glowEdge] : t === 'sun' ? [c.warningSoft, c.warning] : t === 'coral' ? [c.coralSoft, c.coral] : [c.pinkSoft, c.pink];
+}
 
 /** One verified read per open area; any failure replaces the data, never stale content. */
 function useRead<T>(load: () => Promise<ParentRead<T>>) {
@@ -34,31 +50,35 @@ function Unavailable({ what, reload }: { what: string; reload: () => void }) {
   return <StateMessage title={`${what} is unavailable`} body="We couldn't load this from your school right now. Nothing old is shown in its place." action={{ label: 'Try again', onPress: reload }} />;
 }
 
-export function MoreScreen({ onSignOut, version }: { onSignOut: () => void; version: string }) {
+export function MoreScreen({ onSignOut, version, openArea = null, openAt = 0 }: { onSignOut: () => void; version: string; openArea?: Area | null; openAt?: number }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
-  const [area, setArea] = useState<Area | null>(null);
+  const [area, setArea] = useState<Area | null>(openArea);
+  useEffect(() => { if (openArea) setArea(openArea); }, [openArea, openAt]);
   const current = AREAS.find(a => a.key === area);
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: space.xxl }}>
+      {current ? <View style={{ alignSelf: 'flex-start', marginBottom: space.md }}><BackButton label="Back to More" onPress={() => setArea(null)} /></View> : null}
       <Text style={{ color: c.muted, fontSize: type.caption, fontWeight: '700', letterSpacing: 1 }}>MORE</Text>
       <Title>{current ? current.title : 'Account'}</Title>
       {current ? (
         <View>
-          <View style={{ marginTop: space.md, alignSelf: 'flex-start' }}><Button kind="quiet" label="‹ Back" accessibilityLabel="Back to More" onPress={() => setArea(null)} /></View>
-          {area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : <LibraryArea />}
+          {area === 'events' ? <EventsArea /> : area === 'checkout' ? <CheckoutArea /> : area === 'billing' ? <BillingArea /> : area === 'passes' ? <PassesArea /> : area === 'testing' ? <TestingArea /> : area === 'shop' ? <ProShopArea /> : area === 'refer' ? <ReferArea /> : <CurriculumArea />}
         </View>
       ) : (
         <View style={{ marginTop: space.lg }}>
           {AREAS.map(a => (
             <Pressable key={a.key} accessibilityRole="button" accessibilityLabel={`Open ${a.title}`} onPress={() => setArea(a.key)}
-              style={({ pressed }) => ({ minHeight: TOUCH + 16, borderRadius: radius.lg, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface,
-                padding: space.lg, marginBottom: space.md, opacity: pressed ? 0.85 : 1, flexDirection: 'row', alignItems: 'center' })}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700' }}>{a.title}</Text>
-                <Text style={{ color: c.muted, marginTop: space.xs }}>{a.blurb}</Text>
+              style={({ pressed }) => ({ minHeight: TOUCH + 16, borderRadius: radius.lg, borderWidth: 2, borderColor: c.border, borderBottomColor: c.edge, backgroundColor: c.surface,
+                borderBottomWidth: pressed ? 2 : 2 + EDGE, marginTop: pressed ? EDGE : 0, padding: space.md, marginBottom: space.md, flexDirection: 'row', alignItems: 'center', gap: space.md })}>
+              <View style={{ width: 50, height: 50, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: toneColors(c, a.tone)[0] }}>
+                <Icon name={a.icon} size={28} color={toneColors(c, a.tone)[1]} />
               </View>
-              <Text style={{ color: c.subtle, fontSize: type.title }}>›</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.text, fontSize: type.title - 2, fontWeight: '800' }}>{a.title}</Text>
+                <Text style={{ color: c.muted, marginTop: 2 }}>{a.blurb}</Text>
+              </View>
+              <Text style={{ color: c.subtle, fontSize: type.title, fontWeight: '800' }}>›</Text>
             </Pressable>
           ))}
           <Section>Security</Section>
@@ -250,31 +270,6 @@ function TestingArea() {
         );
       })}
       <Text style={{ color: c.subtle, fontSize: type.caption, marginTop: space.md }}>Results come from your school's records. Your instructor decides readiness for testing.</Text>
-    </View>
-  );
-}
-
-function LibraryArea() {
-  const { api } = useFamily();
-  const c = useColors();
-  const { read, reload } = useRead(api.curriculumLibrary);
-  if (!read) return <Loading label="Loading the learning library" />;
-  if (!read.ok) return <Unavailable what="The learning library" reload={reload} />;
-  const items = read.data.resources;
-  if (!items.length) return <Card style={{ marginTop: space.lg }}><Body muted>Your school has not shared any videos or links yet.</Body></Card>;
-  return (
-    <View style={{ marginTop: space.lg }}>
-      {items.map((r, i) => (
-        <Card key={`r-${i}`} label={`${r.title} for ${r.childDisplayName}`}>
-          <Text style={{ color: c.muted, fontSize: type.caption, fontWeight: '700' }}>{r.kind === 'VIDEO' ? 'VIDEO' : 'LINK'} · {r.childDisplayName.toUpperCase()}</Text>
-          <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700', marginTop: space.xs }}>{r.title}</Text>
-          <Text style={{ color: c.muted }}>{r.curriculumName}{r.rankName ? ` · ${r.rankName}` : ''}</Text>
-          {r.description ? <View style={{ marginTop: space.sm }}><Body>{r.description}</Body></View> : null}
-          {/^https:\/\//.test(r.url) ? <View style={{ marginTop: space.md, alignSelf: 'flex-start' }}>
-            <Button kind="quiet" label={r.kind === 'VIDEO' ? 'Watch' : 'Open link'} accessibilityLabel={`Open ${r.title}`} onPress={() => { void WebBrowser.openBrowserAsync(r.url); }} />
-          </View> : null}
-        </Card>
-      ))}
     </View>
   );
 }

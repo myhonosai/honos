@@ -1,13 +1,13 @@
-import { Body, ConflictException, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { Response } from 'express';
-import type { CommandContext } from '@hon/contracts';
+import { validateCrmPipelineTemplateInput, type CommandContext } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { CreatePipelineDto } from './create-pipeline.dto.js';
 import { PipelineService } from './pipeline.service.js';
-import { StarterPipelineHumanUiGuard } from './starter-pipeline-human-ui.guard.js';
+import { StarterPipelineHumanUiGuard, TemplatePipelineHumanUiGuard } from './starter-pipeline-human-ui.guard.js';
 
 @Controller('organizations/:organizationId/schools/:schoolId/crm/pipelines')
 export class PipelineController {
@@ -34,6 +34,20 @@ export class PipelineController {
     if (!scope || scope.organizationId !== organizationId) throw new ForbiddenException('HON pipeline management is not authorized for this school.');
     const requestId = randomUUID(); const context: CommandContext = { organizationId:scope.organizationId, schoolId:scope.schoolId, principalId:scope.principalId, principalType:'HUMAN_USER', requestId, correlationId:requestId, idempotencyKey, source:'HUMAN_UI' };
     const result = await this.pipelines.createStarter(context, { externalSubject: identity.externalSubject });
+    response.status(result.created && !result.replayed ? HttpStatus.CREATED : HttpStatus.OK);
+    return { data:result.pipeline, meta:{ requestId, correlationId:requestId, created:result.created, replayed:result.replayed } };
+  }
+
+  @Post('templates')
+  @UseGuards(TemplatePipelineHumanUiGuard, HonIdentityGuard)
+  async createFromTemplate(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string, @Headers('idempotency-key') idempotencyKey: string, @Req() request: HonRequest, @Res({ passthrough: true }) response: Response) {
+    const identity = request.honIdentity; if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    // The guard already accepted exactly one known template code; it is re-validated here, never trusted from the guard.
+    let template: string; try { template = validateCrmPipelineTemplateInput(request.body).template; } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'crm.pipeline.manage');
+    if (!scope || scope.organizationId !== organizationId) throw new ForbiddenException('HON pipeline management is not authorized for this school.');
+    const requestId = randomUUID(); const context: CommandContext = { organizationId:scope.organizationId, schoolId:scope.schoolId, principalId:scope.principalId, principalType:'HUMAN_USER', requestId, correlationId:requestId, idempotencyKey, source:'HUMAN_UI' };
+    const result = await this.pipelines.createFromTemplate(context, { externalSubject: identity.externalSubject }, template);
     response.status(result.created && !result.replayed ? HttpStatus.CREATED : HttpStatus.OK);
     return { data:result.pipeline, meta:{ requestId, correlationId:requestId, created:result.created, replayed:result.replayed } };
   }

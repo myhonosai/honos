@@ -28,7 +28,7 @@ it('writes one starter idea per chosen look, in a fixed order, as valid Shopify 
 
 it('every kind, look and language builds a draft the server would accept', () => {
   for (const language of Object.keys(STUDIO_LANGUAGES)) for (const kind of MERCH_KINDS) {
-    const ideas = merchConcepts(language, { kind, styles: [...MERCH_STYLES].slice(0, 3), colors: 'Black, Navy' }, 'Ideal Martial Arts', 'USD');
+    const ideas = merchConcepts(language, { kind, styles: [...MERCH_STYLES].slice(0, 3), colors: 'Black, Navy', notes: '' }, 'Ideal Martial Arts', 'USD');
     for (const i of ideas) expect(buildDraft(i.fields), `${language} ${kind} ${i.style}`).not.toBe('INVALID');
   }
   for (const [language, table] of Object.entries(STUDIO_LANGUAGES)) for (const [key, value] of Object.entries(table)) expect(value.trim(), `${language}.${key}`).not.toBe('');

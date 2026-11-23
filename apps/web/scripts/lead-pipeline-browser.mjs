@@ -55,12 +55,20 @@ const openCount = (s) => state.leads.filter((l) => l.stageId === s.id && l.statu
 const stagesJson = () => state.stages.map((s) => ({ ...s, openCount: openCount(s) }));
 /** A school with no lead stages and no leads yet (the starter command has not run). */
 function resetEmpty() { state = { version: 0, seen: new Map(), stages: [], leads: [], empty: true }; }
-function board(status) {
+const TEMPLATE_STAGES = {
+  KIDS_PROGRAM: ['Kids program', [['New inquiry', 'BLUE'], ['Contacted', 'SKY'], ['Trial booked', 'AMBER'], ['Trial done', 'VIOLET'], ['Enrolled', 'GREEN', 'WON'], ['Not now', 'RED', 'LOST']]],
+  ADULT_PROGRAM: ['Adult program', [['New inquiry', 'BLUE'], ['Contacted', 'SKY'], ['Intro class booked', 'AMBER'], ['Intro class done', 'VIOLET'], ['Joined', 'GREEN', 'WON'], ['Not now', 'RED', 'LOST']]],
+  EVENTS: ['Birthday parties and events', [['New request', 'BLUE'], ['Date offered', 'SKY'], ['Deposit pending', 'AMBER'], ['Booked', 'GREEN', 'WON'], ['Not now', 'RED', 'LOST']]],
+};
+function board(status, pipelineId) {
+  const extra = (state.extra ?? []).find((p) => p.id === pipelineId);
+  if (extra) return { pipelines: [{ id: id(20), name: 'Default', version: state.version }, ...state.extra.map((p) => ({ id: p.id, name: p.name, version: p.version }))],
+    pipeline: { id: extra.id, name: extra.name, version: extra.version }, stages: extra.stages.map((s) => ({ ...s, openCount: 0 })), totals: { open: 0, won: 0, lost: 0 }, status, leads: [], truncated: false, limit: 500 };
   if (state.empty) return { pipelines: [], pipeline: null, stages: [], totals: { open: 0, won: 0, lost: 0 }, status, leads: [], truncated: false, limit: 500 };
   const allowed = status === 'CLOSED' ? ['WON', 'LOST'] : [status];
   const leads = state.leads.filter((l) => allowed.includes(l.status)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const count = (st) => state.leads.filter((l) => l.status === st).length;
-  return { pipelines: [{ id: id(20), name: 'Default', version: state.version }], pipeline: { id: id(20), name: 'Default', version: state.version }, stages: stagesJson(),
+  return { pipelines: [{ id: id(20), name: 'Default', version: state.version }, ...(state.extra ?? []).map((p) => ({ id: p.id, name: p.name, version: p.version }))], pipeline: { id: id(20), name: 'Default', version: state.version }, stages: stagesJson(),
     totals: { open: count('OPEN'), won: count('WON'), lost: count('LOST') }, status, leads, truncated: false, limit: 500 };
 }
 let theme = 'modern';
@@ -89,7 +97,7 @@ function api(route) {
   if (!path.startsWith(`${prefix}/crm/`)) return json(route, 403, { code: 'FORBIDDEN' });
   const rest = path.slice(`${prefix}/crm/`.length).split('/');
   const headers = request.headers(), key = headers['idempotency-key'] ?? null, body = request.postData() ? JSON.parse(request.postData()) : null;
-  if (method === 'GET' && rest[0] === 'pipeline-board') return ok(route, board(url.searchParams.get('status') ?? 'OPEN'));
+  if (method === 'GET' && rest[0] === 'pipeline-board') return ok(route, board(url.searchParams.get('status') ?? 'OPEN', url.searchParams.get('pipelineId')));
   if (method === 'GET' && rest[0] === 'leads' && rest[2] === 'trials') {
     const lead = state.leads.find((l) => l.id === rest[1]);
     const trials = lead?.nextTrialAt || lead?.lastTrialAt ? [{ id: id(80), crmLeadId: lead.id, appointmentType: 'TRIAL', status: lead.nextTrialAt ? 'SCHEDULED' : 'COMPLETED',
@@ -101,6 +109,26 @@ function api(route) {
   if (state.denyStarter && rest[1] === 'starter') return json(route, 403, { code: 'FORBIDDEN' });
   if (key && state.seen.has(key)) return ok(route, state.seen.get(key), true);
   const answer = (data) => { if (key) state.seen.set(key, data); return ok(route, data, false); };
+  if (rest[0] === 'pipelines' && rest[1] === 'templates') {
+    const [name, stages] = TEMPLATE_STAGES[body.template] ?? [];
+    if (!name) return json(route, 400, { code: 'VALIDATION_FAILED' });
+    state.extra ??= [];
+    let made = state.extra.find((p) => p.name === name);
+    if (!made) {
+      made = { id: id(700 + state.extra.length), name, version: 1, stages: stages.map(([n, color, terminalStatus], i) => ({ id: id(710 + state.extra.length * 10 + i), name: n, position: i + 1, color, hidden: false, terminalStatus: terminalStatus ?? null })) };
+      state.extra.push(made);
+    }
+    if (key) state.seen.set(key, made);
+    return json(route, 201, { data: { id: made.id, name: made.name, version: made.version, createdAt: day(2), stages: [] }, meta: { ...meta, created: true, replayed: false } });
+  }
+  if (rest[0] === 'pipelines' && rest[2] === 'stages' && state.extra?.some((p) => p.id === rest[1])) {
+    const made = state.extra.find((p) => p.id === rest[1]);
+    if (body.expectedVersion !== made.version) return json(route, 409, { code: 'VERSION_CONFLICT' });
+    const terminal = made.stages.filter((s) => s.terminalStatus);
+    made.stages = [...body.stages.map((s, i) => ({ id: s.id ?? id(900 + i), name: s.name, position: i + 1, color: s.color, hidden: s.hidden, terminalStatus: null })), ...terminal.map((s, i) => ({ ...s, position: body.stages.length + 1 + i }))];
+    made.version++;
+    return answer({ ...school, pipelineId: made.id, priorVersion: made.version - 1, version: made.version, stages: made.stages.map((s) => ({ ...s, openCount: 0 })), moves: [], savedAt: now() });
+  }
   if (rest[0] === 'pipelines' && rest[1] === 'starter') {
     // The server-defined starter funnel; replays on the same key, never a second pipeline.
     if (state.empty) {
@@ -270,6 +298,66 @@ await check('no leads yet: the empty-board Set up button works the same and a de
   await second.page.getByText('Only people who can manage the pipeline can set up stages.').waitFor();
   assert.equal(state.empty, true);
   await second.ctx.close();
+});
+
+await check('edit pipeline: drag a stage by its handle to a new place, then save', async () => {
+  reset(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  await page.getByRole('button', { name: 'Edit pipeline' }).click();
+  const dialog = page.getByTestId('edit-dialog');
+  await dialog.getByTitle('Drag Trial done to reorder').dragTo(dialog.getByTestId('stage-row').nth(0));
+  assert.deepEqual(await dialog.getByLabel('Stage name', { exact: true }).evaluateAll((els) => els.map((e) => e.value)), ['Trial done', 'New lead', 'Contacted', 'Trial booked']);
+  await shot(page, 'pipeline-edit-drag-modern-en');
+  await dialog.getByRole('button', { name: 'Save pipeline' }).click();
+  await page.getByText('Pipeline saved.').waitFor();
+  assert.deepEqual(state.stages.map((s) => s.name), ['Trial done', 'New lead', 'Contacted', 'Trial booked', 'Enrolled', 'Not now']);
+  await ctx.close();
+});
+
+await check('quick actions: Call, Text and Book trial on a card; Email too in the panel; nothing is sent', async () => {
+  reset(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  const card = column(page, 'New lead').getByTestId('lead-card').filter({ hasText: 'Mina Park' });
+  const mina = state.leads.find((l) => l.givenName === 'Mina');
+  assert.equal(await card.getByRole('link', { name: 'Call Mina Park' }).getAttribute('href'), `tel:${mina.phoneE164}`);
+  assert.equal(await card.getByRole('link', { name: 'Text Mina Park' }).getAttribute('href'), `sms:${mina.phoneE164}`);
+  const trial = new URL(await card.getByRole('link', { name: 'Book a trial for Mina Park' }).getAttribute('href'), origin);
+  assert.equal(trial.pathname, '/staff/crm/journey');
+  assert.deepEqual(Object.fromEntries(trial.searchParams), { ...school, leadId: mina.id, step: 'trial' });
+  await shot(page, 'pipeline-quick-actions-card-modern-en');
+  await card.getByRole('button', { name: /Mina Park/ }).click();
+  const panel = page.getByTestId('lead-panel');
+  assert.equal(await panel.getByTestId('panel-email').getAttribute('href'), `mailto:${mina.email}`);
+  await panel.getByText('HON does not send or record those messages.', { exact: false }).waitFor();
+  await shot(page, 'pipeline-quick-actions-panel-modern-en');
+  assert.deepEqual(report.commands, [], 'quick actions send no command');
+  await ctx.close();
+});
+
+await check('new pipeline from a school template: pick Adult program, the editor opens on it, rename and save; picking it again opens it', async () => {
+  reset(); report.commands = [];
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  await page.getByRole('button', { name: 'New pipeline' }).click();
+  const picker = page.getByTestId('template-dialog');
+  await picker.getByText('Intro class booked').waitFor();
+  await shot(page, 'pipeline-templates-modern-en');
+  await picker.getByTestId('template-ADULT_PROGRAM').getByRole('button', { name: 'Add this pipeline' }).click();
+  const dialog = page.getByTestId('edit-dialog');
+  await dialog.waitFor();
+  assert.deepEqual(await dialog.getByLabel('Stage name', { exact: true }).evaluateAll((els) => els.map((e) => e.value)), ['New inquiry', 'Contacted', 'Intro class booked', 'Intro class done']);
+  await dialog.getByLabel('Stage name', { exact: true }).nth(2).fill('Free intro booked');
+  await dialog.getByRole('button', { name: 'Save pipeline' }).click();
+  await page.getByText('Pipeline saved.').waitFor();
+  assert.equal(state.extra[0].stages[2].name, 'Free intro booked');
+  assert.equal(await page.getByLabel('Pipeline').inputValue(), state.extra[0].id, 'the board stays on the new pipeline');
+  await page.getByRole('heading', { name: 'Free intro booked', level: 2, exact: true }).waitFor();
+  await shot(page, 'pipeline-template-board-modern-en', true);
+  await page.getByRole('button', { name: 'New pipeline' }).click();
+  await page.getByTestId('template-ADULT_PROGRAM').getByRole('button', { name: 'Already added: open it' }).waitFor();
+  await page.getByTestId('template-dialog').getByRole('button', { name: 'Cancel' }).click();
+  assert.equal(state.extra.length, 1);
+  assert.deepEqual(report.commands.map((c) => `${c.command}:${c.key}:${c.origin === origin}`), ['crm-pipeline-template:true:true', 'crm.pipeline.stages.save:true:true']);
+  await ctx.close();
 });
 
 for (const [mode, language] of [['classic', 'ko'], ['big-button', 'es'], ['modern', 'ko'], ['classic', 'en']]) {

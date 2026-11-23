@@ -102,12 +102,12 @@ try{
  ];
  for(const [i,change]of bad.entries()){const d=structuredClone(good);change(d);assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,false,'bad document '+i);
   assert.throws(()=>validateWebsiteDocument(d),/Invalid website/,'shared validator, bad document '+i);}
- // 0560 starter art: exactly the eleven shipped /site-art/ paths are images, in every image field, on both sides; any other
+ // 0660 starter art: exactly the eleven shipped /site-art/ paths are images, in every image field, on both sides; any other
  // same-origin path, a query, a different extension or a path that only contains a starter name is refused.
  for(const name of WEBSITE_STARTER_ART){const d=structuredClone(good);const url=websiteStarterArtUrl(name);d.pages[0].sections[0].props.imageUrl=url;d.theme.logoUrl=url;
   assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,true,'starter art '+name);assert.doesNotThrow(()=>validateWebsiteDocument(d));}
  assert.equal(WEBSITE_STARTER_ART.length,11);
- // 0560 templates and fonts: every shared template and font is accepted by the database; an unknown one is refused by both.
+ // 0660 templates and fonts: every shared template and font is accepted by the database; an unknown one is refused by both.
  for(const template of WEBSITE_TEMPLATES)for(const font of WEBSITE_FONTS){const d=structuredClone(good);d.theme.template=template;d.theme.font=font;
   assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,true,'template '+template+' '+font);assert.doesNotThrow(()=>validateWebsiteDocument(d));}
  for(const [k,v]of [['template','NEON'],['template','bento'],['font','COMIC']]){const d=structuredClone(good);d.theme[k]=v;
@@ -128,7 +128,7 @@ try{
  for(const [n,expected]of [[room,true],[room+1,false]]){const d=sized(n);
   assert.equal((await q('SELECT hon.school_website_document_ok($1::jsonb) ok',[d]))[0].ok,expected,'database size '+n);
   if(expected)assert.doesNotThrow(()=>validateWebsiteDocument(d));else assert.throws(()=>validateWebsiteDocument(d),/document size/);}
- pass('database and shared rules refuse script links, data/http images, unknown fields and types, bidi/newline/line-separator characters, bad colours, page and link rules, limits; accept exactly the eleven 0560 starter-art paths and every shared template and font; agree on text starting with / and on the exact size boundary');
+ pass('database and shared rules refuse script links, data/http images, unknown fields and types, bidi/newline/line-separator characters, bad colours, page and link rules, limits; accept exactly the eleven 0660 starter-art paths and every shared template and font; agree on text starting with / and on the exact size boundary');
 
  const module=await Test.createTestingModule({controllers:[SchoolWebsiteController,PublishedSchoolWebsiteController],providers:[SchoolWebsiteService,...Object.values(guards),HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.use(publicSiteTransport());app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;

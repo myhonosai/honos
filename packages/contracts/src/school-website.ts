@@ -3,7 +3,7 @@
 // a site: forms and booking buttons point at the school's own published lead forms (0075) and booking types (0286).
 // The same rules are checked again by hon.school_website_document_ok in the database.
 
-/** The first five follow proven martial arts school sites; NEON_GRID, EDITORIAL and BENTO (0560) show off a modern product look. */
+/** The first five follow proven martial arts school sites; NEON_GRID, EDITORIAL and BENTO (0660) show off a modern product look. */
 export const WEBSITE_TEMPLATES = ['MODERN_CLEAN', 'FAMILY_FRIENDLY', 'BOLD_POWERFUL', 'TRADITIONAL', 'HIGH_CONVERSION', 'NEON_GRID', 'EDITORIAL', 'BENTO'] as const;
 export type WebsiteTemplate = typeof WEBSITE_TEMPLATES[number];
 export const WEBSITE_FONTS = ['MODERN', 'FRIENDLY', 'BOLD', 'CLASSIC', 'TECH', 'EDITORIAL'] as const;
@@ -112,7 +112,7 @@ export function websiteHrefOk(value: unknown): boolean {
   return value.length <= 500 && HTTPS.test(value);
 }
 /**
- * 0560: HON's own starter art, made once with Higgsfield and shipped with the app under /site-art/. Templates start with
+ * 0660: HON's own starter art, made once with Higgsfield and shipped with the app under /site-art/. Templates start with
  * it so a new site never looks empty. Children appear only in illustrations, never in photographs. The list is closed and
  * mirrored by the database validator; a school's own images stay https.
  */

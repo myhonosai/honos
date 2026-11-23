@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ParentJourneyView } from '@hon/contracts/parent-journey-view';
 import { useFamily } from '../family/family-data';
-import { bookingLabel, childSummaries, formatClassTime, nextClass, requirementCounts } from '../home/model';
+import { SchoolAnnouncements, useAnnouncements } from '../home/Announcements';
+import { StreakBar, useStreaks } from '../home/Streaks';
+import { bookingLabel, childSummaries, formatClassTime, nextClass } from '../home/model';
+import { beltPath, eianCheer } from '../home/belt-path';
+import { BeltPathView } from '../home/BeltPathView';
+import { giftsFor, RecommendationSheet, useRecommendations, type JourneyGo } from '../home/Recommendations';
+import type { ParentJourneyResponseInput } from '@hon/contracts/journey-recommendations';
+import type { FamilyJourneyRecommendation } from '@hon/contracts/journey-recommendations';
+import { Icon } from '../ui/icons';
 import { Body, Button, Card, Pill, Section, Title } from '../ui/parts';
-import { radius, space, TOUCH, type, useColors } from '../ui/theme';
+import { EDGE, radius, space, TOUCH, type, useColors } from '../ui/theme';
 import { FamilyGate } from './FamilyStates';
 import { JourneyView } from './JourneyView';
 
@@ -13,8 +22,26 @@ const ACCESS_LABEL: Record<ParentJourneyView['accessLevel'], string> = {
   PRIMARY_GUARDIAN: 'Primary guardian', SECONDARY_GUARDIAN: 'Guardian', VIEWER: 'View only',
 };
 
-export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void }) {
-  const { state, selection, select, refresh, now } = useFamily();
+export function HomeScreen({ onNavigate, onJourneyGo }: { onNavigate: (tab: 'Schedule' | 'Eian' | 'Messages') => void; onJourneyGo?: (go: JourneyGo) => void }) {
+  const { state, selection, select, refresh, now, api, newKey } = useFamily();
+  const announcements = useAnnouncements(api, state.status === 'ready' ? state.view : null);
+  const streaks = useStreaks(api, state.status === 'ready' ? state.view : null);
+  const recommendations = useRecommendations(api, state.status === 'ready' ? state.view : null);
+  const [gift, setGift] = useState<{ item: FamilyJourneyRecommendation; child: string } | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  // 0608: one key per answer, reused if the same answer is tried again. Viewers only read, so nothing is recorded for them.
+  const answerKeys = useRef(new Map<string, string>());
+  const guardian = state.status === 'ready' && state.view.accessLevel !== 'VIEWER';
+  const answer = (id: string, input: ParentJourneyResponseInput) => {
+    if (!guardian) return;
+    const slot = `${id}/${input.kind}/${input.kind === 'INTERESTED' ? input.childName.toLowerCase() : ''}`;
+    try {
+      let key = answerKeys.current.get(slot);
+      if (!key) { key = newKey(); answerKeys.current.set(slot, key); }
+      // Best effort: the sheet already did what the family asked; an unknown outcome is retried with the same key next time.
+      void api.respondJourneyRecommendation(id, input, key).catch(() => undefined);
+    } catch { /* no key source: nothing is recorded */ }
+  };
   const [openChild, setOpenChild] = useState<number | null>(null);
   const insets = useSafeAreaInsets();
   const c = useColors();
@@ -31,12 +58,19 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
           <Text style={{ color: c.muted, fontSize: type.caption, fontWeight: '700', letterSpacing: 1 }}>HON FAMILY</Text>
           <Title>Your family</Title>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Refresh" onPress={refresh} style={[styles.iconButton, { backgroundColor: c.surface, borderColor: c.border }]}>
-          <Text style={{ color: c.accent, fontSize: 20, fontWeight: '800' }}>↻</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh" onPress={refresh} style={[styles.iconButton, { backgroundColor: c.surface, borderColor: c.edge }]}>
+          <Icon name="refresh" size={22} color={c.accent} />
         </Pressable>
       </View>
       <FamilyGate state={state} />
       {state.status === 'ready' ? <Ready view={state.view} timeZone={state.timeZone} /> : null}
+      <RecommendationSheet item={gift?.item ?? null} childName={gift?.child ?? null} tellsSchool={guardian} onClose={() => setGift(null)}
+        onNotNow={id => { setHidden(prev => new Set([...prev, id])); setGift(null); answer(id, { kind: 'HIDDEN' }); }}
+        onGo={(go, item, who) => {
+          setGift(null);
+          if (who) answer(item.recommendationId, { kind: 'INTERESTED', childName: who.childName, sibling: who.sibling });
+          if (onJourneyGo) onJourneyGo(go); else if (go.tab === 'Messages') onNavigate('Messages');
+        }} />
     </ScrollView>
   );
 
@@ -47,6 +81,7 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
     return (
       <View>
         <View style={{ flexDirection: 'row', marginTop: space.sm }}><Pill text={ACCESS_LABEL[view.accessLevel]} /></View>
+        <StreakBar read={streaks} names={selection === 'all' ? null : children.filter(ch => ch.index === selection).map(ch => ch.name)} />
         {children.length > 1 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.lg }} contentContainerStyle={{ gap: space.sm }}>
             <Chip label="All children" active={selection === 'all'} onPress={() => select('all')} a11y="Show all children" />
@@ -54,9 +89,11 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
           </ScrollView>
         ) : null}
 
+        <SchoolAnnouncements read={announcements} timeZone={timeZone} />
+
         <Section>Next class</Section>
         {next && when ? (
-          <Card label={`Next class: ${next.booking.name} for ${next.childName}, ${bookingLabel(next.booking.bookingStatus)}, ${when.text}`} style={{ backgroundColor: c.accent, borderColor: c.accent }}>
+          <Card label={`Next class: ${next.booking.name} for ${next.childName}, ${bookingLabel(next.booking.bookingStatus)}, ${when.text}`} style={{ backgroundColor: c.accent, borderColor: c.accent, borderBottomColor: c.accentEdge }}>
             <Text style={{ color: c.accentText, fontSize: type.caption, fontWeight: '700', opacity: 0.9 }}>{next.childName.toUpperCase()}</Text>
             <Text style={{ color: c.accentText, fontSize: type.heading, fontWeight: '800', marginTop: space.xs }}>{next.booking.name}</Text>
             <Text style={{ color: c.accentText, fontSize: type.body, marginTop: space.xs }}>{when.text}{next.booking.room ? ` · ${next.booking.room}` : ''}</Text>
@@ -74,22 +111,22 @@ export function HomeScreen({ onNavigate }: { onNavigate: (tab: 'Schedule' | 'Eia
         {children.length === 0 ? <Card><Body muted>No children are linked to this family yet.</Body></Card> : null}
         {children.filter(ch => selection === 'all' || ch.index === selection).map(ch => {
           const program = view.children[ch.index]!.programs[0];
-          const counts = program ? requirementCounts(program) : null;
+          if (!ch.profileAvailable || !program) {
+            return (
+              <Pressable key={ch.key} accessibilityRole="button" accessibilityLabel={`Open ${ch.name} journey`} onPress={() => setOpenChild(ch.index)}>
+                <Card><Text style={{ color: c.text, fontSize: type.title, fontWeight: '700' }}>{ch.name}</Text>
+                  <Text style={{ color: c.muted, fontSize: type.body }}>{ch.profileAvailable ? 'No program recorded' : 'Profile not available'}</Text></Card>
+              </Pressable>
+            );
+          }
+          const path = beltPath(program);
+          const first = ch.name.split(/\s+/)[0] || ch.name;
           return (
-            <Pressable key={ch.key} accessibilityRole="button" accessibilityLabel={`Open ${ch.name} journey`} onPress={() => setOpenChild(ch.index)}>
-              <Card>
-                <View style={styles.headerRow}>
-                  <View style={[styles.avatar, { backgroundColor: c.accentSoft }]}><Text style={{ color: c.accent, fontWeight: '800', fontSize: type.title }}>{initials(ch.name)}</Text></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700' }}>{ch.name}</Text>
-                    <Text style={{ color: c.muted, fontSize: type.body }}>{ch.profileAvailable ? [ch.program, ch.rank].filter(Boolean).join(' · ') || 'No program recorded' : 'Profile not available'}</Text>
-                  </View>
-                  <Text style={{ color: c.subtle, fontSize: 22 }}>›</Text>
-                </View>
-                {counts?.available && counts.total > 0 ? <Text style={{ color: c.muted, marginTop: space.md }}>{counts.met} of {counts.total} requirements met{counts.recorded < counts.total ? ` · ${counts.total - counts.recorded} not recorded yet` : ''}</Text> : null}
-                {ch.latestAchievement ? <View style={{ marginTop: space.sm }}><Pill tone="good" text={`★ ${ch.latestAchievement}`} /></View> : null}
-              </Card>
-            </Pressable>
+            <View key={ch.key} style={{ marginBottom: space.lg }}>
+              <BeltPathView childName={ch.name} program={ch.program} rank={ch.rank} path={path} cheer={eianCheer(first, path)} onOpen={() => setOpenChild(ch.index)}
+                gifts={giftsFor(recommendations, ch.name, hidden)} onGift={item => setGift({ item, child: ch.name })} />
+              {ch.latestAchievement ? <View style={{ marginTop: space.sm }}><Pill tone="good" text={`★ ${ch.latestAchievement}`} /></View> : null}
+            </View>
           );
         })}
 
@@ -115,8 +152,8 @@ function Chip({ label, active, onPress, a11y }: { label: string; active: boolean
   const c = useColors();
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={a11y} accessibilityState={{ selected: active }} onPress={onPress}
-      style={[styles.chip, { backgroundColor: active ? c.text : c.surface, borderColor: c.border }]}>
-      <Text style={{ color: active ? c.bg : c.text, fontWeight: '700', fontSize: type.body }}>{label}</Text>
+      style={[styles.chip, active ? { backgroundColor: c.accentSoft, borderColor: c.accent } : { backgroundColor: c.surface, borderColor: c.edge }]}>
+      <Text style={{ color: active ? c.accentEdge : c.text, fontWeight: '800', fontSize: type.body }}>{label}</Text>
     </Pressable>
   );
 }
@@ -127,8 +164,8 @@ export function initials(name: string): string {
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  iconButton: { width: TOUCH, height: TOUCH, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
-  chip: { minHeight: 40, paddingHorizontal: space.lg, borderRadius: radius.pill, justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
+  iconButton: { width: TOUCH, height: TOUCH, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderBottomWidth: 2 + EDGE },
+  chip: { minHeight: 44, paddingHorizontal: space.lg, borderRadius: radius.md, justifyContent: 'center', borderWidth: 2, borderBottomWidth: 2 + EDGE },
   avatar: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   onAccent: { backgroundColor: '#FFFFFF', borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: space.xs },
 });

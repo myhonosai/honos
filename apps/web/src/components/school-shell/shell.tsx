@@ -17,10 +17,12 @@ import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
 import { HON_SCREENSAVER_SHOWN_EVENT, ScreensaverController } from './screensaver';
 import { SchoolShellFrame, type ShellViewState } from './frame';
+import { AppearanceOwner } from './appearance-owner';
 import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { HON_DEMO_DATA_CHANGED_EVENT, demoDataApi } from '../school-demo-data/http';
+import { GlobalSearch } from './global-search';
 
 /** Per-viewer convenience only (never authority, never shared): the chosen AI team art style. */
 export const HON_ART_STYLE_STORAGE_KEY = 'hon.ai-team.art-style';
@@ -83,7 +85,7 @@ export function SchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
 function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: string; children?: ReactNode }): React.ReactElement {
   const path = usePathname() ?? '/staff';
-  const { preferences } = useLocale();
+  const { preferences, claimShellSchool } = useLocale();
   const controller = useRef<SchoolEntryController | null>(null);
   if (!controller.current) controller.current = new SchoolEntryController(sessionSubject);
   const entry = controller.current;
@@ -96,13 +98,15 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const [artChoice, setArtChoice] = useState<HonArtStyle | null>(null);
   useEffect(() => { setArtChoice(readStoredArtStyle()); }, []);
   const chooseArtStyle = useCallback((style: HonArtStyle) => { setArtChoice(style); storeArtStyle(style); }, []);
-  const themeGeneration = useRef(0);
+  const appearance = useRef(new AppearanceOwner()).current;
 
   useEffect(() => {
     entry.activate();
     const unsubscribe = entry.subscribe(next => { if (next.phase !== 'READY') setSchoolName(current => next.phase === 'LOADING' ? current : null); setSnapshot(next); });
     const conceal = (event: Event) => {
       concealShellPrivateNow();
+      // Review [20]: a concealment retires appearance reads and saves still out; none of them may claim SAVED later.
+      appearance.retire(); setViewState('LOCAL');
       setSchoolName(null); entry.conceal(event.type === HON_SESSION_INVALIDATED_EVENT ? 'SESSION' : 'CONCEALED');
     };
     const stop = onShellPrivacyEvent(conceal);
@@ -114,12 +118,17 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   // Verified personal view preference for the selected school; presentation only.
   const selection = snapshot.phase === 'READY' ? snapshot.selection : null;
   useEffect(() => {
+    appearance.select(selection);
     if (!selection) return;
-    const generation = ++themeGeneration.current;
+    const owns = appearance.begin(selection);
     loadInterfaceThemePreference(selection).then(
-      preference => { if (generation !== themeGeneration.current) return; setMode(preference.interfaceTheme); setViewState(preference.selectedVia === 'DEFAULT' ? 'LOCAL' : 'SAVED'); },
-      () => { if (generation === themeGeneration.current) setViewState('LOCAL'); });
+      preference => { if (!owns()) return; setMode(preference.interfaceTheme); setViewState(preference.selectedVia === 'DEFAULT' ? 'LOCAL' : 'SAVED'); },
+      () => { if (owns()) setViewState('LOCAL'); });
   }, [selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Review [20]: school-language precedence follows the verified selection, and is released when the school is concealed.
+  useEffect(() => { claimShellSchool(selection?.schoolId ?? null); }, [selection?.schoolId, claimShellSchool]);
+  useEffect(() => () => { claimShellSchool(null); }, [claimShellSchool]);
 
   // Name only: the existing closed choices read lists names for multi-school staff. Single-school staff see a generic label.
   useEffect(() => {
@@ -205,6 +214,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     if (open) menuOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setMenuOpen(open);
   }, []);
+  const closeMenu = useCallback(() => { setMenuOpen(false); tour(null); }, [tour]);
 
   // Transitional: pages not yet migrated to the UI system may rely on the old light page
   // background. Give those (and only those) a light canvas so their text stays readable.
@@ -244,12 +254,12 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     setMode(next);
     const scope = entry.snapshot().phase === 'READY' ? entry.snapshot().selection : null;
     if (!scope) { setViewState('LOCAL'); return Promise.resolve(false); }
-    const generation = ++themeGeneration.current;
+    const owns = appearance.begin(scope);
     setViewState('SAVING');
     return saveInterfaceThemePreference(scope, next, crypto.randomUUID(), via).then(
-      () => { if (generation === themeGeneration.current) setViewState('SAVED'); return true; },
-      () => { if (generation === themeGeneration.current) setViewState('ERROR'); return false; });
-  }, [entry]);
+      () => { const owned = owns(); if (owned) setViewState('SAVED'); return owned; },
+      () => { if (owns()) setViewState('ERROR'); return false; });
+  }, [entry, appearance]);
   const chooseMode = useCallback((next: HonInterfaceTheme) => { void saveMode(next, 'SETTINGS'); }, [saveMode]);
 
   const choose = useCallback((schoolId: string) => {
@@ -272,6 +282,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
+    search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
     tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;

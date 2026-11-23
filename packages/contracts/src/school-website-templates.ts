@@ -1,4 +1,4 @@
-// WB4: the starting templates (five from proven school sites, three modern product looks in 0560) and the closed edit operations for a school website document. A template is a
+// WB4: the starting templates (five from proven school sites, three modern product looks in 0660) and the closed edit operations for a school website document. A template is a
 // deterministic fill of school facts HON already holds (name, contact details); it is not AI. The same edit operations
 // are what the owner's editor applies today and what AI edit proposals (WB5) will be limited to.
 import {
@@ -6,7 +6,7 @@ import {
   type WebsiteDocument, type WebsitePage, type WebsitePageKind, type WebsiteSection, type WebsiteSectionType, type WebsiteTemplate, type WebsiteTheme, type WebsiteStarterArt,
 } from './school-website.js';
 
-/** 0560: each template starts with its own starter hero and the shared program art (see WEBSITE_STARTER_ART). */
+/** 0660: each template starts with its own starter hero and the shared program art (see WEBSITE_STARTER_ART). */
 const HERO_ART = { MODERN_CLEAN: 'hero-modern', FAMILY_FRIENDLY: 'hero-family', BOLD_POWERFUL: 'hero-bold', TRADITIONAL: 'hero-traditional', HIGH_CONVERSION: 'hero-conversion', NEON_GRID: 'hero-neon', EDITORIAL: 'hero-editorial', BENTO: 'hero-bento' } as const satisfies Record<WebsiteTemplate, WebsiteStarterArt>;
 
 /** A weekly class as HON's timetable holds it: ISO weekdays (1 = Monday) and a school-time start "HH:MM". */

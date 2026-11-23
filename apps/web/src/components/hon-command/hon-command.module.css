@@ -1,5 +1,5 @@
 /* Shared HON command surface. Modes change density and scale only; content, links and states are identical. */
-.workspace, .band, .launcher, .page {
+.workspace, .band, .launcher, .page, .dock {
   --hon-bg: #071426;
   --hon-surface: #0f2033;
   --hon-raised: #13293d;
@@ -130,6 +130,14 @@
 @media (prefers-reduced-motion: no-preference) { .panel { animation: hon-slide .2s ease-out; } }
 @keyframes hon-slide { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
 .panel .team { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Corner pop-up (owner 2026-11-19): opened from the corner HON button, floating above it so the page stays in view. */
+.overlay[data-placement="corner"] { align-items: flex-end; padding: 0 20px 20px; box-sizing: border-box; }
+.overlay[data-placement="corner"] .scrim { background: rgba(2, 8, 18, .32); backdrop-filter: none; }
+.panel[data-placement="corner"], .panel[data-placement="corner"][data-variant] { width: min(480px, 100%); height: auto; max-height: min(780px, calc(100vh - 40px)); padding: 16px; border: 1px solid #2c4862; border-radius: 20px; box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 4px rgba(47, 123, 255, .10); transform-origin: bottom right; }
+.panel[data-placement="corner"][data-variant="big-button"] { width: min(560px, 100%); }
+.panel[data-placement="corner"] .team { grid-template-columns: 1fr; }
+@media (prefers-reduced-motion: no-preference) { .panel[data-placement="corner"] { animation: hon-pop .18s ease-out; } }
+@keyframes hon-pop { from { transform: translateY(12px) scale(.97); opacity: .4; } to { transform: none; opacity: 1; } }
 
 /* Persistent launcher */
 .launcher { position: fixed; right: 20px; bottom: 20px; z-index: 900; display: inline-flex; align-items: center; gap: 9px; min-height: 52px; padding: 8px 18px 8px 9px; border: 1px solid #3a7f8a; border-radius: 999px; background: linear-gradient(135deg, #0f3346, #0a1d30); color: #e9fbfa; font: inherit; font-weight: 800; box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 0 4px rgba(134, 216, 208, .08); cursor: pointer; }
@@ -211,9 +219,40 @@
   .band[data-variant] .bandTeam { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .band[data-variant="classic"] .bandTeam { grid-template-columns: minmax(0, 1fr); }
   .panel { width: 100vw; padding: 16px; border-left: 0; }
+  .overlay[data-placement="corner"] { padding: 0; }
+  .panel[data-placement="corner"], .panel[data-placement="corner"][data-variant] { width: 100vw; height: 100%; max-height: none; border: 0; border-radius: 0; }
   .panel .team { grid-template-columns: 1fr; }
   .workspace .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .launcher { right: 12px; bottom: 12px; }
   .band { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .bandAgent:hover { transform: none; } }
+
+/* Corner chat dock (owner 2026-11-22, "like Manus CRM"): docked in the corner where the HON orb sits, growing out of it and
+   shrinking back into it. Not modal and no dimming: the page stays visible beside it. Above the phone bottom bar on small screens. */
+.dock { position: fixed; right: 20px; bottom: 20px; z-index: 23; display: flex; flex-direction: column; width: min(420px, calc(100vw - 40px)); height: min(680px, calc(100vh - 40px)); height: min(680px, calc(100dvh - 40px)); box-sizing: border-box; overflow: hidden; border: 1px solid #2c4862; border-radius: 20px; background: radial-gradient(circle at 90% 0%, rgba(63, 213, 255, .12), transparent 45%), var(--hon-bg); box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 4px rgba(47, 123, 255, .10); transform-origin: bottom right; }
+.dock[hidden] { display: none; }
+.dock[data-variant="big-button"] { width: min(460px, calc(100vw - 40px)); }
+.dock a:focus-visible, .dock button:focus-visible, .dock summary:focus-visible { outline: 3px solid var(--hon-accent); outline-offset: 2px; }
+.dock h2:focus { outline: none; }
+.dockHead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 14px; border-bottom: 1px solid #22394f; background: rgba(8, 20, 38, .9); }
+.dockHead .mark { width: 36px; height: 36px; border-radius: 50%; }
+.dockTitle { min-width: 0; flex: 1; }
+.dockTitle h2 { margin: 0; font-size: 16px; line-height: 1.2; }
+.dockTitle p { margin: 2px 0 0; overflow: hidden; color: var(--hon-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.dockActions { display: flex; gap: 2px; }
+.dockActions a, .dockActions button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: #b9cbe0; cursor: pointer; }
+.dockActions a:hover, .dockActions button:hover { background: rgba(134, 216, 208, .12); color: #fff; }
+.dockBody { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px 0; }
+.dockBody > .state { margin: 0 0 14px; }
+@keyframes hon-dock-in { from { transform: scale(.2); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes hon-dock-out { from { transform: none; opacity: 1; } to { transform: scale(.2); opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .dock { animation: hon-dock-in .2s cubic-bezier(.2, .8, .2, 1); }
+  .dock[data-closing="true"] { animation: hon-dock-out .16s ease-in forwards; }
+}
+/* Tablet and phone: the bottom bar is showing, so the dock sits just above it, still anchored at the right corner. */
+@media (max-width: 1099px) {
+  .dock, .dock[data-variant] { right: 10px; bottom: calc(76px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); height: min(640px, calc(100vh - 150px)); height: min(640px, calc(100dvh - 150px)); border-radius: 18px; }
+  .dock[data-variant="big-button"] { bottom: calc(88px + env(safe-area-inset-bottom)); height: min(640px, calc(100dvh - 162px)); }
+}

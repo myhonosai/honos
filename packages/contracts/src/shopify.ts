@@ -11,6 +11,12 @@ export const SHOPIFY_RETURN_PATH = '/staff/billing/shopify/return' as const;
 export const SHOPIFY_SCOPES = ['read_products', 'read_inventory', 'read_orders'] as const;
 /** SH4a: asked for only when the owner presses Allow editing. write_products edits products; write_inventory edits unit costs. */
 export const SHOPIFY_EDIT_SCOPES = ['write_products', 'write_inventory'] as const;
+/** SH-F1: asked for only when the owner presses Allow finance. Reads the Shopify Payments balance, payouts and balance transactions. */
+export const SHOPIFY_FINANCE_SCOPES = ['read_shopify_payments_accounts', 'read_shopify_payments_payouts'] as const;
+/** SH2b (0614): asked for only when the owner presses Allow orders. Lets the front desk create the Shopify order a print provider works from. */
+export const SHOPIFY_ORDER_SCOPES = ['write_orders'] as const;
+/** Front desk stock updates: a stock change must name the store's own location, which Shopify shows only with read_locations (seen on the test store 2026-11-22). Optional; asked for by Allow stock updates and with Allow orders. */
+export const SHOPIFY_STOCK_SCOPES = ['read_locations'] as const;
 export const SHOPIFY_LOW_STOCK_AT = 3;
 export const SHOPIFY_CONNECTION_STATUSES = ['CONNECTED', 'NEEDS_RECONNECT', 'DISCONNECTED'] as const;
 export type ShopifyConnectionStatus = typeof SHOPIFY_CONNECTION_STATUSES[number];
@@ -68,14 +74,21 @@ function shop(v: unknown, response = true): string { if (typeof v !== 'string' |
 
 // ---- Inputs from the browser (closed; the API and the database check again) ----
 
-/** allowEditing (SH4a): also ask Shopify for the edit scopes. Absent means false. */
-export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean }
+/**
+ * allowEditing (SH4a): also ask Shopify for the edit scopes. allowFinance (SH-F1): also ask for the finance scope.
+ * allowOrders (SH2b): also ask for the scope that creates orders.
+ * Absent means false.
+ */
+export interface ShopifyConnectInput { schoolId: string; shopDomain: string; allowEditing: boolean; allowFinance: boolean; allowOrders: boolean }
 export function validateShopifyConnectInput(v: unknown): ShopifyConnectInput {
-  const editing = !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, 'allowEditing');
-  const o = closed(v, editing ? ['schoolId', 'shopDomain', 'allowEditing'] : ['schoolId', 'shopDomain'], false);
+  const has = (k: string) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.hasOwn(v, k);
+  const editing = has('allowEditing'), finance = has('allowFinance'), orders = has('allowOrders');
+  const o = closed(v, ['schoolId', 'shopDomain', ...(editing ? ['allowEditing'] : []), ...(finance ? ['allowFinance'] : []), ...(orders ? ['allowOrders'] : [])], false);
   const domain = normalizeShopDomain(o.shopDomain);
-  if (!domain || (editing && typeof o.allowEditing !== 'boolean')) fail(false);
-  return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true });
+  if (!domain || (editing && typeof o.allowEditing !== 'boolean') || (finance && typeof o.allowFinance !== 'boolean')
+    || (orders && typeof o.allowOrders !== 'boolean')) fail(false);
+  return Object.freeze({ schoolId: id(o.schoolId, false), shopDomain: domain, allowEditing: editing && o.allowEditing === true,
+    allowFinance: finance && o.allowFinance === true, allowOrders: orders && o.allowOrders === true });
 }
 /** The raw query string Shopify put on the return URL, without the leading `?`. */
 export interface ShopifyCompleteInput { schoolId: string; query: string }
@@ -100,15 +113,20 @@ export function validateShopifyDisconnectInput(v: unknown): ShopifyDisconnectInp
 export interface ShopifyConnection {
   connectionId: string; shopDomain: string; shopName: string | null; currency: string | null; status: ShopifyConnectionStatus; version: number;
   connectedAt: string; endedAt: string | null; lastSyncAt: string | null; lastSyncOutcome: ShopifySyncOutcome | null; syncRunning: boolean;
+  /** 0614: the store lets HON create orders (write_orders). False from a database before 0614. */
+  ordersAllowed: boolean;
 }
 export function verifyShopifyConnection(v: unknown): ShopifyConnection {
-  const o = closed(v, ['connectionId', 'shopDomain', 'shopName', 'currency', 'status', 'version', 'connectedAt', 'endedAt', 'lastSyncAt', 'lastSyncOutcome', 'syncRunning'], true);
+  const allowed = !!v && typeof v === 'object' && Object.hasOwn(v, 'ordersAllowed');
+  const o = closed(v, ['connectionId', 'shopDomain', 'shopName', 'currency', 'status', 'version', 'connectedAt', 'endedAt', 'lastSyncAt', 'lastSyncOutcome', 'syncRunning',
+    ...(allowed ? ['ordersAllowed'] : [])], true);
   const status = oneOf(o.status, SHOPIFY_CONNECTION_STATUSES);
   const endedAt = maybeIso(o.endedAt);
   if ((status === 'CONNECTED') !== (endedAt === null)) fail(true);
   return Object.freeze({ connectionId: id(o.connectionId, true), shopDomain: shop(o.shopDomain), shopName: maybeText(o.shopName, 120), currency: maybeCurrency(o.currency),
     status, version: int(o.version, 1, 1_000_000_000), connectedAt: iso(o.connectedAt), endedAt, lastSyncAt: maybeIso(o.lastSyncAt),
-    lastSyncOutcome: o.lastSyncOutcome === null ? null : oneOf(o.lastSyncOutcome, SHOPIFY_SYNC_OUTCOMES), syncRunning: bool(o.syncRunning) });
+    lastSyncOutcome: o.lastSyncOutcome === null ? null : oneOf(o.lastSyncOutcome, SHOPIFY_SYNC_OUTCOMES), syncRunning: bool(o.syncRunning),
+    ordersAllowed: allowed ? bool(o.ordersAllowed) : false });
 }
 
 export interface ShopifySummary {
@@ -119,16 +137,27 @@ export interface ShopifyOverview {
   schoolId: string; canManage: boolean; connectEnabled: boolean;
   /** SH1b: HON syncs on its own (Shopify change reports, plus a full sync every six hours). */
   autoSync: boolean; connection: ShopifyConnection | null;
-  counts: { products: number; variants: number; lowStock: number; orders: number } | null; summary: ShopifySummary | null;
+  counts: { products: number; variants: number; lowStock: number; provider: number; orders: number } | null; summary: ShopifySummary | null;
+  /** HON's own Shopify sign-up link for a school with no store yet (set by HON, never by a school); null when HON has none. */
+  newStoreUrl: string | null;
+}
+/** A sign-up link is https on Shopify's own site or Shopify's partner link host, with no sign-in part, port or fragment. Anything else is null. */
+const NEW_STORE_URL = /^https:\/\/(?:(?:[a-z0-9-]{1,63}\.){0,3}shopify\.com|shopify\.pxf\.io)(?:\/[A-Za-z0-9._~%\/?&=+-]*)?$/;
+export function shopifyNewStoreUrl(v: unknown): string | null {
+  return typeof v === 'string' && v.length <= 500 && NEW_STORE_URL.test(v) ? v : null;
 }
 export function verifyShopifyOverview(v: unknown): ShopifyOverview {
-  const o = closed(v, ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'], true);
+  // An API one release older does not send newStoreUrl yet: read that as "no link".
+  const base = ['schoolId', 'canManage', 'connectEnabled', 'autoSync', 'connection', 'counts', 'summary'];
+  const o = closed(v, v && typeof v === 'object' && Object.hasOwn(v, 'newStoreUrl') ? [...base, 'newStoreUrl'] : base, true);
+  const newStoreUrl = o.newStoreUrl === undefined || o.newStoreUrl === null ? null : shopifyNewStoreUrl(o.newStoreUrl);
+  if (o.newStoreUrl !== undefined && o.newStoreUrl !== null && newStoreUrl !== o.newStoreUrl) fail(true);
   const connection = o.connection === null ? null : verifyShopifyConnection(o.connection);
   if ((connection === null) !== (o.counts === null) || (connection === null) !== (o.summary === null)) fail(true);
   let counts: ShopifyOverview['counts'] = null, summary: ShopifySummary | null = null;
   if (connection) {
-    const c = closed(o.counts, ['products', 'variants', 'lowStock', 'orders'], true);
-    counts = Object.freeze({ products: int(c.products, 0, 1e7), variants: int(c.variants, 0, 1e7), lowStock: int(c.lowStock, 0, 1e7), orders: int(c.orders, 0, 1e7) });
+    const c = closed(o.counts, ['products', 'variants', 'lowStock', 'provider', 'orders'], true);
+    counts = Object.freeze({ products: int(c.products, 0, 1e7), variants: int(c.variants, 0, 1e7), lowStock: int(c.lowStock, 0, 1e7), provider: int(c.provider, 0, 1e7), orders: int(c.orders, 0, 1e7) });
     const s = closed(o.summary, ['days', 'orders', 'sales', 'averageOrder', 'itemsSold', 'lineSales', 'coveredSales', 'estimatedGrossProfit', 'topProducts'], true);
     summary = Object.freeze({ days: int(s.days, 1, 366), orders: int(s.orders, 0, 1e7), sales: money(s.sales), averageOrder: money(s.averageOrder),
       itemsSold: int(s.itemsSold, 0, 1e9), lineSales: money(s.lineSales), coveredSales: money(s.coveredSales), estimatedGrossProfit: money(s.estimatedGrossProfit, true),
@@ -136,12 +165,14 @@ export function verifyShopifyOverview(v: unknown): ShopifyOverview {
         return Object.freeze({ title: text(x.title, 255), quantity: int(x.quantity, 0, 1e9), sales: money(x.sales) }); })) });
     if (summary.coveredSales > summary.lineSales) fail(true);
   }
-  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary });
+  return Object.freeze({ schoolId: id(o.schoolId, true), canManage: bool(o.canManage), connectEnabled: bool(o.connectEnabled), autoSync: bool(o.autoSync), connection, counts, summary, newStoreUrl });
 }
 
 export interface ShopifyVariant {
   variantId: string; title: string; sku: string | null; barcode: string | null; price: number; compareAtPrice: number | null; unitCost: number | null;
   margin: number | null; marginPercent: number | null; tracked: boolean; inventoryQuantity: number | null; lowStock: boolean;
+  /** The third-party fulfilment service (a print-on-demand provider, for example) that stocks and ships this variant; null = the school. */
+  fulfilledBy: string | null;
 }
 export interface ShopifyProduct {
   productId: string; title: string; status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | 'UNLISTED'; vendor: string | null; productType: string | null; imageUrl: string | null;
@@ -157,11 +188,12 @@ export function verifyShopifyCatalog(v: unknown): ShopifyCatalog {
     return Object.freeze({ productId: shopifyId(x.productId), title: text(x.title, 255), status: oneOf(x.status, ['ACTIVE', 'DRAFT', 'ARCHIVED', 'UNLISTED'] as const),
       vendor: maybeText(x.vendor, 255), productType: maybeText(x.productType, 255), imageUrl: x.imageUrl as string | null,
       variants: Object.freeze(arr(x.variants, 100).map(w => {
-        const y = closed(w, ['variantId', 'title', 'sku', 'barcode', 'price', 'compareAtPrice', 'unitCost', 'margin', 'marginPercent', 'tracked', 'inventoryQuantity', 'lowStock'], true);
+        const y = closed(w, ['variantId', 'title', 'sku', 'barcode', 'price', 'compareAtPrice', 'unitCost', 'margin', 'marginPercent', 'tracked', 'inventoryQuantity', 'lowStock', 'fulfilledBy'], true);
+        if (y.fulfilledBy !== null && bool(y.lowStock)) fail(true);
         return Object.freeze({ variantId: shopifyId(y.variantId), title: text(y.title, 255), sku: maybeText(y.sku, 255), barcode: maybeText(y.barcode, 255),
           price: money(y.price), compareAtPrice: maybeMoney(y.compareAtPrice), unitCost: maybeMoney(y.unitCost), margin: maybeMoney(y.margin, true),
           marginPercent: y.marginPercent === null ? null : money(y.marginPercent, true), tracked: bool(y.tracked),
-          inventoryQuantity: maybeInt(y.inventoryQuantity, -10_000_000, 10_000_000), lowStock: bool(y.lowStock) });
+          inventoryQuantity: maybeInt(y.inventoryQuantity, -10_000_000, 10_000_000), lowStock: bool(y.lowStock), fulfilledBy: maybeText(y.fulfilledBy, 64) });
       })) });
   })) });
 }
@@ -360,4 +392,139 @@ export interface ShopifyChangeResult { change: ShopifyProductChange }
 export function verifyShopifyChangeResult(v: unknown): ShopifyChangeResult {
   const o = closed(v, ['change'], true);
   return Object.freeze({ change: verifyShopifyProductChange(o.change) });
+}
+
+// ---- SH-F1 (0597): Shopify Payments balance, payouts and balance transactions (read-only) ----
+
+export const SHOPIFY_PAYOUT_STATUSES = ['SCHEDULED', 'IN_TRANSIT', 'PAID', 'FAILED', 'CANCELED'] as const;
+export type ShopifyPayoutStatus = typeof SHOPIFY_PAYOUT_STATUSES[number];
+export const SHOPIFY_PAYOUT_DIRECTIONS = ['DEPOSIT', 'WITHDRAWAL'] as const;
+export type ShopifyPayoutDirection = typeof SHOPIFY_PAYOUT_DIRECTIONS[number];
+/** Money as Shopify Payments sends it: a decimal string with at most 4 decimals below one billion, which may be negative. */
+export const SHOPIFY_SIGNED_MONEY_TEXT = /^-?(0|[1-9][0-9]{0,8})(\.[0-9]{1,4})?$/;
+function signedMoneyText(v: unknown): string { if (typeof v !== 'string' || !SHOPIFY_SIGNED_MONEY_TEXT.test(v)) fail(true); return v; }
+function unique<T>(list: readonly T[], key: (t: T) => string): readonly T[] { if (new Set(list.map(key)).size !== list.length) fail(true); return Object.freeze(list); }
+
+export interface ShopifyBalance { currency: string; amount: string }
+export interface ShopifyPayout { id: string; status: ShopifyPayoutStatus; direction: ShopifyPayoutDirection; issuedAt: string; currency: string; net: string }
+export interface ShopifyBalanceTransaction {
+  id: string; type: string; at: string; currency: string; amount: string; fee: string; net: string; test: boolean; payoutId: string | null;
+}
+/** One read of Shopify Payments, as the API sends it to the database and the database answers it back. */
+export interface ShopifyFinanceSnapshot {
+  paymentsActive: boolean; balances: readonly ShopifyBalance[]; payouts: readonly ShopifyPayout[]; transactions: readonly ShopifyBalanceTransaction[];
+}
+export function verifyShopifyFinanceSnapshot(v: unknown): ShopifyFinanceSnapshot {
+  const o = closed(v, ['paymentsActive', 'balances', 'payouts', 'transactions'], true);
+  const paymentsActive = bool(o.paymentsActive);
+  const balances = unique(arr(o.balances, 10).map(b => { const x = closed(b, ['currency', 'amount'], true);
+    return Object.freeze({ currency: currency(x.currency), amount: signedMoneyText(x.amount) }); }), b => b.currency);
+  const payouts = unique(arr(o.payouts, 20).map(p => { const x = closed(p, ['id', 'status', 'direction', 'issuedAt', 'currency', 'net'], true);
+    return Object.freeze({ id: shopifyId(x.id), status: oneOf(x.status, SHOPIFY_PAYOUT_STATUSES), direction: oneOf(x.direction, SHOPIFY_PAYOUT_DIRECTIONS),
+      issuedAt: iso(x.issuedAt), currency: currency(x.currency), net: signedMoneyText(x.net) }); }), p => p.id);
+  const transactions = unique(arr(o.transactions, 50).map(t => { const x = closed(t, ['id', 'type', 'at', 'currency', 'amount', 'fee', 'net', 'test', 'payoutId'], true);
+    const type = word(x.type); if (type === null) fail(true);
+    return Object.freeze({ id: shopifyId(x.id), type, at: iso(x.at), currency: currency(x.currency), amount: signedMoneyText(x.amount),
+      fee: signedMoneyText(x.fee), net: signedMoneyText(x.net), test: bool(x.test), payoutId: maybeShopifyId(x.payoutId) }); }), t => t.id);
+  if (!paymentsActive && (balances.length || payouts.length || transactions.length)) fail(true);
+  return Object.freeze({ paymentsActive, balances, payouts, transactions });
+}
+
+/** READ (commerce.shopify.manage). financeAllowed: the store granted the finance scope. finance: the latest snapshot, or null before the first read. */
+export interface ShopifyFinanceView {
+  schoolId: string; connected: boolean; financeAllowed: boolean; currency: string | null;
+  finance: (ShopifyFinanceSnapshot & { readAt: string }) | null;
+}
+export function verifyShopifyFinanceView(v: unknown): ShopifyFinanceView {
+  const o = closed(v, ['schoolId', 'connected', 'financeAllowed', 'currency', 'finance'], true);
+  const connected = bool(o.connected), financeAllowed = bool(o.financeAllowed);
+  if (financeAllowed && !connected) fail(true);
+  let finance: ShopifyFinanceView['finance'] = null;
+  if (o.finance !== null) {
+    if (!connected) fail(true);
+    const f = closed(o.finance, ['paymentsActive', 'balances', 'payouts', 'transactions', 'readAt'], true);
+    const { readAt, ...rest } = f;
+    finance = Object.freeze({ ...verifyShopifyFinanceSnapshot(rest), readAt: iso(readAt) });
+  }
+  return Object.freeze({ schoolId: id(o.schoolId, true), connected, financeAllowed, currency: maybeCurrency(o.currency), finance });
+}
+
+// ---- TB2: storefront blocks (theme app extension; no theme scopes) ----
+/**
+ * HON's theme app extension: an app embed (school colors), an app block for product pages (size guide), an app block for
+ * the cart (pickup note) and, for carts without app block support, an app embed banner. The owner adds them in Shopify's
+ * theme editor; their content is one app-data metafield HON writes on its own app installation.
+ */
+export const SHOPIFY_STOREFRONT_BLOCKS = { colors: 'school-colors', sizeGuide: 'size-guide', pickupNote: 'pickup-note', pickupBanner: 'pickup-note-banner' } as const;
+export const SHOPIFY_STOREFRONT_METAFIELD = { namespace: 'hon_storefront', key: 'settings' } as const;
+export interface ShopifyStorefrontSettings {
+  primaryColor: string; accentColor: string | null;
+  sizeGuideTitle: string | null; sizeGuideText: string | null; pickupNote: string | null;
+}
+export const SHOPIFY_STOREFRONT_STATUSES = ['NEVER', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'UNKNOWN'] as const;
+export interface ShopifyStorefrontLinks { colors: string; sizeGuide: string; pickupNote: string; pickupBanner: string }
+export interface ShopifyStorefront {
+  schoolId: string; connected: boolean; shopDomain: string | null;
+  settings: ShopifyStorefrontSettings | null; settingsVersion: number | null; savedAt: string | null;
+  publishedVersion: number | null; publishedAt: string | null;
+  publishStatus: typeof SHOPIFY_STOREFRONT_STATUSES[number]; failureCode: string | null; busy: boolean;
+  /** Theme editor deep links that add each block (null when not connected). */
+  links: ShopifyStorefrontLinks | null;
+}
+export interface ShopifyStorefrontSave { schoolId: string; expectedVersion: number | null; settings: ShopifyStorefrontSettings }
+export interface ShopifyStorefrontPublish { schoolId: string; settingsVersion: number }
+export interface ShopifyStorefrontPublishResult { outcome: 'PUBLISHED' | 'FAILED' | 'UNKNOWN'; failureCode: string | null; storefront: ShopifyStorefront }
+
+const HEX_COLOR = /^#[0-9A-F]{6}$/;
+function storefrontSettings(v: unknown, response: boolean): ShopifyStorefrontSettings {
+  const o = closed(v, ['primaryColor', 'accentColor', 'sizeGuideTitle', 'sizeGuideText', 'pickupNote'], response);
+  if (typeof o.primaryColor !== 'string' || !HEX_COLOR.test(o.primaryColor)
+    || (o.accentColor !== null && (typeof o.accentColor !== 'string' || !HEX_COLOR.test(o.accentColor)))) fail(response);
+  const sizeGuideTitle = maybeEditText(o.sizeGuideTitle, 60, response), sizeGuideText = maybeEditText(o.sizeGuideText, 2000, response, true);
+  if (sizeGuideTitle !== null && sizeGuideText === null) fail(response);
+  return Object.freeze({ primaryColor: o.primaryColor as string, accentColor: o.accentColor as string | null, sizeGuideTitle, sizeGuideText,
+    pickupNote: maybeEditText(o.pickupNote, 500, response, true) });
+}
+export function validateShopifyStorefrontSave(v: unknown): ShopifyStorefrontSave {
+  const o = closed(v, ['schoolId', 'expectedVersion', 'settings'], false);
+  return Object.freeze({ schoolId: id(o.schoolId, false), expectedVersion: o.expectedVersion === null ? null : int(o.expectedVersion, 1, 1_000_000_000, false),
+    settings: storefrontSettings(o.settings, false) });
+}
+export function validateShopifyStorefrontPublish(v: unknown): ShopifyStorefrontPublish {
+  const o = closed(v, ['schoolId', 'settingsVersion'], false);
+  return Object.freeze({ schoolId: id(o.schoolId, false), settingsVersion: int(o.settingsVersion, 1, 1_000_000_000, false) });
+}
+/** A theme editor deep link on the store's own admin, for HON's app (client id) and one of its blocks. */
+const EDITOR_LINK = /^https:\/\/[a-z0-9][a-z0-9-]{0,59}\.myshopify\.com\/admin\/themes\/current\/editor\?[A-Za-z0-9=&%._\/-]{1,300}$/;
+function editorLink(v: unknown, domain: string): string {
+  if (typeof v !== 'string' || !EDITOR_LINK.test(v) || !v.startsWith(`https://${domain}/admin/`)) fail(true);
+  return v;
+}
+export function verifyShopifyStorefront(v: unknown): ShopifyStorefront {
+  const o = closed(v, ['schoolId', 'connected', 'shopDomain', 'settings', 'settingsVersion', 'savedAt', 'publishedVersion', 'publishedAt',
+    'publishStatus', 'failureCode', 'busy', 'links'], true);
+  const connected = bool(o.connected), busy = bool(o.busy);
+  const shopDomain = o.shopDomain === null ? null : shop(o.shopDomain);
+  const settings = o.settings === null ? null : storefrontSettings(o.settings, true);
+  const settingsVersion = maybeInt(o.settingsVersion, 1, 1_000_000_000), publishedVersion = maybeInt(o.publishedVersion, 1, 1_000_000_000);
+  const publishStatus = oneOf(o.publishStatus, SHOPIFY_STOREFRONT_STATUSES), failureCode = word(o.failureCode);
+  if (connected !== (shopDomain !== null) || (settings === null) !== (settingsVersion === null) || (settings === null) !== (o.savedAt === null)
+    || (publishedVersion === null) !== (o.publishedAt === null) || (publishedVersion !== null && (settingsVersion === null || publishedVersion > settingsVersion))
+    || (failureCode !== null) !== (publishStatus === 'FAILED' || publishStatus === 'UNKNOWN') || busy !== (publishStatus === 'PUBLISHING')
+    || (settings === null && publishStatus !== 'NEVER') || (!connected && settings !== null)) fail(true);
+  let links: ShopifyStorefrontLinks | null = null;
+  if (o.links !== null) {
+    if (shopDomain === null) fail(true);
+    const l = closed(o.links, ['colors', 'sizeGuide', 'pickupNote', 'pickupBanner'], true);
+    links = Object.freeze({ colors: editorLink(l.colors, shopDomain), sizeGuide: editorLink(l.sizeGuide, shopDomain),
+      pickupNote: editorLink(l.pickupNote, shopDomain), pickupBanner: editorLink(l.pickupBanner, shopDomain) });
+  }
+  return Object.freeze({ schoolId: id(o.schoolId, true), connected, shopDomain, settings, settingsVersion, savedAt: maybeIso(o.savedAt),
+    publishedVersion, publishedAt: maybeIso(o.publishedAt), publishStatus, failureCode, busy, links });
+}
+export function verifyShopifyStorefrontPublishResult(v: unknown): ShopifyStorefrontPublishResult {
+  const o = closed(v, ['outcome', 'failureCode', 'storefront'], true);
+  const outcome = oneOf(o.outcome, ['PUBLISHED', 'FAILED', 'UNKNOWN'] as const), failureCode = word(o.failureCode);
+  if ((outcome === 'PUBLISHED') !== (failureCode === null)) fail(true);
+  return Object.freeze({ outcome, failureCode, storefront: verifyShopifyStorefront(o.storefront) });
 }

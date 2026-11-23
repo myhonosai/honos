@@ -1,9 +1,10 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { JourneyChild, JourneyRequirement } from '@hon/contracts/parent-journey-view';
 import { bookingLabel, formatAwardDate, formatClassTime, upcomingFor } from '../home/model';
-import { Body, Card, Pill, Section, Title } from '../ui/parts';
+import { BackButton, Body, Card, Pill, Section, Title } from '../ui/parts';
 import { space, TOUCH, type, useColors } from '../ui/theme';
 
 const STATUS: Record<NonNullable<JourneyRequirement['status']>, { text: string; tone: 'good' | 'warn' | 'bad' | 'neutral' }> = {
@@ -18,9 +19,7 @@ export function JourneyView({ child, timeZone, now, onBack }: { child: JourneyCh
   const upcoming = upcomingFor(child, now, 5);
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.md, paddingBottom: space.xxl }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back to family" onPress={onBack} style={styles.back}>
-        <Text style={{ color: c.accent, fontSize: type.body, fontWeight: '700' }}>‹ Family</Text>
-      </Pressable>
+      <View style={{ alignSelf: 'flex-start', marginBottom: space.md }}><BackButton label="Back to family" onPress={onBack} /></View>
       <Title>{child.name}</Title>
       {!child.profileAvailable ? <Card style={{ marginTop: space.lg }}><Body muted>The school hasn't made this profile available in the app.</Body></Card> : null}
 
