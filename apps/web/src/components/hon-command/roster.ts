@@ -116,6 +116,7 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Draft content for an existing school campaign', state: 'AVAILABLE', href: '/staff/marketing/assistant' },
       { label: 'Publish, advertise or spend', state: 'BACKEND_REQUIRED' },
+      { label: 'Merchandise ideas and store presentation review in the Shopify Merch Studio', state: 'AVAILABLE', href: '/staff/billing/shopify' },
       { label: 'Marketing performance analysis', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
@@ -167,7 +168,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Campaign, plan catalog and Creative Studio analysis (Ask HON → Lena)', state: 'AVAILABLE' },
-      { label: 'Merchandise and commerce presentation drafts', state: 'BACKEND_REQUIRED' },
+      { label: 'Merchandise ideas and store presentation review (Marcus writes these in the Shopify Merch Studio)', state: 'AVAILABLE', href: '/staff/billing/shopify' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
