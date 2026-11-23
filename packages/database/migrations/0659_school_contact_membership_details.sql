@@ -8,7 +8,7 @@ BEGIN;
 --   items (payer and payment schedule: cadence, amount, next charge)  billing.membership.read, as the card's membership tab
 --   paid and due per membership                                        one of the 0280 receivables-reader codes, as the card's
 --                                                                      billing tab; otherwise null, so a membership-only role
---                                                                      never sees payment amounts
+--                                                                      never sees amounts paid or due
 -- The same memberships as the card's membership tab (not DRAFT, newest 20). Nothing is written, sent or charged; no card,
 -- method or processor fact is returned.
 

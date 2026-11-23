@@ -5,20 +5,20 @@ import styles from './people.module.css';
 
 /** 0659 membership details, en / ko / es. Labels only; nothing here is authority. */
 const en = {
-  price: 'Price', nextPayment: 'Next payment', paid: 'Paid to date', due: 'Still due', lastPaid: 'Last paid', payer: 'Paid by',
+  price: 'Price', nextPayment: 'Next payment', paid: 'Payments received', due: 'Still due', lastPaid: 'Last paid', payer: 'Paid by',
   freq_WEEKLY: '{amount} / week', freq_MONTHLY: '{amount} / month', freq_ANNUAL: '{amount} / year', freq_CUSTOM: '{amount} (custom schedule)',
   status_PAUSED: 'payments paused', status_CANCELLED: 'payments stopped', autoRenew: 'renews automatically',
   noSchedule: 'No payment schedule', none: 'None yet', reading: 'Reading payment details…', unreadable: 'Payment details could not be loaded.',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
-  price: '금액', nextPayment: '다음 결제', paid: '결제 누계', due: '남은 금액', lastPaid: '최근 결제', payer: '결제자',
+  price: '금액', nextPayment: '다음 결제', paid: '받은 결제', due: '남은 금액', lastPaid: '최근 결제', payer: '결제자',
   freq_WEEKLY: '주 {amount}', freq_MONTHLY: '월 {amount}', freq_ANNUAL: '연 {amount}', freq_CUSTOM: '{amount} (맞춤 일정)',
   status_PAUSED: '결제 일시 중지', status_CANCELLED: '결제 중단', autoRenew: '자동 갱신',
   noSchedule: '결제 일정 없음', none: '아직 없음', reading: '결제 정보를 읽는 중…', unreadable: '결제 정보를 불러오지 못했습니다.',
 };
 const es: Record<Key, string> = {
-  price: 'Precio', nextPayment: 'Próximo pago', paid: 'Pagado hasta hoy', due: 'Pendiente', lastPaid: 'Último pago', payer: 'Paga',
+  price: 'Precio', nextPayment: 'Próximo pago', paid: 'Pagos recibidos', due: 'Pendiente', lastPaid: 'Último pago', payer: 'Paga',
   freq_WEEKLY: '{amount} / semana', freq_MONTHLY: '{amount} / mes', freq_ANNUAL: '{amount} / año', freq_CUSTOM: '{amount} (calendario propio)',
   status_PAUSED: 'pagos en pausa', status_CANCELLED: 'pagos detenidos', autoRenew: 'se renueva sola',
   noSchedule: 'Sin calendario de pagos', none: 'Aún nada', reading: 'Leyendo los datos de pago…', unreadable: 'No se pudieron cargar los datos de pago.',

@@ -45,7 +45,7 @@ it('a role without receivables sees the price and payer but no amounts paid', ()
   const details = verifySchoolContactMembershipDetails({ allowed: true, money: false, items: [detail({ paid: null, lastPaidOn: null })] });
   const html = renderToStaticMarkup(<MembershipFacts language="en" details={{ state: 'READY', personId: person, details }} membershipId={member}/>);
   expect(html).toContain('$149.00 / month');
-  expect(html).not.toContain('Paid to date');
+  expect(html).not.toContain('Payments received');
   expect(html).not.toContain('Last paid');
   const paused = verifySchoolContactMembershipDetails({ allowed: true, money: false, items: [detail({ paid: null, lastPaidOn: null, schedule: { ...schedule, status: 'PAUSED' } })] });
   const p = renderToStaticMarkup(<MembershipFacts language="en" details={{ state: 'READY', personId: person, details: paused }} membershipId={member}/>);
