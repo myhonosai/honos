@@ -17,8 +17,9 @@ const scope = { organizationId:org, schoolId:school, principalId:actor };
 const context = (patch={}) => ({...scope,externalSubject:'verified',principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),idempotencyKey:randomUUID(),...patch});
 const config = (patch={}) => ({expectedVersion:0,title:'School enquiries',description:'Enquiry only',optionalFields:['ageBand'],pipelineId:randomUUID(),pipelineStageId:randomUUID(),campaignId:null,...patch});
 const body = (patch={}) => ({name:'PRIVATE_NAME',email:'private@example.test',mobile:'',interest:'Private interest',source:'Referral',website:'',acknowledged:false,ageBand:'ADULT',...patch});
-const published = {publicId,title:'School enquiries',description:'Enquiry only',optionalFields:['ageBand']};
-const staffForm = {id,...published,version:1,status:'DRAFT',pipelineId:randomUUID(),pipelineStageId:randomUUID(),campaignId:null,acceptedCount:0,updatedAt:'2026-10-01T00:00:00.000Z'};
+const base4 = {publicId,title:'School enquiries',description:'Enquiry only',optionalFields:['ageBand']};
+const published = {...base4,schoolName:'Tiger Dojo'};
+const staffForm = {id,...base4,version:1,status:'DRAFT',pipelineId:randomUUID(),pipelineStageId:randomUUID(),campaignId:null,acceptedCount:0,updatedAt:'2026-10-01T00:00:00.000Z'};
 const status = n => e => e.getStatus?.()===n;
 test('intake monitor response is a server-side minimal projection with no identifiers or private configuration',async()=>{
  const queries=[];const svc=new PublicFormService({withTenantTransaction:async(c,work)=>work({query:async(sql,args)=>{queries.push([sql,args]);return {rows:[{data:[staffForm]}]};}})});
@@ -100,4 +101,12 @@ test('BOM and identifier newline normalization cannot bypass public schema bound
  assert.throws(()=>parsePublicFormJson(Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),Buffer.from('{}')])));
  const svc=new PublicFormService({readPublishedLeadForm:async()=>{throw Error('must not query');},submitPublishedLeadForm:async()=>{throw Error('must not query');}});
  assert.equal(await svc.published(publicId+'\n'),null);assert.equal(await svc.submit(publicId+'\n',body(),randomUUID()),'invalid');assert.equal(await svc.submit(publicId,body(),randomUUID()+'\n'),'invalid');
+});
+test('IC1: the lead may tick "Text me" (boolean only); the published form names its school for the consent wording',()=>{
+ const { validatePublicFormSubmission: sub, validatePublishedLeadForm: pub } = require('@hon/contracts');
+ sub(body({textOptIn:true}),['ageBand']); sub(body({textOptIn:false}),['ageBand']); sub(body(),['ageBand']);
+ for(const textOptIn of ['true',1,null,{}])assert.throws(()=>sub(body({textOptIn}),['ageBand']));
+ pub(published);
+ for(const schoolName of [undefined,'',' ','x'.repeat(201),'Dojo‮',7])assert.throws(()=>pub({...published,schoolName}));
+ assert.throws(()=>pub(base4),'the public read must name the school');assert.throws(()=>pub({...published,extra:'x'}));
 });

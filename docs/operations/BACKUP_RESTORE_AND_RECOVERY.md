@@ -26,37 +26,48 @@ Run from a trusted machine or job, never from the API process. Use the **direct*
 ```bash
 # PGSSLMODE/PGSSLROOTCERT make pg_dump verify the server like HON does.
 export PGSSLMODE=verify-full PGSSLROOTCERT=/secure/prod-ca-2021.crt
-pg_dump --dbname "$DATABASE_URL" --schema=hon --format=custom --no-password \
-  --file "hon-$(date -u +%Y%m%dT%H%M%SZ).dump"
-# Encrypt before it leaves the machine, e.g. age/gpg, then upload to off-site storage.
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+pg_dump --dbname "$DATABASE_URL" --schema=hon --format=custom --no-password --file "hon-$stamp.dump"
+# The dump holds schema hon only. Record what it depends on but does not contain, next to the dump:
+psql "$DATABASE_URL" -X -At -c "SELECT extname, extnamespace::regnamespace, extversion FROM pg_extension WHERE extname <> 'plpgsql' ORDER BY 1" > "hon-$stamp.extensions.txt"
+# Encrypt both before they leave the machine, e.g. age/gpg, then upload to off-site storage.
 ```
 
 `pg_dump` must be the same major version as the server (PostgreSQL 16 or newer client).
 
+What a `--schema=hon` dump does **not** carry, so a fresh target must get it first (§3):
+- the extensions HON uses (`pgcrypto`, `citext`). Their objects live outside `hon` (for example `public.citext`), so the restore fails without them;
+- the four login roles (`hon_runtime`, `hon_outbox_worker`, `hon_communication_worker`, `hon_automation_worker`), their database `CONNECT`, `search_path` and logging settings. The dump carries every grant **to** them, so the restore fails while they are missing.
+
 ## 3. Restore into an isolated environment (verification drill)
 
-Automated proof: `packages/database/scripts/test-restore-drill.mjs` runs in CI as part of `.github/scripts/run-db-proofs.sh`. On a disposable fixture it:
+Two automated proofs run in CI as part of `.github/scripts/run-db-proofs.sh`:
 
-1. writes a synthetic tenant, then fingerprints every `hon` table (row count + content hash), the migration ledger, effective ACLs of every relation and function, RLS/FORCE flags, policies, triggers, and the schema and database ACLs;
-2. runs `pg_dump -Fc`;
-3. **drops the database** (simulated total loss);
-4. runs `pg_restore --create`;
-5. requires identical fingerprints, then re-runs `verify-rls.mjs`, `test-platform-least-privilege.mjs` and `migration-status.mjs --require-current` on the restored database.
+- `packages/database/scripts/test-restore-drill.mjs` (same-cluster loss). On a disposable fixture it writes a synthetic tenant, fingerprints every `hon` table (row count + content hash), the migration ledger, effective ACLs of every relation and function, RLS/FORCE flags, policies, triggers and the schema and database ACLs, runs `pg_dump -Fc`, **drops the database**, runs `pg_restore --create`, requires identical fingerprints, then re-runs `verify-rls.mjs`, `test-platform-least-privilege.mjs` and `migration-status.mjs --require-current`.
+- `packages/database/scripts/test-restore-fresh-target-drill.mjs` (**fresh target**, the steps below, launch-readiness review [23]). It creates two private throwaway clusters. The source gets every migration, then the canonical `010`/`012`/`013`/`014` provisioning with the real role names and a synthetic organization. It dumps with the exact §2 command. On the brand-new target it first shows that the old order fails (`010` before the restore; a restore before the extensions or the roles), each time leaving the target untouched. Then it runs steps 2 to 5 below and requires identical data, ledger, effective relation/function/type/database ACLs, RLS, policies, triggers, extensions and login-role attributes, both right after the restore and after the `010` reconcile. `011` must pass in a read-only session, the runtime must log in with its **new** password (the source password is refused) and still has no direct table read.
 
-Local result 2026-10-28: 277 tables, 181 migrations, everything identical, all verifiers pass, 4.3 s on the fixture.
+Production-shaped drill or real recovery (owner-authorized, recommended monthly and before launch):
 
-Production-shaped drill (owner-authorized, recommended monthly and before launch):
-
-1. Create an **isolated** target: Supabase *restore to a new project*, or a throwaway PostgreSQL 16. Never restore over production.
-2. On a fresh target, first create the roles: run `infra/postgres/010_supabase_hon_runtime.sql` and `012_supabase_hon_outbox_worker.sql` with new passwords.
-3. `pg_restore --dbname "$TARGET_URL" --exit-on-error hon-YYYY….dump` (do not pass `--no-owner` or `--no-acl`: owners and grants carry the security model).
-4. Verify, all against the target:
+1. Create an **isolated** target: Supabase *restore to a new project*, or a throwaway PostgreSQL 16. Never restore over production. (A Supabase "restore to a new project" is a physical copy that already has the roles and extensions: skip steps 2 to 4 and only reset the role passwords, see §1. The steps below are for restoring a layer-C dump.)
+2. Create the source's extensions in the same schemas, from `hon-….extensions.txt`, for example:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;  -- use the schema the file names (Supabase: often "extensions")
+   CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
+   ```
+3. Create the roles: run `infra/postgres/009_restore_target_roles.sql` as the target administrator with four **new** passwords. It refuses a target that already has schema `hon` or any HON login role. Do **not** run `010`/`012`/`013`/`014` yet: they reconcile grants on `hon` objects that do not exist yet, and `012`–`014` refuse an existing role.
+4. Restore in one transaction, keeping owners and grants (do not pass `--no-owner` or `--no-acl`):
+   ```bash
+   pg_restore --dbname "$TARGET_URL" --exit-on-error --single-transaction --no-password hon-YYYY….dump
+   ```
+   A failure rolls back completely, so fix the cause (usually step 2 or 3) and run it again.
+5. Reconcile and verify, all against the target:
+   - run `infra/postgres/010_supabase_hon_runtime.sql` (with the new runtime password in its placeholder; on an existing role it only reconciles grants). On a correct restore it changes nothing;
+   - `infra/postgres/011_verify_supabase_hon_runtime.sql` in a read-only session → no error;
    - `pnpm db:status --require-current` → `PASS`
    - `pnpm db:verify-rls` → passes (forced RLS, least privilege, client roles)
-   - `infra/postgres/011_verify_supabase_hon_runtime.sql` in a read-only session
    - row counts of the key tenant tables match the source at dump time (organizations, schools, people, memberships, invoices)
    - point a **staging** API at the target and check that `GET /v1/health/ready` returns 200
-5. Record the result in the sign-off table (§7). Then delete the target and its credentials.
+6. Record the result in the sign-off table (§7). Then delete the target and its credentials.
 
 ## 4. Failed database migration
 
@@ -119,8 +130,9 @@ The mandatory release-checkout `db:check` and reviewed `db:status` preflight rem
 | Check | Evidence | Result | Who / date |
 |---|---|---|---|
 | Disposable restore drill (CI) | `test-restore-drill.mjs` in run-db-proofs | PASS locally and in CI (manual dispatch) 2026-10-28 | Claude |
+| Fresh-target restore drill (CI) | `test-restore-fresh-target-drill.mjs` in run-db-proofs | PASS locally and in CI 2026-11-22 (#603; 581 tables, 381 migrations, about 20 s) | Claude |
 | Supabase plan, backup retention and PITR status recorded | Dashboard screenshot | NOT VERIFIED | Owner |
 | Production logical dump taken and encrypted off-site | File name + checksum | NOT VERIFIED | Owner |
 | Isolated restore of a production backup + §3 checks | Command output | NOT VERIFIED | Owner + Claude |
 | Measured RTO / RPO | Timestamps | NOT VERIFIED | Owner |
-| Rollback rehearsal on staging (deploy N+1, roll back to N) | Health checks | NOT VERIFIED (no hosting yet) | Owner |
+| Rollback rehearsal on staging (deploy N+1, roll back to N) | Render health check `/api/readiness` on hon-web, which probes hon-api `/v1/health/ready` | NOT VERIFIED (Render hosting exists; no rehearsal recorded) | Owner |

@@ -133,6 +133,8 @@ export interface SaasCreativeSchoolWallet extends WalletBase {
 }
 export interface SaasCreativeProviderExpense {
   actualProviderCostMicrounits: number; finalizedProviderCostMicrounits: number; failedOrNotChargedProviderCostMicrounits: number; consumedCredits: number;
+  /** 0637 (review [22]): the part of the recorded provider cost that is only HON's own estimate. Absent before 0637. */
+  estimatedProviderCostMicrounits?: number;
   unknownCostGenerations: number; pendingCostGenerations: number; spendClass: 'CREATIVE_MEDIA';
   generations: { finalized: number; released: number; reserved: number; outcomeUnknown: number };
 }
@@ -377,8 +379,10 @@ export function validateSaasCreativeHqWallet(value: unknown): SaasCreativeHqWall
   if ((w.reservations as SaasCreativeReservationInternal[]).some(r => r.schoolId !== w.schoolId || r.organizationId !== w.organizationId)) drift();
   if ((w.purchases as SaasCreativePurchase[]).some(p => p.schoolId !== w.schoolId)) drift();
   const e = record(w.providerExpense, drift);
+  const estimated = Object.hasOwn(e, 'estimatedProviderCostMicrounits');
   exactKeys(e, ['actualProviderCostMicrounits','finalizedProviderCostMicrounits','failedOrNotChargedProviderCostMicrounits','consumedCredits',
-    'unknownCostGenerations','pendingCostGenerations','spendClass','generations'], drift);
+    'unknownCostGenerations','pendingCostGenerations','spendClass','generations', ...(estimated ? ['estimatedProviderCostMicrounits'] : [])], drift);
+  if (estimated && (!count(e.estimatedProviderCostMicrounits) || (e.estimatedProviderCostMicrounits as number) > (e.actualProviderCostMicrounits as number))) drift();
   if (!count(e.actualProviderCostMicrounits) || !count(e.finalizedProviderCostMicrounits) || !count(e.failedOrNotChargedProviderCostMicrounits) || !count(e.consumedCredits)
     || !count(e.unknownCostGenerations) || !count(e.pendingCostGenerations) || e.spendClass !== 'CREATIVE_MEDIA'
     || (e.finalizedProviderCostMicrounits as number) + (e.failedOrNotChargedProviderCostMicrounits as number) !== e.actualProviderCostMicrounits) drift();
