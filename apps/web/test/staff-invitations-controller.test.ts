@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { StaffInvitationController, newStaffInvitationToken } from '../src/components/staff-invitations/controller';
 import { StaffAccountError, type StaffInvitationApi, type StaffCommand } from '../src/components/staff-invitations/http';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const scope = { organizationId: id(1), schoolId: id(2) }, token = 'a'.repeat(43);
 const role = { id: id(3), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', schoolId: scope.schoolId, permissionCodes: ['crm.lead.read'], version: 1 };
 const invitation = { invitationId: id(4), schoolId: scope.schoolId, roleId: role.id, roleName: role.name, email: 'staff@example.test', expiresAt: '2026-11-06T12:00:00.000Z', status: 'PENDING' as const };
-let c: StaffInvitationController, api: StaffInvitationApi, event: ReturnType<typeof vi.fn>;
+let c: StaffInvitationController, api: StaffInvitationApi, event: Mock<() => void>;
 const tick = async () => { for (let n = 0; n < 20; n++) await Promise.resolve(); };
 beforeEach(() => {
   api = { identity: vi.fn().mockResolvedValue(undefined), list: vi.fn().mockResolvedValue([invitation]), roles: vi.fn().mockResolvedValue({ roles: [{ roleId: role.id, roleName: role.name, permissionCodes: role.permissionCodes }], truncated: false }), role: vi.fn().mockResolvedValue(role), command: vi.fn().mockResolvedValue(invitation) };

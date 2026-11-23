@@ -7,7 +7,7 @@ import { WALK_IN_COPY, walkInCopy, walkInPrice } from '../src/components/walk-in
 import { handOffWalkInTablet, takeWalkInTablet } from '../src/components/walk-in-kiosk/handoff';
 import { walkInApi, walkInErrorFor, walkInTabletApi, WALKIN_COMMANDS, WalkInError } from '../src/components/walk-in-kiosk/http';
 import { addPadPoint, padPoint, signedStrokes, strokePath } from '../src/components/walk-in-kiosk/signature-pad';
-import { leadHref, nextOfferKey, priceMinor, settingsBody, settingsDraft, WalkInStaffView } from '../src/components/walk-in-kiosk/staff';
+import { leadHref, nextOfferKey, priceMinor, settingsBody, settingsDraft, settingsProblems, WalkInStaffView } from '../src/components/walk-in-kiosk/staff';
 import { detailsOk, emptyDraft, normalizeMobile, visitBody, waiverOk, WalkInVisitorView, type VisitDraft, type VisitorViewProps } from '../src/components/walk-in-kiosk/visitor';
 
 const org = '11111111-1111-4111-8111-111111111111', school = '22222222-2222-4222-8222-222222222222';
@@ -21,9 +21,9 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const terminal: WalkInTerminal = {
   schoolName: 'Synthetic Dojo', branding: { logoUrl: null, accentColor: null }, endsAt: '2099-01-01T00:00:00.000Z', settingsVersion: 3,
   waiver: { en: 'I accept the risks of training.', ko: '훈련 위험을 이해합니다.' }, emergencyRequired: false,
-  offers: [{ key: 'free-trial', kind: 'TRIAL', name: { en: 'Free trial class' }, description: { en: '' }, priceMinor: 0, currency: 'USD' },
-    { key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass', es: 'Pase de día' }, description: { en: 'One day' }, priceMinor: 2500, currency: 'USD' }],
-  thankYou: { en: 'See you on the mat.' },
+  offers: [{ key: 'free-trial', kind: 'TRIAL', name: { en: 'Free trial class' }, description: { en: '' }, priceMinor: 0, currency: 'USD', classes: null },
+    { key: 'day-pass', kind: 'DAY_PASS', name: { en: 'Day pass', es: 'Pase de día' }, description: { en: 'One day' }, priceMinor: 2500, currency: 'USD', classes: null }],
+  thankYou: { en: 'See you on the mat.' }, cardSurfaces: [],
 };
 const today = '2026-11-16';
 const filled = (patch: Partial<VisitDraft> = {}): VisitDraft => ({
@@ -180,7 +180,7 @@ describe('walk-in http', () => {
   });
 });
 
-const settingsRead: WalkInSettingsRead = { settings: null, pipelines: [{ pipelineId: pipe, name: 'Walk-ins', stages: [{ stageId: stage, name: 'New' }] }] };
+const settingsRead: WalkInSettingsRead = { settings: null, pipelines: [{ pipelineId: pipe, name: 'Walk-ins', stages: [{ stageId: stage, name: 'New' }] }], programs: [] };
 const overview: WalkInOverview = {
   canManage: true, configured: true, enabled: true,
   devices: [{ deviceId: device, label: 'Front desk', startedAt: '2026-11-16T08:00:00.000Z', endsAt: '2026-11-16T16:00:00.000Z', endedAt: null, live: true, version: 1, startedBy: 'Owner' }],
@@ -218,6 +218,40 @@ describe('staff page', () => {
     expect(ko).toContain(WALK_IN_COPY.ko.startTitle);
     expect(renderToStaticMarkup(<WalkInStaffView {...base} overview={{ state: 'DENIED' }}/>)).toContain(WALK_IN_COPY.en.denied);
     expect(renderToStaticMarkup(<WalkInStaffView {...base} outcome={{ kind: 'START_REPLAYED' }}/>)).toContain(WALK_IN_COPY.en.startReplayed);
+  });
+  it('names what still stops the settings from saving, and a pasted waiver loses its tabs', () => {
+    const d = settingsDraft(settingsRead), waiver = { en: 'I accept the risks.', ko: '', es: '' };
+    expect(settingsProblems(d, 1)).toEqual(['pWaiverMissing']);
+    expect(settingsProblems({ ...d, waiver }, 1)).toEqual([]);
+    expect(settingsProblems({ ...d, waiver }, 0)).toEqual(['pNoPipeline']);
+    expect(settingsProblems({ ...d, waiver, pipelineId: '' }, 1)).toEqual(['pPipeline']);
+    expect(settingsProblems({ ...d, waiver: { en: 'Use <b>care</b>', ko: '', es: '' } }, 1)).toEqual(['pWaiverChars']);
+    const offers = d.offers.map((o, i) => i ? { ...o, price: '25.555' } : { ...o, name: { en: ' ', ko: '', es: '' } });
+    expect(settingsProblems({ ...d, waiver, offers }, 1)).toEqual(['pOfferName', 'pOfferPrice']);
+    expect(settingsProblems({ ...d, waiver, thankYou: { en: 'See <you>', ko: '', es: '' } }, 1)).toEqual(['pTextChars']);
+    const pasted = { en: 'Rule 1:\tBow in.\r\nRule 2:\tListen.\f', ko: '', es: '' };
+    expect(settingsProblems({ ...d, waiver: pasted }, 1)).toEqual([]);
+    expect(settingsBody({ ...d, waiver: pasted }, null).waiver).toEqual({ en: 'Rule 1: Bow in.\nRule 2: Listen.' });
+  });
+  it('before setup the start card lists the steps and links to the settings, which come right after it', () => {
+    const fresh = { ...overview, configured: false, enabled: false };
+    const base = { language: 'en', waiting: false, hasSchool: true, overview: { state: 'READY' as const, read: fresh }, settings: { state: 'READY' as const, read: settingsRead },
+      draft: settingsDraft(settingsRead), detail: null, outcome: null, busy: false, label: 'Front desk', hours: 8, scope };
+    const html = renderToStaticMarkup(<WalkInStaffView {...base}/>);
+    for (const k of ['setupSteps', 'setupWaiver', 'setupPipeline', 'setupOffers', 'setupSave', 'setupGo'] as const) expect(html).toContain(WALK_IN_COPY.en[k]);
+    expect(html).toContain('href="#walkin-settings"'); expect(html).toContain('id="walkin-settings"');
+    expect(html.indexOf('id="walkin-settings"')).toBeLessThan(html.indexOf(WALK_IN_COPY.en.visitsTitle));
+    expect(html).toMatch(/<button type="button" class="[^"]*" disabled="">Start kiosk/);
+    const staff = renderToStaticMarkup(<WalkInStaffView {...base} overview={{ state: 'READY', read: { ...fresh, canManage: false } }}/>);
+    expect(staff).toContain(WALK_IN_COPY.en.notSetUpStaff); expect(staff).not.toContain(WALK_IN_COPY.en.setupGo);
+    const noPipes = renderToStaticMarkup(<WalkInStaffView {...base} settings={{ state: 'READY', read: { ...settingsRead, pipelines: [] } }}/>);
+    expect(noPipes).toContain('data-testid="walkin-no-pipeline"'); expect(noPipes).toContain('href="/staff/crm"');
+    const told = renderToStaticMarkup(<WalkInStaffView {...base} problems={['pWaiverMissing']} outcome={{ kind: 'INVALID' }}/>);
+    expect(told).toContain(WALK_IN_COPY.en.problemsTitle); expect(told).toContain(WALK_IN_COPY.en.pWaiverMissing);
+    expect(told).toContain('data-testid="walkin-settings-outcome"');
+    const off = renderToStaticMarkup(<WalkInStaffView {...base} overview={{ state: 'READY', read: { ...overview, enabled: false } }}/>);
+    expect(off).toContain(WALK_IN_COPY.en.turnOnGo);
+    expect(off.indexOf('id="walkin-settings"')).toBeGreaterThan(off.indexOf(WALK_IN_COPY.en.visitsTitle));
   });
 });
 

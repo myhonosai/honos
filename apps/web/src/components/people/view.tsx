@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
@@ -66,12 +66,13 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
   const t: T = (key, vars) => peopleText(language, key, vars);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool') : null;
   const visible = notice === null;
+  // Edit profile pop-up (owner, 2026-11-21) lives in the panel: the record forms open from the button beside the name.
   return <section className={styles.people} aria-labelledby="people-title" data-hon-native="">
     <header className={styles.head}>
       <div><h1 id="people-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
       {/* The shared inboxes stay for working through unanswered messages across every contact. */}
       <nav className={styles.inboxes} aria-label={panelText(language, 'inboxes')}>
-        <a className={styles.secondary} href="/staff/conversations">{panelText(language, 'textsInbox')}</a>
+        <a className={styles.secondary} href="/staff/texts">{panelText(language, 'textsInbox')}</a>
         <a className={styles.secondary} href="/staff/family-messages">{panelText(language, 'familyInbox')}</a>
       </nav>
     </header>
@@ -87,33 +88,69 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
   </section>;
 }
 
+/** A modal pop-up over the People page. Escape, the close button or a click outside closes it; focus returns to Edit profile. */
+function ProfileDialog({ t, onClose, children }: { t: T; onClose: () => void; children: React.ReactNode }): React.ReactElement {
+  const title = useId(), close = useRef<HTMLButtonElement>(null), box = useRef<HTMLDivElement>(null), latest = useRef(onClose);
+  latest.current = onClose;
+  // Runs once per opening: a re-render while staff type never moves focus. Tab and Shift+Tab stay inside the pop-up.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    close.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { latest.current(); return; }
+      if (e.key !== 'Tab' || !box.current) return;
+      const items = [...box.current.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.hasAttribute('disabled') && el.getClientRects().length > 0);
+      const first = items[0], last = items[items.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && (document.activeElement === first || !box.current.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !box.current.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); opener?.focus(); };
+  }, []);
+  return <div className={styles.backdrop} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div ref={box} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={title} data-testid="contact-profile-dialog">
+      <header className={styles.dialogHead}>
+        <div><h2 id={title}>{t('profileTitle')}</h2><p className={styles.meta}>{t('profileIntro')}</p></div>
+        <button ref={close} type="button" className={styles.dialogClose} aria-label={t('profileClose')} onClick={onClose}>×</button>
+      </header>
+      {children}
+    </div>
+  </div>;
+}
+
 const EDITING = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
-/** The slide-out card: mode and close buttons, the last delete/merge notice, then the card with Details inside it. */
+/**
+ * The slide-out card: mode and close buttons, the last delete/merge notice, the card (Edit profile beside the name opens
+ * the record forms in a pop-up), then delete/restore/merge. Without a readable card the forms stay inline.
+ */
 function ContactPanel(props: PeopleViewProps & { t: T }): React.ReactElement {
   const { language, t, onReload } = props;
   const p = (key: PanelKey) => panelText(language, key);
   const mode = props.cardMode ?? 'SIDE';
   const panel = useRef<HTMLElement | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   // Opening a card moves focus into it, so keyboard and screen-reader users land on the person they chose.
   useEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
   const card = props.card ?? { state: 'NONE' as const };
-  const details = <div className={styles.detail} data-testid="person-details">
-    {card.state === 'READY' && props.actionsSlot ? props.actionsSlot(card.card) : null}
-    <RecordPanel {...props} t={t} onReload={onReload}/>
-  </div>;
+  const cardReady = card.state === 'READY', cardLoading = card.state === 'LOADING';
+  const canOpenProfile = cardReady && props.record.state !== 'NONE';
+  const recordPanel = <RecordPanel {...props} t={t} onReload={onReload}/>;
   return <aside ref={panel} className={styles.panel} data-testid="contact-panel" aria-label={p('panelLabel')} tabIndex={-1}
-    onKeyDown={event => { if (event.key === 'Escape' && props.onClose && !EDITING.has((event.target as HTMLElement).tagName)) { event.stopPropagation(); props.onClose(); } }}>
+    onKeyDown={event => { if (event.key === 'Escape' && !profileOpen && props.onClose && !EDITING.has((event.target as HTMLElement).tagName)) { event.stopPropagation(); props.onClose(); } }}>
     <div className={styles.panelBar}>
       <button type="button" className={`${styles.secondary} ${styles.modeToggle}`} data-testid="card-mode" aria-pressed={mode === 'FULL'}
         onClick={() => props.onCardMode?.(mode === 'SIDE' ? 'FULL' : 'SIDE')}>{p(mode === 'SIDE' ? 'fullScreen' : 'keepSide')}</button>
       <button type="button" className={styles.secondary} data-testid="card-close" onClick={() => props.onClose?.()}>{p('close')}</button>
     </div>
     {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
-    {card.state === 'READY'
-      ? <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
-          membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} detailsSlot={() => details} familySlot={props.familySlot} messagesSlot={props.messagesSlot}/>
-      // The card could not be read (or is still reading): the person's own record can still be seen and corrected.
-      : <><ContactCardTabs language={language} card={card}/><div data-testid="contact-tab-details">{details}</div></>}
+    <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
+      membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} familySlot={props.familySlot} messagesSlot={props.messagesSlot}
+      onEditProfile={canOpenProfile ? () => setProfileOpen(true) : undefined}/>
+    {cardReady && props.actionsSlot ? props.actionsSlot(card.card) : null}
+    {props.record.state === 'NONE' || (!cardReady && !cardLoading) ? <div data-testid="person-details">{recordPanel}</div> : null}
+    {profileOpen && cardReady ? <ProfileDialog t={t} onClose={() => setProfileOpen(false)}><div data-testid="person-details">{recordPanel}</div></ProfileDialog> : null}
   </aside>;
 }
 

@@ -137,7 +137,7 @@ it('session invalidation hides the loaded account; server text never reaches the
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'CLOSED', schoolId: uuid(3), available: null, trial: null }));
   click('Check my account'); await settle(); expect(text(render())).toContain('Synthetic Dojo');
   window.dispatchEvent(new Event('hon:session-invalidated')); expect(text(render())).not.toContain('Synthetic Dojo'); expect(text(render())).toContain('Sign in to continue');
-  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ code: 'select * from hon.secrets' }), { status: 500 }));
+  const f = vi.spyOn(globalThis, 'fetch').mockClear().mockResolvedValueOnce(new Response(JSON.stringify({ code: 'select * from hon.secrets' }), { status: 500 }));
   await expect(startRequest('account/sign-up', new AbortController().signal)).rejects.toMatchObject({ status: 500, code: 'ACCOUNT_UNAVAILABLE' }); expect(f).toHaveBeenCalledTimes(1);
 });
 

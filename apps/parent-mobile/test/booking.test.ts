@@ -83,8 +83,9 @@ describe('booking model', () => {
   });
 
   it('never calls a waitlist place a booking, and an unknown result is not done', () => {
-    expect(describeOutcome({ ok: true, replayed: false, data: { booking: { status: 'WAITLISTED' } } }, 'book')).toEqual({ kind: 'done', message: expect.stringMatching(/waitlist.*not a confirmed spot/i) });
-    expect(describeOutcome({ ok: true, replayed: false, data: { booking: { status: 'BOOKED' } } }, 'book')).toEqual({ kind: 'done', message: 'Booked.' });
+    expect(describeOutcome({ ok: true, replayed: false, data: { booking: { status: 'WAITLISTED' } } }, 'book')).toEqual({ kind: 'done', message: expect.stringMatching(/waitlist.*not a confirmed spot/i), confirmedBooking: false });
+    expect(describeOutcome({ ok: true, replayed: false, data: { booking: { status: 'BOOKED' } } }, 'book')).toEqual({ kind: 'done', message: 'Booked.', confirmedBooking: true });
+    expect(describeOutcome({ ok: true, replayed: false, data: { booking: { status: 'CANCELLED' } } }, 'cancel')).toEqual({ kind: 'done', message: 'Booking cancelled.', confirmedBooking: false });
     expect(describeOutcome({ ok: false, state: 'unknown' }, 'book')).toEqual({ kind: 'unknown' });
     expect(describeOutcome({ ok: false, state: 'refused', code: 'PARENT_CLASS_BOOKING_FULL' }, 'book')).toEqual({ kind: 'refused', message: 'This class is full.' });
     expect(describeOutcome({ ok: false, state: 'signed-out' }, 'cancel')).toEqual({ kind: 'session' });

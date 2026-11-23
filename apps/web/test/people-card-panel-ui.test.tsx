@@ -54,14 +54,13 @@ it('with nobody open there is no panel and the list is the whole page', () => {
   expect(html).not.toContain('data-testid="contact-panel"');
 });
 
-it('keeps the editable details, consents and actions inside the card on a Details tab', () => {
-  const overview = view();
-  expect(overview).not.toContain('data-testid="person-details"');
-  const details = view({ cardTab: 'details', actionsSlot: () => <div data-testid="actions-slot"/>, consentSlot: () => <div data-testid="consent-slot"/> });
-  expect(details).toContain('data-testid="contact-tab-details"');
-  expect(details).toContain('data-testid="person-details"');
-  expect(details).toContain('data-testid="actions-slot"');
-  expect(details).toContain('data-testid="consent-slot"');
+it('puts Edit profile beside the name in the panel (the forms open in its pop-up) and delete/merge under the card', () => {
+  const html = view({ actionsSlot: () => <div data-testid="actions-slot"/>, consentSlot: () => <div data-testid="consent-slot"/> });
+  expect(html).toContain('data-testid="contact-edit-profile"');
+  expect(html).toContain('data-testid="actions-slot"');
+  // The forms are not inline while the card reads; they open from Edit profile.
+  expect(html).not.toContain('data-testid="person-details"');
+  expect(html).not.toContain('data-testid="consent-slot"');
   // The notice from a delete or merge stays above the tabs.
   expect(view({ actionNotice: 'Merged.' })).toContain('data-testid="contact-action-done"');
 });
@@ -74,7 +73,7 @@ it('still lets staff correct details when the card itself could not be read', ()
 
 it('links to the shared inboxes for unanswered messages', () => {
   const html = view({ selectedId: null, record: { state: 'NONE' }, card: { state: 'NONE' } });
-  expect(html).toContain('href="/staff/conversations"');
+  expect(html).toContain('href="/staff/texts"');
   expect(html).toContain('href="/staff/family-messages"');
 });
 
@@ -85,7 +84,7 @@ it('puts family app access under each family and both message kinds under Messag
   const messages = renderToStaticMarkup(<ContactCard language="en" card={{ state: 'READY', card }} initialTab="messages"
     messagesSlot={c => <div data-testid={`msg-${c.person.personId}`}/>}/>);
   expect(messages).toContain(`data-testid="msg-${person}"`);
-  expect(CARD_TABS).toContain('details');
+  expect(CARD_TABS).not.toContain('details');
 });
 
 it('remembers side or full screen in this browser only, and falls back to side when storage fails', () => {
@@ -137,7 +136,7 @@ it('keeps People as the Contacts home with search hidden, and the inboxes outsid
   expect(contacts.routes[0]!.href).toBe('/staff/people');
   expect(contacts.routes[0]!.hidden).toBeFalsy();
   expect(contacts.routes.find(r => r.href === '/staff/search')!.hidden).toBe(true);
-  for (const href of ['/staff/conversations', '/staff/family-messages']) {
+  for (const href of ['/staff/texts', '/staff/family-messages']) {
     expect(contacts.routes.some(r => r.href === href), href).toBe(false);
     expect(SCHOOL_SHELL_NAV.some(item => item.routes.some(r => r.href === href)), href).toBe(true);
   }

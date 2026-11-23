@@ -6,7 +6,16 @@ import { verifyParentBillingView } from '@hon/contracts/parent-billing-view';
 import { verifyParentClassPassView } from '@hon/contracts/parent-classpass-view';
 import { verifyParentTestingStatusView } from '@hon/contracts/parent-testing-status';
 import { verifyParentCurriculumLibrary } from '@hon/contracts/curriculum-resource-library';
+import { verifyParentCurriculumApp } from '@hon/contracts/parent-app-curriculum';
+import { verifyParentSchoolBookingReceipt, verifyParentSchoolBookings, type ParentSchoolBooking } from '@hon/contracts/parent-school-bookings';
+import { verifyParentInvoicePayments } from '@hon/contracts/parent-invoice-pay';
+import { verifyParentSchoolAnnouncements } from '@hon/contracts/school-announcements';
+import { verifyParentAttendanceStreaks } from '@hon/contracts/parent-attendance-streaks';
+import { verifyParentProShop } from '@hon/contracts/parent-pro-shop';
+import { verifyParentReferrals } from '@hon/contracts/family-referrals';
+import { verifyParentCheckoutPages } from '@hon/contracts/family-checkout';
 import type { ParentApi } from '../api/client';
+import { verifyParentJourneyRecommendations, verifyParentJourneyResponseReceipt } from '@hon/contracts/journey-recommendations';
 import { localDate, localMidnight } from '../schedule/absence-model';
 
 /**
@@ -94,10 +103,41 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
         sessionId: s.sessionId, name: s.name, programName: s.programName, roomName: s.roomName, startsAt: s.startsAt, endsAt: plus(s.startsAt, 45), spotsLeft: s.spotsLeft, booking: booking(s) })) })),
   });
   const ok = <T,>(data: T) => Promise.resolve({ ok: true as const, data });
+  // School events and family bookings (0466), in memory only: one open house with two times, one private-lesson type.
+  const dayOf = (days: number) => new Date(Date.parse(`${today}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  const eventSlots = [
+    { slotId: id(1200), localStart: '10:00', localEnd: '11:00', startsAt: ms(at(10, 10)), spotsLeft: 12 },
+    { slotId: id(1201), localStart: '11:00', localEnd: '12:00', startsAt: ms(at(10, 11)), spotsLeft: 0 },
+  ];
+  const lessonTimes = [1, 2, 3].flatMap(d => [[16, 0], [16, 30]].map(([h, m]) => ({ startsAt: ms(at(d, h!, m!)), localDate: dayOf(d),
+    localStart: `${h}:${String(m).padStart(2, '0')}`, localEnd: `${m === 30 ? h! + 1 : h}:${m === 30 ? '00' : '30'}`, spotsLeft: 1 })));
+  const familyBookings: (ParentSchoolBooking & { ref: string })[] = [];
+  let familyBookingN = 1300;
+  const schoolBookingView = () => verifyParentSchoolBookings({
+    canBook: true, timezone: ZONE, contact: { name: 'Sam Sample', email: 'sam@example.com' },
+    events: [{ eventId: id(1100), title: 'Holiday open house', description: 'Bring a friend to try a class with the family.', place: 'Main studio',
+      localDate: dayOf(10), bookingId: familyBookings.find(b => b.ref === 'event')?.bookingId ?? null, slots: eventSlots.map(x => ({ ...x })) }],
+    bookingTypes: [{ typeId: id(1150), name: 'Private lesson', description: 'One-on-one time with an instructor.', template: 'OTHER', durationMinutes: 30,
+      questions: [{ label: 'Anything we should know?', kind: 'TEXT', required: false }], waiver: '',
+      bookingId: familyBookings.find(b => b.ref === 'lesson')?.bookingId ?? null, times: lessonTimes.map(x => ({ ...x })) }],
+    bookings: familyBookings.map(({ ref: _ref, ...b }) => b).sort((x, y) => x.startsAt.localeCompare(y.startsAt)),
+  });
+  const addFamilyBooking = (ref: string, kind: 'EVENT' | 'BOOKING_TYPE', title: string, localDate: string, localStart: string, localEnd: string, startsAt: string) => {
+    const booking = { ref, kind, bookingId: id(familyBookingN++), parentId: ref === 'event' ? id(1100) : id(1150), title, localDate, localStart, localEnd, startsAt,
+      status: 'BOOKED' as const, version: 1, canCancel: true };
+    familyBookings.push(booking);
+    const { ref: _ref, ...out } = booking;
+    return out;
+  };
   const wrote = <T,>(data: T) => Promise.resolve({ ok: true as const, data, replayed: false });
   const refused = (code: string) => Promise.resolve({ ok: false as const, state: 'refused' as const, code });
 
   return {
+    sampleMode: true,
+    // The made-up family never signs a phone up for notifications.
+    pushStatus: () => ok({ sending: false }),
+    registerPushDevice: () => refused('PARENT_PUSH_FORBIDDEN'),
+    unregisterPushDevice: () => wrote({ unregistered: false }),
     journey: () => ok(verifyParentJourneyView(journeyRaw())),
     schoolTimeZone: () => Promise.resolve(ZONE),
     classBookings: () => ok(verifyParentClassBookingChoices(choicesRaw())),
@@ -157,9 +197,97 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
       { title: 'Form 1 walkthrough', description: 'Practice the first form at home, step by step.', kind: 'VIDEO', url: 'https://www.myhonos.com/', curriculumName: 'Kids Program', rankName: 'Yellow Belt', childDisplayName: 'Mia Sample' },
       { title: 'Sparring safety basics', description: 'What to bring and how to stay safe.', kind: 'LINK', url: 'https://www.myhonos.com/', curriculumName: 'Junior Program', rankName: null, childDisplayName: 'Leo Sample' },
     ] })),
+    // Sample curriculum: one rank-based program (Mia) and one cycle-based program (Leo). Invented, like the rest of the sample family.
+    curriculumApp: () => ok(verifyParentCurriculumApp({ children: [
+      { childDisplayName: 'Leo Sample', curricula: [{ curriculumName: 'Junior Program', mode: 'CYCLE', rank: null,
+        cycle: { name: 'Cycle 2: Kicks', startsOn: dayOf(-3), endsOn: dayOf(3), rotation: 'AUTO' }, next: { name: 'Cycle 3: Forms', startsOn: dayOf(4) },
+        sections: [
+          { label: 'CURRENT', items: [{ title: 'Front kick drill', description: 'Ten slow kicks on each leg.', kind: 'VIDEO', url: 'https://www.myhonos.com/' }] },
+          { label: 'ALL', items: [{ title: 'Sparring safety basics', description: 'What to bring and how to stay safe.', kind: 'LINK', url: 'https://www.myhonos.com/' }] },
+        ] }] },
+      { childDisplayName: 'Mia Sample', curricula: [{ curriculumName: 'Kids Program', mode: 'RANK', rank: { name: 'Yellow Belt', color: '#FFD400' }, cycle: null,
+        next: { name: 'Orange Belt', startsOn: null },
+        sections: [
+          { label: 'CURRENT', items: [
+            { title: 'Form 1 walkthrough', description: 'Practice the first form at home, step by step.', kind: 'VIDEO', url: 'https://www.myhonos.com/' },
+            { title: 'Yellow belt checklist', description: 'What your instructor looks for at this rank.', kind: 'DOCUMENT', url: 'https://www.myhonos.com/' }] },
+          { label: 'NEXT', items: [{ title: 'Orange belt preview', description: '', kind: 'VIDEO', url: 'https://www.myhonos.com/' }] },
+        ] }] },
+    ] })),
     // The sample family never reaches HON's AI: Eian stays in guided mode and a question is refused locally.
     eianStatus: () => ok({ mode: 'GUIDED' as const, reason: 'NOT_INCLUDED' as const }),
     askEian: async () => ({ ok: false as const, state: 'refused' as const, code: 'EIAN_AI_UNAVAILABLE' }),
     eianTurn: async () => ({ ok: false as const, state: 'unavailable' as const }),
+    schoolBookings: () => ok(schoolBookingView()),
+    bookSchoolEventSlot: (slotId, _key) => {
+      const slot = eventSlots.find(x => x.slotId === slotId);
+      if (!slot || slot.spotsLeft < 1 || familyBookings.some(b => b.ref === 'event')) return Promise.resolve({ ok: false as const, state: 'refused' as const, code: 'PARENT_SCHOOL_BOOKING_FULL' });
+      slot.spotsLeft--;
+      return wrote(verifyParentSchoolBookingReceipt({ booking: addFamilyBooking('event', 'EVENT', 'Holiday open house', dayOf(10), slot.localStart, slot.localEnd, slot.startsAt), spotsLeft: slot.spotsLeft }, { kind: 'EVENT' }));
+    },
+    bookSchoolBookingType: (input, _key) => {
+      const time = lessonTimes.find(x => x.startsAt === input.startsAt);
+      if (!time || time.spotsLeft < 1 || familyBookings.some(b => b.ref === 'lesson')) return Promise.resolve({ ok: false as const, state: 'refused' as const, code: 'PARENT_SCHOOL_BOOKING_FULL' });
+      time.spotsLeft--;
+      return wrote(verifyParentSchoolBookingReceipt({ booking: addFamilyBooking('lesson', 'BOOKING_TYPE', 'Private lesson', time.localDate, time.localStart, time.localEnd, time.startsAt), spotsLeft: 0 }, { kind: 'BOOKING_TYPE' }));
+    },
+    cancelSchoolBooking: (bookingId, _version, _key) => {
+      const i = familyBookings.findIndex(b => b.bookingId === bookingId);
+      if (i < 0) return Promise.resolve({ ok: false as const, state: 'refused' as const, code: 'PARENT_SCHOOL_BOOKING_NOT_FOUND' });
+      const [gone] = familyBookings.splice(i, 1);
+      const back = gone!.ref === 'event' ? eventSlots.find(x => x.startsAt === gone!.startsAt) : lessonTimes.find(x => x.startsAt === gone!.startsAt);
+      if (back) back.spotsLeft++;
+      const { ref: _ref, ...b } = gone!;
+      return wrote(verifyParentSchoolBookingReceipt({ booking: { ...b, status: 'CANCELLED', canCancel: false, version: b.version + 1 }, spotsLeft: back?.spotsLeft ?? 0 }, { bookingId }));
+    },
+    // The sample family never pays: no school processor is reachable, so nothing is payable and a press is refused.
+    announcements: () => ok(verifyParentSchoolAnnouncements({ schoolName: SAMPLE_SCHOOL, announcements: [
+      { announcementId: id(900), title: 'Belt testing next Saturday', body: 'Testing starts at 10am. Please arrive 15 minutes early in a clean uniform.', publishedAt: ms(plus(start.toISOString(), -90)) },
+      { announcementId: id(901), title: 'Closed Monday for the holiday', body: 'There are no classes on Monday. See you Tuesday!', publishedAt: ms(plus(start.toISOString(), -3 * 24 * 60)) },
+    ] })),
+    attendanceStreaks: () => ok(verifyParentAttendanceStreaks({ children: [{ name: 'Leo Sample', weeks: 2 }, { name: 'Mia Sample', weeks: 5 }] })),
+    journeyRecommendations: () => ok(verifyParentJourneyRecommendations({ children: [
+      { name: 'Leo Sample', recommendations: [
+        { recommendationId: id(960), program: 'Junior Program', rank: 'Orange Belt', triggerKind: 'REQUIREMENTS_MET', threshold: 1, title: 'Try summer camp',
+          message: 'Leo is moving fast! Camp is a fun week of forms and games.', targetKind: 'CHECKOUT', checkoutId: id(950), eventId: null, targetLabel: 'Sample summer camp' },
+      ] },
+      { name: 'Mia Sample', recommendations: [
+        { recommendationId: id(961), program: 'Kids Program', rank: null, triggerKind: 'CLASSES_ATTENDED', threshold: 10, title: 'Time for sparring gear',
+          message: 'After 10 classes, Mia is ready to start light sparring. Gloves and pads are in the pro shop.', targetKind: 'PRO_SHOP', checkoutId: null, eventId: null, targetLabel: null },
+      ] },
+    ] })),
+    // The made-up family's answers stay on this phone: nothing reaches a school.
+    respondJourneyRecommendation: (recommendationId, input, _key) =>
+      wrote(verifyParentJourneyResponseReceipt({ recommendationId, kind: input.kind, childName: input.kind === 'INTERESTED' ? input.childName : null,
+        recordedAt: ms(start.toISOString()), replayed: false }, { recommendationId, ...input })),
+    proShop: () => ok(verifyParentProShop({ schoolName: SAMPLE_SCHOOL, available: true, currency: 'USD', products: [
+      { productId: '9001', title: 'Sample sparring gloves', imageUrl: null, fromPrice: '39.00', url: 'https://sample-dojo.myshopify.com/products/sample-sparring-gloves' },
+      { productId: '9002', title: 'Sample uniform', imageUrl: null, fromPrice: '65.00', url: 'https://sample-dojo.myshopify.com/products/sample-uniform' },
+    ] })),
+    // The sample family sees a made-up program and history; it never gets a real link to share.
+    referrals: () => ok(verifyParentReferrals({ schoolName: SAMPLE_SCHOOL, on: true, referrerReward: 'One free month of classes', friendOffer: 'Free trial week',
+      rules: "Given after your friend's first paid month.", shareMessage: 'Come train with us!', canShare: true, shareUrl: null,
+      counts: { referred: 3, joined: 1, rewarded: 1 }, referrals: [
+        { referredAt: '2026-11-12T17:00:00Z', status: 'INTERESTED', reward: 'PENDING' },
+        { referredAt: '2026-10-28T17:00:00Z', status: 'JOINED', reward: 'GIVEN' },
+        { referredAt: '2026-10-02T17:00:00Z', status: 'NOT_JOINED', reward: 'NOT_ELIGIBLE' },
+      ] })),
+    referralLink: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_REFERRALS_NOT_CONFIGURED' }),
+    // The sample family can fill in a sample page but never orders: the app hides the order button and a press would be refused.
+    checkoutPages: () => ok(verifyParentCheckoutPages({ schoolName: SAMPLE_SCHOOL, canBuy: true, canPay: true, testMode: true, pages: [
+      { checkoutId: id(950), version: 1, group: 'events', title: 'Sample summer camp', description: 'A week of games, forms and sparring.', currency: 'USD', maxParticipants: 2,
+        blocks: [], options: [{ key: 'week', label: 'Full week', description: null, priceMinor: 19900, additionalParticipantMinor: 14900, mostPopular: true, placesLeft: 8 }],
+        addOns: [{ key: 'shirt', label: 'Camp shirt', amountMinor: 1500, required: false }],
+        questions: [{ key: 'size', label: 'Shirt size', kind: 'CHOICE', required: true, options: ['Youth S', 'Youth M', 'Youth L'] }],
+        waiver: 'I agree to the camp safety rules.', thankYou: null },
+    ], children: [{ studentProfileId: id(951), displayName: 'Sample child' }], orders: [] })),
+    orderCheckout: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    startCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    confirmCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    cancelCheckoutOrder: async () => ({ ok: false as const, state: 'refused' as const, code: 'FAMILY_CHECKOUT_NOT_CONFIGURED' }),
+    invoicePayments: () => ok(verifyParentInvoicePayments({ canPay: false, testMode: true, invoices: [] })),
+    startInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
+    confirmInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
+    cancelInvoicePayment: async () => ({ ok: false as const, state: 'refused' as const, code: 'PARENT_INVOICE_PAY_NOT_CONFIGURED' }),
   } as ParentApi;
 }

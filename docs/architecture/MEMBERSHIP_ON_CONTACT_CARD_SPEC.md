@@ -67,13 +67,13 @@ The New membership dialog on the card gains a **How they'll pay** step: choose o
 
 ### Backend
 
-**0531: start a membership from a plan for an existing person** (`POST billing/people/:personId/memberships/from-plan`).
+**0624: start a membership from a plan for an existing person** (`POST billing/people/:personId/memberships/from-plan`).
 - Input: `{ membershipPlanId, membershipPlanVersion, kind: NEW | RENEW, startDate (school-local), renewsMembershipId? , confirmation }`, Idempotency-Key required.
 - Works for any active (not archived) person with a student profile at the school. The billing account is the person's own for an adult, or the family's billing contact account for a minor. A minor without a guardian of record is refused (same rule as 0177).
 - Plan checks are the 0175 ones: current version, AVAILABLE, open program, account currency.
 - Overlap rule (owner decision, one per program): refuse when the new term would overlap another current or scheduled membership of the same person **in the same program**.
 - RENEW requires `renewsMembershipId` to be the same person's fixed-term membership; the suggested start is the day after it ends. The link is stored as evidence.
-- Creates the DRAFT with a plan selection and a new source row (`CONTACT_CARD_PLAN`). 0177's activation evaluation learns this source (replacement function in 0531, not an edit of 0177), so the existing preview/confirm path activates it with all its rules.
+- Creates the DRAFT with a plan selection and a new source row (`CONTACT_CARD_PLAN`). 0177's activation evaluation learns this source (replacement function in 0624, not an edit of 0177), so the existing preview/confirm path activates it with all its rules.
 - Permission `billing.membership.create` (existing). Audit + outbox, idempotency, forced RLS, lock order and final authority recheck follow 0175.
 
 **0399: change plan** (`POST billing/memberships/:membershipId/plan-changes`).
@@ -89,7 +89,7 @@ The New membership dialog on the card gains a **How they'll pay** step: choose o
 | Slice | What | Migration |
 |---|---|---|
 | A | Card Membership tab gets the actions that need no new backend: Pause/Resume, Cancel, Change dates, History, Record a refund, Finish starting (existing DRAFTs). Report rows open the card. | none |
-| B | New membership + Renew on the card | 0531 |
+| B | New membership + Renew on the card | 0624 |
 | C | Change plan on the card | 0399 |
 | D | Billing > Memberships as three pages: Membership (plans + payment options + auto-charge), Agreement & waiver, Import. List and renewals move to Reports | none for the layout; per-plan payment options may need one (ask coordinator) |
 | E | Agreement & waiver templates and signed records, shared with the kiosk thread; Sign step in the card dialog | to allocate |

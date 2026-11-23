@@ -449,3 +449,24 @@ describe('Ask HON preselected specialist (?ask=)', () => {
     expect(honAskHref('jordan')).toBe('/staff/hon?ask=jordan');
   });
 });
+
+describe('HON corner chat presentation (owner 2026-11-22, docked like a chat window)', () => {
+  it('shows the chat first: past conversations folded away, a New chat button, and the Enter-to-send hint', () => {
+    const html = render({ presentation: 'dock', thread: thread([human(11, 'How many trials?'), reply(12)]), threadPhase: 'READY' });
+    expect(html).toContain('data-presentation="dock"');
+    expect(html).toMatch(/<details[^>]*data-dock-history=""[^>]*><summary>Past conversations \(1\)<\/summary>/);
+    expect(html).toContain('data-dock-new=""');
+    expect(html).toContain('Enter to send · Shift+Enter for a new line.');
+    expect(html).toContain('data-dock-intro=""');
+    expect(html).toContain('You have 3 trial leads waiting for follow-up.');
+    // The same composer, privacy warning and character limit as everywhere else.
+    expect(html).toContain('Don’t include passwords, card numbers or medical details.');
+  });
+  it('keeps the side panel and full workspace unchanged', () => {
+    for (const presentation of ['panel', 'full'] as const) {
+      const html = render({ presentation });
+      expect(html).not.toContain('data-dock-history'); expect(html).not.toContain('data-dock-new'); expect(html).not.toContain('Enter to send');
+      expect(html).toContain('>New conversation<');
+    }
+  });
+});
