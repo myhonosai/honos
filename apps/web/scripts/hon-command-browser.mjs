@@ -1201,11 +1201,11 @@ async function peopleApiRoute(route, path, method, url) {
     const q = (url.searchParams.get('query') ?? '').toLowerCase(), segment = url.searchParams.get('segment') ?? 'ALL';
     const all = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
       .map((r) => ({ personId: r.personId, version: r.version, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164,
-        segment: r.student ? 'STUDENT' : 'OTHER', planName: null, planCode: null, programName: null, membershipEndsAt: null, ranks: [] }));
+        segment: r.student ? 'STUDENT' : 'OTHER', planName: null, planCode: null, programName: null, membershipEndsAt: null, membershipState: null, age: null, ranks: [] }));
     const counts = { ALL: all.length, STUDENT: all.filter((r) => r.segment === 'STUDENT').length, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 };
     const rows = all.filter((r) => segment === 'ALL' || r.segment === segment);
     return json(route, 200, { data: { generatedAt: iso(0), segment, counts, rows, hasMore: false, nextCursor: null,
-      options: url.searchParams.get('options') === 'true' ? { ranks: [], programs: [], plans: [] } : null }, meta: { requestId: id(900), correlationId: id(900) } });
+      options: url.searchParams.get('options') === 'true' ? { ranks: [], programs: [], plans: [], tags: [] } : null }, meta: { requestId: id(900), correlationId: id(900) } });
   }
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase();
