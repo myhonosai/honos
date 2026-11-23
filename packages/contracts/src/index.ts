@@ -1188,6 +1188,7 @@ export * from './eian.js';
 export * from './parent-invoice-pay.js';
 export * from './parent-app-curriculum.js';
 export * from './rank-setup.js';
+export * from './rank-chart-draft.js';
 export * from './school-announcements.js';
 export * from './parent-push.js';
 export * from './parent-pro-shop.js';

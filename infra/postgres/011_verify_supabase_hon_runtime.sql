@@ -6505,3 +6505,36 @@ DO $$ DECLARE f record; BEGIN
     RAISE EXCEPTION 'Unsafe AI agent switch name helper'; END IF;
 END $$;
 -- End staff AI agent switches exact verification.
+-- Rank chart AI draft exact verification (0636): the RANK_CHART kind row on the shared AI text proposals (0550), the closed
+-- brief and draft shapes, the private actor, facts and view helpers, and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_rank_chart_draft(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','1f9744ef6334348e300e88c61cc4eb19cb8552645312f1d7dc261a839b270940'),
+('hon.close_rank_chart_draft(text,uuid,text)',true,true,'search_path=pg_catalog, hon','5c988ce8c05ee27efccea609abaf3d1c9727fe98a1764efae03c725e4b4c79a7'),
+('hon.fail_rank_chart_draft(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','3feae945c7f1d30a8d9962cde7fc27d3edd7a590ad406805c71c23674aa44561'),
+('hon.plan_rank_chart_draft(text,uuid)',true,true,'search_path=pg_catalog, hon','412669ab27950d8ae9f96f41cf9bd78437d579ba061a65e70cff4504365dbb88'),
+('hon.prepare_rank_chart_draft(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','86051b3091c9d5d2765dc321c4fd49500d46012b408d506d819efc130028cfe3'),
+('hon.read_rank_chart_drafts(text,uuid)',true,true,'search_path=pg_catalog, hon','0dc4f291a0027c0a64fd3c2ee0a958212e0bc132e2ddf15b3bdeeee567b5a391'),
+('hon.record_rank_chart_draft(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','1729ce567bdc75597d64ad1f131e34e6fa1742fb9806522f0e817bcfadd5fab6'),
+('hon.rank_chart_ai_actor(text)',true,false,'search_path=pg_catalog, hon','ce0c708987e4168d288f07d3b2ff6494816b5be7b0782ccbec4deb0d3972a359'),
+('hon.rank_chart_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8d93ce12801a7754fcd8093575a268356e89bbf1854b7681b8af6c760e6ff93f'),
+('hon.rank_chart_facts(jsonb)',true,false,'search_path=pg_catalog, hon','a25a066125cef3eb73f0cc7832cfe122ef69df9582059a50b243c1bd182dac96'),
+('hon.rank_chart_ok(jsonb)',false,false,'search_path=pg_catalog, hon','87b3386d720ba8724060a7e8aaa966d28ac1fb363987b99ea27621c8f9476f38'),
+('hon.rank_chart_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','58347e329510c9ba09aad9c3d68959aecc8d9be47afa3d11a87a71db6bd14508'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe rank chart AI draft function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='RANK_CHART' AND k.agent_key='kai' AND k.task_class='DRAFT_TEACHING'
+      AND k.input_budget=16000 AND k.output_budget=5000 AND k.max_cost_microunits=150000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RANK_CHART') THEN
+    RAISE EXCEPTION 'Rank chart AI draft kind row missing or changed';
+  END IF;
+END $$;
+-- End rank chart AI draft exact verification.

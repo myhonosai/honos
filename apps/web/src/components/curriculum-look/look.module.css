@@ -105,3 +105,13 @@ textarea.field { min-height: 80px; resize: vertical; line-height: 1.5; }
 .quickNum { display: grid; gap: 2px; font-size: var(--hon-text-xs, 12px); color: var(--hon-text-muted, #a9b8d6); }
 @media (max-width: 650px) { .quickRow { grid-template-columns: 24px 44px 1fr 1fr; } .quickRow > input.field { grid-column: 3 / -1; } .quickRow > .quickNum { grid-column: 1 / 4; }
   .quickRow > .quickNum + .quickNum { grid-column: 4 / 5; } .quickRow > .actions { grid-column: 1 / -1; justify-content: flex-end; } }
+/* Quick setup: the "describe it in your own words" AI box. */
+.aiBox { display: grid; gap: var(--hon-space-3, 12px); padding: 12px !important; border: 1px solid color-mix(in srgb, var(--hon-accent-2, #22d3ee) 45%, transparent) !important; border-radius: var(--hon-radius-md, 12px);
+  background: color-mix(in srgb, var(--hon-accent-2, #22d3ee) 7%, transparent); }
+.aiTalk { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--hon-space-2, 8px); max-height: 260px; overflow-y: auto; }
+.aiTalk p { margin: 0; overflow-wrap: anywhere; }
+.aiYou { color: var(--hon-text-2, #b6c2d9); }
+.aiKai { padding: 6px 10px; border-radius: var(--hon-radius-sm, 8px); background: color-mix(in srgb, var(--hon-accent-2, #22d3ee) 12%, transparent); }
+.aiKai[data-tone='bad'] { background: color-mix(in srgb, var(--hon-danger, #f87171) 14%, transparent); }
+.kaiVoice { display: grid; gap: var(--hon-space-2, 8px); padding-top: var(--hon-space-2, 8px); border-top: 1px solid color-mix(in srgb, var(--hon-accent-2, #22d3ee) 25%, transparent); }
+.aiBox .add { text-align: left; white-space: normal; height: auto; padding-top: 6px; padding-bottom: 6px; }

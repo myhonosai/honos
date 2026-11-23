@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e9fa1be8bafa0f4e62e595b640d938b2597c61ceb9d44f607fb537644941afe7",
+  "chainSha256": "893bfd2a3bf2efe0b8894e00b555cc43f69e182943da795b0c0c1ea5d8779ebe",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -877,6 +877,10 @@
     {
       "file": "0635_staff_ai_agent_switches.sql",
       "sha256": "01835c17065d5e9a7a1d85b3e1d3dd3341b7d055e78e0a7c8a10577400d290fa"
+    },
+    {
+      "file": "0636_rank_chart_ai_draft.sql",
+      "sha256": "e0f524f44788b4650deda15e65e5954c66b23caef534de170b7a277883736627"
     },
     {
       "file": "0644_booking_invoice_security_hygiene.sql",
