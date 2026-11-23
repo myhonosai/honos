@@ -11,7 +11,7 @@ startup gate and the shared OIDC/session validation.
 
 | Service | Type | Public? | Build | Start | Health |
 |---|---|---|---|---|---|
-| `hon-web` | web | yes (only entry point) | `pnpm --filter @hon/web build` | `next start` on `PORT=3000` | `GET /api/identity/readiness` |
+| `hon-web` | web | yes (only entry point) | `pnpm --filter @hon/web build` | `next start` on `PORT=3000` | `GET /api/readiness`: 200 only when sign-in is configured **and** `hon-api` answers `GET /v1/health/ready` (a verified runtime-database connection) over the private network; 2.5 s timeout, answers reused for 2 s, closed codes only (review [24]) |
 | `hon-api` | private service | no; reached by `hon-web` over Render's private network | `pnpm --filter @hon/api build` | `node dist/main.js` on `3001` | process exits before listening on bad config (no HTTP health check: Render supports those for web services only) |
 
 Both: region `virginia` (Supabase project is `us-east-1`), Node `22.23.4` (same pin as CI, verified at
@@ -86,6 +86,25 @@ What each setting does:
   network can block others. This is why steps 2 and 3 must pass before relying on it.
 - **Too high:** the limiter reads an entry the client can write, so a sender can dodge the per-client limit (the database
   limits still apply).
+
+### Picture storage for the media library (`HON_MEDIA_STORAGE_*`, api)
+
+Marketing > Media (0628) stores pictures in one **private** Supabase Storage bucket on the existing Supabase project (owner
+decision 2026-11-22, "Allow media storage"). It is off until all four values are set on `hon-api`; while off, uploads answer
+`MEDIA_STORAGE_OFF`, nothing is stored and `/m/<token>` links open nothing.
+
+| Variable | Value |
+|---|---|
+| `HON_MEDIA_STORAGE_APPROVED` | exactly `true` |
+| `HON_MEDIA_STORAGE_URL` | `https://<project-ref>.supabase.co` (origin only) |
+| `HON_MEDIA_STORAGE_KEY` | the project's server-side (service role) key; never sent to the browser |
+| `HON_MEDIA_STORAGE_BUCKET` | the bucket name, for example `hon-media` |
+
+Before switching it on: create the bucket as **private** (not public), with a 25 MB file size limit and allowed types
+`image/jpeg`, `image/png` and `image/gif`. Then, on staging, upload a picture on Marketing > Media, open its link (it should
+redirect to a `.../storage/v1/object/sign/...` link that stops working after five minutes), and delete it (the link should
+stop at once and the file should leave the bucket). The `/m/<token>` link uses the per-client limiter above with its own
+window of 600 reads a minute, because email image proxies fetch for many readers.
 
 Related: `DATABASE_TLS_AND_CONNECTIONS.md` (TLS, pooler sizing, startup codes),
 `BACKUP_RESTORE_AND_RECOVERY.md` (migrations, rollback, restore), `MONITORING_AND_ALERTING.md`.

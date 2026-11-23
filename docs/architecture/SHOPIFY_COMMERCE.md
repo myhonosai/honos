@@ -287,12 +287,20 @@ scopes in `shopify-app/shopify.app.toml`, released in app version `hon-os-4` (20
 Seen on the test store on 2026-11-22 (refusal log): with `read_shopify_payments_accounts` alone Shopify answers the
 balance but refuses `shopifyPaymentsAccount.payouts` (ACCESS_DENIED), which failed the whole finance read. Payouts need
 `read_shopify_payments_payouts`. So Allow finance now asks for both scopes (the second is in the app file for the next
-app version, not released yet; until then Shopify's request page may not offer it), and the adapter reads finance
-without payouts and without each transaction's payout when Shopify refuses the full read. `financeAllowed` still means
+app file since app version `hon-os-5`, released 2026-11-22), and the adapter steps the finance read down when Shopify
+refuses it: without payouts and each transaction's payout, then (the test store refused `balanceTransactions` too once
+payouts were left out) the balance alone. `financeAllowed` still means
 the accounts scope. The Finance screen cannot tell "no payouts" from "payouts not allowed", so an empty payouts list
 shows an **Allow payouts** button that runs Allow finance again.
 The same log shows why the catalog read with stock locations is refused: it needs `read_locations`, which the app does
-not ask for; the catalog keeps using the plain read (no fulfilment source) until that scope is decided.
+not ask for; the catalog keeps using the plain read (no fulfilment source) without it.
+
+The first live front desk sale on the test store (2026-11-22) showed the same refusal on the stock send
+(`HonVariantStock`, `needs read_locations`): a stock change must name the store's own location, so without the scope no
+front desk sale can change Shopify's count (the task stays waiting; nothing is lost). The owner approved adding it
+(2026-11-22): `read_locations` is an optional scope in the app file (next app version, `hon-os-6`), granted by **Allow
+stock updates** in Settings and together with Allow orders. HON keeps no flag for it, so the button stays offered;
+pressing it again changes nothing. After it is granted a manager sends the waiting stock changes again from the Register.
 
 Settled on the test store on 2026-11-22: with managed installation, `/admin/oauth/authorize` with the scope in `scope=`
 does **not** grant an optional scope (the owner comes back connected, without it). Shopify's request address does
@@ -521,3 +529,14 @@ nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and
 - **Evidence.** `packages/database/scripts/test-shopify-commerce-review.mjs` (9 groups, fake provider, 0 network calls),
   `apps/api/test/commerce-review.test.cjs`, `apps/web/test/school-shopify-commerce-review.test.tsx`, and the 011 section
   "Shopify commerce review exact verification (0615)".
+
+## New-shop guide (schools with no Shopify store)
+
+Before a store is connected, a manager sees a "Set up your shop" guide above the connect form: start a store on Shopify, copy
+the `.myshopify.com` address, come back and connect, then fill the shop with Merch Studio. No app can create a Shopify store
+or accept Shopify's terms for a merchant, so the account is always made by the school on Shopify's own page.
+
+The guide's button opens `HON_SHOPIFY_NEW_STORE_URL` when hon-api has it (HON's Shopify Affiliate Program link, which keeps the school's free trial; https on
+`shopify.com`, a subdomain of it, or `shopify.pxf.io` only, otherwise ignored) and Shopify's public sign-up page when not. The
+link is HON-wide configuration, never school input, and reaches the page as `newStoreUrl` on the overview read. When HON's link
+is used the guide says HON may receive a referral fee. No migration; nothing is written.

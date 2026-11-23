@@ -19,6 +19,8 @@ test('puts the app address into every app link and leaves no placeholder', () =>
     assert.ok(html.includes('href="https://app.example.test/account/start"'));
     assert.ok(html.includes('href="https://app.example.test/auth/login"'));
     assert.doesNotMatch(html, /\{\{[A-Z_]+\}\}/);
+    // Site ownership check for the Shopify Affiliate Program (Impact reads it from the home page head).
+    assert.match(html.slice(0, html.indexOf('</head>')), /<meta name="impact-site-verification" value="[0-9a-f-]{36}">/);
     for (const f of ['styles.css', 'story.css', 'boot.js', 'loader.js', 'story.js', 'site.js', 'favicon.svg', 'assets/story-class-1344.webp', 'assets/story-door-1280.mp4']) {
       assert.ok(existsSync(join(out, f)), `${f} copied`);
     }

@@ -61,6 +61,8 @@ const OPEN_BY_DESIGN={
  'hon.submit_walkin_visit(text,jsonb,text)':'walk-in tablet (0414): answers CLOSED for a suspended school, lapsed entitlement or unknown device and writes nothing; returns no people data',
  'hon.open_walkin_card_payment(text,text)':'walk-in tablet card payment (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device (the 0414 tablet hold) and opens nothing; returns no people data',
  'hon.settle_walkin_card_payment(text,text)':'walk-in tablet card payment state (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device and changes nothing; returns no people data',
+ 'hon.open_public_checkout_order(text,jsonb,text,boolean)':'public checkout page link sign-up (0627): answers INVALID for a suspended school or organization, a lapsed entitlement or a page taken down (the 0620 page rule) and writes nothing; returns no order data',
+ 'hon.read_public_checkout_order(text,text)':'public checkout order by link and buyer key (0627): an order already placed stays reachable so the buyer can check or cancel it while the school is suspended; returns only that order, and the API hands out no processor page to pay on unless the page still opens',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.marketing_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',

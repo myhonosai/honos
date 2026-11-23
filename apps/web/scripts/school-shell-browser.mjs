@@ -50,6 +50,16 @@ const snapshot = (scope) => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 1, SUCCEEDED: 118, FAILED: 3, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 1 } },
 });
 
+// Rank setup (0622) synthetic fixtures: one program with three belts, two students. The mock keeps belts added in this run.
+const rsRank = (n, name, color, order, students, requirements = [], classes = 0, days = 0) => ({ id: id(700 + n), name, color, order, version: 1, classes, days, students, requirements });
+let rankSetupState = null;
+const rankSetup = () => rankSetupState ??= { programs: [{ id: id(690), name: 'Kids Taekwondo', version: 1, ranks: [
+  rsRank(1, 'White belt', '#FFFFFF', 1, 1, [{ id: id(721), code: 'FRONT_KICK', kind: 'TECHNIQUE', label: 'Front kick, both legs', description: '', required: true, version: 1 },
+    { id: id(722), code: 'RESPECT', kind: 'CHARACTER', label: 'Bows in and out of class', description: '', required: true, version: 1 }], 24, 60),
+  rsRank(2, 'Yellow belt', '#FACC15', 2, 1, [{ id: id(723), code: 'TAEGEUK_1', kind: 'TECHNIQUE', label: 'Taegeuk 1', description: 'Whole form without help.', required: true, version: 1 }]),
+  rsRank(3, 'Orange belt', '#F97316', 3, 0)] }, { id: id(691), name: 'Adult Karate', version: 1, ranks: [] }],
+  students: [{ enrollmentId: id(731), programId: id(690), studentProfileId: id(741), givenName: 'Avery', familyName: 'Sample', currentRankId: id(701), version: 1 },
+    { enrollmentId: id(732), programId: id(690), studentProfileId: id(742), givenName: 'Rowan', familyName: 'Example', currentRankId: id(702), version: 1 }] };
 // Parent app > Curriculum synthetic fixtures (names and links are placeholders).
 const pcRes = (n, patch) => ({ id: id(1000 + n), curriculumId: id(960), rankId: null, cycleId: null, kind: 'VIDEO', url: `https://www.youtube.com/watch?v=sample${n}`, title: `Sample ${n}`, description: '', audience: 'PARENT', status: 'ACTIVE', version: 1, ...patch });
 const pcSettings = (patch) => ({ saved: true, version: 3, displayMode: 'CYCLE', showInApp: true, rankShowEarlier: false, rankShowNext: false, cycleRotation: 'AUTO', cycleAnchorDate: '2026-11-02', cycleLengthWeeks: 2, cycleShowNext: true, ...patch });
@@ -194,6 +204,25 @@ function api(route) {
     if (path === `${prefix}/staff-roles/lists`) return json(route, 200, { data: { roles: [{ id: id(880), code: 'CUSTOM_FRONT_DESK', name: 'Front desk', version: 1, permissionCodes: ['school.view', 'crm.lead.read'] }], grants: [] }, meta: {} });
     if (path === `${prefix}/staff-roles/permissions`) return json(route, 200, { data: [['school.view', 'View the school', false], ['attendance.record', 'Record attendance', false], ['attendance.cards.manage', 'Choose how attendance cards look', true], ['crm.lead.read', 'Read leads', false], ['billing.refund.create', 'Create refunds', true]]
       .map(([code, description, sensitive]) => ({ code, description, sensitive })), meta: {} });
+    // Rank setup (0622): read, and adding a belt appends it at the end.
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup`) return json(route, 200, { data: rankSetup(), meta: { requestId: id(750), correlationId: id(750), replayed: false } });
+    if (method === 'POST' && path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/programs/${id(690)}/ranks`) {
+      const body = JSON.parse(route.request().postData() ?? '{}'), p = rankSetup().programs[0];
+      p.ranks.push(rsRank(p.ranks.length + 10, body.name, body.color, p.ranks.length + 1, 0, [], body.classes, body.days)); p.version += 1;
+      return json(route, 200, { data: p, meta: { requestId: id(751), correlationId: id(751), replayed: false } });
+    }
+    // Quick setup creates the program and all its belts in one command; removing a belt closes the order up.
+    if (method === 'POST' && path === `/api/v1/staff/schools/${scope.schoolId}/rank-setup/quick-setup`) {
+      const body = JSON.parse(route.request().postData() ?? '{}');
+      const p = { id: id(692), name: body.name, version: 1, ranks: body.ranks.map((b, i) => rsRank(50 + i, b.name, b.color, i + 1, 0, [], b.classes, b.days)) };
+      rankSetup().programs.push(p);
+      return json(route, 200, { data: p, meta: { requestId: id(752), correlationId: id(752), replayed: false } });
+    }
+    if (method === 'POST' && /\/rank-setup\/programs\/[0-9a-f-]{36}\/ranks\/[0-9a-f-]{36}\/remove$/.test(path)) {
+      const [, pid, rid] = path.match(/programs\/([0-9a-f-]{36})\/ranks\/([0-9a-f-]{36})\/remove$/), p = rankSetup().programs.find((x) => x.id === pid);
+      p.ranks = p.ranks.filter((k) => k.id !== rid).map((k, i) => ({ ...k, order: i + 1 }));
+      return json(route, 200, { data: p, meta: { requestId: id(753), correlationId: id(753), replayed: false } });
+    }
     // Parent app > Curriculum (0605/0610): one cycle-based and one rank-based synthetic curriculum.
     if (method === 'POST' && /\/parent-app\/curriculum\/[0-9a-f-]{36}\/cycles$/.test(path)) return json(route, 409, { code: 'CYCLE_NAME_TAKEN' });
     if (path === `/api/v1/staff/schools/${scope.schoolId}/parent-app/curriculum`) return json(route, 200, { data: parentCurriculum(), meta: { requestId: id(990), correlationId: id(990), replayed: false } });
@@ -202,6 +231,8 @@ function api(route) {
     if (path === `${prefix}/pickers/enrollments`) return json(route, 200, { data: [['Avery', 'Sample'], ['Rowan', 'Example']].map(([givenName, familyName], i) => ({ enrollmentId: id(980 + i),
       curriculumId: new URL(route.request().url()).searchParams.get('curriculumId') ?? id(960), curriculumName: 'Little Dragons', studentProfileId: id(820 + i), givenName, familyName, currentRankId: null, currentRankName: null, nextRankId: null, nextRankName: null, version: 1 })),
       meta: { requestId: id(985), correlationId: id(985), limit: 50 } });
+    if (path === `${prefix}/pickers/students`) return json(route, 200, { data: [['Kim', 'Placeholder', 743], ['Jordan', 'Sample', 744]].map(([givenName, familyName, n]) => ({ studentProfileId: id(n), givenName, familyName })),
+      meta: { requestId: id(745), correlationId: id(745), limit: 50 } });
     if (path === `${prefix}/pickers/staff`) return json(route, 200, { data: [['Avery Sample', 870], ['Rowan Example', 871], ['Kim Placeholder', 872]]
       .map(([displayName, n]) => ({ principalId: id(n), displayName })), meta: { requestId: id(875), correlationId: id(875), limit: 200 } });
     if (path === `${prefix}/pickers/testing-candidates`) return json(route, 200, { data: [['Avery', 'Sample', 'PASSED'], ['Rowan', 'Example', 'PASSED'], ['Kim', 'Placeholder', 'DEFERRED']]
@@ -211,6 +242,21 @@ function api(route) {
     if (path === `${prefix}/search`) return json(route, 200, { data: { search: { organizationId: scope.organizationId, schoolId: scope.schoolId, results: [
       { kind: 'LEAD', entityId: id(201), title: 'Avery Sample', subtitle: 'Open lead', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/LEAD/${id(201)}` },
       { kind: 'CLASS_SESSION', entityId: id(100), title: 'Little Tigers', subtitle: 'Scheduled class', route: `/staff/search/${scope.organizationId}/${scope.schoolId}/CLASS_SESSION/${id(100)}` }] } }, meta: {} });
+    // Plain curriculum pages (synthetic): videos and links, one student's belt, teaching studio, achievements.
+    if (path === `/api/v1/staff/schools/${scope.schoolId}/curriculum-library`) return json(route, 200, { data: { curricula: [{ id: id(960), name: 'Little Dragons', ranks: [{ id: id(661), name: 'White belt' }, { id: id(662), name: 'Yellow belt' }] }],
+      resources: [{ id: id(671), curriculumId: id(960), rankId: id(661), cycleId: null, kind: 'VIDEO', url: 'https://www.youtube.com/watch?v=sample1', title: 'Front kick drill', description: 'Ten kicks each side, slow then fast.', audience: 'PARENT', status: 'ACTIVE', version: 1 },
+        { id: id(672), curriculumId: id(960), rankId: null, cycleId: null, kind: 'LINK', url: 'https://example.com/stretching', title: 'Warm-up stretches', description: '', audience: 'STAFF', status: 'ACTIVE', version: 2 }] }, meta: { requestId: id(673), correlationId: id(673), replayed: false } });
+    if (path === `${prefix}/curricula/${id(960)}/enrollments/${id(980)}`) return json(route, 200, { data: { enrollment: { id: id(980), curriculumId: id(960), studentProfileId: id(820), currentRankId: id(661), version: 3, status: 'ACTIVE', enrolledAt: '2026-09-01T12:00:00.000000+00:00' },
+      requirements: [['Front kick, both legs', 'TECHNIQUE', 'MET', 681], ['Bows in and out of class', 'CHARACTER', 'PRACTICING', 682], ['Ten classes attended', 'ATTENDANCE', null, 683]].map(([label, kind, status, n]) => ({ id: id(n), rankId: id(661), code: `R_${n}`, kind,
+        definition: { label }, required: true, version: 1, progressVersion: status ? 2 : 0, status, recordedAt: status ? '2026-11-18T17:00:00.000000+00:00' : null })) }, meta: { requestId: id(684), correlationId: id(684), replayed: false } });
+    if (path === '/api/v1/staff/teaching-studio/access') return json(route, 200, { data: { canRead: true, canManageLessons: true, canManageResources: true, canRecordAssessments: true } });
+    if (path === '/api/v1/staff/teaching-studio/lessons') return json(route, 200, { data: { nextAfter: null, items: [{ id: id(691), version: 1, title: 'Kicks and stances', instructionalObjective: 'Students hold a front stance and kick with control.',
+      sections: [{ heading: 'Warm-up', content: 'Jog, stretch, five minutes.' }], durationMinutes: 45, status: 'PUBLISHED', targetCurriculumId: null, targetRankId: null, recordedAt: iso(), humanAuthoredOnly: true }] } });
+    if (path === '/api/v1/staff/teaching-studio/resources') return json(route, 200, { data: { nextAfter: null, items: [{ id: id(692), version: 1, title: 'Pad drill: double kicks', resourceType: 'DRILL', description: 'Partners hold pads at waist height.', status: 'ACTIVE', recordedAt: iso(), metadataOnly: true }] } });
+    if (path === '/api/v1/staff/students/achievements/access') return json(route, 200, { data: { canReadDefinitions: true, canManageDefinitions: true, canReadAwards: true, canRecordAwards: true } });
+    if (path === '/api/v1/staff/students/achievements/definitions') return json(route, 200, { data: { nextAfter: null, items: [
+      { id: id(693), version: 1, name: 'Best effort', description: 'Worked hard all class.', category: 'EFFORT', ageBand: 'CHILD', visualToken: null, status: 'ACTIVE' },
+      { id: id(694), version: 1, name: 'Perfect attendance', description: 'Came to every class this month.', category: 'EFFORT', ageBand: 'CHILD', visualToken: null, status: 'ACTIVE' }] } });
     if (path === `${prefix}/reports/operations`) return json(route, 200, { data: { operationalSnapshot: snapshot(scope) }, meta: {} });
     if (path === `${prefix}/interface-theme`) {
       if (method === 'PUT') theme = JSON.parse(route.request().postData() ?? '{}').interfaceTheme ?? theme;
@@ -574,6 +620,41 @@ await check('Parent app is its own page laid out like the texts inbox (TE3a)', a
   assert.equal(await page.locator('[data-compose]').count(), 0, 'no composer on the parent app page');
   await shot(page, 'te3a-parent-app-desktop'); await ctx.close();
 });
+for (const size of ['desktop', 'phone']) await check(`Rank setup: belts in order, what each needs, students, add a belt (${size})`, async () => {
+  theme = 'modern'; rankSetupState = null; const { ctx, page } = await open(viewports[size], '/staff/curriculum/ranks');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('heading', { name: 'Belts, first to last' }).waitFor();
+  await page.getByRole('button', { name: 'What this belt needs (2)' }).click();
+  await page.getByText('Bows in and out of class').waitFor();
+  assert.equal(await page.getByText(/[0-9a-f]{8}-[0-9a-f]{4}-/).count(), 0, 'no ids on the page');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `rank-setup-${size}.png`), fullPage: true }); report.screenshots.push(`rank-setup-${size}.png`);
+  await page.getByRole('textbox', { name: 'Next belt' }).fill('Green belt'); await page.getByRole('button', { name: 'Green', exact: true }).last().click();
+  await page.getByRole('button', { name: 'Add belt' }).click();
+  await page.getByText('Added Green belt.').waitFor();
+  assert.equal(await page.getByRole('article', { name: 'Green belt' }).count(), 1, 'the new belt is listed last');
+  await page.getByText('24 classes and 60 days to move up').waitFor();
+  await page.getByRole('button', { name: /Adult Karate/ }).click();
+  await page.getByText('No belts yet.').waitFor();
+  // Quick setup: pick the art, answer, check the list, create; then a belt can be removed afterwards.
+  await page.getByRole('button', { name: 'Quick setup for a new program' }).click();
+  await page.getByRole('button', { name: /Brazilian Jiu-Jitsu \(adults\)/ }).click();
+  await page.getByText('3. Check the list (21 belts, first to last)').waitFor();
+  await page.getByLabel('Stripes on each belt').selectOption('0');
+  await page.getByText('3. Check the list (5 belts, first to last)').waitFor();
+  await page.getByLabel('Name of belt 1', { exact: true }).fill('White belt (new student)');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `rank-setup-quick-${size}.png`), fullPage: true }); report.screenshots.push(`rank-setup-quick-${size}.png`);
+  await page.getByRole('button', { name: 'Create Adult BJJ with 5 belts' }).click();
+  await page.getByText('Created Adult BJJ with 5 belts.').waitFor();
+  assert.equal(await page.getByRole('article', { name: 'White belt (new student)' }).count(), 1, 'the edited name was saved');
+  await page.getByRole('article', { name: 'Blue belt' }).getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Remove this belt' }).click();
+  await page.getByRole('button', { name: 'Yes, remove Blue belt' }).click();
+  await page.getByText('Removed Blue belt.').waitFor();
+  assert.equal(await page.getByRole('article', { name: 'Blue belt' }).count(), 0, 'the belt is gone');
+  await ctx.close();
+});
 for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: cycle-based and rank-based setup, preview (${size})`, async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/parent-app/curriculum');
   const posts = () => report.apiRequests.filter(r => r.startsWith('POST')).length, postsBefore = posts();
@@ -594,6 +675,29 @@ for (const size of ['desktop', 'phone']) await check(`Parent app > Curriculum: c
   await page.getByRole('heading', { name: 'Material by rank' }).waitFor();
   await page.screenshot({ path: join(results, `pca3-rank-${size}.png`), fullPage: true }); report.screenshots.push(`pca3-rank-${size}.png`);
   await ctx.close();
+});
+for (const [path, heading, name] of [['/staff/curriculum/library', 'Videos and links', 'plain-library'], ['/staff/teaching-studio', 'Teaching studio', 'plain-teaching'], ['/staff/students/achievements', 'Achievements', 'plain-achievements']])
+  for (const size of ['desktop', 'phone']) await check(`Plain curriculum page: ${heading} (${size})`, async () => {
+    theme = 'modern'; const { ctx, page } = await open(viewports[size], path);
+    await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+    await page.getByRole('heading', { name: heading, exact: true, level: 1 }).waitFor();
+    if (name === 'plain-library') await page.getByText('Front kick drill').waitFor();
+    if (name === 'plain-teaching') await page.getByText('Kicks and stances').waitFor();
+    if (name === 'plain-achievements') await page.getByRole('heading', { name: 'Perfect attendance' }).waitFor();
+    assert.equal(await page.getByText(/UUID|[0-9a-f]{8}-[0-9a-f]{4}-/).count(), 0, 'no ids on the page');
+    await noOverflow(page);
+    await page.screenshot({ path: join(results, `${name}-${size}.png`), fullPage: true }); report.screenshots.push(`${name}-${size}.png`); await ctx.close();
+  });
+for (const size of ['desktop', 'phone']) await check(`Plain curriculum page: Curriculum progress (${size})`, async () => {
+  theme = 'modern'; const { ctx, page } = await open(viewports[size], '/staff/curriculum/progress');
+  await page.waitForFunction(() => document.querySelector('[data-phase]')?.getAttribute('data-phase') === 'READY');
+  await page.getByRole('combobox', { name: 'Student' }).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Show what their belt needs' }).click();
+  await page.getByText('Bows in and out of class').first().waitFor();
+  await page.getByText('Shown in class').first().waitFor({ state: 'attached' });
+  assert.equal(await page.getByText(/UUID|[0-9a-f]{8}-[0-9a-f]{4}-/).count(), 0, 'no ids on the page');
+  await noOverflow(page);
+  await page.screenshot({ path: join(results, `plain-progress-${size}.png`), fullPage: true }); report.screenshots.push(`plain-progress-${size}.png`); await ctx.close();
 });
 await check('Texts > Send: type a name, pick the contact, nothing sent before Send (TE3a)', async () => {
   theme = 'modern'; const { ctx, page } = await open(viewports.desktop, '/staff/texts/send');

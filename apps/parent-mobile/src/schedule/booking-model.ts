@@ -19,6 +19,15 @@ export function createCommandKeys(newKey: () => string) {
 }
 export type CommandKeys = ReturnType<typeof createCommandKeys>;
 
+/** One confirmed booking action whose answer was lost: the server ids it was for, as the server sent them. */
+export type UnconfirmedBooking = Readonly<{ kind: 'book' | 'cancel'; childId: string; childName: string; session: ParentClassSessionChoice }>;
+/**
+ * Command keys plus the unconfirmed action, held above the booking screen. The action stays until the server
+ * confirms it (directly, by a same-key retry, or by a re-read that shows it) or answers it definitely.
+ */
+export type BookingCustody = { keys: CommandKeys; unconfirmed: UnconfirmedBooking | null };
+export const createBookingCustody = (newKey: () => string): BookingCustody => ({ keys: createCommandKeys(newKey), unconfirmed: null });
+
 export const bookAction = (studentProfileId: string, sessionId: string) => `book:${studentProfileId}:${sessionId}`;
 export const cancelAction = (bookingId: string, version: number) => `cancel:${bookingId}:${version}`;
 

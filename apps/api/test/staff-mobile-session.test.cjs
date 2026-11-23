@@ -14,6 +14,9 @@ const staff = issueStaffMobileSession(identity, config);
 const family = issueMobileSession(identity, config);
 const service = new HonIdentityService();
 const req = (headers, url, method = 'GET') => ({ headers, originalUrl: url, method });
+const ledger = () => { const seen = new Set(); const calls = []; return { calls, redeemMobileHandoff: async (app, jti, expiresAt) => { calls.push({ app, jti, expiresAt }); if (seen.has(`${app}:${jti}`)) return false; seen.add(`${app}:${jti}`); return true; } }; };
+const astatus = async (fn) => { try { await fn(); return 200; } catch (e) { return e.getStatus?.() ?? 'throw'; } };
+const acode = async (fn) => { try { await fn(); return null; } catch (e) { return e.getResponse?.().code ?? null; } };
 const status = (fn) => { try { fn(); return 200; } catch (e) { return e.getStatus?.() ?? 'throw'; } };
 const code = (fn) => { try { fn(); return null; } catch (e) { return e.getResponse?.().code ?? null; } };
 const bearer = (token) => ({ authorization: `Bearer ${token}` });
@@ -56,23 +59,28 @@ test('web cookie sessions are unchanged and never marked as a mobile app; a web 
   assert.equal(status(() => service.authenticate(req({ cookie: `hon_session=${staff}` }, '/v1/staff/reporting-schools'))), 401);
 });
 
-test('staff hand-off exchange: native-only headers, verifier required, never crosses with the family exchange', () => {
+test('staff hand-off exchange: native-only headers, verifier required, single use, never crosses with the family exchange', async () => {
   const verifier = 'v'.repeat(43);
   const challenge = pkceChallenge(verifier);
   const staffCode = issueStaffMobileHandoff(identity, challenge, config);
   const familyCode = issueMobileHandoff(identity, challenge, config);
-  const controller = new MobileSessionController();
+  const runtime = ledger();
+  const controller = new MobileSessionController(runtime);
   const json = { 'content-type': 'application/json' };
-  const result = controller.exchangeStaff({ code: staffCode, verifier }, { headers: json });
+  assert.equal(await astatus(() => controller.exchange({ code: staffCode, verifier }, { headers: json })), 401);
+  assert.equal(await astatus(() => controller.exchangeStaff({ code: familyCode, verifier }, { headers: json })), 401);
+  assert.equal(runtime.calls.length, 0, 'a code for the other app never reaches the ledger');
+  const result = await controller.exchangeStaff({ code: staffCode, verifier }, { headers: json });
   const r = req(bearer(result.data.token), '/v1/staff/reporting-schools');
   service.authenticate(r);
   assert.equal(r.honMobileApp, 'STAFF');
-  assert.equal(status(() => controller.exchangeStaff({ code: familyCode, verifier }, { headers: json })), 401);
-  assert.equal(status(() => controller.exchange({ code: staffCode, verifier }, { headers: json })), 401);
-  assert.equal(status(() => controller.exchangeStaff({ code: staffCode, verifier: 'w'.repeat(43) }, { headers: json })), 401);
-  assert.equal(status(() => controller.exchangeStaff({ code: staffCode, verifier, extra: 1 }, { headers: json })), 400);
+  assert.equal(runtime.calls.length, 1);
+  assert.equal(runtime.calls[0].app, 'staff');
+  assert.equal(await astatus(() => controller.exchangeStaff({ code: staffCode, verifier }, { headers: json })), 401, 'a used staff code is refused');
+  assert.equal(await astatus(() => controller.exchangeStaff({ code: staffCode, verifier: 'w'.repeat(43) }, { headers: json })), 401);
+  assert.equal(await astatus(() => controller.exchangeStaff({ code: staffCode, verifier, extra: 1 }, { headers: json })), 400);
   for (const extra of [{ origin: 'https://hon.example' }, { 'sec-fetch-site': 'none' }, { cookie: 'a=b' }, { authorization: 'Bearer x' }, { 'content-type': 'text/plain' }]) {
-    assert.equal(status(() => controller.exchangeStaff({ code: staffCode, verifier }, { headers: { ...json, ...extra } })), 403, JSON.stringify(extra));
+    assert.equal(await astatus(() => controller.exchangeStaff({ code: staffCode, verifier }, { headers: { ...json, ...extra } })), 403, JSON.stringify(extra));
   }
 });
 
