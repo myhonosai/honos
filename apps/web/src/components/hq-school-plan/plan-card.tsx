@@ -140,7 +140,8 @@ export function PlanCardView(p: PlanCardViewProps): React.ReactElement {
 /** What a refused or unconfirmed command means for the person, and whether the same key must be kept for a retry. */
 export function planProblem(error: unknown): { key: SchoolPlanKey; keepKey: boolean; reload: boolean } {
   const e = error instanceof PlanError ? error : new PlanError('UNKNOWN');
-  if (e.kind === 'CHANGED') return { key: 'CHANGED', keepKey: false, reload: true };
+  // A reused key means the earlier press may have saved: show the latest plan with a fresh key.
+  if (e.kind === 'CHANGED' || e.kind === 'KEY_REUSED') return { key: 'CHANGED', keepKey: false, reload: true };
   if (e.kind === 'REFUSED' && e.code && isSchoolPlanKey(`REFUSED_${e.code}`)) return { key: `REFUSED_${e.code}` as SchoolPlanKey, keepKey: false, reload: false };
   if (e.kind === 'DENIED') return { key: 'DENIED', keepKey: false, reload: false };
   return { key: 'UNKNOWN', keepKey: true, reload: false }; // same key: pressing again replays instead of saving twice

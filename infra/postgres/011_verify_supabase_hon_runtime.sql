@@ -6791,7 +6791,7 @@ BEGIN
     ('hon.hq_school_plan_current(uuid)','48f22d7aa8b47ced2aa0919af9fe9321','s',false),
     ('hon.hq_school_plan_expected(jsonb)','6005bd5c38be258c8367427e3a30e3c9','i',false),
     ('hon.hq_school_plan_json(hon.hq_school_plan_assignments)','ecd31086f6b67be84a2bf9909a12b44f','s',false),
-    ('hon.hq_school_plan_lock(uuid,integer,boolean)','ac8be7c4ab3ad689506adde83fbe63c3','v',false),
+    ('hon.hq_school_plan_lock(uuid,integer,boolean)','a27fab280c617381ef01c69dcbd09c2b','v',false),
     ('hon.hq_school_plan_note(jsonb)','5b8a66141e4fbf795300b6fc4d7b432f','i',false),
     ('hon.hq_school_plan_offers()','180aff67b318b9fc3c25f7a0c5641179','s',false),
     ('hon.hq_school_plan_owner_eligible(uuid)','dbc3cd018b615eacfbd5ce243d396c5d','s',false),

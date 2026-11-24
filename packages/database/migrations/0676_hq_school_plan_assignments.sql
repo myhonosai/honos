@@ -30,7 +30,7 @@ CREATE TABLE hon.hq_school_plan_assignments (
   offer_id uuid REFERENCES hon.saas_offer_set_offers(id) ON DELETE RESTRICT,
   offer_kind text CHECK (offer_kind IN ('REGULAR_MONTHLY','REGULAR_ANNUAL','FOUNDER_MONTHLY','FOUNDER_ANNUAL','LIFETIME','FOUNDER_LIFETIME')),
   offer_set_version integer CHECK (offer_set_version > 0),
-  plan_name text CHECK (plan_name = btrim(plan_name) AND length(plan_name) BETWEEN 3 AND 80),
+  plan_name text CHECK (plan_name = btrim(plan_name) AND length(plan_name) BETWEEN 1 AND 80),
   billing_interval text CHECK (billing_interval IN ('MONTHLY','ANNUAL','ONE_TIME')),
   price_minor bigint CHECK (price_minor BETWEEN 0 AND 10000000),
   currency text CHECK (currency = 'USD'),
@@ -42,6 +42,7 @@ CREATE TABLE hon.hq_school_plan_assignments (
   PRIMARY KEY (organization_id, revision),
   FOREIGN KEY (school_id, organization_id) REFERENCES hon.schools(id, organization_id),
   CHECK ((action = 'REMOVE') = (source IS NULL)),
+  CHECK (source IS DISTINCT FROM 'CUSTOM' OR length(plan_name) >= 3), -- offer names follow 0181 (1-80); custom names need 3+
   CHECK (action = 'REMOVE' OR (plan_name IS NOT NULL AND billing_interval IS NOT NULL AND price_minor IS NOT NULL
     AND currency IS NOT NULL AND founder IS NOT NULL)),
   CHECK (action = 'ASSIGN' OR (offer_id IS NULL AND offer_kind IS NULL AND offer_set_version IS NULL AND plan_name IS NULL
@@ -164,7 +165,10 @@ BEGIN
   SELECT * INTO s FROM hon.schools WHERE id = p_school;
   IF s.id IS NULL THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('hq-school-plan:' || s.organization_id::text, 0));
-  SELECT * INTO o FROM hon.organizations WHERE id = s.organization_id;
+  -- Share-lock the organization, then the school, so a concurrent archive (0675) waits for this record or is seen by it.
+  SELECT * INTO o FROM hon.organizations WHERE id = s.organization_id FOR SHARE;
+  SELECT * INTO s FROM hon.schools WHERE id = p_school AND organization_id = o.id FOR SHARE;
+  IF s.id IS NULL THEN RAISE EXCEPTION 'SAAS_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
   IF p_assign AND (s.status::text = 'ARCHIVED' OR o.status::text = 'ARCHIVED') THEN
     RAISE EXCEPTION 'HQ_SCHOOL_PLAN_SCHOOL_ARCHIVED' USING ERRCODE = '23514';
   END IF;

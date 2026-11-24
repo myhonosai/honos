@@ -95,6 +95,7 @@ it('keeps the same key only when the outcome is unknown, and reloads after a con
   expect(planProblem(new Error('network'))).toEqual({ key: 'UNKNOWN', keepKey: true, reload: false });
   expect(planProblem(new PlanError('CHANGED', 'SAAS_VERSION_CONFLICT'))).toEqual({ key: 'CHANGED', keepKey: false, reload: true });
   expect(planProblem(new PlanError('REFUSED', 'HQ_SCHOOL_PLAN_NO_CHANGE'))).toEqual({ key: 'REFUSED_HQ_SCHOOL_PLAN_NO_CHANGE', keepKey: false, reload: false });
+  expect(planProblem(new PlanError('KEY_REUSED', 'IDEMPOTENCY_KEY_REUSED'))).toEqual({ key: 'CHANGED', keepKey: false, reload: true });
   expect(planProblem(new PlanError('DENIED'))).toEqual({ key: 'DENIED', keepKey: false, reload: false });
 });
 

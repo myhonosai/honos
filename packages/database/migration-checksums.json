@@ -401,6 +401,6 @@
     "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
     "0642_membership_plan_payment_options.sql": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251",
-    "0676_hq_school_plan_assignments.sql": "4e852e672f5f9b0e4c445aff179b76a41b8360bd2dc594efc84ebf396b78d3bf"
+    "0676_hq_school_plan_assignments.sql": "ec678f629f21222ff612462ceb151e821938b4aaa602d08dd64e928b2cb91dc6"
   }
 }
