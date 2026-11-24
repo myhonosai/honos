@@ -31,7 +31,7 @@ import { MembershipPlanService } from './billing/membership-plan.service.js';
 import { GuardianChildEnrollmentController, GuardianChildMembershipDraftController } from './crm/guardian-child-enrollment.controller.js';
 import { GuardianChildEnrollmentService } from './crm/guardian-child-enrollment.service.js';
 import { CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard } from './crm/guardian-child-enrollment.dto.js';
-import { CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard } from './billing/membership-plan.dto.js';
+import { CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, MembershipPlanSetupsHumanUiGuard, MembershipPlanCreateWithOptionsHumanUiGuard, MembershipPlanReviseWithOptionsHumanUiGuard } from './billing/membership-plan.dto.js';
 import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
@@ -1088,7 +1088,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmSchoolClockService,
     CrmSchoolClockHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
-    MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
+    MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, MembershipPlanSetupsHumanUiGuard, MembershipPlanCreateWithOptionsHumanUiGuard, MembershipPlanReviseWithOptionsHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     TuitionPaymentRecordHumanUiGuard,
