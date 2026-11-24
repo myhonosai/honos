@@ -1,4 +1,5 @@
 'use client';
+import { SchoolSwitcher } from '../school-switcher/switcher';
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -304,6 +305,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
+    switcher={<SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} />}
     search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
     tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
