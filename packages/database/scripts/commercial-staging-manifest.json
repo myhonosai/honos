@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "187e0703a9e96d8ae40b2b3852eb54e565d904210627fb6541ddbbb2f35772a8",
+  "chainSha256": "d020a7b495c55a59c06ba2b9ae27847c51178749a6ce8070dbebfef4ff8f6593",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -889,6 +889,26 @@
     {
       "file": "0638_eian_natural_voice.sql",
       "sha256": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
+    },
+    {
+      "file": "0639_alex_delegation_plans.sql",
+      "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
+    },
+    {
+      "file": "0640_jordan_follow_through.sql",
+      "sha256": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d"
+    },
+    {
+      "file": "0641_marcus_marketing_review.sql",
+      "sha256": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47"
+    },
+    {
+      "file": "0642_membership_plan_payment_options.sql",
+      "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
+    },
+    {
+      "file": "0643_claire_kpi_report.sql",
+      "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
     },
     {
       "file": "0644_booking_invoice_security_hygiene.sql",
