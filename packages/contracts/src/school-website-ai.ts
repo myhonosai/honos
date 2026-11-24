@@ -18,7 +18,7 @@ export type WebsiteAiStatus = typeof WEBSITE_AI_STATUSES[number];
 export const WEBSITE_AI_REASONS = ['CONFIGURATION_REQUIRED', 'NO_ELIGIBLE_ROUTE', 'CUSTOMER_BUDGET_EXCEEDED', 'AI_SPEND_STOPPED', 'UNSUPPORTED_PROVIDER',
   'INVALID_REQUEST', 'PROVIDER_REJECTED', 'PROVIDER_UNKNOWN', 'ROUTE_STALE', 'RESULT_BUDGET_EXCEEDED', 'RESULT_INVALID', 'SUBJECT_STALE', 'GATE_CLOSED',
   // 0670: an edit paid from creative credits that could not reserve them (nothing was sent).
-  'CREATIVE_CREDITS_EXHAUSTED', 'CREATIVE_NOT_PRICED', 'CREATIVE_NOT_ELIGIBLE'] as const;
+  'CREATIVE_CREDITS_EXHAUSTED', 'CREATIVE_NOT_PRICED', 'CREATIVE_NOT_ELIGIBLE', 'CREATIVE_EDIT_IN_PROGRESS'] as const;
 export type WebsiteAiReason = typeof WEBSITE_AI_REASONS[number];
 /**
  * 0670: what the next AI website edit is paid with. CREATIVE_CREDITS when the creative program is on, the school is

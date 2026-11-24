@@ -36,9 +36,11 @@ The read needs the same access as asking Marcus. The panel shows "Each message u
 | PRE_SEND (back to CONFIGURATION_REQUIRED) | RELEASED at a known zero cost (`NOT_SENT`) | none |
 | UNKNOWN (incl. the 90-second SENDING timeout) | OUTCOME_UNKNOWN, credits held | none |
 
+**One creative-paid edit in flight per school.** A creative-paid proposal holds no included credits, so the school AI cost limit, which counts only `reserved_credits > 0` holds, cannot see it while it runs. The reserve therefore refuses a second one while the school already has a RESERVED website reservation (`CREATIVE_EDIT_IN_PROGRESS`, nothing sent). The cost the limit cannot see is at most one request, $0.15 under the kind's cap. An OUTCOME_UNKNOWN reservation does not block.
+
 The dollar cost is recorded once, in the 0550 `AGENT_INFERENCE` usage row. The school AI cost limit and HQ usage still see it, and CW1 settlement writes no second usage row.
 
-**UNKNOWN goes to one queue: CW1.** The HQ owner resolves it with the existing creative reservation resolution (`resolve_saas_creative_reservation_from_hq`). The S4 unknown queue lists only included-credit holds (`reserved_credits > 0`), and a creative-paid proposal holds none, so the same decision never appears in two queues. HQ Creative Credits labels the reservation "Website AI edit".
+**UNKNOWN goes to one queue: CW1.** The HQ owner resolves it with the existing creative reservation resolution (`resolve_saas_creative_reservation_from_hq`). The S4 unknown queue lists only included-credit holds (`reserved_credits > 0`), and a creative-paid proposal holds none, so the same decision never appears in two queues. HQ Creative Credits labels the reservation "Website AI edit". A "charged" CW1 resolution records its cost as CREATIVE_MEDIA usage, as CW1 does for every creative reservation. That cost counts against HON's creative spend, not the school's AI-team cost limit, which is accepted because it only follows an UNKNOWN outcome that the HQ owner decides by hand.
 
 ## Custody
 

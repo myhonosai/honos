@@ -33,7 +33,7 @@ it('says what each message costs and why a creative-paid message could not start
   expect(websiteAiText('en', 'costIncluded')).toBe('Messages use your included AI.');
   for (const lang of ['ko', 'es']) {
     expect(websiteAiText(lang, 'costCreative', { n: '5', left: '120' })).toContain('120');
-    for (const k of ['r_CREATIVE_CREDITS_EXHAUSTED', 'r_CREATIVE_NOT_PRICED', 'r_CREATIVE_NOT_ELIGIBLE', 'costIncluded'] as const) expect(websiteAiText(lang, k)).not.toBe(websiteAiText('en', k));
+    for (const k of ['r_CREATIVE_CREDITS_EXHAUSTED', 'r_CREATIVE_NOT_PRICED', 'r_CREATIVE_NOT_ELIGIBLE', 'r_CREATIVE_EDIT_IN_PROGRESS', 'costIncluded'] as const) expect(websiteAiText(lang, k)).not.toBe(websiteAiText('en', k));
   }
 });
 

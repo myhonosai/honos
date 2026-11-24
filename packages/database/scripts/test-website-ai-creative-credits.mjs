@@ -106,6 +106,7 @@ try {
     await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','PRIVATE_DIRECTORY',true)", [h.id, h.user]);
   }
   await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,'HON_HQ_OWNER','{}',clock_timestamp()-interval '1 hour')", [humans.owner.id]);
+  await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state) VALUES('HIGGSFIELD','Fixture image provider','DISABLED') ON CONFLICT DO NOTHING");
   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state,credential_secret_ref) VALUES('OPENROUTER','W670 synthetic route','HEALTHY',$1)", [`hon-secret:${K()}`]);
   await admin.query("INSERT INTO hon.hq_ai_model_catalog(catalog_id,provider_id,model_id,display_name,capabilities,modalities,active,minimum_tier,unit_cost_micros,cost_unit,effective_from) VALUES($1,'OPENROUTER','approved/w670-synthetic','W670 synthetic model',ARRAY['TEXT'],ARRAY['TEXT'],true,'COMPLETE',2,'TOKEN','2020-01-01')", [catalog]);
   await admin.query('COMMIT');
@@ -294,10 +295,10 @@ try {
   await check('W12', 'concurrency on one wallet: website edits and image reservations race without deadlock, and never spend more than the wallet holds', async () => {
     const lot = await row("SELECT id FROM hon.saas_creative_lots WHERE school_id=$1 AND lot_kind='INCLUDED_MONTHLY'", [S.B]);
     const b0 = await balance('B'), t0 = (await row('SELECT clock_timestamp() t')).t;
-    await wallet.debitLot(H('owner'), lot.id, { credits: b0.available - 30, reasonCode: 'BILLING_CORRECTION', note: 'Fixture: 30 credits for the race' }, K());
+    await wallet.debitLot(H('owner'), lot.id, { credits: b0.available - 40, reasonCode: 'BILLING_CORRECTION', note: 'Fixture: 40 credits for the race' }, K());
     let release; fake.hold = new Promise((r) => { release = r; });
     const edits = [1, 2, 3, 4].map((n) => settle(ask('B', `Race edit ${n}`)));
-    const images = [1, 2, 3, 4].map(() => settle(wallet.reserveCredits(H('ownerB'), S.B, { operationCode: 'image.generate', units: 1, providerId: 'HIGGSFIELD', modelCode: 'fixture-image-1' }, K())));
+    const images = [1, 2].map(() => settle(wallet.reserveCredits(H('ownerB'), S.B, { operationCode: 'image.generate', units: 1, providerId: 'HIGGSFIELD', modelCode: 'fixture-image-1' }, K())));
     const imageResults = await Promise.all(images);
     await new Promise((r) => setTimeout(r, 300));
     release(); fake.hold = null;
@@ -305,12 +306,30 @@ try {
     for (const x of [...editResults, ...imageResults]) if (x.error) assert.notEqual(x.error?.code, '40P01', 'no deadlock');
     const all = await rows('SELECT media_kind, status, reserved_credits FROM hon.saas_creative_reservations WHERE school_id=$1 AND reserved_at > $2', [S.B, t0]);
     const spentOrHeld = all.filter((r) => r.status !== 'RELEASED').reduce((n, r) => n + r.reserved_credits, 0);
-    assert(spentOrHeld <= 30, `spent or held ${spentOrHeld} of 30`);
+    assert(spentOrHeld <= 40, `spent or held ${spentOrHeld} of 40`);
     const bal = await balance('B');
-    assert(bal.available >= 0 && bal.available + spentOrHeld === 30, JSON.stringify({ bal, spentOrHeld }));
+    assert(bal.available >= 0 && bal.available + spentOrHeld === 40, JSON.stringify({ bal, spentOrHeld }));
     const okEdits = editResults.filter((x) => x.value?.status === 'RESULT_RECORDED').length, okImages = imageResults.filter((x) => x.value).length;
-    assert(okEdits * RATE + okImages * 10 <= 30 && okEdits + okImages >= 2, JSON.stringify({ okEdits, okImages }));
-    for (const x of editResults) if (x.value?.status === 'BLOCKED') assert.equal(x.value.reason, 'CREATIVE_CREDITS_EXHAUSTED');
+    assert(okEdits * RATE + okImages * 10 <= 40 && okEdits >= 1 && okImages === 2, JSON.stringify({ okEdits, okImages }));
+    for (const x of editResults) if (x.value?.status === 'BLOCKED') assert(['CREATIVE_CREDITS_EXHAUSTED', 'CREATIVE_EDIT_IN_PROGRESS'].includes(x.value.reason), x.value.reason);
+  });
+
+  await check('W14', 'one creative-paid edit in flight per school: a second edit while the first is with the provider is blocked CREATIVE_EDIT_IN_PROGRESS with no call; after it settles the next one runs', async () => {
+    const lot = await row("SELECT id FROM hon.saas_creative_lots WHERE school_id=$1 AND lot_kind='PROMOTIONAL'", [S.B]);
+    if (!lot) await wallet.grantCredits(H('owner'), S.B, { kind: 'PROMOTIONAL', credits: 100, reasonCode: 'PROMOTION', note: 'Fixture credits for the in-flight check' }, K());
+    let release, entered; const inside = new Promise((r) => { entered = r; });
+    fake.hold = () => { entered(); return new Promise((r) => { release = r; }); };
+    const first = settle(ask('B', 'First of two'));
+    await inside;
+    fake.hold = null;
+    const before = fake.calls;
+    const second = await ask('B', 'Second while the first runs');
+    assert.deepEqual([second.status, second.reason], ['BLOCKED', 'CREATIVE_EDIT_IN_PROGRESS']); assert.equal(fake.calls, before);
+    assert.equal(await linkOf(second.id), undefined);
+    release();
+    assert.equal((await first).value?.status, 'RESULT_RECORDED');
+    const third = await ask('B', 'After the first settled');
+    assert.equal(third.status, 'RESULT_RECORDED');
   });
 
   await check('W13', 'the 011 exact verification for 0670 and the shared 0550 core passes on this database', async () => {

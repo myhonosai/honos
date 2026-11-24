@@ -6590,7 +6590,7 @@ END $$;
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.ai_text_creative_applies(hon.ai_text_proposals,timestamptz)',true,false,'search_path=pg_catalog, hon','0d82ad6f95132caba978fcfcbc07f93f69d550078976fd95457246541c45522e'),
-('hon.ai_text_creative_reserve(hon.ai_text_proposals,hon.ai_invocation_plans)',true,false,'search_path=pg_catalog, hon','2105e4ed1ff576b2d879a9348b04b5493d7630fd3b8df523f3fb6c6ee2065d13'),
+('hon.ai_text_creative_reserve(hon.ai_text_proposals,hon.ai_invocation_plans)',true,false,'search_path=pg_catalog, hon','ffc643599a798dbf3019ba3af30ecfd543bde21aee9b9ae23dc1644bcae07bce'),
 ('hon.ai_text_creative_settle()',true,false,'search_path=pg_catalog, hon','e7fa39c773cac29df7468ad105d16d6585b4862409a237c2cca924e5c11bb4fa'),
 ('hon.guard_ai_text_creative()',false,false,'search_path=pg_catalog, hon','7ab0272cdad7ca16d51de0e31f3909fe7068e98fc6698fa136cce5f364b0373e'),
 ('hon.guard_website_creative_reservation()',false,false,'search_path=pg_catalog, hon','ad6f745fb6ac071dc44ced7f1afc5150e9f54bb9f420ac16804f57475bbc28e9'),

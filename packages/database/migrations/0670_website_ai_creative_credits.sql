@@ -70,7 +70,7 @@ DO $$ DECLARE c record; BEGIN
 END $$;
 ALTER TABLE hon.ai_text_proposals ADD CONSTRAINT ai_text_proposals_reason_check CHECK (reason IN ('CONFIGURATION_REQUIRED','NO_ELIGIBLE_ROUTE',
   'CUSTOMER_BUDGET_EXCEEDED','AI_SPEND_STOPPED','UNSUPPORTED_PROVIDER','INVALID_REQUEST','PROVIDER_REJECTED','PROVIDER_UNKNOWN','ROUTE_STALE',
-  'RESULT_BUDGET_EXCEEDED','RESULT_INVALID','SUBJECT_STALE','GATE_CLOSED','CREATIVE_NOT_PRICED','CREATIVE_CREDITS_EXHAUSTED','CREATIVE_NOT_ELIGIBLE'));
+  'RESULT_BUDGET_EXCEEDED','RESULT_INVALID','SUBJECT_STALE','GATE_CLOSED','CREATIVE_NOT_PRICED','CREATIVE_CREDITS_EXHAUSTED','CREATIVE_NOT_ELIGIBLE','CREATIVE_EDIT_IN_PROGRESS'));
 
 -- Website usage is TEXT; IMAGE and VIDEO keep their own modality (0202 body otherwise unchanged). Used by the HQ owner's
 -- CW1 resolution and late-cost recording.
@@ -172,7 +172,8 @@ CREATE TRIGGER ai_text_creative_billing_no_truncate BEFORE TRUNCATE ON hon.ai_te
 CREATE TRIGGER ai_text_creative_reservations_immutable BEFORE UPDATE OR DELETE ON hon.ai_text_creative_reservations FOR EACH ROW EXECUTE FUNCTION hon.guard_ai_text_creative();
 CREATE TRIGGER ai_text_creative_reservations_no_truncate BEFORE TRUNCATE ON hon.ai_text_creative_reservations FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_ai_text_creative();
 
--- A WEBSITE reservation is created and provider-settled only by this path (transaction-local marker). The public CW1
+-- A WEBSITE reservation is created and provider-settled only by this path (transaction-local marker). Defence in depth
+-- only: any session could set the marker, but the runtime cannot write these tables or call the private helpers anyway. The public CW1
 -- reserve and settle refuse it; the HQ owner's resolution and late-cost recording are not provider settlements.
 CREATE FUNCTION hon.guard_website_creative_reservation() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,hon AS $$
 BEGIN
@@ -209,6 +210,10 @@ BEGIN
   at := clock_timestamp();
   IF hon.ai_spend_allowed(i.organization_id, i.school_id, at, 'CREATIVE_MEDIA') IS NOT NULL
     OR hon.ai_school_spend_decision(i.organization_id, i.school_id, at, 'CREATIVE_MEDIA') IS NOT NULL THEN RETURN 'AI_SPEND_STOPPED'; END IF;
+  -- One creative-paid edit in flight per school: these holds carry no included credits, so the school AI cost limit
+  -- (which counts only reserved_credits > 0) cannot see them; this keeps the unseen in-flight cost to one request.
+  IF EXISTS (SELECT 1 FROM hon.ai_text_creative_reservations c JOIN hon.saas_creative_reservations x ON x.id = c.reservation_id AND x.school_id = c.school_id
+      WHERE c.school_id = i.school_id AND x.status = 'RESERVED') THEN RETURN 'CREATIVE_EDIT_IN_PROGRESS'; END IF;
   PERFORM hon.saas_creative_open_window(i.school_id, i.requested_by, at);
   e := hon.saas_creative_eligibility(i.school_id, at);
   IF NOT (e->>'eligible')::boolean THEN RETURN 'CREATIVE_NOT_ELIGIBLE'; END IF;
