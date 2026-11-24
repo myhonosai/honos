@@ -295,6 +295,13 @@ const SAAS_BILLING_CALLS = {
   createMarketingCampaign: { sql: 'SELECT hon.create_hq_marketing_campaign($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   updateMarketingCampaign: { sql: 'SELECT hon.update_hq_marketing_campaign($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   setMarketingCampaignStatus: { sql: 'SELECT hon.set_hq_marketing_campaign_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0677: HQ ad account connections (HQ owner connects HON's own Google Ads / Meta through Zernio). Records only.
+  readHqAdAccounts: { sql: 'SELECT hon.read_hq_ad_accounts($1) AS data', arity: 1, readOnly: true },
+  startHqAdConnect: { sql: 'SELECT hon.start_hq_ad_connect($1,$2::jsonb,$3) AS data', arity: 3, readOnly: false },
+  recordHqAdProfile: { sql: 'SELECT hon.record_hq_ad_profile($1,$2::uuid,$3) AS data', arity: 3, readOnly: false },
+  claimHqAdConnect: { sql: 'SELECT hon.claim_hq_ad_connect($1,$2) AS data', arity: 2, readOnly: false },
+  recordHqAdAccounts: { sql: 'SELECT hon.record_hq_ad_accounts($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  disconnectHqAdAccount: { sql: 'SELECT hon.disconnect_hq_ad_account($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   // 0308: HQ plan promotions. HQ reads are read-only; HQ commands write only promotion rows; the school event writes one
   // seen/opened/dismissed row. Nothing here changes prices, offers, checkouts, plans, billing or messages.
   readPlanPromotions: { sql: 'SELECT hon.read_hq_plan_promotions($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },

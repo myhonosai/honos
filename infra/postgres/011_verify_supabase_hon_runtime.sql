@@ -6754,3 +6754,52 @@ BEGIN
   END LOOP;
 END $$;
 -- End membership plan payment options exact verification.
+
+-- HQ ad account connections exact verification (0677): six runtime entry points, seven private helpers, five forced-RLS tables.
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_hq_ad_accounts(text)','hon.start_hq_ad_connect(text,jsonb,text)','hon.record_hq_ad_profile(text,uuid,text)',
+      'hon.claim_hq_ad_connect(text,text)','hon.record_hq_ad_accounts(text,uuid,jsonb)','hon.disconnect_hq_ad_account(text,uuid,jsonb,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe HQ ad connection entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_ad()','hon.hq_ad_owner_eligible(uuid)','hon.require_hq_ad_actor(text,boolean)','hon.hq_ad_account_json(hon.hq_ad_accounts)',
+      'hon.hq_ad_accounts_json()','hon.hq_ad_event(text,uuid,uuid,uuid,jsonb)','hon.hq_ad_open_intent(uuid,uuid)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe HQ ad connection helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_ad_profile','hq_ad_accounts','hq_ad_connect_intents','hq_ad_requests','hq_ad_events'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe HQ ad connection table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_hq_ad()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'HQ ad connection guard missing: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND (proname LIKE '%hq\_ad\_%' OR proname='guard_hq_ad'))<>13 THEN
+    RAISE EXCEPTION 'Unexpected HQ ad connection overload'; END IF;
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.claim_hq_ad_connect(text,text)','e8fb92ded4d17db66accd3d79cfb1289','v',true,'search_path=pg_catalog, hon'),
+    ('hon.disconnect_hq_ad_account(text,uuid,jsonb,uuid)','b216501f99a353098889476837085820','v',true,'search_path=pg_catalog, hon'),
+    ('hon.guard_hq_ad()','995f9a67805f08f1d1d8e2a3b09c7ecb','v',false,'search_path=pg_catalog, hon'),
+    ('hon.hq_ad_account_json(hon.hq_ad_accounts)','4966a321b1b8fbd39badaa04ccc03105','s',false,'search_path=pg_catalog, hon'),
+    ('hon.hq_ad_accounts_json()','db0ee8455ed9aa2399443a6f689405d9','s',false,'search_path=pg_catalog, hon'),
+    ('hon.hq_ad_event(text,uuid,uuid,uuid,jsonb)','e2aadd252affd3709c0bd5204f60bb7e','v',false,'search_path=pg_catalog, hon'),
+    ('hon.hq_ad_open_intent(uuid,uuid)','b94d44e9146e956a3df8e3a4edfc9846','v',false,'search_path=pg_catalog, hon'),
+    ('hon.hq_ad_owner_eligible(uuid)','6aa8dd564fe2af7cea8d2cf0db4e6c25','s',false,'search_path=pg_catalog, hon'),
+    ('hon.read_hq_ad_accounts(text)','d3c2da11fff3e0c147f19c0435d958bd','v',true,'search_path=pg_catalog, hon'),
+    ('hon.record_hq_ad_accounts(text,uuid,jsonb)','ce1b78e40466523ccb181aeddc98e93c','v',true,'search_path=pg_catalog, hon'),
+    ('hon.record_hq_ad_profile(text,uuid,text)','7079b9b04de43d9ffc54cf052d633454','v',true,'search_path=pg_catalog, hon'),
+    ('hon.require_hq_ad_actor(text,boolean)','d892ab624ab770d942cae767f2fca92a','v',false,'search_path=pg_catalog, hon'),
+    ('hon.start_hq_ad_connect(text,jsonb,text)','251fef7be73988c7ee362aa6125fd0ca','v',true,'search_path=pg_catalog, hon')) x(f,t,c,d,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s]) THEN
+      RAISE EXCEPTION 'HQ ad connection function body/posture drift: %',f; END IF;
+  END LOOP;
+END $$;
+-- End HQ ad account connections exact verification.
