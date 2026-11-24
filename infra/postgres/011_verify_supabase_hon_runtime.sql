@@ -6754,3 +6754,54 @@ BEGIN
   END LOOP;
 END $$;
 -- End membership plan payment options exact verification.
+
+-- HQ school plan assignments exact verification (0676): three runtime entry points, eleven private helpers, two forced-RLS tables.
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_hq_school_plan(text,uuid)','hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','hon.remove_hq_school_plan(text,uuid,jsonb,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe HQ school plan entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_plan_evidence()','hon.require_hq_school_plan_owner(text)','hon.hq_school_plan_owner_eligible(uuid)',
+      'hon.hq_school_plan_json(hon.hq_school_plan_assignments)','hon.hq_school_plan_offers()','hon.hq_school_plan_current(uuid)',
+      'hon.hq_school_plan_view(uuid,uuid)','hon.hq_school_plan_claim(uuid,uuid,text,text)','hon.hq_school_plan_lock(uuid,integer,boolean)',
+      'hon.hq_school_plan_expected(jsonb)','hon.hq_school_plan_note(jsonb)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe HQ school plan helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_school_plan_assignments','hq_school_plan_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe HQ school plan table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_hq_school_plan_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'HQ school plan guard missing: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname LIKE '%hq_school_plan%')<>14 THEN
+    RAISE EXCEPTION 'Unexpected HQ school plan overload'; END IF;
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','8d5bdf65bd58cf2ca8df26abbcdd8ed5','v',true),
+    ('hon.guard_hq_school_plan_evidence()','038a3ad60cf851ce84ba3330bd4f322f','v',false),
+    ('hon.hq_school_plan_claim(uuid,uuid,text,text)','0a52e5a8f7173cab4dea868e50576ecc','v',false),
+    ('hon.hq_school_plan_current(uuid)','48f22d7aa8b47ced2aa0919af9fe9321','s',false),
+    ('hon.hq_school_plan_expected(jsonb)','6005bd5c38be258c8367427e3a30e3c9','i',false),
+    ('hon.hq_school_plan_json(hon.hq_school_plan_assignments)','ecd31086f6b67be84a2bf9909a12b44f','s',false),
+    ('hon.hq_school_plan_lock(uuid,integer,boolean)','ac8be7c4ab3ad689506adde83fbe63c3','v',false),
+    ('hon.hq_school_plan_note(jsonb)','5b8a66141e4fbf795300b6fc4d7b432f','i',false),
+    ('hon.hq_school_plan_offers()','180aff67b318b9fc3c25f7a0c5641179','s',false),
+    ('hon.hq_school_plan_owner_eligible(uuid)','dbc3cd018b615eacfbd5ce243d396c5d','s',false),
+    ('hon.hq_school_plan_view(uuid,uuid)','913e37dbe15b2be2ff90ee6780f0d9c4','s',false),
+    ('hon.read_hq_school_plan(text,uuid)','1383b8081a88528f41e6ef62d2b64e24','v',true),
+    ('hon.remove_hq_school_plan(text,uuid,jsonb,uuid)','72e0e4601531edfd50863ef4beae49a9','v',true),
+    ('hon.require_hq_school_plan_owner(text)','6e7895d645e16e9bd9c5195ef8ecbd55','v',false)) x(f,t,c,d) CROSS JOIN (SELECT 'search_path=pg_catalog, hon'::text) y(s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s]) THEN
+      RAISE EXCEPTION 'HQ school plan function body/posture drift: %',f; END IF;
+  END LOOP;
+END $$;
+-- End HQ school plan assignments exact verification.

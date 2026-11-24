@@ -5348,3 +5348,28 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0676 HQ school plan assignments: three HQ entry points (read, assign, remove). Both tables keep forced RLS with no
+-- runtime privilege; every helper stays migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_hq_school_plan(text,uuid)','hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','hon.remove_hq_school_plan(text,uuid,jsonb,uuid)'];
+BEGIN
+  IF to_regclass('hon.hq_school_plan_assignments') IS NULL OR to_regclass('hon.hq_school_plan_requests') IS NULL THEN
+    RAISE EXCEPTION 'Apply migration 0676 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.hq_school_plan_assignments','hon.hq_school_plan_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_plan_evidence()','hon.require_hq_school_plan_owner(text)','hon.hq_school_plan_owner_eligible(uuid)',
+      'hon.hq_school_plan_json(hon.hq_school_plan_assignments)','hon.hq_school_plan_offers()','hon.hq_school_plan_current(uuid)',
+      'hon.hq_school_plan_view(uuid,uuid)','hon.hq_school_plan_claim(uuid,uuid,text,text)','hon.hq_school_plan_lock(uuid,integer,boolean)',
+      'hon.hq_school_plan_expected(jsonb)','hon.hq_school_plan_note(jsonb)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

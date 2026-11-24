@@ -137,6 +137,9 @@ export const SAAS_COMMANDS = {
   updatePlanPromotion: 'hq-plan-promotion-update',
   setPlanPromotionStatus: 'hq-plan-promotion-status',
   recordSchoolPlanPromotionEvent: 'school-plan-promotion-event',
+  // 0676: HQ school plan assignments; same values as HQ_SCHOOL_PLAN_COMMANDS.
+  assignSchoolPlan: 'hq-school-plan-assign',
+  removeSchoolPlan: 'hq-school-plan-remove',
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
