@@ -190,6 +190,20 @@ try {
   assert.equal(getSeen.headers['sec-fetch-site'], 'same-origin'); assert.equal(getSeen.headers['sec-fetch-mode'], 'same-origin'); assert.equal(getSeen.headers['sec-fetch-dest'], 'empty');
   assert.equal(getSeen.headers['x-forwarded-for'], undefined, 'Next did not add X-Forwarded-For on this path.');
 
+  // 1b. Behind the hosting edge (Render), every browser request reaches Next with X-Forwarded-For/-Proto/-Port and Next's
+  // rewrite passes them on. Refusing them refused every class read on the live app (calendar empty), so they are accepted.
+  // A raw request, because Node's fetch rewrites Sec-Fetch-Mode to cors; a browser cannot set X-Forwarded-For itself.
+  const viaEdge = await new Promise((resolve, reject) => {
+    const request = http.request(`${publicOrigin}/api${readPath()}`, { method: 'GET', headers: browserLike({ 'X-Forwarded-For': '203.0.113.9, 10.0.0.1', 'X-Forwarded-Proto': 'https', 'X-Forwarded-Port': '443' }) }, (response) => {
+      let body = ''; response.setEncoding('utf8'); response.on('data', (chunk) => { body += chunk; }); response.on('end', () => resolve({ status: response.statusCode, body }));
+    });
+    request.on('error', reject); request.end();
+  });
+  assert.equal(viaEdge.status, 200, `GET through Next behind the hosting edge: expected 200, got ${viaEdge.status} ${viaEdge.body}`);
+  const edgeSeen = lastReceived('GET', readPath());
+  assert.equal(edgeSeen.headers['x-forwarded-for'], '203.0.113.9, 10.0.0.1', 'Proof precondition: Next passed the edge X-Forwarded-For on to Nest.');
+  assert.equal(edgeSeen.headers['x-forwarded-proto'], 'https', 'Proof precondition: Next passed the edge X-Forwarded-Proto on to Nest.');
+
   // 2. The native production POST through Next (Origin present + X-Forwarded-Host) creates a session.
   const startsAt = new Date(Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 2 * 86_400_000).toISOString();
   const endsAt = new Date(Date.parse(startsAt) + 3_600_000).toISOString();
@@ -224,10 +238,11 @@ try {
 
   // 4. Spoofing negatives sent straight to Nest with a valid session (what a non-browser client could try).
   assert.equal((await direct('GET', readPath(), browserLike())).status, 200, 'Direct same-origin metadata without Origin or forwarding headers.');
+  assert.equal((await direct('GET', readPath(), browserLike({ 'X-Forwarded-For': '203.0.113.9', 'X-Real-IP': '203.0.113.9' }))).status, 200, 'Edge client-address headers are not authority.');
   for (const [label, patch] of [
     ['wrong Origin', { Origin: 'https://evil.test' }], ['opaque Origin', { Origin: 'null' }],
     ['mismatched X-Forwarded-Host', { 'X-Forwarded-Host': 'evil.test' }], ['list X-Forwarded-Host', { 'X-Forwarded-Host': `127.0.0.1:${WEB_PORT}, evil.test` }],
-    ['X-Forwarded-For', { 'X-Forwarded-For': '203.0.113.9' }], ['X-Forwarded-Proto', { 'X-Forwarded-Proto': 'https' }], ['Forwarded', { Forwarded: 'host=evil.test' }], ['X-Real-IP', { 'X-Real-IP': '203.0.113.9' }],
+    ['Forwarded', { Forwarded: 'host=evil.test' }], ['edge headers with a mismatched X-Forwarded-Host', { 'X-Forwarded-For': '203.0.113.9', 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'evil.test' }],
     ['cross-site metadata', { 'Sec-Fetch-Site': 'cross-site' }], ['navigation metadata', { 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' }],
     ['missing marker', { 'X-HON-Human-Read': undefined }], ['principal injection', { 'X-Principal-Id': ids.staff }], ['school injection', { 'X-School-Id': ids.otherSchool }],
   ]) {
@@ -235,13 +250,13 @@ try {
     assert.equal((await direct('GET', readPath(), headers)).status, 403, `direct GET ${label} must be 403`);
   }
   const commandHeaders = (patch = {}) => Object.fromEntries(Object.entries({ Cookie: `${HON_SESSION_COOKIE}=${cookieFor()}`, Origin: publicOrigin, 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID(), 'X-HON-Human-Command': 'class-session', 'Sec-Fetch-Site': 'same-origin', 'Sec-Fetch-Mode': 'same-origin', 'Sec-Fetch-Dest': 'empty', ...patch }).filter(([, value]) => value !== undefined));
-  for (const [label, patch] of [['missing Origin', { Origin: undefined, 'X-Forwarded-Host': `127.0.0.1:${WEB_PORT}` }], ['mismatched X-Forwarded-Host', { 'X-Forwarded-Host': 'evil.test' }], ['X-Forwarded-For', { 'X-Forwarded-For': '203.0.113.9' }]]) {
+  for (const [label, patch] of [['missing Origin', { Origin: undefined, 'X-Forwarded-Host': `127.0.0.1:${WEB_PORT}` }], ['mismatched X-Forwarded-Host', { 'X-Forwarded-Host': 'evil.test' }], ['edge headers without Origin', { Origin: undefined, 'X-Forwarded-For': '203.0.113.9', 'X-Forwarded-Proto': 'https' }]]) {
     assert.equal((await direct('POST', readPath(), commandHeaders(patch), createBody)).status, 403, `direct POST ${label} must be 403`);
   }
   assert.equal(commands.length, 1, 'Rejected commands never reached the write service.');
 
   await verifyClassSessionsReadSecurity(admin, runtime.username);
-  console.log('PASS: real Chromium -> production Next rewrite -> Nest -> PostgreSQL: native same-origin GET (no Origin, Next X-Forwarded-Host) returns 200 and the native POST passes transport, identity and database scope; missing marker, ungranted school, cross-origin, no session and unknown subject stay blocked; direct spoofed Origin/forwarding/metadata/authority headers stay 403.');
+  console.log('PASS: real Chromium -> production Next rewrite -> Nest -> PostgreSQL: native same-origin GET (no Origin, Next X-Forwarded-Host) returns 200 and the native POST passes transport, identity and database scope; missing marker, ungranted school, cross-origin, no session and unknown subject stay blocked; hosting-edge X-Forwarded-For/-Proto pass; direct spoofed Origin/Forwarded/X-Forwarded-Host/metadata/authority headers stay 403.');
 } finally {
   await browser?.close().catch(() => {});
   if (next && next.exitCode === null) { next.kill('SIGTERM'); await new Promise((r) => { next.once('exit', r); setTimeout(r, 5000); }); }

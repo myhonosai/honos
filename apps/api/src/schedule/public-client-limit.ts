@@ -18,11 +18,13 @@ import { isIP } from 'node:net';
  * Addresses are kept only as keyed hashes in process memory (an IPv6 address counts by its /64). Memory is fixed: when a window
  * already tracks MAX_CLIENTS addresses, a new address is let through untracked rather than refused.
  */
-export type PublicClientAction = 'read' | 'book' | 'cancel';
+export type PublicClientAction = 'read' | 'book' | 'cancel' | 'media';
 const WINDOWS: Record<PublicClientAction, { ms: number; max: number }> = {
   read: { ms: 60_000, max: 120 },
   book: { ms: 3_600_000, max: 20 },
   cancel: { ms: 3_600_000, max: 30 },
+  // 0628 picture links in emails: image proxies (such as Gmail's) fetch for many readers from few addresses.
+  media: { ms: 60_000, max: 600 },
 };
 export const PUBLIC_CLIENT_LIMITS = WINDOWS;
 const MAX_CLIENTS = 20_000;

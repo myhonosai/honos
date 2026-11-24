@@ -1,17 +1,19 @@
 import type { CommandContext } from './index.js';
-export const CURRICULUM_RESOURCE_KINDS = ['VIDEO', 'LINK'] as const;
+export const CURRICULUM_RESOURCE_KINDS = ['VIDEO', 'LINK', 'DOCUMENT'] as const;
 export type CurriculumResourceKind = (typeof CURRICULUM_RESOURCE_KINDS)[number];
 export type CurriculumResourceAudience = 'STAFF' | 'PARENT';
 export interface CurriculumResourceContext extends CommandContext { externalSubject: string }
 export interface CurriculumResourceCreateInput {
   expectedVersion: 0; curriculumId: string; rankId: string | null;
+  /** 0605: at most one of rankId / cycleId; an active cycle of the same curriculum. Optional for older clients. */
+  cycleId?: string | null;
   kind: CurriculumResourceKind; url: string; title: string; description: string; audience: CurriculumResourceAudience;
 }
 /** Fixed URL, kind and curriculum/rank identity cannot be rewritten. Archive and create instead. */
 export interface CurriculumResourceUpdateInput { expectedVersion: number; title: string; description: string; audience: CurriculumResourceAudience }
 export interface CurriculumResourceArchiveInput { expectedVersion: number }
 export interface CurriculumResourceRecord {
-  id: string; curriculumId: string; rankId: string | null; kind: CurriculumResourceKind; url: string;
+  id: string; curriculumId: string; rankId: string | null; cycleId: string | null; kind: CurriculumResourceKind; url: string;
   title: string; description: string; audience: CurriculumResourceAudience; status: 'ACTIVE' | 'ARCHIVED'; version: number;
 }
 export interface StaffCurriculumLibrary { resources: CurriculumResourceRecord[]; curricula: { id: string; name: string; ranks: { id: string; name: string }[] }[] }
@@ -38,13 +40,14 @@ export function libraryText(v: unknown, max: number, empty = false): string {
   return v;
 }
 export function verifyCurriculumResourceRecord(v: unknown): CurriculumResourceRecord {
-  const r = closedLibraryObject(v, ['id','curriculumId','rankId','kind','url','title','description','audience','status','version']);
+  const r = closedLibraryObject(v, ['id','curriculumId','rankId','cycleId','kind','url','title','description','audience','status','version']);
   if (!isCurriculumLibraryId(r.id) || !isCurriculumLibraryId(r.curriculumId) || (r.rankId !== null && !isCurriculumLibraryId(r.rankId))
+    || (r.cycleId !== null && !isCurriculumLibraryId(r.cycleId)) || (r.rankId !== null && r.cycleId !== null)
     || !CURRICULUM_RESOURCE_KINDS.includes(r.kind as never) || !isSafeCurriculumResourceUrl(r.url)
     || !['STAFF','PARENT'].includes(r.audience as string) || !['ACTIVE','ARCHIVED'].includes(r.status as string)
     || !Number.isSafeInteger(r.version) || Number(r.version) < 1 || Number(r.version) > 999999999) bad();
   libraryText(r.title,160); libraryText(r.description,600,true);
-  return { id:r.id, curriculumId:r.curriculumId, rankId:r.rankId, kind:r.kind, url:r.url, title:r.title, description:r.description, audience:r.audience, status:r.status, version:r.version } as CurriculumResourceRecord;
+  return { id:r.id, curriculumId:r.curriculumId, rankId:r.rankId, cycleId:r.cycleId, kind:r.kind, url:r.url, title:r.title, description:r.description, audience:r.audience, status:r.status, version:r.version } as CurriculumResourceRecord;
 }
 export function verifyParentCurriculumLibrary(v: unknown): ParentCurriculumLibrary {
   const data = closedLibraryObject(v, ['resources']);

@@ -1,0 +1,22 @@
+{%- comment -%}
+  App block for the cart page (themes whose cart sections take app blocks): the school's pickup note.
+{%- endcomment -%}
+{%- liquid
+  assign s = app.metafields.hon_storefront.settings.value
+  assign note = s.pickupNote | append: '' | strip
+-%}
+{%- if note != blank -%}
+  {{ 'hon-storefront.css' | asset_url | stylesheet_tag }}
+  <div class="hon-pickup-note" role="note" {{ block.shopify_attributes }}>{{ note | escape | newline_to_br }}</div>
+{%- elsif request.design_mode -%}
+  <p class="hon-placeholder" {{ block.shopify_attributes }}>{{ 'blocks.pickup_note.empty' | t }}</p>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "t:blocks.pickup_note.name",
+  "target": "section",
+  "enabled_on": { "templates": ["cart"] },
+  "settings": []
+}
+{% endschema %}

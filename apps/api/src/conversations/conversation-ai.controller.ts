@@ -44,7 +44,7 @@ export class ConversationAiItemSaveGuard extends MembershipActivationHumanUiGuar
 export class ConversationAiItemStatusGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = CONVERSATION_AI_ITEM_STATUS_COMMAND;
 }
-/** CE2 (0563): reading the test chat and asking a test question are each their own browser command. */
+/** CE2 (0667): reading the test chat and asking a test question are each their own browser command. */
 @Injectable()
 export class ConversationAiTestReadGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = CONVERSATION_AI_TEST_READ_COMMAND;

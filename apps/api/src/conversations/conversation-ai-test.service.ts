@@ -42,7 +42,7 @@ const validUsage = (r: ConversationTestResult) => [r.inputTokens, r.outputTokens
   && Number.isSafeInteger(r.providerCostMicrounits) && r.providerCostMicrounits >= 0 && r.providerCostMicrounits <= 1_000_000_000;
 
 /**
- * CE2 (0563): "Try it". Chad answers one test question from the school's training on the live text route (S4 spend
+ * CE2 (0667): "Try it". Chad answers one test question from the school's training on the live text route (S4 spend
  * controls, per-school ceiling). The answer is shown only to the staff member who asked; nothing is sent to anyone.
  * Usage evidence is recorded in its own transaction.
  */

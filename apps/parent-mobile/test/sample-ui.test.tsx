@@ -59,7 +59,7 @@ describe('sample family (test builds)', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Open Belt testing' }));
     expect(await screen.findByText(/Next test: Kids belt test/)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Back to More' }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Open Learning library' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Open Curriculum' }));
     expect(await screen.findByText('Form 1 walkthrough')).toBeTruthy();
   });
 

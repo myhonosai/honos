@@ -1,0 +1,21 @@
+{%- comment -%}
+  App embed for the cart page, for themes whose cart does not take app blocks: the same pickup note as a banner at the
+  top of the page. Use either this or the pickup note block, not both.
+{%- endcomment -%}
+{%- liquid
+  assign s = app.metafields.hon_storefront.settings.value
+  assign note = s.pickupNote | append: '' | strip
+-%}
+{%- if note != blank and template.name == 'cart' -%}
+  {{ 'hon-storefront.css' | asset_url | stylesheet_tag }}
+  <div class="hon-pickup-note hon-pickup-note--banner" role="note">{{ note | escape | newline_to_br }}</div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "t:embeds.pickup_banner.name",
+  "target": "body",
+  "enabled_on": { "templates": ["cart"] },
+  "settings": []
+}
+{% endschema %}

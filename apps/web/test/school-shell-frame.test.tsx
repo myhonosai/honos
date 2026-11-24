@@ -145,7 +145,7 @@ describe('school shell frame', () => {
 
   it('marks only the everyday pages for the Modern top bar; the rest stay in the Menu', () => {
     const html = render({ mode: 'modern' });
-    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
+    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'messages']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
     expect(html).toMatch(/data-nav="billing" data-everyday="false"/);
   });
 
@@ -193,10 +193,11 @@ describe('school shell frame', () => {
     const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
     const progress = render({ path: '/staff/curriculum/progress' });
     expect(progress).not.toContain('data-shell-groups');
-    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Achievements']);
+    expect(tabs(progress)).toEqual(['Rank setup', 'Curriculum progress', 'Videos and links', 'Teaching studio', 'Achievements']);
     expect(tabs(render({ path: '/staff/billing/invoices' }))).toEqual(['Invoices', 'Tuition balances']);
+    expect(tabs(render({ path: '/staff/billing/checkout-pages' }))).toEqual(['Checkout pages', 'Checkout orders']);
     // A one-page item shows no tab row at all.
-    expect(render({ path: '/staff/billing/checkout-pages' })).not.toContain('data-shell-tabs');
+    expect(render({ path: '/staff/billing/shopify' })).not.toContain('data-shell-tabs');
   });
 
   it('shows Tests as numbered steps in order, not tabs, with the current step marked (L3)', () => {
@@ -232,5 +233,14 @@ describe('school shell frame', () => {
     const classes = mobile(render({ path: '/staff/schedule' }));
     expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
     expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Calendar<\/span>/s);
+  });
+
+  it('gives every phone bar slot one short single-line label, keeping the full name for screen readers (owner 2026-11-22)', () => {
+    const bar = render({ path: '/staff/schedule' }).match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
+    const labels = [...bar.matchAll(/<span>([^<]*)<\/span>/g)].map(match => match[1]);
+    expect(labels).toEqual(['Dashboard', 'Contacts', 'Pipeline', 'Calendar', 'More']);
+    expect(bar).toContain('aria-label="Contact list"'); expect(bar).toContain('aria-label="Lead pipeline"');
+    for (const language of ['ko', 'es'] as const) for (const key of ['barHome', 'barStudents', 'barCrm', 'barClasses'] as const)
+      expect(shellText(language, key).length).toBeLessThanOrEqual(10);
   });
 });

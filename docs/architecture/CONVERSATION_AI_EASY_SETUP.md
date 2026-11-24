@@ -4,7 +4,7 @@ Owner request (David, 2026-11-19): learn what GoHighLevel's Conversation AI does
 martial arts school owner can set it up faster than in GoHighLevel. **Not a copy of GoHighLevel's layout.**
 
 Backend reused as is: 0364 inbox, 0420 Train AI (settings, training library, knowledge pack), 0424 history.
-Migration 0563 (coordinator; 0546 released) is CE2, the "Try it" test chat. No other new numbers.
+Migration 0667 (coordinator; 0546 released) is CE2, the "Try it" test chat. No other new numbers.
 
 ## 1. What GoHighLevel does, and what is hard about it
 
@@ -50,7 +50,7 @@ HQ allows, in plain words:
    A small line shows what it also reads automatically (plans, booking types, school articles), from the knowledge pack.
 3. **When to hand off**: hand-off words as removable chips with an add box, an after-hours text, and reply length as
    three presets (Short 160, Normal 320, Long 640 characters) for texts and chat, with the exact number still shown.
-4. **Try it** (CE2, migration 0563, section 6): a chat box on the same page. Staff type a question, the AI answers from the same
+4. **Try it** (CE2, migration 0667, section 6): a chat box on the same page. Staff type a question, the AI answers from the same
    knowledge pack; nothing is sent to anyone and no conversation changes; the call is metered through S4. Under each
    answer: "Use a better answer" saves a coaching card (0420 COACHING) with the question and the staff's answer.
 
@@ -66,7 +66,7 @@ Everything uses `--hon-*` tokens (dark shell adapter), works in Big Button / Mod
 | Piece | What | Migration |
 |---|---|---|
 | **CE1** | New page (status, checklist, tabs 1-3), quick start, chips, presets. Frontend only. | none |
-| **CE2** | "Try it" test chat: a CONVERSATION_TEST kind on the shared AI text caller (0550), one staff command that plans, calls the approved provider with the trimmed knowledge pack and records usage; the text is never sent; "Use a better answer" -> coaching card. | 0563 |
+| **CE2** | "Try it" test chat: a CONVERSATION_TEST kind on the shared AI text caller (0550), one staff command that plans, calls the approved provider with the trimmed knowledge pack and records usage; the text is never sent; "Use a better answer" -> coaching card. | 0667 |
 | CE3 | Suggested reply box for the inbox composer (handed to "Redesign texts and email pages" to mount). | ask |
 | CE4 | Goals: "Book a free trial class" using the school's booking type (old CA3 design). | ask |
 
@@ -76,7 +76,7 @@ Everything uses `--hon-*` tokens (dark shell adapter), works in Big Button / Mod
 - Render: status sentence per HQ program, tabs, read-only disables controls, quick start fills the question.
 - Existing 0420 http tests stay unchanged.
 
-## 6. CE2 "Try it" (0563)
+## 6. CE2 "Try it" (0667)
 - **Shape.** One test = one row on `hon.ai_text_proposals` (0550) with kind `CONVERSATION_TEST`: agent `chad`, task
   `DRAFT_FOLLOW_UP` (HQ's CHAD_SALES profile), 12,000 input / 600 output tokens, at most 20,000 micro-units. The shared core
   owns the one S4 wiring (pause, access, school limit, organization budget, UNKNOWN queue, late expenses, HQ usage), so no

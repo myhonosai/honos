@@ -1,5 +1,5 @@
 /* Shared HON command surface. Modes change density and scale only; content, links and states are identical. */
-.workspace, .band, .launcher, .page {
+.workspace, .band, .launcher, .page, .dock {
   --hon-bg: #071426;
   --hon-surface: #0f2033;
   --hon-raised: #13293d;
@@ -227,3 +227,44 @@
   .band { padding: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .bandAgent:hover { transform: none; } }
+
+/* Corner chat dock (owner 2026-11-22, "like Manus CRM"): docked in the corner where the HON orb sits, growing out of it and
+   shrinking back into it. Not modal and no dimming: the page stays visible beside it. Above the phone bottom bar on small screens. */
+.dock { position: fixed; right: 20px; bottom: 20px; z-index: 23; display: flex; flex-direction: column; width: min(420px, calc(100vw - 40px)); height: min(680px, calc(100vh - 40px)); height: min(680px, calc(100dvh - 40px)); box-sizing: border-box; overflow: hidden; border: 1px solid #2c4862; border-radius: 20px; background: radial-gradient(circle at 90% 0%, rgba(63, 213, 255, .12), transparent 45%), var(--hon-bg); box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 4px rgba(47, 123, 255, .10); transform-origin: bottom right; }
+.dock[hidden] { display: none; }
+.dock[data-variant="big-button"] { width: min(460px, calc(100vw - 40px)); }
+.dock a:focus-visible, .dock button:focus-visible, .dock summary:focus-visible { outline: 3px solid var(--hon-accent); outline-offset: 2px; }
+.dock h2:focus { outline: none; }
+.dockHead { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 14px; border-bottom: 1px solid #22394f; background: rgba(8, 20, 38, .9); }
+.dockHead .mark { width: 36px; height: 36px; border-radius: 50%; }
+.dockTitle { min-width: 0; flex: 1; }
+.dockTitle h2 { margin: 0; font-size: 16px; line-height: 1.2; }
+.dockTitle p { margin: 2px 0 0; overflow: hidden; color: var(--hon-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.dockActions { display: flex; gap: 2px; }
+.dockActions a, .dockActions button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: #b9cbe0; cursor: pointer; }
+.dockActions a:hover, .dockActions button:hover { background: rgba(134, 216, 208, .12); color: #fff; }
+.dockBody { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px 0; }
+.dockBody > .state { margin: 0 0 14px; }
+@keyframes hon-dock-in { from { transform: scale(.2); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes hon-dock-out { from { transform: none; opacity: 1; } to { transform: scale(.2); opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .dock { animation: hon-dock-in .2s cubic-bezier(.2, .8, .2, 1); }
+  .dock[data-closing="true"] { animation: hon-dock-out .16s ease-in forwards; }
+}
+/* Tablet and phone: the bottom bar is showing, so the dock sits just above it, still anchored at the right corner. */
+@media (max-width: 1099px) {
+  .dock, .dock[data-variant] { right: 10px; bottom: calc(76px + env(safe-area-inset-bottom)); width: min(440px, calc(100vw - 20px)); height: min(640px, calc(100vh - 150px)); height: min(640px, calc(100dvh - 150px)); border-radius: 18px; }
+  .dock[data-variant="big-button"] { bottom: calc(88px + env(safe-area-inset-bottom)); height: min(640px, calc(100dvh - 162px)); }
+}
+
+/* P1 (0639): Plan with Alex on Alex's page. */
+.alexPlan { margin: 16px 0; padding: 14px 16px; border: 1px solid var(--hon-line); border-radius: 14px; background: var(--hon-raised); }
+.alexPlan h4 { margin-top: 0; }
+.alexForm { display: grid; gap: 10px; margin: 10px 0; }
+.alexForm label { display: grid; gap: 4px; font-weight: 700; }
+.alexForm textarea { width: 100%; min-height: 64px; padding: 10px 12px; border: 1px solid var(--hon-line); border-radius: 10px; background: transparent; color: inherit; font: inherit; box-sizing: border-box; }
+.alexForm fieldset { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; border: 0; }
+.alexForm fieldset label { display: inline-flex; align-items: center; gap: 6px; min-height: var(--hon-target); font-weight: 600; }
+.alexForm legend { padding: 0; margin-bottom: 4px; font-weight: 700; }
+.alexActions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.alexActions button.inlineLink { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-decoration: underline; }

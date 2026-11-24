@@ -32,6 +32,8 @@ const { HonExceptionFilter } = await load('observability/http-telemetry.js');
 const { PaperImportController } = await load('paper-import/paper-import.controller.js');
 const { PaperImportService } = await load('paper-import/paper-import.service.js');
 const { PAPER_READER_RUNTIME, SyntheticPaperReader } = await load('paper-import/paper-reader.js');
+const { AiInvocationPlanService } = await load('ai/ai-invocation-plan.service.js');
+const { PAPER_VISION_RUNTIME } = await load('ai/paper-vision-runtime.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -53,11 +55,15 @@ const database = new RuntimeDatabaseService();
 let readerCalls = 0;
 const reader = new SyntheticPaperReader();
 const countingReader = { read: (input) => { readerCalls += 1; return reader.read(input); } };
+// 0594: the AI reader is a fake that is never ready here; the 0594 proof covers it (test-paper-import-ai-reader.mjs).
+let visionCalls = 0;
+const idleVision = { readiness: () => 'CONFIGURATION_REQUIRED', read: async () => { visionCalls += 1; throw new Error('not in this proof'); } };
 
 async function startApp() {
   const module = await Test.createTestingModule({
     controllers: [PaperImportController],
-    providers: [HonIdentityGuard, HonIdentityService, PaperImportService, { provide: RuntimeDatabaseService, useValue: database }, { provide: PAPER_READER_RUNTIME, useValue: countingReader }],
+    providers: [HonIdentityGuard, HonIdentityService, PaperImportService, { provide: RuntimeDatabaseService, useValue: database }, { provide: PAPER_READER_RUNTIME, useValue: countingReader },
+      AiInvocationPlanService, { provide: PAPER_VISION_RUNTIME, useValue: idleVision }],
   }).compile();
   app = module.createNestApplication({ logger: false });
   app.useBodyParser('json', { limit: '2mb' });
@@ -97,6 +103,7 @@ const pageImage = (actor, id, n, o = {}) => call(actor, 'GET', `/${id}/pages/${n
 const create = (actor, body, o = {}) => call(actor, 'POST', '', { body, command: 'students.paper_import.create', ...o });
 const addPage = (actor, id, body, o = {}) => call(actor, 'POST', `/${id}/pages`, { body, command: 'students.paper_import.page', ...o });
 const readSet = (actor, id, body, o = {}) => call(actor, 'POST', `/${id}/reading`, { body, command: 'students.paper_import.reading', key: null, ...o });
+const typeRows = (actor, id, body, o = {}) => call(actor, 'POST', `/${id}/typed`, { body, command: 'students.paper_import.typed', key: null, ...o });
 const save = (actor, id, body, o = {}) => call(actor, 'POST', `/${id}/table`, { body, command: 'students.paper_import.save', ...o });
 const send = (actor, id, body, o = {}) => call(actor, 'POST', `/${id}/send`, { body, command: 'students.paper_import.send', ...o });
 const remove = (actor, id, o = {}) => call(actor, 'POST', `/${id}/delete`, { body: {}, command: 'students.paper_import.delete', ...o });
@@ -298,12 +305,17 @@ try {
   await sql('UPDATE hon.paper_import_sets SET reading_id=gen_random_uuid(), reading_started_at=clock_timestamp() WHERE id=$1', [cards.id]);
   await sql('ALTER TABLE hon.paper_import_sets ENABLE TRIGGER USER');
   await refused(() => addPage(IMPORTER, cards.id, pageBody(CONTRACT, 'image/png', v)), 409, 'PAPER_IMPORT_ALREADY_READ', 'no page once a reading has begun');
-  const read = (await success(() => readSet(IMPORTER, cards.id, { expectedVersion: v }), 'read the student cards')).data;
-  ok(readerCalls === 1 && read.set.status === 'READ' && read.set.reader === 'SYNTHETIC' && read.set.readOutcome === 'SAMPLE_READ', 'the stand-in read the sample');
-  ok(read.rows.length === 1 && read.rows[0][0] === 'Mina' && read.rows[0][8] === '+12135550142' && read.unsure[0][8] === true, 'the sample card became one row, its phone marked unsure');
+  // 0594: a set with a real photo is read by HON on the AI route, which needs the AI team (Complete) and AI permission.
+  // This CORE school has neither: nothing is read, planned or sent, and staff type the rows instead.
+  await refused(() => readSet(IMPORTER, cards.id, { expectedVersion: v }), 403, 'PAPER_IMPORT_AI_FORBIDDEN', 'a real photo needs the AI team');
+  ok(readerCalls === 0 && visionCalls === 0 && (await sql("SELECT count(*)::int n FROM hon.ai_text_proposals WHERE organization_id=$1", [ids.organization])).rows[0].n === 0, 'no reading, no proposal, no provider call');
+  v = (await success(() => detail(IMPORTER, cards.id), 'detail after the refusal')).data.set.version;
+  const read = (await success(() => typeRows(IMPORTER, cards.id, { expectedVersion: v }), 'type the rows myself')).data;
+  ok(read.set.status === 'READ' && read.set.reader === 'NONE' && read.set.readOutcome === 'TYPED' && read.rows.length === 0 && read.aiReading === null, 'typed: an empty table, no AI');
   ok(read.columns.length === 10 && read.pages.length === 2, 'columns and pages are listed');
   const readAgain = (await success(() => readSet(IMPORTER, cards.id, { expectedVersion: 1 }), 'read again')).data;
-  ok(readerCalls === 1 && readAgain.set.version === read.set.version, 'a set is read once: a repeat returns the same table');
+  ok(readerCalls === 0 && visionCalls === 0 && readAgain.set.version === read.set.version, 'a set is read once: a repeat returns the same table');
+  ok((await success(() => typeRows(IMPORTER, cards.id, { expectedVersion: 1 }), 'type again')).data.set.version === read.set.version, 'typing again changes nothing');
   await refused(() => addPage(IMPORTER, cards.id, pageBody(CONTRACT, 'image/png', read.set.version)), 409, 'PAPER_IMPORT_ALREADY_READ', 'no page after reading');
   // A stale reading result can never be recorded (database-level).
   await assert.rejects(runtime.query("SELECT hon.record_paper_reading('x',$1,'{}'::jsonb,gen_random_uuid(),gen_random_uuid())", [cards.id]), /PAPER_IMPORT_INVALID|PAPER_IMPORT_FORBIDDEN/); checks += 1;
@@ -342,8 +354,10 @@ try {
   const sheet = (await success(() => create(IMPORTER, { kind: 'ATTENDANCE_SHEETS' }), 'create attendance set')).data;
   await refused(() => readSet(IMPORTER, sheet.id, { expectedVersion: 1 }), 400, 'PAPER_IMPORT_NO_PAGES', 'reading needs a page');
   let s2 = (await success(() => addPage(IMPORTER, sheet.id, pageBody(PHOTO, 'image/jpeg', 1)), 'add a non-sample photo')).data;
-  const blank = (await success(() => readSet(IMPORTER, sheet.id, { expectedVersion: s2.version }), 'read a non-sample photo')).data;
-  ok(blank.set.readOutcome === 'NOT_READABLE' && blank.rows.length === 0 && blank.columns.join() === 'studentGivenName,studentFamilyName,birthDate,attendedOn,visits,className', 'a real photo is never guessed: empty table, attendance columns');
+  await refused(() => readSet(IMPORTER, sheet.id, { expectedVersion: s2.version }), 403, 'PAPER_IMPORT_AI_FORBIDDEN', 'a non-sample photo needs the AI team');
+  s2 = (await success(() => detail(IMPORTER, sheet.id), 'sheet detail')).data.set;
+  const blank = (await success(() => typeRows(IMPORTER, sheet.id, { expectedVersion: s2.version }), 'type the rows of a non-sample photo')).data;
+  ok(blank.set.readOutcome === 'TYPED' && blank.rows.length === 0 && blank.columns.join() === 'studentGivenName,studentFamilyName,birthDate,attendedOn,visits,className', 'a real photo is never guessed: empty table, attendance columns');
   await refused(() => send(IMPORTER, sheet.id, { expectedVersion: blank.set.version }), 400, 'PAPER_IMPORT_TABLE_EMPTY', 'an empty table is not sent');
   s2 = (await success(() => save(IMPORTER, sheet.id, { expectedVersion: blank.set.version, rows: [['Mina', 'Park', '', '2026-11-02', '1', 'Kids'], ['=cmd()', 'X', '', '2026-11-02', '', '']], unsure: [Array(6).fill(false), Array(6).fill(false)] }), 'type the attendance rows')).data;
   const sheetSent = (await success(() => send(IMPORTER, sheet.id, { expectedVersion: s2.version }), 'send attendance')).data;
@@ -357,7 +371,7 @@ try {
   const contract = (await success(() => create(IMPORTER, { kind: 'CONTRACTS' }), 'create contract set')).data;
   const c2 = (await success(() => addPage(IMPORTER, contract.id, pageBody(CONTRACT, 'image/png', 1)), 'add contract page')).data;
   const cRead = (await success(() => readSet(IMPORTER, contract.id, { expectedVersion: c2.version }), 'read contract')).data;
-  ok(cRead.rows[0][0] === 'Leo' && cRead.unsure[0][7] === true, 'the sample contract was read');
+  ok(readerCalls === 1 && cRead.set.reader === 'SYNTHETIC' && cRead.set.readOutcome === 'SAMPLE_READ' && cRead.rows[0][0] === 'Leo' && cRead.unsure[0][7] === true, 'the stand-in read the sample contract');
   const delKey = randomUUID();
   const gone = (await success(() => remove(IMPORTER, contract.id, { key: delKey }), 'delete the contract set')).data;
   ok(gone.status === 'DELETED' && gone.deleteReason === 'STAFF' && gone.pageCount === 0, 'deleted by staff');
