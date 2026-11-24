@@ -16,7 +16,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * 0497: the Kai teaching journal. Route identifiers are never authority: the boundary resolves the route scope from the
+ * 0665: the Kai teaching journal. Route identifiers are never authority: the boundary resolves the route scope from the
  * verified session for teaching.journal.use, and each protected database function proves the direct human subject, the
  * permission and Complete access again. An instructor only ever changes their own entries; the team read shows, read-only,
  * the entries other instructors at the same school chose to share.

@@ -97,6 +97,10 @@
       "title": "HON | School message history"
     },
     {
+      "path": "/parent/payment-return",
+      "title": "HON | Payment finished"
+    },
+    {
       "path": "/complete-mobile",
       "title": "HON Complete Mobile"
     },
@@ -157,6 +161,10 @@
       "title": "Human Public Lead Forms"
     },
     {
+      "path": "/staff/marketing/referrals",
+      "title": "Family Referrals"
+    },
+    {
       "path": "/staff/marketing/intake",
       "title": "HON | Lead Sources & Intake Monitor"
     },
@@ -189,6 +197,10 @@
       "title": "HON | Creative Studio"
     },
     {
+      "path": "/staff/creative-studio/designs",
+      "title": "HON | Designs"
+    },
+    {
       "path": "/staff/people",
       "title": "HON | People"
     },
@@ -209,6 +221,10 @@
       "title": "School Enquiry Form"
     },
     {
+      "path": "/refer/:code",
+      "title": "Family Referral Invitation"
+    },
+    {
       "path": "/book/:publicId",
       "title": "Book a time"
     },
@@ -217,12 +233,32 @@
       "title": "Book a time"
     },
     {
+      "path": "/checkout/:publicId",
+      "title": "Sign up"
+    },
+    {
+      "path": "/calendars/:publicId",
+      "title": "Class calendar"
+    },
+    {
+      "path": "/agreement/:token",
+      "title": "Membership agreement"
+    },
+    {
       "path": "/staff/team/shifts",
       "title": "HON | Shifts"
     },
     {
       "path": "/staff/team/hours",
       "title": "HON | Hours"
+    },
+    {
+      "path": "/staff/marketing/blasts",
+      "title": "HON | Blasts"
+    },
+    {
+      "path": "/staff/marketing/media",
+      "title": "HON | Media"
     },
     {
       "path": "/staff/team/availability",
@@ -257,6 +293,10 @@
       "title": "HON | Human Planned Absence Review"
     },
     {
+      "path": "/staff/attendance/report",
+      "title": "HON | Attendance report"
+    },
+    {
       "path": "/staff/attendance/cards",
       "title": "HON | Attendance cards"
     },
@@ -271,6 +311,10 @@
     {
       "path": "/staff/instructor-qualifications",
       "title": "HON | Human instructor qualification evidence"
+    },
+    {
+      "path": "/staff/automations",
+      "title": "HON | Automations"
     },
     {
       "path": "/staff/automation/rules",
@@ -329,6 +373,14 @@
       "title": "HON | Checkout pages"
     },
     {
+      "path": "/staff/billing/checkout-orders",
+      "title": "HON | Checkout orders"
+    },
+    {
+      "path": "/staff/billing/pos",
+      "title": "HON | Point of Sale"
+    },
+    {
       "path": "/staff/billing/saved-payment-methods",
       "title": "HON | Saved payment methods"
     },
@@ -365,8 +417,52 @@
       "title": "HON | Students at risk"
     },
     {
+      "path": "/staff/texts",
+      "title": "HON | Texts"
+    },
+    {
+      "path": "/staff/texts/send",
+      "title": "HON | Send a text"
+    },
+    {
+      "path": "/staff/texts/history",
+      "title": "HON | Text history"
+    },
+    {
+      "path": "/staff/texts/templates",
+      "title": "HON | Text templates"
+    },
+    {
+      "path": "/staff/texts/opted-out",
+      "title": "HON | Opted out of texts"
+    },
+    {
+      "path": "/staff/email",
+      "title": "HON | Send an email"
+    },
+    {
+      "path": "/staff/email/history",
+      "title": "HON | Email history"
+    },
+    {
+      "path": "/staff/email/templates",
+      "title": "HON | Email templates"
+    },
+    {
+      "path": "/staff/email/opted-out",
+      "title": "HON | Opted out of email"
+    },
+    {
       "path": "/staff/family-messages",
-      "title": "HON | Family messages"
+      "title": "HON | Parent app"
+    },
+    {
+      "path": "/staff/family-messages/announcements",
+      "title": "HON | Announcements"
+    },
+    {
+      "path": "/staff/parent-app/curriculum",
+      "title": "HON | Parent app curriculum"
     },
     {
       "path": "/staff/conversations",
@@ -406,7 +502,7 @@
     },
     {
       "path": "/staff/billing/invoices",
-      "title": "HON | Human Invoice Workbench"
+      "title": "HON | Invoices"
     },
     {
       "path": "/community",
@@ -547,6 +643,10 @@
     {
       "path": "/staff/curriculum/library",
       "title": "Private curriculum library"
+    },
+    {
+      "path": "/staff/curriculum/ranks",
+      "title": "HON | Rank setup"
     },
     {
       "path": "/staff/curriculum/progress",
@@ -702,7 +802,7 @@
     },
     {
       "path": "/hq/pricing-offers",
-      "title": "HON HQ | Pricing & Offers \u00b7 Design review"
+      "title": "HON HQ | Pricing & Offers · Design review"
     },
     {
       "path": "/reference/classic-dashboard",
@@ -778,6 +878,10 @@
     },
     {
       "path": "/kiosk/walk-in",
+      "title": "HON | Walk-in"
+    },
+    {
+      "path": "/kiosk/walk-in/paid",
       "title": "HON | Walk-in"
     }
   ]

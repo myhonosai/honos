@@ -399,3 +399,98 @@ test('0337 simulators: one charge per attempt key, lost answers, settling a debi
   await assert.rejects(off.chargeOffSession(base), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
   await assert.rejects(off.findCharge(), (e) => e.outcome === 'PRE_SEND');
 });
+
+test('0529 Stripe one-time payment: Checkout Session on the school account, fixed parameters and key, retrieval and expiry', async () => {
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const ACCOUNT = 'acct_Test123', PAYMENT = '55555555-5555-4555-8555-555555555555', SESSION = 'cs_test_a1B2c3';
+  const session = (over = {}) => ({ id: SESSION, object: 'checkout.session', mode: 'payment', status: 'open', payment_status: 'unpaid', amount_total: 2500, currency: 'usd',
+    client_reference_id: PAYMENT, metadata: { hon_pay_once_id: PAYMENT }, client_secret: `${SESSION}_secret_x`, url: null, payment_intent: null, ...over });
+  let reply = { status: 200, body: session() }, read = { status: 200, body: session() }, expire = { status: 200, body: session({ status: 'expired' }) };
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/checkout/sessions', reply: () => reply },
+    { method: 'GET', url: `https://api.stripe.com/v1/checkout/sessions/${SESSION}`, reply: () => read },
+    { method: 'POST', url: `https://api.stripe.com/v1/checkout/sessions/${SESSION}/expire`, reply: () => expire },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  assert.deepEqual(stripe.oneTimeSurfaces(), ['EMBEDDED', 'HOSTED']);
+  const request = { accountRef: ACCOUNT, paymentId: PAYMENT, amountMinor: 2500, currency: 'USD', label: 'Trial class', payerEmail: 'pay.er@example.test',
+    surface: 'EMBEDDED', returnUrl: 'https://app.example.test/kiosk/done', providerExpiresAt: '2026-11-17T10:31:00.000Z' };
+  assert.deepEqual(await stripe.beginOneTimePayment(request), { sessionRef: SESSION, clientSecret: `${SESSION}_secret_x`, url: null });
+  const sent = t.calls[0];
+  assert.equal(sent.headers['Stripe-Account'], ACCOUNT, 'a direct charge on the school account');
+  assert.equal(sent.headers['Idempotency-Key'], `hon-school-pay-once-${PAYMENT}`);
+  assert.deepEqual(form(sent.body), {
+    mode: 'payment', ui_mode: 'embedded', 'payment_method_types[0]': 'card', 'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': 'usd',
+    'line_items[0][price_data][unit_amount]': '2500', 'line_items[0][price_data][product_data][name]': 'Trial class', client_reference_id: PAYMENT,
+    'metadata[hon_pay_once_id]': PAYMENT, 'payment_intent_data[metadata][hon_pay_once_id]': PAYMENT, expires_at: String(Date.parse(request.providerExpiresAt) / 1000),
+    return_url: 'https://app.example.test/kiosk/done', redirect_on_completion: 'if_required', customer_email: 'pay.er@example.test',
+  }, 'exactly these fields: no fee, no transfer, no on_behalf_of; a card payment stays on the page (the kiosk keeps its in-memory token)');
+  reply = { status: 200, body: session({ client_secret: null, url: 'https://checkout.stripe.com/c/pay/cs_test_a1B2c3' }) };
+  assert.deepEqual(await stripe.beginOneTimePayment({ ...request, surface: 'HOSTED', payerEmail: null }), { sessionRef: SESSION, clientSecret: null, url: 'https://checkout.stripe.com/c/pay/cs_test_a1B2c3' });
+  const hosted = form(t.calls.at(-1).body);
+  assert.equal(hosted.ui_mode, 'hosted'); assert.equal(hosted.success_url, request.returnUrl); assert.equal(hosted.cancel_url, request.returnUrl);
+  assert.ok(!('customer_email' in hosted) && !('return_url' in hosted) && !('redirect_on_completion' in hosted));
+  for (const [bad, label, surface = 'EMBEDDED'] of [[session({ amount_total: 2499 }), 'another amount'], [session({ currency: 'eur' }), 'another currency'],
+    [session({ metadata: { hon_pay_once_id: 'x' } }), 'another payment'], [session({ client_reference_id: null }), 'no client reference'], [session({ status: 'complete' }), 'not open'],
+    [session({ id: 'pi_123' }), 'not a session'], [session({ client_secret: null }), 'no client secret'],
+    [session({ client_secret: null, url: 'https://evil.example.test/pay' }), 'a checkout URL off Stripe', 'HOSTED']]) {
+    reply = { status: 200, body: bad };
+    await assert.rejects(stripe.beginOneTimePayment({ ...request, surface }), (e) => e.outcome === 'UNKNOWN', label);
+  }
+  for (const status of [500, 429, 409]) { reply = { status, body: {} }; await assert.rejects(stripe.beginOneTimePayment(request), (e) => e.outcome === 'UNKNOWN', `HTTP ${status}`); }
+  reply = { status: 400, body: { error: { type: 'invalid_request_error' } } };
+  await assert.rejects(stripe.beginOneTimePayment(request), (e) => e.outcome === 'FAILED');
+  const before = t.calls.length;
+  await assert.rejects(stripe.beginOneTimePayment({ ...request, returnUrl: 'http://app.example.test/x' }), (e) => e.outcome === 'PRE_SEND', 'plain http return');
+  await assert.rejects(stripe.beginOneTimePayment({ ...request, amountMinor: 0 }), (e) => e.outcome === 'PRE_SEND');
+  assert.equal(t.calls.length, before, 'nothing sent for a refused request');
+
+  const lookup = { accountRef: ACCOUNT, paymentId: PAYMENT, sessionRef: SESSION, amountMinor: 2500, currency: 'USD' };
+  const seen = async (body) => { read = { status: 200, body }; return stripe.findOneTimePayment(lookup); };
+  assert.deepEqual(await seen(session()), { outcome: 'OPEN', sessionRef: SESSION, paymentRef: null, failureClass: null, amountMinor: 2500, currency: 'USD' });
+  assert.equal(t.calls.at(-1).headers['Stripe-Account'], ACCOUNT);
+  assert.equal((await seen(session({ status: 'expired' }))).outcome, 'EXPIRED');
+  assert.equal((await seen(session({ status: 'complete', payment_status: 'unpaid' }))).outcome, 'PROCESSING');
+  assert.deepEqual(await seen(session({ status: 'complete', payment_status: 'paid', payment_intent: 'pi_Test9' })),
+    { outcome: 'SUCCEEDED', sessionRef: SESSION, paymentRef: 'pi_Test9', failureClass: null, amountMinor: 2500, currency: 'USD' });
+  assert.equal((await seen(session({ status: 'complete', payment_status: 'paid', payment_intent: { id: 'pi_Test8' } }))).paymentRef, 'pi_Test8');
+  for (const [bad, label] of [[session({ status: 'complete', payment_status: 'paid' }), 'paid without a PaymentIntent'], [session({ status: 'complete', payment_status: 'no_payment_required' }), 'no payment'],
+    [session({ amount_total: 1 }), 'another amount'], [session({ id: 'cs_test_other' }), 'another session'], [session({ status: 'weird' }), 'unknown status']]) {
+    await assert.rejects(seen(bad), (e) => e.outcome === 'UNKNOWN', label);
+  }
+  read = { status: 404, body: { error: { code: 'resource_missing' } } };
+  await assert.rejects(stripe.findOneTimePayment(lookup), (e) => e.outcome === 'FAILED');
+  await stripe.expireOneTimePayment(lookup);
+  expire = { status: 400, body: { error: { message: 'Only Checkout Sessions with a status of open can be expired.' } } };
+  await stripe.expireOneTimePayment(lookup); // already closed: the caller retrieves it next
+  expire = { status: 500, body: {} };
+  await assert.rejects(stripe.expireOneTimePayment(lookup), (e) => e.outcome === 'UNKNOWN');
+
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, fakeTransport([]).send);
+  assert.deepEqual(square.oneTimeSurfaces(), [], 'Square payment links are a later piece: not offered');
+  for (const call of ['beginOneTimePayment', 'findOneTimePayment', 'expireOneTimePayment']) {
+    await assert.rejects(square[call]({}), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED', call);
+  }
+});
+
+test('0529 simulators: one session per payment key, hosted-only Square, faults, unconfigured refuses', async () => {
+  const { SimulatedStripeConnectAdapter, SimulatedSquareAdapter, UnconfiguredSchoolPaymentAdapter } = await loadAdapters();
+  const stripe = new SimulatedStripeConnectAdapter(), square = new SimulatedSquareAdapter();
+  const request = { accountRef: 'acct_simX', paymentId: '66666666-6666-4666-8666-666666666666', amountMinor: 900, currency: 'USD', label: 'Gi', payerEmail: null,
+    surface: 'EMBEDDED', returnUrl: 'https://app.example.test/done', providerExpiresAt: '2026-11-17T10:31:00.000Z' };
+  const first = await stripe.beginOneTimePayment(request);
+  assert.deepEqual(await stripe.beginOneTimePayment(request), first, 'same key, same session');
+  await assert.rejects(stripe.beginOneTimePayment({ ...request, amountMinor: 901 }), (e) => e.outcome === 'FAILED', 'same key, other parameters');
+  const lookup = { accountRef: 'acct_simX', paymentId: request.paymentId, sessionRef: first.sessionRef, amountMinor: 900, currency: 'USD' };
+  assert.equal((await stripe.findOneTimePayment(lookup)).outcome, 'OPEN');
+  await stripe.expireOneTimePayment(lookup);
+  assert.equal((await stripe.findOneTimePayment(lookup)).outcome, 'EXPIRED');
+  stripe.onceFaults.set(request.paymentId, { findLost: true });
+  await assert.rejects(stripe.findOneTimePayment(lookup), (e) => e.outcome === 'UNKNOWN');
+  assert.deepEqual(square.oneTimeSurfaces(), ['HOSTED']);
+  await assert.rejects(square.beginOneTimePayment(request), (e) => e.outcome === 'PRE_SEND', 'Square embedded is not offered');
+  assert.ok((await square.beginOneTimePayment({ ...request, surface: 'HOSTED' })).url.startsWith('https://'));
+  const none = new UnconfiguredSchoolPaymentAdapter('STRIPE_CONNECT');
+  assert.deepEqual(none.oneTimeSurfaces(), []);
+  await assert.rejects(none.beginOneTimePayment(request), (e) => e.reason === 'NOT_CONFIGURED');
+});

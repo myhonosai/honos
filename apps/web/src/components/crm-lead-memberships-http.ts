@@ -28,6 +28,10 @@ const LEAD_JOURNEY_PAGE = '/staff/crm/journey';
 export function leadWorkflowHref(value: LeadMembershipScope): string {
   return `${LEAD_JOURNEY_PAGE}?${new URLSearchParams(leadMembershipScope(value))}`;
 }
+/** The same journey page, opened at its trial step, for one-tap Book trial on the Leads board. */
+export function leadTrialHref(value: LeadMembershipScope): string {
+  return `${LEAD_JOURNEY_PAGE}?${new URLSearchParams({ ...leadMembershipScope(value), step: 'trial' })}`;
+}
 /** One lead only. No fallback lookup, read-side writes, query, body, key or provider call. */
 export async function readLeadMemberships(value: LeadMembershipScope, signal: AbortSignal): Promise<CrmLeadMemberships> {
   const scope = leadMembershipScope(value);

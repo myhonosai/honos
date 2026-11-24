@@ -142,4 +142,7 @@ test('0496 Allow editing asks Shopify for the edit scopes; plain connect stays r
   };
   assert.equal(await scopeOf(undefined), 'read_products,read_inventory,read_orders');
   assert.equal(await scopeOf(true), 'read_products,read_inventory,read_orders,write_products,write_inventory');
+  // 0614: Allow orders adds write_orders, and only when asked.
+  const started = await service.start(req, { schoolId: SCHOOL, shopDomain: SHOP, allowEditing: true, allowOrders: true });
+  assert.equal((await app.adapter.exchangeCode(SHOP, new URL(started.authorizeUrl).searchParams.get('code'))).scope, 'read_products,read_inventory,read_orders,write_products,write_inventory,write_orders');
 });

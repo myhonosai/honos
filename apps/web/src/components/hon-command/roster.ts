@@ -60,7 +60,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Whole-school view and weekly priorities from verified facts (Ask HON → Alex)', state: 'AVAILABLE' },
-      { label: 'Coordinate and delegate work across the team', state: 'BACKEND_REQUIRED' },
+      { label: 'Turn a goal into tasks for your team (Plan with Alex, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'School Command Center', href: '/staff/command-center' },
@@ -116,7 +116,8 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Draft content for an existing school campaign', state: 'AVAILABLE', href: '/staff/marketing/assistant' },
       { label: 'Publish, advertise or spend', state: 'BACKEND_REQUIRED' },
-      { label: 'Marketing performance analysis', state: 'BACKEND_REQUIRED' },
+      { label: 'Marketing performance review of leads, sources, campaigns and forms (Marketing review with Marcus, below)', state: 'AVAILABLE' },
+      { label: 'Merchandise ideas and store presentation review in the Shopify Merch Studio', state: 'AVAILABLE', href: '/staff/billing/shopify' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
@@ -132,7 +133,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Class schedule, capacity, instructor coverage and attendance analysis (Ask HON → Jordan)', state: 'AVAILABLE' },
-      { label: 'Operational task follow-through', state: 'BACKEND_REQUIRED' },
+      { label: 'Follow through on open and overdue team tasks (Follow through with Jordan, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Class sessions', href: '/staff/schedule/sessions' },
@@ -167,7 +168,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Campaign, plan catalog and Creative Studio analysis (Ask HON → Lena)', state: 'AVAILABLE' },
-      { label: 'Merchandise and commerce presentation drafts', state: 'BACKEND_REQUIRED' },
+      { label: 'Merchandise ideas and store presentation review (Marcus writes these in the Shopify Merch Studio)', state: 'AVAILABLE', href: '/staff/billing/shopify' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
@@ -242,7 +243,7 @@ export const HON_TEACHING_AI = {
   boundary: 'Kai will never mark student proficiency, promotions, testing results or curriculum completion. Those stay instructor decisions recorded in the existing workflows.',
   tools: [
     { label: 'Teaching Studio', href: '/staff/teaching-studio' },
-    { label: 'Curriculum library', href: '/staff/curriculum/library' },
+    { label: 'Videos and links', href: '/staff/curriculum/library' },
     { label: 'Curriculum progress', href: '/staff/curriculum/progress' },
     { label: 'Scheduled classes', href: '/staff/schedule/sessions' },
     { label: 'Teaching drafts', href: '/staff/teaching-assistant' },

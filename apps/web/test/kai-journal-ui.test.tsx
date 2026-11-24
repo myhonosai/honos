@@ -11,7 +11,7 @@ import { addTopic, draftOf, draftProblems, newDraft, saveInput } from '../src/co
 import { KaiJournalView, type KaiJournalViewProps } from '../src/components/kai-journal/view';
 import { id } from './account-status-fixtures';
 
-// 0497: the Kai teaching journal. Instructors log what they taught, recall it and see pattern notes (no AI).
+// 0665: the Kai teaching journal. Instructors log what they taught, recall it and see pattern notes (no AI).
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

@@ -355,7 +355,10 @@ try {
   const after = await sideEffects();
   ok(JSON.stringify(after) === JSON.stringify(before), `no membership, account, invoice, payment, schedule, enrollment, portal access or lead: ${JSON.stringify(after)}`);
   const events = (await sql("SELECT event_type, count(*)::int n FROM hon.outbox_events WHERE organization_id=$1 GROUP BY 1 ORDER BY 1", [ids.organization])).rows;
-  ok(events.map((e) => `${e.event_type}:${e.n}`).join(',') === 'students.import.decide:2,students.import.finalize:1,students.import.row_applied:4,students.import.stage:1', `only inert import events ${JSON.stringify(events)}`);
+  ok(events.map((e) => `${e.event_type}:${e.n}`).join(',') === 'communication.consent.recorded:4,students.import.decide:2,students.import.finalize:1,students.import.row_applied:4,students.import.stage:1', `only inert import events and IC1 intake consent ${JSON.stringify(events)}`);
+  const imported = (await sql("SELECT c.source, k.method, count(*)::int n FROM hon.communication_consents c JOIN hon.communication_consent_captures k ON k.consent_id=c.id WHERE c.organization_id=$1 GROUP BY 1,2", [ids.organization])).rows;
+  ok(JSON.stringify(imported) === JSON.stringify([{ source: 'IMPORT', method: 'STUDENT_IMPORT', n: 4 }]), `IC1: imported people get consent from the import by default ${JSON.stringify(imported)}`);
+  ok((await sql("SELECT count(*)::int n FROM hon.communication_messages WHERE organization_id=$1", [ids.organization])).rows[0].n === 0, 'IC1: recording consent sends nothing');
   const evidence = JSON.stringify((await sql("SELECT payload FROM hon.outbox_events WHERE organization_id=$1 UNION ALL SELECT next_state FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'students.import.%'", [ids.organization])).rows);
   ok(!/Ava|Stone|Mia|example\.test|2016-04-02|\+1555/.test(evidence), 'audit and outbox carry identifiers only');
   ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE organization_id=$1 AND action_code LIKE 'students.import.%'", [ids.organization])).rows[0].n === 8, 'one audit event per command and per imported row');

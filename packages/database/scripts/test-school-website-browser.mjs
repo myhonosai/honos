@@ -46,7 +46,7 @@ try {
   const subject = 'oidc:website-browser:' + randomUUID(), email = `owner-${randomUUID()}@example.invalid`;
   const school = (await restricted.query('SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4) data', [subject, email,
     { ownerName: 'Synthetic Owner', schoolName: 'Synthetic Tiger Dojo', legalName: 'Synthetic Tiger LLC', timezone: 'America/Chicago', termsVersionId: terms, confirmation: SIGNUP_CONFIRMATION }, randomUUID()])).rows[0].data;
-  await q("UPDATE hon.organization_entitlements SET status='ACTIVE',effective_until=NULL,updated_at=clock_timestamp() WHERE organization_id=$1", [school.organizationId]);
+  await q("UPDATE hon.organization_entitlements SET tier='COMPLETE',status='ACTIVE',effective_until=NULL,updated_at=clock_timestamp() WHERE organization_id=$1", [school.organizationId]);
   const pipeline = randomUUID(), stage = randomUUID();
   await q("INSERT INTO hon.crm_pipelines(id,organization_id,school_id,name) VALUES($1,$2,$3,'Synthetic pipeline')", [pipeline, school.organizationId, school.schoolId]);
   await q("INSERT INTO hon.crm_pipeline_stages(id,organization_id,school_id,pipeline_id,name,position) VALUES($1,$2,$3,$4,'New',1)", [stage, school.organizationId, school.schoolId, pipeline]);
@@ -99,6 +99,20 @@ try {
   await page.getByRole('button', { name: 'Save draft' }).click();
   await page.getByText('Draft saved.').waitFor();
   step('owner edits a section and connects the form; the draft preview updates on computer and phone; save keeps the revision');
+
+  // WB5: Ask Marcus is wired end to end. This environment has no provider key and no AI route, so the request is
+  // recorded and refused before any provider call: nothing is sent and nothing is spent, and the draft is unchanged.
+  const ai = page.locator('[data-website-ai]');
+  await ai.getByRole('heading', { name: 'Ask Marcus to edit your website' }).waitFor();
+  await ai.getByLabel('What should change?').fill('Add a summer camp page and make the welcome warmer for parents.');
+  await ai.getByRole('button', { name: 'Ask Marcus' }).click();
+  await ai.getByText(/nothing was sent/i).first().waitFor({ timeout: 30000 });
+  await page.screenshot({ path: join(shots, '02b-ask-marcus.png'), fullPage: true });
+  // Refused either at the start (S4 access decision for this synthetic sign-up) or at the send (no route, no key).
+  const asked = await q("SELECT status,reserved_credits,usage_id FROM hon.ai_text_proposals WHERE school_id=$1 AND kind='WEBSITE_EDIT'", [school.schoolId]);
+  assert(asked.length <= 1); for (const a of asked) { assert(['BLOCKED', 'CONFIGURATION_REQUIRED'].includes(a.status), JSON.stringify(asked)); assert.equal(a.reserved_credits, 0); assert.equal(a.usage_id, null); }
+  assert.equal((await q('SELECT count(*)::int n FROM hon.ai_usage_ledger WHERE school_id=$1', [school.schoolId]))[0].n, 0);
+  step('Ask Marcus: the request reaches the database through the browser and is refused before any provider call (spend access, no route or no key), with nothing reserved or spent');
 
   await page.getByLabel('Note for your records (optional)').fill('First launch');
   await page.getByRole('button', { name: 'Publish', exact: true }).click();

@@ -62,6 +62,10 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.invoices WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.memberships WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.billing_accounts WHERE organization_id = $1', [ids.organization]);
+    // Lead attribution evidence is immutable by trigger; fixture cleanup removes this proof's rows only.
+    await administrator.query('ALTER TABLE hon.crm_lead_attributions DISABLE TRIGGER USER');
+    await administrator.query('DELETE FROM hon.crm_lead_attributions WHERE organization_id = $1', [ids.organization]);
+    await administrator.query('ALTER TABLE hon.crm_lead_attributions ENABLE TRIGGER USER');
     await administrator.query('DELETE FROM hon.crm_leads WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_pipeline_stages WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.crm_pipelines WHERE organization_id = $1', [ids.organization]);
@@ -74,6 +78,7 @@ async function cleanupFixtures() {
     await administrator.query('DELETE FROM hon.principals WHERE id = $1', [ids.principal]);
     await administrator.query('DELETE FROM hon.users WHERE id = $1', [ids.user]);
     await administrator.query('DELETE FROM hon.schools WHERE id IN ($1, $2)', [ids.schoolA, ids.schoolB]);
+    await administrator.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.organization]);
     await administrator.query('DELETE FROM hon.organizations WHERE id = $1', [ids.organization]);
     await administrator.query('COMMIT');
   } catch (error) {
@@ -132,6 +137,8 @@ try {
       'INSERT INTO hon.organizations (id, legal_name, display_name) VALUES ($1, $2, $2)',
       [ids.organization, 'Operations Report Test'],
     );
+    // Operations reports need an active school-operations entitlement (added after this proof was written).
+    await administrator.query("INSERT INTO hon.organization_entitlements (organization_id, tier, status) VALUES ($1, 'CORE', 'ACTIVE')", [ids.organization]);
     await administrator.query(
       `INSERT INTO hon.schools (id, organization_id, name, slug) VALUES
        ($1, $2, 'Operations School A', $3),
@@ -233,19 +240,23 @@ try {
         ids.sessionB, ids.schoolB, ids.programB,
       ],
     );
+    // The attendance credit snapshot trigger (added after this proof) needs a live human attendance command; these
+    // rows are synthetic aggregate fixtures, so it is held off for this one insert inside the setup transaction.
+    await administrator.query('ALTER TABLE hon.attendance_records DISABLE TRIGGER attendance_credit_snapshot');
     await administrator.query(
       `INSERT INTO hon.attendance_records (
-         id, organization_id, school_id, class_session_id, student_profile_id, status
+         id, organization_id, school_id, class_session_id, student_profile_id, status, progression_enabled
        ) VALUES
-       ($1, $2, $3, $4, $5, 'PRESENT'),
-       ($6, $2, $3, $7, $8, 'LATE'),
-       ($9, $2, $10, $11, $12, 'UNEXCUSED_ABSENCE')`,
+       ($1, $2, $3, $4, $5, 'PRESENT', false),
+       ($6, $2, $3, $7, $8, 'LATE', false),
+       ($9, $2, $10, $11, $12, 'UNEXCUSED_ABSENCE', false)`,
       [
         ids.attendanceAPresent, ids.organization, ids.schoolA, ids.sessionAScheduled, ids.studentA1,
         ids.attendanceALate, ids.sessionACompleted, ids.studentA2,
         ids.attendanceB, ids.schoolB, ids.sessionB, ids.studentB,
       ],
     );
+    await administrator.query('ALTER TABLE hon.attendance_records ENABLE TRIGGER attendance_credit_snapshot');
     await administrator.query(
       `INSERT INTO hon.billing_accounts (id, organization_id, school_id, responsible_person_id) VALUES
        ($1, $2, $3, $4),
@@ -364,7 +375,8 @@ try {
       SELECT
         EXISTS (SELECT 1 FROM hon.student_profiles WHERE id = $1::uuid) AS student_profile_visible,
         EXISTS (SELECT 1 FROM hon.crm_leads WHERE id = $2::uuid) AS lead_visible,
-        EXISTS (SELECT 1 FROM hon.class_sessions WHERE id = $3::uuid) AS session_visible,
+        -- #177 (0632): the runtime cannot read hon.class_sessions at all; see the ACL check below.
+        $3::uuid IS NULL AS session_visible,
         EXISTS (SELECT 1 FROM hon.attendance_records WHERE id = $4::uuid) AS attendance_visible,
         EXISTS (SELECT 1 FROM hon.memberships WHERE id = $5::uuid) AS membership_visible,
         EXISTS (SELECT 1 FROM hon.invoices WHERE id = $6::uuid) AS invoice_visible,
@@ -374,6 +386,22 @@ try {
     ])).rows[0];
     assert(Object.values(foreign).every((visible) => !visible),
       'RLS exposed an operational-report input from another school.');
+    const sessionAcl = (await runtime.query(
+      "SELECT has_table_privilege(current_user,'hon.class_sessions','SELECT') AS table_select, has_any_column_privilege(current_user,'hon.class_sessions','SELECT') AS column_select",
+    )).rows[0];
+    assert(!sessionAcl.table_select && !sessionAcl.column_select, 'The runtime can read hon.class_sessions directly (#177).');
+    await runtime.query('SAVEPOINT direct_session_read');
+    let directRefused = false;
+    try { await runtime.query('SELECT 1 FROM hon.class_sessions LIMIT 1'); } catch (error) { directRefused = error?.code === '42501'; }
+    await runtime.query('ROLLBACK TO SAVEPOINT direct_session_read');
+    assert(directRefused, 'A direct runtime SELECT on hon.class_sessions was not refused (#177).');
+    let foreignCountsRefused = false;
+    await runtime.query('SAVEPOINT counts_without_principal');
+    try {
+      await runtime.query("SELECT * FROM hon.read_operations_report_session_counts($1, now() - interval '1 day', now())", [externalSubject]);
+    } catch (error) { foreignCountsRefused = error?.code === '42501' && error.message === 'CLASS_SESSIONS_READ_FORBIDDEN'; }
+    await runtime.query('ROLLBACK TO SAVEPOINT counts_without_principal');
+    assert(foreignCountsRefused, 'The operations report session read ran without a human principal in the transaction.');
     await runtime.query('ROLLBACK');
   } catch (error) {
     await runtime.query('ROLLBACK');
@@ -384,6 +412,25 @@ try {
   );
   assert(clearedContext.rows[0]?.organization_id === null && clearedContext.rows[0]?.school_id === null,
     'Operations reporting fixture left tenant context on a pooled runtime connection.');
+
+  {
+    // #177 (0632) canonical posture section, with the fixture runtime role in place of hon_runtime.
+    const { readFile } = await import('node:fs/promises');
+    const runtimeRole = (await runtime.query('SELECT current_user AS role')).rows[0].role;
+    const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+    const section = verify.split('-- Class sessions function-only reads exact verification (0632')[1]?.split('-- End class sessions function-only reads exact verification.')[0];
+    assert(section, 'Missing the 0632 011 section.');
+    await administrator.query(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', runtimeRole));
+    // The section fails closed on the pre-#177 canonical grant.
+    await administrator.query('BEGIN');
+    let sectionRefusedGrant = false;
+    try {
+      await administrator.query(`GRANT SELECT ON hon.class_sessions TO ${runtimeRole}`);
+      await administrator.query(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', runtimeRole));
+    } catch (error) { sectionRefusedGrant = /INSERT-only/.test(error.message); }
+    await administrator.query('ROLLBACK');
+    assert(sectionRefusedGrant, 'The 0632 011 section accepted a runtime SELECT grant on hon.class_sessions.');
+  }
 
   console.log('Verified reporting.view scope, forced RLS, invoice SELECT/INSERT plus payment SELECT-only runtime access, exact aggregate accuracy, bounded time semantics, cross-school invisibility, and no raw operational data exposure.');
 } finally {

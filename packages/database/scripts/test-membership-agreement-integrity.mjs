@@ -77,7 +77,9 @@ try{
  for(const t of priv){for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+' '+p);
   assert.deepEqual((await q("SELECT relrowsecurity r,relforcerowsecurity f,(SELECT count(*) FROM pg_policy WHERE polrelid=c.oid)::int n FROM pg_class c WHERE oid=('hon.'||$1)::regclass",[t]))[0],{r:true,f:true,n:0});}
  const entries=['read_membership_agreement','save_membership_agreement_draft','publish_membership_agreement','read_family_membership_agreement','sign_family_membership_agreement',
-  'set_family_child_photo','remove_family_child_photo'];
+  'set_family_child_photo','remove_family_child_photo',
+  // 0499 signing link: staff read and send, public link read and sign (proved in test-membership-agreement-link-integrity.mjs).
+  'read_membership_agreement_send','send_membership_agreement_link','read_membership_agreement_link','sign_membership_agreement_link'];
  const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%membership\\_agreement%' OR p.proname IN ('set_family_child_photo','remove_family_child_photo'))");
  assert(fns.length>=entries.length+12);
  for(const f of fns){assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entries.includes(f.proname),f.proname);

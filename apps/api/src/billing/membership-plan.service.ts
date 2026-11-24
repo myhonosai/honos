@@ -4,6 +4,8 @@ import {
   verifyCrmAdultMembershipDraftFromPlan, verifyCrmAdultMembershipPlanOptions, verifyMembershipPlanCatalog, verifyMembershipPlanVersionSummary,
   type CreateMembershipPlanInput, type CrmAdultMembershipDraftFromPlan, type CrmAdultMembershipDraftFromPlanInput, type CrmAdultMembershipPlanOptions,
   type MembershipPlanCatalog, type MembershipPlanCommandResult, type MembershipPlanContext, type ReviseMembershipPlanInput,
+  validateCreateMembershipPlanWithOptionsInput, validateReviseMembershipPlanWithOptionsInput, verifyMembershipPlanSetups, verifyMembershipPlanWithOptions,
+  type CreateMembershipPlanWithOptionsInput, type MembershipPlanSetups, type MembershipPlanWithOptionsResult, type ReviseMembershipPlanWithOptionsInput,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -46,6 +48,11 @@ async function session(client: PoolClient, context: MembershipPlanContext, comma
 function commandResult(data: unknown): { plan: unknown; replayed: boolean } {
   if (!data || typeof data !== 'object' || Object.keys(data).sort().join(',') !== 'plan,replayed' || typeof (data as { replayed?: unknown }).replayed !== 'boolean') throw new Error('Unverified plan command.');
   return data as { plan: unknown; replayed: boolean };
+}
+
+function withOptionsResult(data: unknown): { plan: unknown; setup: unknown; replayed: boolean } {
+  if (!data || typeof data !== 'object' || Object.keys(data).sort().join(',') !== 'plan,replayed,setup' || typeof (data as { replayed?: unknown }).replayed !== 'boolean') throw new Error('Unverified plan command.');
+  return data as { plan: unknown; setup: unknown; replayed: boolean };
 }
 
 /** School membership plan catalog: published terms only. No schedule, invoice, payment, charge, discount, agreement or provider effect. */
@@ -99,6 +106,59 @@ export class MembershipPlanService {
         const plan = verifyMembershipPlanVersionSummary(data.plan);
         if (plan.planId !== selected || plan.version !== input.expectedVersion + 1) throw new Error('Unverified plan command.');
         return { plan, replayed: data.replayed };
+      });
+    } catch (error) { return translate(error, 'MEMBERSHIP_PLAN'); }
+  }
+
+  /** 0642: the payment options of every plan's current version. */
+  async setups(context: MembershipPlanContext): Promise<MembershipPlanSetups> {
+    human(context, false, 'MEMBERSHIP_PLAN');
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async client => {
+        await session(client, context, false);
+        const result = await client.query<{ data: unknown }>('SELECT hon.read_school_membership_plan_setups($1) AS data', [context.externalSubject]);
+        if (result.rows.length !== 1) throw new Error('Unverified setups.');
+        return verifyMembershipPlanSetups(result.rows[0]!.data);
+      });
+    } catch (error) { return translate(error, 'MEMBERSHIP_PLAN'); }
+  }
+
+  /** 0642: publish a plan with its payment options in one step. */
+  async createWithOptions(context: MembershipPlanContext, value: CreateMembershipPlanWithOptionsInput): Promise<MembershipPlanWithOptionsResult> {
+    human(context, true, 'MEMBERSHIP_PLAN');
+    let input: CreateMembershipPlanWithOptionsInput;
+    try { input = validateCreateMembershipPlanWithOptionsInput(value); } catch { throw new BadRequestException({ code: 'INVALID_MEMBERSHIP_PLAN_INPUT' }); }
+    try {
+      return await this.database.withTenantTransaction(context, async client => {
+        await session(client, context, true);
+        const result = await client.query<{ data: unknown }>('SELECT hon.create_school_membership_plan_with_options($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data',
+          [context.externalSubject, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId]);
+        if (result.rows.length !== 1) throw new Error('Unverified plan command.');
+        const { replayed, ...data } = withOptionsResult(result.rows[0]!.data);
+        const verified = verifyMembershipPlanWithOptions(data);
+        if (verified.plan.planCode !== input.planCode || verified.plan.version !== 1 || verified.setup.paymentOptions.length !== input.paymentOptions.length) throw new Error('Unverified plan command.');
+        return { ...verified, replayed };
+      });
+    } catch (error) { return translate(error, 'MEMBERSHIP_PLAN'); }
+  }
+
+  /** 0642: publish the next version of a plan with its payment options. */
+  async reviseWithOptions(context: MembershipPlanContext, planId: string, value: ReviseMembershipPlanWithOptionsInput): Promise<MembershipPlanWithOptionsResult> {
+    human(context, true, 'MEMBERSHIP_PLAN');
+    let input: ReviseMembershipPlanWithOptionsInput;
+    if (typeof planId !== 'string' || !CRM_ADULT_MEMBERSHIP_DRAFT_UUID.test(planId)) throw new BadRequestException({ code: 'INVALID_MEMBERSHIP_PLAN_INPUT' });
+    try { input = validateReviseMembershipPlanWithOptionsInput(value); } catch { throw new BadRequestException({ code: 'INVALID_MEMBERSHIP_PLAN_INPUT' }); }
+    const selected = planId.toLowerCase();
+    try {
+      return await this.database.withTenantTransaction(context, async client => {
+        await session(client, context, true);
+        const result = await client.query<{ data: unknown }>('SELECT hon.revise_school_membership_plan_with_options($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data',
+          [context.externalSubject, selected, JSON.stringify(input), context.idempotencyKey, context.requestId, context.correlationId]);
+        if (result.rows.length !== 1) throw new Error('Unverified plan command.');
+        const { replayed, ...data } = withOptionsResult(result.rows[0]!.data);
+        const verified = verifyMembershipPlanWithOptions(data);
+        if (verified.plan.planId !== selected || verified.plan.version !== input.expectedVersion + 1 || verified.setup.paymentOptions.length !== input.paymentOptions.length) throw new Error('Unverified plan command.');
+        return { ...verified, replayed };
       });
     } catch (error) { return translate(error, 'MEMBERSHIP_PLAN'); }
   }

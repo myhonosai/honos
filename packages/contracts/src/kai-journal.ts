@@ -1,5 +1,5 @@
 /**
- * Kai teaching journal (KJ1, migration 0497). Owner request (David, 2026-11-18): instructors tell Kai, by voice or text, what
+ * Kai teaching journal (KJ1, migration 0665). Owner request (David, 2026-11-18): instructors tell Kai, by voice or text, what
  * they taught; Kai recalls it ("what did we work on last week?") and offers a few suggestions from the patterns. This piece
  * uses no AI: recall is a fixed period parser and the suggestions are fixed rules over the instructor's own entries.
  * The database checks every input rule again. Spec: docs/architecture/KAI_TEACHING_JOURNAL.md.

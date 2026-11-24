@@ -28,7 +28,8 @@ store is the test store.
 | SH2 | POS sells Shopify variants when connected (database reprices from the mirror) and each sale is pushed to Shopify (order + inventory) through a queued job. Coordinated with the POS thread (0403). | No |
 | SH3 | Parent App and HON website buy through Shopify Checkout (Storefront cart → Shopify-hosted checkout); orders link back to the HON contact. | No |
 | SH4 | Commerce Workspace writes: create/edit products and prices, artwork upload, mockups, publish; AI descriptions/pricing/promotions by plan (fake AI until approved). | Paid AI |
-| SH5 | Print-on-demand providers. | Provider accounts |
+| **PD1 (0611)** | Print on demand, first piece: the sync reads who fulfils each variant (the school's own location or a third-party fulfilment service such as a print provider's Shopify app) and Commerce shows it. HON connects to no provider. | No |
+| SH5 | Print-on-demand providers: direct connections, where a provider's API is verified. | Provider accounts |
 | SH6 | Complete-plan commerce agent through the AI Action Engine (proposals, owner approval). | Paid AI |
 | Live | Create the HON Shopify Partner app, set its secrets on Render, connect the Ideal Martial Arts store. | **Yes** |
 
@@ -127,13 +128,20 @@ links orders to HON contacts.
   [[webhooks.subscriptions]]
   topics = ["products/create", "products/update", "products/delete", "inventory_levels/update",
             "orders/create", "orders/updated", "orders/cancelled", "orders/delete", "app/uninstalled"]
-  uri = "https://<HON API host>/v1/commerce/webhooks/shopify"
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
 
   [[webhooks.subscriptions]]
   compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
-  uri = "https://<HON API host>/v1/commerce/webhooks/shopify"
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
   ```
 
+  The real file is `shopify-app/shopify.app.toml`. The API is a private service with no public URL, so the address is
+  the web app's `/api/v1/*` rewrite, which forwards the request to the API's `/v1/*` unchanged.
+
+  **Live state (2026-11-21):** the released app versions up to `hon-os-3` declare only `api_version`, with no
+  subscriptions, so no webhook reaches HON yet: an uninstall does not disconnect the store, changes wait for Sync now
+  or the six-hour background run, and the compliance topics do not arrive. The subscriptions take effect when the app
+  owner releases a version that includes them (see `shopify-app/README.md`).
 - Transport: mounted before the JSON parser so the exact bytes are kept; POST to that one path only, JSON, no query
   string, cookies, credentials or compression, at most 4 MiB.
 - Verification first: base64 HMAC-SHA256 of the raw body with the app's client secret (`X-Shopify-Hmac-SHA256`),
@@ -269,6 +277,43 @@ Plain connect still asks only for read scopes. **Allow editing** reconnects the 
 `write_products` and `write_inventory` as well. The Shopify app version must list those scopes first (one-time step in
 the Dev Dashboard, owner action).
 
+**Live state (2026-11-21):** the app uses Shopify managed installation and lists the two write scopes as *required*
+(since `hon-os-2`), so Shopify asks every store for them at install. HON still treats a store as read-only until its
+owner presses Allow editing and the returned token carries the scopes.
+
+**Allow finance** needs `read_shopify_payments_accounts`, and **Allow orders** needs `write_orders`. Both are *optional*
+scopes in `shopify-app/shopify.app.toml`, released in app version `hon-os-4` (2026-11-21).
+
+Seen on the test store on 2026-11-22 (refusal log): with `read_shopify_payments_accounts` alone Shopify answers the
+balance but refuses `shopifyPaymentsAccount.payouts` (ACCESS_DENIED), which failed the whole finance read. Payouts need
+`read_shopify_payments_payouts`. So Allow finance now asks for both scopes (the second is in the app file for the next
+app file since app version `hon-os-5`, released 2026-11-22), and the adapter steps the finance read down when Shopify
+refuses it: without payouts and each transaction's payout, then (the test store refused `balanceTransactions` too once
+payouts were left out) the balance alone. `financeAllowed` still means
+the accounts scope. The Finance screen cannot tell "no payouts" from "payouts not allowed", so an empty payouts list
+shows an **Allow payouts** button that runs Allow finance again.
+The same log shows why the catalog read with stock locations is refused: it needs `read_locations`, which the app does
+not ask for; the catalog keeps using the plain read (no fulfilment source) without it.
+
+The first live front desk sale on the test store (2026-11-22) showed the same refusal on the stock send
+(`HonVariantStock`, `needs read_locations`): a stock change must name the store's own location, so without the scope no
+front desk sale can change Shopify's count (the task stays waiting; nothing is lost). The owner approved adding it
+(2026-11-22): `read_locations` is an optional scope in the app file (next app version, `hon-os-6`), granted by **Allow
+stock updates** in Settings and together with Allow orders. HON keeps no flag for it, so the button stays offered;
+pressing it again changes nothing. After it is granted a manager sends the waiting stock changes again from the Register.
+
+Settled on the test store on 2026-11-22: with managed installation, `/admin/oauth/authorize` with the scope in `scope=`
+does **not** grant an optional scope (the owner comes back connected, without it). Shopify's request address does
+(`https://admin.shopify.com/store/{store}/oauth/install?client_id=...&optional_scopes=...`); it returns the owner to the
+app's address (the Commerce page), not to HON's return page, and one more pass through HON's usual approval then records
+the scope on the connection.
+
+So the two buttons take two hops, in the web app only (`school-shopify/grant.ts`): the request address first, with a
+note in session storage (action, school, shop domain, ten minutes, used once); back on the Commerce page the usual
+approval starts by itself and ends on HON's return page. The request address is built from the client id in the
+approval address the API returned. In development (the fake) and when the browser cannot keep the note there is no
+first hop. An owner who declines on Shopify's page still finishes connected, without the permission.
+
 ### Screens
 - Products: managers get **Edit** on each product and **New product**; a product with an open edit points to Changes.
 - Changes: each edit shows Now and After approval, its status (Waiting for approval, Sending to Shopify, Saved in
@@ -280,6 +325,87 @@ the Dev Dashboard, owner action).
 - No inventory quantity changes, images, collections, variants added or removed, or publishing a draft (each a later
   piece). AI-proposed edits (Commerce Agent) are a later piece and will use the same approval path.
 - The orders list still shows at most the 200 newest kept orders, without a "more" marker.
+
+## CS-M1: Merch Studio, starter ideas to Shopify drafts (step 3, part 1; no migration)
+
+Commerce step 3 ("Creative Studio product drafts", vision section 7) in three parts:
+
+1. **CS-M1 (this piece, frontend only).** A Merch Studio section in the Commerce Workspace. The person picks a product
+   (8 kinds) and up to three looks (5 styles), optionally types colors, and HON writes one starter idea per look from
+   templates in en/ko/es: title, description, product type, vendor (the school name), SKU stem and, in a USD store only,
+   a suggested price (no conversion in other currencies: the price stays empty and must be typed). Ideas are always
+   labelled as templates, never as AI. "Use this idea" opens the SH4a draft form prefilled; saving goes through the
+   unchanged SH4a propose path, so nothing reaches Shopify until a manager approves it, and the product is created as a
+   DRAFT. The school's saved logo and brand color (0285 branding read, refused or missing = not shown) are displayed.
+   Each idea carries a print checklist (artwork attached, transparent PNG, 300 DPI, print area, provider colors,
+   variants in Shopify), every item shown as "Not checked": HON never labels a design ready to print until the print
+   provider (step 6) checks it. Sizes and colors are listed but the draft has one price; the person adds variants in
+   Shopify for now (SH4a creates single-variant drafts).
+2. **CS-M2.** AI-written ideas through HON's governed text path (S4 spend decision, school cost ceiling, plan, ledger,
+   human approval), with these templates as the fallback when AI is off or over budget.
+3. **CS-M3.** Artwork and mockups from Creative Studio image generations attached as product media, once creative media
+   storage (C3, PR #365) is merged; until then no generated image can become Shopify media.
+
+## CS-M2: Marcus merch ideas (step 3, part 2; migration 0596)
+
+Marcus writes up to three merch ideas from the owner's brief, on the shared AI text proposals (0550, kind `MERCH_IDEAS`).
+An idea is text only: using one opens the CS-M1 draft form, and Shopify changes only through an approved SH4a change.
+
+- **Kind row.** `MERCH_IDEAS`: agent `marcus`, task `DRAFT_MARKETING`, 6,000 input and 3,000 output tokens, at most
+  80,000 micro-USD per call, at most 12,288 result bytes, caller `HUMAN_UI`, subject `SHOPIFY_STORE` (the connection id).
+- **Who may ask.** Shopify management at the session school, `marketing.assistant.use`, `ai.invocation.plan` and an
+  active Complete plan, re-proved in the database on every step. A Shopify reader can read the list only.
+- **What Marcus sees.** The closed brief (one product kind, one to three looks, up to ten colors, up to 500 characters of
+  notes), the school name, the store currency, the saved brand color and up to 30 existing product titles. No customer,
+  order, family or student data.
+- **Flow.** begin (store must be CONNECTED) -> planning reference -> plan (marcus, DRAFT_MARKETING) -> prepare (budget lock
+  first; blocks `GATE_CLOSED` if the store disconnected since the start) -> one provider call -> fail, or record usage and
+  the validated answer in its own transaction. The S4 spend decision, HQ pause, per-school ceiling and UNKNOWN queue are
+  the shared 0550 ones; S4 itself is unchanged.
+- **Answer checks.** `hon.shopify_merch_ideas_ok` and `validateMerchAiProposal` take only `{summary, ideas[1..3]}`, each
+  idea `{style, title, description, productType, price, printNotes}`. `merchAiProblems` rejects a look that was not asked
+  for, a repeated look, a count that does not match the looks, and any price in a store that is not in US dollars (HON
+  never converts). A rejected answer keeps its usage and shows its problems, and can only be dismissed.
+- **Closing.** The requester marks ideas used (`APPLIED`) after sending one for approval, or dismisses them.
+- **Screen.** Merch Studio shows "Ask Marcus for ideas" only when the server has the paid text route configured and the
+  person can manage the store. Any refusal, failure, rejected answer or switched-off route falls back to the CS-M1
+  template ideas, labelled as templates. A lost answer keeps its key, so only the identical brief is sent again.
+- **Evidence.** `packages/database/scripts/test-shopify-merch-ai-ideas.mjs` (8 groups, fake provider, 0 network calls),
+  `apps/api/test/merch-ai.test.cjs`, `apps/web/test/school-shopify-merch-ai.test.tsx`, and the 011 section
+  "Shopify merch AI ideas exact verification (0596)".
+
+## TB2: storefront blocks through a theme app extension (step 4; migration 0609, retires TB1 0600)
+
+TB1 (0600, merged 2026-11-20, never deployed) copied the live theme and wrote ready-made changes to the copy, which needs
+`write_themes`. Shopify declined that scope for HON on 2026-11-20 and pointed to
+[theme app extensions](https://shopify.dev/docs/apps/build/online-store/theme-app-extensions). TB2 replaces TB1 with that
+route; 0609 drops every 0600 table, trigger, helper and entry point (0600 itself is unchanged).
+
+- **The extension.** `shopify-app/extensions/hon-storefront/`: app embed `school-colors` (head; the theme's button and
+  link color variables), app block `size-guide` (product template), app block `pickup-note` (cart) and app embed
+  `pickup-note-banner` (cart, for themes whose cart takes no app blocks). Each reads only the app-data metafield
+  `hon_storefront.settings` (JSON) on HON's app installation, escapes every value and re-checks colors as `#RRGGBB` in
+  Liquid. The extension makes no network requests. Releasing it (`shopify app deploy`) is an owner step in
+  `shopify-app/README.md`.
+- **Who.** Read, save and publish need `commerce.shopify.manage` at the session school, re-proved after each write.
+- **Settings.** `{primaryColor, accentColor|null, sizeGuideTitle|null, sizeGuideText|null, pickupNote|null}`: upper-case
+  `#RRGGBB`, title at most 60 characters (needs text), guide at most 2,000, note at most 500. Saved in
+  `hon.shopify_storefronts` (one row per CONNECTED store, versioned; `expectedVersion` null only for the first save).
+  Saving never reaches Shopify.
+- **Publish** (`POST /v1/school/shopify/storefront/publish {schoolId, settingsVersion}`). The version must be the saved
+  one. The database leases the store's publish for three minutes (one at a time, at most 100 a UTC day) and hands over
+  the settings and the sealed credential. The API sets the metafield with `metafieldsSet` on
+  `currentAppInstallation` (no access scope needed) and finishes under the lease: PUBLISHED (the leased version is live),
+  FAILED (refused, nothing written) or UNKNOWN (answer lost; publishing again settles it because the write is
+  idempotent). A lease that ends without a result reads and settles as UNKNOWN `LEASE_EXPIRED`.
+- **Placing blocks.** The read answers theme editor deep links (client id + block handle) that open the live theme in the
+  editor with the block added or the embed on; the owner previews and presses Save in Shopify, and removes a block there
+  to undo it. HON never reads or writes theme files.
+- **Not in TB2.** Changing the theme's own color settings, blocks in sections that take no app blocks, file diffs.
+  Connecting asks for no theme scope; the TB1 "Allow theme editing" switch is gone.
+- **Evidence.** `packages/database/scripts/test-shopify-storefront-integrity.mjs` (8 groups, fake Shopify, 0 network
+  calls), `apps/api/test/shopify-storefront.test.cjs`, `apps/web/test/school-shopify-storefront.test.tsx`, and the 011
+  section "Shopify storefront blocks exact verification (0609, TB2)".
 
 ## Plan (TDD)
 
@@ -305,3 +431,112 @@ the Dev Dashboard, owner action).
 3. Contract `autoSync` on the overview; the page line in en/ko/es.
 4. Grants: 010 (nothing for the runtime), 011 exact verification, 013 worker grants; verify-rls, staging pins,
    run-db-proofs.
+
+## PD1: who fulfils each product (0611)
+
+Commerce step 6, first print-on-demand piece. A school that sells made-to-order items installs the provider's own Shopify
+app (Printful and similar). Shopify then stocks those variants at that provider's **fulfilment service location**, and the
+provider makes and ships each order. HON reads that fact; it connects to no provider, sends no order and promises nothing
+about a provider's catalog, prices or delivery.
+
+- **Read.** The catalog sync asks for each variant's first two stock locations
+  (`inventoryItem.inventoryLevels(first: 2) { nodes { location { fulfillmentService { serviceName type } } } }`), which the
+  `read_inventory` scope HON already holds covers. The page size went from 100 to 50 variants to stay well inside Shopify's
+  single-query cost limit. The first service of type `THIRD_PARTY` gives the name (trimmed, at most 64 characters);
+  otherwise the variant is the school's. Known limits: a provider ranked third or later among a variant's locations is
+  missed, and a name HON cannot keep (empty after cleaning) leaves the variant shown as school stock. A single-product read-back and a product webhook do not ask, and leave the key out.
+  **Fallback (2026-11-21).** On the live test store the first sync with this read failed with `SHOPIFY_INVALID_RESPONSE` and
+  0 products in a quarter of a second, while the read without the stock locations had succeeded two days before. HON does
+  not keep Shopify's error text, so the exact refusal is not known. When a catalog page is refused that way, the adapter
+  now reads that page and the rest of the sync without the stock locations; those variants leave `fulfilledBy` out and the
+  mirror keeps what it had. A plain read that is refused too fails the sync as before.
+  **Refusal log.** A GraphQL answer Shopify refuses (not throttling) now leaves one log line:
+  `shopify_graphql_refused operation=<HON's operation name> errors=<n> [<CODE> at <field path> needs <scope names>; ...]`.
+  It never holds the shop, Shopify's message text, ids or values. A skipped finance read logs
+  `shopify_finance_skipped stage=read|record` with a one-word reason.
+- **Store.** `hon.shopify_variants.fulfilled_by` (text, NULL = the school). `fulfilledBy` is an optional variant key in
+  `hon.shopify_apply_page`, `hon.shopify_product_item_ok` and `hon.shopify_mirror_product`; a variant sent without the key
+  keeps its value. `hon.shopify_fulfilled_by_ok(jsonb)` is the closed name check (no runtime grant).
+- **Show.** `read_shopify_catalog` returns `fulfilledBy` per variant; `read_shopify` counts gain `provider`. A provider's
+  variant is never low stock (the school cannot restock it), in the flag and in the count; the contract refuses an answer
+  that says otherwise. Commerce shows "Made to order by <name>" in Products and Inventory, an Inventory list of those
+  items, and a count on the Overview when there is at least one.
+- **Not here.** Provider accounts or APIs, order routing, tracking events, product creation at a provider, and the other
+  fulfilment modes in the vision (bulk preorder, hybrid) are later pieces. No new scope, entry point, grant or table.
+
+Evidence: `apps/api/test/shopify.test.cjs` (PD1), `apps/web/test/school-shopify-ui.test.tsx` (PD1),
+`packages/database/scripts/test-shopify-commerce-integrity.mjs` (group 4), and the 011 section "Shopify fulfilment source
+exact verification (0611, PD1)".
+
+## SH2: the front desk sells Shopify products (step 6; migration 0613)
+
+Full behaviour in [SCHOOL_POINT_OF_SALE.md](SCHOOL_POINT_OF_SALE.md#shopify-products-at-the-register-sh2-migration-0613).
+In short: the POS register lists the connected store's own-stock ACTIVE products; a sale is priced by the database from
+the mirror and queues one idempotent `inventoryAdjustQuantities` per counted line (refund restock raises it again).
+Uses the existing `write_inventory` scope; **no new scope and no Shopify order** (owner decision 2026-11-21, "stock
+now, orders later"; orders need `write_orders`). New adapter call `adjustInventory`; new entry points
+`begin_pos_shopify_stock`, `rotate_pos_shopify_credential`, `finish_pos_shopify_stock`.
+
+## SH2b: made-to-order items sold at the front desk create a Shopify order (step 6; migration 0614)
+
+Full behaviour in [SCHOOL_POINT_OF_SALE.md](SCHOOL_POINT_OF_SALE.md#made-to-order-items-at-the-register-sh2b-migration-0614).
+In short: provider-made variants are sold at the register only when the store grants **`write_orders`** (new optional
+scope, asked for by the Allow orders button; `ShopifyConnection.ordersAllowed`). Each such sale creates one PAID order
+through `orderCreate`, tagged with the HON order row id so a lost answer is found again instead of made twice, shipped
+to the school or to an address staff type. New adapter call `createPosOrder`; new entry points
+`begin_pos_shopify_order`, `finish_pos_shopify_order`. Reconnecting the same store keeps `write_orders` once granted.
+The app's next version must list `write_orders` under `optional_scopes` (shopify-app/shopify.app.toml) and the owner
+releases it; until then Shopify will not offer the permission.
+
+## CA1: the commerce review (step 7, part 1; migration 0615)
+
+The owner asks Marcus how the store is doing. Marcus answers with a short summary, up to five findings and up to five
+recommendations, on the shared AI text proposals (0550, kind `COMMERCE_REVIEW`). A review is text only: it changes
+nothing in HON or Shopify, and the only actions on it are "mark as reviewed" and "dismiss".
+
+- **Kind row.** `COMMERCE_REVIEW`: agent `marcus`, task `DRAFT_MARKETING`, 9,000 input and 2,500 output tokens, at most
+  80,000 micro-USD per call, at most 12,288 result bytes, caller `HUMAN_UI`, subject `SHOPIFY_STORE` (the connection id).
+- **Who may ask.** The same people as CS-M2 (0596 `shopify_merch_ai_actor`): Shopify management at the session school,
+  `marketing.assistant.use`, `ai.invocation.plan` and an active Complete plan, re-proved in the database on every step.
+  A Shopify reader can read the list only.
+- **What Marcus sees** (`hon.shopify_review_facts`, built in the database, never by the browser). The closed brief (one
+  focus of OVERVIEW, SALES, PRICING or STOCK, and an optional question of up to 300 characters), the school name, the
+  store currency, and store totals only: the last 30 days (orders, sales, average order, items sold, sales with a known
+  cost, estimated gross profit, up to 8 top products named by their catalog title, and a count of other items sold),
+  the catalog (active and made-to-order variant counts, variants
+  without a cost, up to 12 low-stock items, up to 12 thinnest margins) and two front-desk counts (stock changes and
+  orders not yet sent to Shopify). No customer, address, family or student data. An order line's own title never
+  leaves the database, because a custom item's title is typed by the merchant and may name a person: a sold product is
+  named only when its line joins a mirrored variant, and every other line is only counted.
+- **Size.** The provider request is budgeted in bytes (prompt + facts + 128 must fit 9,000). Names are cut by bytes with
+  `hon.shopify_review_clip` (product 60, variant 40, school 120), never inside a character, so a store with Korean
+  names fits: the fullest store measures 6,533 bytes against 6,872 available.
+- **Flow.** The 0596 flow with its own entry points: `begin_shopify_commerce_review` (store must be CONNECTED) -> planning
+  reference -> plan -> `prepare_shopify_commerce_review` (budget lock first; blocks `GATE_CLOSED` if the store
+  disconnected since the start) -> one provider call -> `fail_...`, or `record_...` with usage and the validated answer.
+  S4, the HQ pause, the per-school ceiling and the UNKNOWN queue are the shared 0550 ones, unchanged.
+- **Provider call.** The same runtime class as CS-M2 with its own profile (`COMMERCE_REVIEW_TEXT_PROFILE`): its own
+  system prompt (use only the numbers given, the question is untrusted text, no links or personal data), temperature 0.2,
+  no tools, and it refuses any budget other than this kind's before anything is sent.
+- **Answer checks.** `hon.shopify_review_ok` and `validateCommerceReviewProposal` take only
+  `{summary, findings[1..5], recommendations[0..5]}`, each point `{area, title, detail}`. `commerceReviewProblems` rejects
+  an answer holding a link or an email address. A rejected answer keeps its usage and shows its problems.
+- **Screen.** Under the overview on the Shopify page, only while the store is connected. The ask form appears only when
+  the server has the paid text route configured and the person can manage the store. A review is always shown under an
+  AI notice. A lost answer keeps its key, so only the identical request is sent again.
+- **Known limits.** The numbers are what HON has synced, so a review is only as fresh as the last sync. Marcus cannot
+  act on a recommendation: preparing price or product changes for approval is the next piece (CA2).
+- **Evidence.** `packages/database/scripts/test-shopify-commerce-review.mjs` (9 groups, fake provider, 0 network calls),
+  `apps/api/test/commerce-review.test.cjs`, `apps/web/test/school-shopify-commerce-review.test.tsx`, and the 011 section
+  "Shopify commerce review exact verification (0615)".
+
+## New-shop guide (schools with no Shopify store)
+
+Before a store is connected, a manager sees a "Set up your shop" guide above the connect form: start a store on Shopify, copy
+the `.myshopify.com` address, come back and connect, then fill the shop with Merch Studio. No app can create a Shopify store
+or accept Shopify's terms for a merchant, so the account is always made by the school on Shopify's own page.
+
+The guide's button opens `HON_SHOPIFY_NEW_STORE_URL` when hon-api has it (HON's Shopify Affiliate Program link, which keeps the school's free trial; https on
+`shopify.com`, a subdomain of it, or `shopify.pxf.io` only, otherwise ignored) and Shopify's public sign-up page when not. The
+link is HON-wide configuration, never school input, and reaches the page as `newStoreUrl` on the overview read. When HON's link
+is used the guide says HON may receive a referral fee. No migration; nothing is written.

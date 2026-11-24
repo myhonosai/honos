@@ -15,7 +15,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-/** The client may supply only recipient, channel, content, and an optional schedule. */
+/** The client may supply only recipient, channel, content, an optional schedule and, for an email, an optional subject. */
 export class CreateCommunicationMessageDto implements CreateCommunicationMessageInput {
   @IsUUID()
   recipientPersonId!: string;
@@ -31,6 +31,13 @@ export class CreateCommunicationMessageDto implements CreateCommunicationMessage
   @IsOptional()
   @IsISO8601({ strict: true, strictSeparator: true })
   scheduledAt?: string;
+
+  /** EMAIL only; the service checks the channel, trimming and control characters. */
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(150)
+  emailSubject?: string;
 }
 
 /** Queueing requires an optimistic-concurrency version supplied by the human UI. */

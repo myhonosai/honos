@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 
-/** 0497: the journal reads are GETs; the save is its own same-origin browser command. */
+/** 0665: the journal reads are GETs; the save is its own same-origin browser command. */
 @Injectable()
 export class KaiJournalReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'kai_journal.read';

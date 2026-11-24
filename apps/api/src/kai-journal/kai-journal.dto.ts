@@ -1,6 +1,6 @@
 import { Allow } from 'class-validator';
 
-/** 0497 journal entry save. Every field is closed-validated by the shared contract validator in the service. */
+/** 0665 journal entry save. Every field is closed-validated by the shared contract validator in the service. */
 export class SaveKaiJournalEntryDto {
   @Allow() entryId?: unknown;
   @Allow() expectedVersion?: unknown;
