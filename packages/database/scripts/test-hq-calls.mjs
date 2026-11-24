@@ -1,4 +1,4 @@
-// HQ calling (CL5, 0591, docs/architecture/SCHOOL_CALLING.md §10) on the marked disposable communication delivery database
+// HQ calling (CL5, 0674, docs/architecture/SCHOOL_CALLING.md §10) on the marked disposable communication delivery database
 // (the 0243 fixture). It proves: forced RLS and no table privilege on the six HQ calling tables; the runtime runs only the
 // HQ entry points and the worker only the provider entry points; HQ people with an HQ messaging purpose use calling, only
 // the HQ owner switches it on; outgoing calls follow the school toll-fraud rules, the HQ number, the HQ do-not-call list,
@@ -308,7 +308,7 @@ try {
   // ---------- 8. canonical 011 section ----------
   {
     const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    const section = verify.split('-- HQ calls exact verification (0591)')[1]?.split('-- End HQ calls exact verification.')[0];
+    const section = verify.split('-- HQ calls exact verification (0674)')[1]?.split('-- End HQ calls exact verification.')[0];
     assert(section, '011 section');
     const rt = new URL(process.env.HON_RUNTIME_DATABASE_URL).username, wk = new URL(process.env.HON_COMMUNICATION_WORKER_DATABASE_URL).username;
     const body = section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_communication_worker', wk).replaceAll('hon_runtime', rt);
@@ -324,7 +324,7 @@ try {
     await admin.query(`REVOKE SELECT ON hon.hq_calls FROM ${wk}`);
     await admin.query(body);
   }
-  pass('the canonical 011 verification of the 0591 tables and functions passes and refuses an extra runtime grant, worker grant or table privilege');
+  pass('the canonical 011 verification of the 0674 tables and functions passes and refuses an extra runtime grant, worker grant or table privilege');
   console.log(`HQ calls: ${groups} groups passed`);
 } finally {
   await cleanup().catch(() => {});

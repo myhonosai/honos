@@ -29,7 +29,11 @@ export type SchoolShellFrameProps = {
   asleep?: boolean; onWake?: () => void;
   /** 0459: this school has demo data loaded (read for the verified school only). Presentation only. */
   demoLoaded?: boolean;
+  /** The top-bar search (field + pop-up). Without it the bar links to the Search page. */
+  search?: ReactNode;
 };
+/** Short labels for the phone bottom bar, so every slot fits on one line. */
+const MOBILE_BAR_LABEL: Partial<Record<string, ShellKey>> = { home: 'barHome', students: 'barStudents', crm: 'barCrm', classes: 'barClasses' };
 const MODES: readonly HonInterfaceTheme[] = ['big-button', 'modern', 'classic'];
 const VIEW_STATE: Record<ShellViewState, ShellKey> = { LOCAL: 'viewLocal', SAVING: 'viewSaving', SAVED: 'viewSaved', ERROR: 'viewError' };
 
@@ -108,7 +112,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       <button type="button" className={styles.closeMenu} aria-label={t('closeMenu')} onClick={() => onMenu(false)}><ShellIcon name="close" /></button>
       {rail}
     </aside>
-    {menuOpen && <div className={styles.scrim} aria-hidden="true" onClick={() => onMenu(false)} />}
+    {/* A click anywhere outside the Menu box closes it (owner, 2026-11-21); on wide screens too, not only for the phone drawer. */}
+    {menuOpen && <div className={styles.scrim} aria-hidden="true" data-menu-scrim={!sidebar && tourStep === null ? 'panel' : 'drawer'} onClick={() => onMenu(false)} />}
     {asleep && <SchoolScreensaver language={language} schoolName={phase === 'READY' ? props.schoolName ?? t('READY') : t('brand')} onWake={onWake} />}
     {tourStep !== null && <div inert={asleep} style={{ display: 'contents' }}><div className={styles.tourScrim} aria-hidden="true" onClick={() => onTour(null)} />
       <SchoolTourDialog language={language} step={tourStep} verified={verified} onStep={onTour} onClose={() => onTour(null)} /></div>}
@@ -137,7 +142,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         </div>
         {props.utility && <div className={styles.locale}>{props.utility}</div>}
         {verified && props.phone}
-        <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>
+        {props.search ?? <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>}
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}
       {active?.steps && <nav className={styles.steps} aria-label={t('stepsNav')} data-shell-steps=""><ol>
@@ -152,8 +157,11 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     </div>
     {!honHere && <ShellHonCorner inert={modal} asleep={asleep} path={path} label={t('askHon')} title={t('honLauncher')} />}
     <nav className={styles.mobileNav} aria-label={t('mobileNav')} inert={modal}>
+      {/* One short single-line label per slot (owner 2026-11-22: labels must line up); the full name stays as the link's name. */}
       {SCHOOL_SHELL_MOBILE.map(key => { const item = SCHOOL_SHELL_NAV.find(candidate => candidate.key === key)!;
-        return <a key={key} href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === key ? 'page' : undefined}><ShellIcon name={key} /><span>{t(item.titleKey)}</span></a>; })}
+        const short = t(MOBILE_BAR_LABEL[key] ?? item.titleKey), full = t(item.titleKey);
+        return <a key={key} href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === key ? 'page' : undefined}
+          aria-label={short === full ? undefined : full}><ShellIcon name={key} /><span>{short}</span></a>; })}
       {offBar ? <button type="button" aria-expanded={menuOpen} aria-current="true" aria-label={`${t('more')}: ${t('currentArea')} ${t(offBar.titleKey)}`} data-mobile-current="" onClick={() => onMenu(true)}>
         <ShellIcon name={offBar.key} /><span>{t(offBar.titleKey)}</span></button>
         : <button type="button" aria-expanded={menuOpen} onClick={() => onMenu(true)}><ShellIcon name="more" /><span>{t('more')}</span></button>}

@@ -1,0 +1,44 @@
+# HON OS Shopify app configuration for the Shopify CLI (used only to release the theme app extension).
+# client_id is the app's public Client ID. Never put the client secret here. The storefront blocks need no theme scope.
+#
+# This file MUST mirror the live app's active version exactly (Dev Dashboard, Versions). With Shopify CLI 5.x:
+#   - include_config_on_deploy = true sends this file's settings with every version, so a wrong value here would
+#     change the live app.
+#   - include_config_on_deploy = false is NOT "extension only": the new version is built with no configuration at all,
+#     and the deploy summary lists the name, URLs, scopes and webhooks as "(removed)". Never release that.
+# So keep it true, run `shopify app config link` first, and read the deploy summary before confirming (see README.md).
+client_id = "154b23d02458cd42edb274394640843b"
+name = "HON OS"
+application_url = "https://app.myhonos.com/staff/billing/shopify"
+embedded = false
+
+[access_scopes]
+scopes = "read_inventory,read_orders,read_products,write_inventory,write_products"
+# Asked for only when an owner presses Allow finance (read_shopify_payments_accounts for the balance and transactions,
+# read_shopify_payments_payouts for the payouts list) or Allow orders (write_orders:
+# a made-to-order item sold at the front desk becomes a paid order). A store can decline either. Shopify does not
+# prompt anyone when this list changes.
+optional_scopes = [ "read_locations", "read_shopify_payments_accounts", "read_shopify_payments_payouts", "write_orders" ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://app.myhonos.com/staff/billing/shopify/return" ]
+
+# One endpoint for every store (SH1b). The API is a private service, so Shopify reaches it through the web app's
+# /api/v1 rewrite. HON verifies the signature before anything else and never stores the payload.
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = [
+    "products/create", "products/update", "products/delete", "inventory_levels/update",
+    "orders/create", "orders/updated", "orders/cancelled", "orders/delete", "app/uninstalled"
+  ]
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "https://app.myhonos.com/api/v1/commerce/webhooks/shopify"
+
+[build]
+include_config_on_deploy = true

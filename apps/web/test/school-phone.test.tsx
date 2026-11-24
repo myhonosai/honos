@@ -8,7 +8,7 @@ import { phoneCopy } from '../src/components/calls/phone-copy';
 import { CallButton } from '../src/components/calls/call-button';
 import { SchoolShellFrame } from '../src/components/school-shell/frame';
 
-// Browser phone (0556/0590): the token stays in memory, a call is recorded by the API before the device connects it with the
+// Browser phone (0556/0673): the token stays in memory, a call is recorded by the API before the device connects it with the
 // recorded id only, retries keep one idempotency key, and incoming calls register only when Ring me is on.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';

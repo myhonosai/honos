@@ -111,11 +111,24 @@ describe('school conversations screen', () => {
   it('is the first tab of Texts under Communication, and the old address redirects there', () => {
     const texts = SCHOOL_SHELL_NAV.find(item => item.key === 'messages')!;
     expect(texts.section).toBe('communication');
-    expect(texts.routes.map(r => r.href)).toEqual(['/staff/texts', '/staff/texts/send']);
+    expect(texts.routes.map(r => r.href)).toEqual(['/staff/texts', '/staff/texts/send', '/staff/texts/history', '/staff/texts/templates', '/staff/texts/opted-out']);
     expect(readFileSync(resolve('src/app/staff/conversations/page.tsx'), 'utf8')).toContain('redirect(`/staff/texts${movedQuery(await searchParams)}`)');
     expect(movedQuery({})).toBe('');
     expect(movedQuery({ conversation: 'abc', tag: ['a', 'b'], gone: undefined })).toBe('?conversation=abc&tag=a&tag=b');
     expect(readFileSync(resolve('src/app/staff/texts/page.tsx'), 'utf8')).toContain('<StaffConversations />');
+  });
+  it('has Email as its own Communication page after Texts, with Send, History, Templates and Opted out (TE4)', () => {
+    const items = SCHOOL_SHELL_NAV.filter(item => item.section === 'communication').map(item => item.key);
+    expect(items.slice(0, 3)).toEqual(['messages', 'email', 'parentApp']);
+    const email = SCHOOL_SHELL_NAV.find(item => item.key === 'email')!;
+    expect(email.titleKey).toBe('navEmail');
+    expect(email.routes.map(r => r.href)).toEqual(['/staff/email', '/staff/email/history', '/staff/email/templates', '/staff/email/opted-out']);
+    for (const [file, component] of [['email/page.tsx', '<EmailSend '], ['email/history/page.tsx', '<EmailHistory />'], ['email/templates/page.tsx', '<EmailTemplates />'], ['email/opted-out/page.tsx', '<EmailOptedOut />']]) {
+      const source = readFileSync(resolve(`src/app/staff/${file}`), 'utf8');
+      expect(source).toContain(component); expect(source).toContain('await requireVerifiedWebSession()');
+    }
+    const routes = JSON.parse(readFileSync(resolve('public/manus-routes.json'), 'utf8')) as unknown;
+    expect(JSON.stringify(routes)).toContain('"/staff/email/opted-out"');
   });
   it('searches as you type and filters with chips, with no Apply button', () => {
     const source = readFileSync(resolve('src/components/conversations/staff-conversations.tsx'), 'utf8');

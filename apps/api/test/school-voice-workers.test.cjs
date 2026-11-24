@@ -7,7 +7,7 @@ const { SchoolVoiceAppWorker, SchoolCallRecordingRetentionWorker } = require('..
 const { SchoolCallsService } = require('../dist/calls/school-calls.service.js');
 const { SchoolCallsController } = require('../dist/calls/school-calls.controller.js');
 
-// CL3c (0556 K2/K3, 0590 V1): voice app setup, recording playback and 90-day deletion, all behind the owner's voice switch.
+// CL3c (0556 K2/K3, 0673 V1): voice app setup, recording playback and 90-day deletion, all behind the owner's voice switch.
 const parent = `AC${'c'.repeat(32)}`, sub = `AC${'d'.repeat(32)}`;
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222', C = '33333333-3333-4333-8333-333333333333';
 const claim = '44444444-4444-4444-8444-444444444444', recSid = `RE${'3'.repeat(32)}`;

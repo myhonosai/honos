@@ -72,6 +72,11 @@
 .buttonPrimary { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: #1d4ed8; color: #fff; font-weight: 600; cursor: pointer; }
 .buttonPrimary:disabled, .button:disabled { opacity: 0.55; cursor: default; }
 .notice { border-left: 4px solid #1d4ed8; padding: 8px 12px; background: #eff6ff; color: #0f172a; border-radius: 6px; margin: 0; }
+.setup { display: grid; gap: 8px; border-left: 4px solid #f59e0b; padding: 10px 12px; background: #fffbeb; color: #0f172a; border-radius: 6px; }
+.setup p, .setup ol { margin: 0; }
+.setup ol { padding-left: 20px; }
+.setup a { justify-self: start; text-decoration: none; }
+.notice a { color: #1d4ed8; }
 .signed { white-space: pre-line; border: 1px solid var(--hon-border, #e2e8f0); border-radius: 8px; padding: 12px; max-height: 320px; overflow-y: auto; }
 .signature { width: 100%; max-width: 420px; aspect-ratio: 3 / 1; border: 1px solid var(--hon-border, #e2e8f0); border-radius: 8px; background: #fff; color: #0f172a; }
 @media print { .noPrint { display: none !important; } }

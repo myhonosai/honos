@@ -1,5 +1,5 @@
 /**
- * Disposable local browser proof for the HQ Calls page and the HQ top-bar phone (0591). Synthetic fixtures only: every /api
+ * Disposable local browser proof for the HQ Calls page and the HQ top-bar phone (0674). Synthetic fixtures only: every /api
  * request is answered in the browser by this script and every other origin is blocked, so no database, Twilio or
  * production backend is reached. Requires `pnpm build` first.
  *

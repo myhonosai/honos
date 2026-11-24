@@ -253,7 +253,9 @@ try{
  assert.deepEqual(holdTables(await body('ai_org_open_agent_holds')),holdTables(await body('ai_org_committed_credits')));
  assert.equal(holdTables(await body('ai_org_open_agent_holds')).length,4);
  assert.deepEqual(await q('SELECT * FROM hon.ai_org_open_agent_holds($1)',[ana.reg.organizationId]),[]);
- for(const reader of ['read_ai_school_usage_from_hq','read_ai_team_readiness'])assert.match(await body(reader),/ai_org_display_ceiling/,reader);
+ // 0635 keeps the 0284 readiness body as read_ai_team_readiness_0284 behind a wrapper that only narrows agents.
+ for(const reader of ['read_ai_school_usage_from_hq','read_ai_team_readiness_0284'])assert.match(await body(reader),/ai_org_display_ceiling/,reader);
+ assert.match(await body('read_ai_team_readiness'),/hon\.read_ai_team_readiness_0284\(p_subject\)/);
  const display=async(org,at='clock_timestamp()')=>Number((await q(`SELECT hon.ai_org_display_ceiling($1,${at}) c`,[org]))[0].c);
  assert.equal(await display(ana.reg.organizationId),100,'HQ sees the trial credits left, not the per-request minimum');assert.equal(await room(ana.reg.organizationId),10);
  assert.equal(await display(eli.reg.organizationId),2147483647);assert.equal(await display(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);

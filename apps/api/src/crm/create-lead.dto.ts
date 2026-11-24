@@ -75,4 +75,5 @@ export class CreateHumanLeadDto implements CreateHumanCrmLeadInput {
   @Allow() declare pipelineId: string;
   @Allow() declare pipelineStageId: string;
   @Allow() declare primaryContact: CreateHumanCrmLeadInput['primaryContact'];
+  @Allow() declare consentChannels?: NonNullable<CreateHumanCrmLeadInput['consentChannels']>;
 }

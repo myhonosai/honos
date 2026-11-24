@@ -1,6 +1,6 @@
 import {
-  validateSchoolDashboardQuery, validateSchoolReportsQuery, verifySchoolDashboard, verifySchoolReportLocations, verifySchoolReports,
-  type SchoolDashboard, type SchoolDashboardRange, type SchoolReportLocations, type SchoolReports,
+  validateAttendanceReportQuery, validateSchoolDashboardQuery, validateSchoolReportsQuery, verifyAttendanceReport, verifySchoolDashboard, verifySchoolReportLocations, verifySchoolReports,
+  type AttendanceReport, type AttendanceReportQuery, type SchoolDashboard, type SchoolDashboardRange, type SchoolReportLocations, type SchoolReports,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -51,6 +51,17 @@ async function fetchVerified<T>(path: string, signal: AbortSignal, owned: () => 
 }
 
 export const schoolReportsApi = {
+  /** AR1 (0633): the attendance report; week is any day of the week wanted, month is YYYY-MM or ALL (reporting.view here). */
+  async attendance(scope: ReportsScope, input: AttendanceReportQuery, signal: AbortSignal, owned: () => boolean): Promise<AttendanceReport> {
+    let query: AttendanceReportQuery;
+    try { query = validateAttendanceReportQuery(input); } catch { throw new ReportsError('UNAVAILABLE'); }
+    const search = new URLSearchParams();
+    if (query.week !== undefined) search.set('week', query.week);
+    if (query.month !== undefined) search.set('month', query.month);
+    const suffix = search.size ? `?${search.toString()}` : '';
+    return fetchVerified(`/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/reports/attendance${suffix}`,
+      signal, owned, (data) => verifyAttendanceReport(data, scope.schoolId, query));
+  },
   /** R3 (0520): the dashboard for one range in school time (reporting.view here). */
   async dashboard(scope: ReportsScope, range: SchoolDashboardRange, signal: AbortSignal, owned: () => boolean): Promise<SchoolDashboard> {
     let query: { range?: SchoolDashboardRange };

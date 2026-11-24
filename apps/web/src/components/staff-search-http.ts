@@ -33,3 +33,12 @@ export function searchFailure(status: number): string {
   if (status === 404) return 'This record is no longer available.';
   return 'Search is not available right now. Nothing was changed; try again in a moment.';
 }
+/** The staff search read for the palette: the exact school, the given kinds, validated against that school. */
+export async function staffSearchRecords(org: string, school: string, q: string, types: readonly StaffSearchKind[], signal: AbortSignal): Promise<StaffSearchResult[]> {
+  const path = searchApiPath(org, school);
+  const params = new URLSearchParams({ q, types: STAFF_SEARCH_KINDS.filter(kind => types.includes(kind)).join(',') });
+  const response = await fetch(`${path}?${params}`, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', signal, referrerPolicy: 'no-referrer' });
+  if (!response.ok) throw new Error(searchFailure(response.status));
+  const payload = await response.json() as { data?: { search?: unknown } };
+  return safeSearchResults(payload.data?.search, org, school);
+}

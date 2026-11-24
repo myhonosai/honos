@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { schoolEntryApi } from '../src/components/school-entry/http';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -11,7 +11,7 @@ const report = { ...a, generatedAt: '2026-11-04T00:00:00Z', from: '2026-11-01T00
   invoices: { inRangeByStatus: zeroes(['DRAFT', 'ISSUED', 'PAID', 'VOID', 'UNCOLLECTIBLE']) }, paymentAttempts: { inRangeByState: zeroes(['PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'REQUIRES_ACTION', 'UNKNOWN', 'REFUNDED']) } };
 const response = (data: unknown, status = 200) => Response.json({ data }, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const signal = () => new AbortController().signal;
-let invalidated: ReturnType<typeof vi.fn>;
+let invalidated: Mock<() => void>;
 beforeEach(() => { const w = new EventTarget(); invalidated = vi.fn(); w.addEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated); vi.stubGlobal('window', w); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

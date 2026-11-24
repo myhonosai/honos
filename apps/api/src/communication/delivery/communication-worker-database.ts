@@ -70,7 +70,7 @@ export interface CommunicationWorkerStore {
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
   /** 0435 school inbox: record one signed inbound DM or comment. */
   recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
-  /** 0556/0590 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
+  /** 0556/0673 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
   connectSchoolClientCall?(callId: string, identity: string, accountSid: string | null, callSid: string): Promise<SchoolClientCallDecision>;
   routeSchoolIncomingCall?(to: string, from: string | null, callSid: string): Promise<SchoolIncomingCallRoute>;
   recordSchoolCallStatus?(accountSid: string | null, callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null,
@@ -78,7 +78,7 @@ export interface CommunicationWorkerStore {
   recordSchoolCallRecording?(accountSid: string | null, callSid: string, recordingSid: string, seconds: number, voicemail: boolean):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; callId: string | null }>;
   readSchoolVoiceApp?(schoolId: string): Promise<SchoolVoiceAppKey | null>;
-  /** 0590 V1 (CL3c): the voice app worker claims a school, records its TwiML App, then its sealed API key. */
+  /** 0673 V1 (CL3c): the voice app worker claims a school, records its TwiML App, then its sealed API key. */
   readSchoolsNeedingVoiceApp?(limit: number): Promise<string[]>;
   beginSchoolVoiceApp?(schoolId: string, leaseSeconds: number): Promise<SchoolVoiceAppClaim>;
   recordSchoolVoiceAppTwiml?(schoolId: string, claimToken: string, twimlAppSid: string): Promise<boolean>;
@@ -86,7 +86,7 @@ export interface CommunicationWorkerStore {
   /** 0556 K3 (CL3c): recordings past 90 days, deleted at Twilio first, then marked deleted by exact SID. */
   readSchoolCallRecordingsDue?(limit: number): Promise<SchoolCallRecordingDue[]>;
   markSchoolCallRecordingDeleted?(callId: string, recordingSid: string): Promise<boolean>;
-  /** 0591 HQ calling on the HQ number (CL5): parent-account webhooks, the HQ voice app and voicemail retention. */
+  /** 0674 HQ calling on the HQ number (CL5): parent-account webhooks, the HQ voice app and voicemail retention. */
   connectHqClientCall?(callId: string, identity: string, callSid: string): Promise<HqClientCallDecision>;
   routeHqIncomingCall?(to: string, from: string | null, callSid: string): Promise<HqIncomingCallRoute>;
   recordHqCallStatus?(callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null, durationSeconds: number | null, occurredAt: string):

@@ -25,7 +25,7 @@ const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'] as con
 export function SchoolPhone({ scope, language, createDevice }: { scope: OperationalSchoolScope; language: string; createDevice?: VoiceDeviceFactory }): React.ReactElement | null {
   return <BrowserPhone target={{ organizationId: scope.organizationId, schoolId: scope.schoolId }} callsHref="/staff/calls" language={language} createDevice={createDevice} />;
 }
-/** The HQ top-bar phone on the HQ texting number (0591). Hidden for anyone the HQ calling API refuses. */
+/** The HQ top-bar phone on the HQ texting number (0674). Hidden for anyone the HQ calling API refuses. */
 export function HqPhone({ language, createDevice, backend = HQ_PHONE_BACKEND }: { language: string; createDevice?: VoiceDeviceFactory; backend?: PhoneBackend }): React.ReactElement | null {
   return <BrowserPhone target={backend} callsHref="/hq/communications/calls" language={language} createDevice={createDevice} hq />;
 }

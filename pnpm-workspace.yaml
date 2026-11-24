@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - '!apps/parent-mobile'
+  - '!apps/staff-mobile'
   - packages/*
 
 onlyBuiltDependencies:

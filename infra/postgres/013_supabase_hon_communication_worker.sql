@@ -191,7 +191,26 @@ BEGIN
 END;
 $$;
 
--- 0590 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
+-- 0597 Shopify finance: record the Shopify Payments snapshot a background sync read under its lease (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_shopify_background_finance(jsonb)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_shopify_background_finance(jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0601 parent announcement push: claim and record sends and Expo receipts (when applied). No table access.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_parent_push_receipt(uuid,uuid,jsonb)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.claim_parent_push_deliveries(integer, integer), hon.record_parent_push_send(uuid, uuid, jsonb),
+      hon.claim_parent_push_receipts(integer, integer), hon.record_parent_push_receipt(uuid, uuid, jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
+-- 0673 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
 -- a phone token (when applied).
 DO $$
 BEGIN
@@ -203,7 +222,7 @@ BEGIN
 END;
 $$;
 
--- 0591 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
+-- 0674 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
 -- voicemail, delete voicemail after 90 days (when applied).
 DO $$
 BEGIN

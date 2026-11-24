@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarCard, CurrentSchoolClassSession } from '@hon/contracts';
 import { CALENDAR_LANGUAGES } from '../src/components/school-calendar/copy';
 import { CalendarViewPane, NO_INSTRUCTOR, canDrag, filterOptions, filteredClasses, type CalendarViewProps, type CardsState } from '../src/components/school-calendar/view';
-import { CalendarCardForm, cardFormInput, initialCardForm } from '../src/components/school-calendar/card-form';
+import { CalendarCardForm, cardFormInput, firstRosterDate, initialCardForm, startHasPassed } from '../src/components/school-calendar/card-form';
 import { CardError, calendarCardsApi, cardErrorFor } from '../src/components/school-calendar/cards-http';
 import { nextWholeHour } from '../src/components/school-calendar/calendar';
 import { id, scope } from './account-status-fixtures';
@@ -96,6 +96,14 @@ describe('Program and Instructor filters', () => {
   });
 });
 
+describe('a class just added', () => {
+  it('is marked so the page can scroll to it, and the message sits above the board', () => {
+    const html = render({ fresh: id(602), message: <p>DONE</p> });
+    expect((html.match(/data-new="true"/g) ?? []).length).toBe(1);
+    expect(html.indexOf('DONE')).toBeLessThan(html.indexOf('data-testid="calendar-week"'));
+  });
+});
+
 describe('create form', () => {
   const programs = [{ programId: kids, name: 'Kids Karate' }];
   it('starts at the clicked time, 60 minutes, with the only program chosen', () => {
@@ -116,6 +124,36 @@ describe('create form', () => {
       initial={{ ...initialCardForm('2027-03-03', 600, programs), repeats: true }} busy={false} error={null} onCancel={() => undefined} onSubmit={() => undefined}/>);
     for (const label of ['Class', 'Private lesson', 'Trial class', 'Event', 'Kids Karate', 'Coach Kim', 'No instructor', 'Repeats every week', 'Wed', 'Add to calendar']) expect(html).toContain(label);
     expect(html).toMatch(/<input type="checkbox" disabled="" checked=""\/><span>Wed/);
+  });
+  // David's report: a weekly roster made today at a time that had already passed got its first class next week, so the week
+  // shown stayed empty. The form says so first, and the page jumps to the first class.
+  const LA = 'America/Los_Angeles', saturday1125 = Date.parse('2026-11-21T19:25:00.000Z'); // Sat 21 Nov 2026, 11:25 AM in LA
+  const base = { kind: 'CLASS' as const, programId: kids, name: 'test', capacity: 20, bookingPolicy: 'OPTIONAL_BOOKING' as const, durationMinutes: 60, localDate: '2026-11-21' };
+  it('knows when a start time today has already passed in school time', () => {
+    expect(startHasPassed('2026-11-21', '10:00', LA, saturday1125)).toBe(true);
+    expect(startHasPassed('2026-11-21', '11:25', LA, saturday1125)).toBe(true);
+    expect(startHasPassed('2026-11-21', '12:00', LA, saturday1125)).toBe(false);
+    expect(startHasPassed('2026-11-22', '06:00', LA, saturday1125)).toBe(false);
+  });
+  it('finds the date of a new roster’s first class', () => {
+    expect(firstRosterDate({ ...base, localStartTime: '10:00', repeatWeekdays: [6] }, LA, saturday1125)).toBe('2026-11-28');
+    expect(firstRosterDate({ ...base, localStartTime: '17:00', repeatWeekdays: [6] }, LA, saturday1125)).toBe('2026-11-21');
+    expect(firstRosterDate({ ...base, localStartTime: '10:00', repeatWeekdays: [1, 6] }, LA, saturday1125)).toBe('2026-11-23');
+    expect(firstRosterDate({ ...base, localStartTime: '10:00', repeatWeekdays: [6], repeatUntil: '2026-11-21' }, LA, saturday1125)).toBeNull();
+    // 2:30 AM does not exist in LA on 14 March 2027: that date is skipped, as the server does.
+    expect(firstRosterDate({ ...base, localDate: '2027-03-14', localStartTime: '02:30', repeatWeekdays: [7] }, LA, saturday1125)).toBe('2027-03-21');
+  });
+  it('warns before saving a time that has already passed today', () => {
+    const programsOne = [{ programId: kids, name: 'Kids Karate' }];
+    const form = (repeats: boolean, language = 'en') => renderToStaticMarkup(<CalendarCardForm language={language} programs={programsOne} instructors={[]} timeZone={LA} now={saturday1125}
+      initial={{ ...initialCardForm('2026-11-21', 600, programsOne), repeats }} busy={false} error={null} onCancel={() => undefined} onSubmit={() => undefined}/>);
+    expect(form(true)).toContain('10:00 AM today has already passed, so the first class will be on Saturday, November 28.');
+    expect(form(false)).toContain('10:00 AM today has already passed. Choose a later time.');
+    expect(form(true, 'ko')).toContain('11월 28일');
+    expect(form(true, 'es')).toContain('28 de noviembre');
+    const later = renderToStaticMarkup(<CalendarCardForm language="en" programs={programsOne} instructors={[]} timeZone={LA} now={saturday1125}
+      initial={{ ...initialCardForm('2026-11-21', 17 * 60, programsOne), repeats: true }} busy={false} error={null} onCancel={() => undefined} onSubmit={() => undefined}/>);
+    expect(later).not.toContain('already passed');
   });
   it('tells the school it has no program yet', () => {
     const html = renderToStaticMarkup(<CalendarCardForm language="ko" programs={[]} instructors={[]} initial={initialCardForm('2027-03-03', 600, [])} busy={false} error={null}

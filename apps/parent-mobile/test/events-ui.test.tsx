@@ -28,11 +28,16 @@ describe('events and bookings in the app', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Book Holiday open house at 10:00, 12 left' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Confirm booking' }));
     expect(await screen.findByText(/^Booked: Holiday open house/)).toBeTruthy();
+    expect(screen.getByText("You're booked!")).toBeTruthy();
+    expect(screen.getByText(/^Holiday open house, .* at 10:00$/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByText("You're booked!")).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
     expect(await screen.findByText('Your family is booked')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Cancel Holiday open house' }));
     await fireEvent.press(await screen.findByRole('button', { name: 'Confirm cancel' }));
     expect(await screen.findByText(/^Cancelled: Holiday open house/)).toBeTruthy();
+    expect(screen.queryByText("You're booked!")).toBeNull();
   });
 
   it('a family booking needs a time before it can be confirmed', async () => {
@@ -54,6 +59,7 @@ describe('events and bookings in the app', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Confirm booking' }));
     expect(await screen.findByText(/could not confirm this with your school yet/)).toBeTruthy();
     expect(screen.queryByText(/^Booked:/)).toBeNull();
+    expect(screen.queryByText("You're booked!")).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByText(/^Booked: Holiday open house/)).toBeTruthy();
     expect(keys[0]).toBe(keys[1]);

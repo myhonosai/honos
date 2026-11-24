@@ -10,7 +10,8 @@ Owner ask (2026-11-19): "on main screen we would have announcement that we can p
 - **Families** see the school's live announcements from the last 60 days, newest first (at most 20), in an **Announcements**
   section at the top of the HON Family app's Home screen. Every grant level (including VIEWER) can read them. Families never see
   who posted it.
-- **Nothing is sent.** No text, email or phone push. Push alerts need a separate Firebase/APNs setup and owner approval.
+- **No text or email.** Phone notifications are added by 0601 ([PARENT_ANNOUNCEMENT_PUSH.md](PARENT_ANNOUNCEMENT_PUSH.md)): built, but
+  nothing is sent until the owner approves sends and the Android Firebase key / iOS APNs key are set up.
 
 ## Boundaries
 
