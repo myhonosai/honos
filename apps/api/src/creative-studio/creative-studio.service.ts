@@ -178,9 +178,8 @@ export class CreativeStudioService {
       return settled.generation.status === 'GENERATING' ? created : this.avatarReceipt(subject, school, created.avatar.avatarId, settled, true);
     }
     // While no real provider is connected the photo is never sent anywhere: the synthetic provider gets the look only.
-    const recorded = await this.record(subject, g.generationId,
-      await this.invoke(g, route, { name: created.avatar.name, style: created.avatar.style, description: created.avatar.description }));
-    return this.avatarReceipt(subject, school, created.avatar.avatarId, recorded, false);
+    const recorded = await this.run(subject, g, route, { name: created.avatar.name, style: created.avatar.style, description: created.avatar.description });
+    return recorded ? this.avatarReceipt(subject, school, created.avatar.avatarId, recorded, false) : created;
   }
 
   private async videoReceipt(subject: string, school: string, videoId: string, recorded: CreativeGenerationReceipt, replayed: boolean): Promise<CreativeAvatarVideoReceipt> {
