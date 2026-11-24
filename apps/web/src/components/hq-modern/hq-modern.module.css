@@ -631,3 +631,10 @@
   .commercialStatus{order:3}
   .commercialList{grid-template-columns:minmax(0,1fr)}
 }
+/* HQ usability (2026-11-24): display choices sit quietly in the page header instead of a full-width bar on every page. */
+.topbar{flex-wrap:wrap}
+.topbar>.appearance{flex:0 1 auto;margin:0 0 0 auto;padding:4px 6px;gap:8px;min-height:0;background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
+.topbar>.appearance>.appearanceGroup{padding:3px;gap:2px}
+.topbar>.appearance button{min-height:36px;padding:4px 9px;font-size:11px}
+.topbar>.appearance>.appearanceGroup>span{font-size:10px;margin:0 4px}
+.topbar>div{text-align:left}
