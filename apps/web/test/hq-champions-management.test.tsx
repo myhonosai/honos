@@ -100,13 +100,13 @@ describe('HQ Champions management overview', () => {
     snapshot.overview.attributions = { qualified: 0, pending: 0, rejected: 0, refunded: 0, reversed: 0 };
     snapshot.overview.rewardLiabilities.entries = 0;
     const html = renderToStaticMarkup(<ChampionsManagementResults data={snapshot}/>);
-    expect(html).toContain('No referrals recorded'); expect(html).toContain('No published qualification policy');
-    expect(html).not.toContain('Configured welcome credit'); expect(html).toContain('No non-voided reward liabilities');
+    expect(html).toContain('No referrals recorded'); expect(html).toContain('The program isn’t published yet');
+    expect(html).not.toContain('Configured welcome credit'); expect(html).toContain('No rewards owed right now');
   });
   it('renders no operational facts before authorization; both existing routes remain dynamic and no-index', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     const html = renderToStaticMarkup(<HqChampionsManagement pagePath="/hq/growth"/>);
-    expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Loading authorized Champions Club'); expect(html).not.toContain('data-champions-total');
+    expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Loading Champions Club'); expect(html).not.toContain('data-champions-total');
     for (const path of ['src/app/hq/growth/page.tsx', 'src/app/hq/growth/champions-club/page.tsx']) {
       const route = readFileSync(path, 'utf8'); expect(route).toContain('HqChampionsManagement'); expect(route).toContain('force-dynamic'); expect(route).toContain('index: false');
     }

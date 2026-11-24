@@ -1,5 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { HQ_HON_LIMITS } from '@hon/contracts';
 import type { HonReplyMode, HqHonAgentKey, HqHonConversation, HqHonStatus, HqHonTurn } from '@hon/contracts';
 import type { Language } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
@@ -115,7 +116,7 @@ export function HqHonPanelView({ agentKey, name, language, number, state, questi
   return <section aria-labelledby={`hq-hon-${agentKey}-title`} data-hq-hon-agent={agentKey}>
     <h2 id={`hq-hon-${agentKey}-title`}>{t('askTitle')}</h2>
     <p>{t('askIntro')}</p>
-    <p>{b.creditCap === null ? t('noBudget') : t('budget', { available: number(b.availableCredits), cap: number(b.creditCap), used: number(b.usedCredits), held: number(b.heldCredits) })}</p>
+    <p>{b.creditCap === null ? t('noBudget') : b.creditCap >= HQ_HON_NO_CAP ? t('budgetNoCap', { used: number(b.usedCredits), held: number(b.heldCredits) }) : t('budget', { available: number(b.availableCredits), cap: number(b.creditCap), used: number(b.usedCredits), held: number(b.heldCredits) })}</p>
     {view.viewer.isOwner && !compact && <BudgetForm agentKey={agentKey} t={t} outcome={budgetOutcome} onBudget={onBudget} onRefresh={onRefresh} language={language}
       history={view.budgetHistory} number={number}/>}
     {!allowed ? <p role="note">{t('notYours')}</p> : !connected ? <p role="note">{t('providerOff')}</p> :
@@ -138,6 +139,10 @@ export function HqHonPanelView({ agentKey, name, language, number, state, questi
   </section>;
 }
 
+/** The highest cap the server accepts (HQ_HON_LIMITS.maxCap, 0263 CHECK credit_cap <= 10,000,000). The owner chose no monthly cap on HQ AI (2026-11-24),
+ * so this is offered as one tap; every question still carries its own per-request cost limit on the server. */
+export const HQ_HON_NO_CAP = HQ_HON_LIMITS.maxCap;
+
 function BudgetForm({ agentKey, t, outcome, onBudget, onRefresh, language, history, number }: { agentKey: string; t: (k: HqHonCopyKey, p?: Readonly<Record<string, string | number>>) => string;
   outcome: BudgetOutcome; onBudget: (cap: string, reason: string) => void; onRefresh: () => void; language: Language; history: HqHonConversation['budgetHistory']; number: (n: number) => string }): React.ReactElement {
   const locked = outcome?.kind === 'SENDING' || unconfirmed(outcome), id = `hq-hon-${agentKey}-budget`;
@@ -152,6 +157,11 @@ function BudgetForm({ agentKey, t, outcome, onBudget, onRefresh, language, histo
       <label htmlFor={`${id}-reason`}>{t('reasonLabel')}</label>
       <input id={`${id}-reason`} name="reason" required minLength={3} maxLength={300} autoComplete="off"/>
       <button type="submit">{outcome?.kind === 'SENDING' ? t('savingBudget') : t('saveBudget')}</button>
+    </fieldset>
+    <fieldset disabled={locked} data-hq-hon-no-cap="">
+      <legend>{t('noCapTitle')}</legend>
+      <small>{t('noCapHelp')}</small>
+      <button type="button" onClick={() => onBudget(String(HQ_HON_NO_CAP), t('noCapReason'))}>{t('noCapButton')}</button>
     </fieldset>
     <div aria-live="polite">{outcome?.kind === 'DONE' && <p>{t('budgetSaved')}</p>}
       {outcome?.kind === 'ERROR' && <p role="alert">{outcome.error.kind === 'REFUSED' && outcome.error.code

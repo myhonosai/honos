@@ -41,7 +41,7 @@ describe('HQ navigation groups', () => {
   });
 
   it('keeps page labels and opens only the group that holds the current page', () => {
-    expect(hqPageLabel('/hq/revenue')).toBe('Revenue');
+    expect(hqPageLabel('/hq/revenue')).toBe('Subscriptions');
     expect(hqPageLabel('/hq/schools')).toBe('Schools');
     expect(hqPageLabel('/hq/pricing-offers')).toBe('Pricing & Offers');
     expect(hqPageLabel('/hq/ai-providers')).toBe('AI Providers');
@@ -121,8 +121,8 @@ describe('HQ commercial program status', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     const html = renderToStaticMarkup(<CommercialStatus/>);
     expect(fetch).not.toHaveBeenCalled();
-    for (const text of ['Commercial programs', 'Payment program', 'Live checkout', 'AI credit program', 'Read-only · server reported']) expect(html).toContain(text);
-    expect(html.match(/Verifying…/g)).toHaveLength(3);
+    for (const text of ['Payments &amp; credits', 'Taking payments', 'Real-money checkout', 'AI credits']) expect(html).toContain(text);
+    expect(html.match(/Loading…/g)).toHaveLength(3);
     expect(html).not.toMatch(/Test mode|Disabled|Inactive|data-commercial-state|paid access|Paid-access/i);
     const source = readFileSync('src/components/hq-modern/commercial-status-http.ts', 'utf8');
     expect(source).not.toMatch(/method:\s*'POST'|Idempotency-Key|program\/|organizationId/);
