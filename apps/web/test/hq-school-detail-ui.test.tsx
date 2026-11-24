@@ -111,3 +111,12 @@ it('route, label, manifest and directory link are wired; the client has no stora
     expect(source).not.toMatch(/localStorage|sessionStorage|dangerouslySetInnerHTML|method: 'POST'|Idempotency-Key/);
   }
 });
+
+it('renders the plan slot after the School card only when one is given', () => {
+  const state: SchoolDetailState = { state: 'READY', view: detail() };
+  const without = render(state);
+  expect(without).not.toContain('data-plan-slot');
+  const withPlan = renderToStaticMarkup(<HqSchoolDetailView language="en" formattingLocale="en-US" concealed={false} state={state} busy={false} onRefresh={() => {}} onReveal={() => {}}
+    plan={<section data-plan-slot="">plan</section>}/>);
+  expect(withPlan).toContain('<section data-plan-slot="">plan</section>');
+});
