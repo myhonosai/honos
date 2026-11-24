@@ -80,4 +80,22 @@ describe('HQ Schools list like agency sub-accounts', () => {
     expect(api.authorize).toHaveBeenCalledTimes(2); expect(controller.snapshot().access).toBe('signed-out');
     unbind();
   });
+  it('coming back during an in-flight create waits for it to settle, then re-checks once', async () => {
+    let release!: () => void; const gate = new Promise<void>(done => { release = done; });
+    const api = { authorize: vi.fn(async () => ids[0]!), send: vi.fn(async () => { await gate; throw new Error('network'); }) };
+    const controller = new SchoolCreationController(api as never); controller.start();
+    const browser = new EventTarget(); const documentTarget = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    const unbind = bindSchoolCreationPrivacy(controller, () => {}, browser, documentTarget);
+    await controller.authorize();
+    for (const [key, value] of [['legalName', 'Harbor LLC'], ['displayName', 'Harbor'], ['schoolName', 'Harbor Main'], ['schoolSlug', 'harbor-main']] as const) controller.edit(key, value);
+    controller.confirm(true); const sent = controller.submit();
+    await vi.waitFor(() => expect(api.send).toHaveBeenCalledTimes(1));
+    const before = api.authorize.mock.calls.length;
+    browser.dispatchEvent(new Event('blur')); browser.dispatchEvent(new Event('focus'));
+    expect(api.authorize).toHaveBeenCalledTimes(before);
+    release(); await sent;
+    await vi.waitFor(() => expect(controller.snapshot().concealed).toBe(false));
+    expect(api.authorize).toHaveBeenCalledTimes(before + 1); expect(controller.snapshot().uncertain).toBe(true);
+    unbind();
+  });
 });

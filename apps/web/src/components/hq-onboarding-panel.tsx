@@ -36,7 +36,8 @@ export function HqOnboardingPanel(): React.ReactElement {
     {state.concealed ? <>
       <p>{state.access === 'signed-out' ? t('signedOut') : state.access === 'forbidden' ? t('forbidden') : state.access === 'unavailable' ? t('unavailable') : t('concealed')}</p>
       {state.access === 'signed-out' && <a href="/auth/login">{t('signIn')}</a>}
-      {(state.access === 'forbidden' || state.access === 'unavailable') && <button type="button" disabled={state.busy} onClick={() => void controller.authorize()}>{t('tryAgain')}</button>}
+      {/* Refused, unavailable or account changed: the page will not retry by itself, so offer the same HQ-owner read. */}
+      {(state.access === 'forbidden' || state.access === 'unavailable' || state.message === 'principalChanged') && <button type="button" disabled={state.busy} onClick={() => void controller.authorize()}>{t('tryAgain')}</button>}
     </> : null}
     <div key={controller.revision()} ref={privateArea} data-hq-create-private hidden={state.concealed} inert={state.concealed}>
     {!state.concealed && (state.receipt ? <section aria-labelledby="hq-school-created">

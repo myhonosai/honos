@@ -103,10 +103,18 @@ export class SchoolCreationController {
 
 /** Conceal mounted form/receipt DOM before React batching, without retiring the command lease. */
 export function bindSchoolCreationPrivacy(controller: SchoolCreationController, concealDom: () => void, browser: EventTarget, documentTarget: EventTarget & { readonly visibilityState: string }): () => void {
-  const conceal = (event: Event) => { concealDom(); controller.conceal(event.type === HON_SESSION_INVALIDATED_EVENT); };
+  let deferred = false;
+  const conceal = (event: Event) => { deferred = false; concealDom(); controller.conceal(event.type === HON_SESSION_INVALIDATED_EVENT); };
   // No "Verify" button (owner, 2026-11-24): coming back re-runs the same HQ-owner read automatically.
   // The server still re-checks the owner on every create; signed-out and refused states wait for the person.
-  const restore = () => { const view = controller.snapshot(); if (view.concealed && !view.busy && view.access === 'idle') void controller.authorize(); };
+  // Coming back while a create is still in flight waits for it to settle, then re-runs the read once.
+  const restore = () => {
+    const view = controller.snapshot();
+    if (view.busy) { deferred = view.concealed; return; }
+    deferred = false;
+    if (view.concealed && view.access === 'idle' && view.message !== 'principalChanged') void controller.authorize();
+  };
+  const unsubscribe = controller.subscribe(() => { if (deferred && !controller.snapshot().busy) restore(); });
   const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); else restore(); };
   const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
   for (const event of events) browser.addEventListener(event, conceal);
@@ -114,7 +122,7 @@ export function bindSchoolCreationPrivacy(controller: SchoolCreationController, 
   documentTarget.addEventListener('visibilitychange', visibility);
   if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange'));
   return () => {
-    browser.removeEventListener('focus', restore);
+    unsubscribe(); browser.removeEventListener('focus', restore);
     conceal(new Event('unmount'));
     for (const event of events) browser.removeEventListener(event, conceal);
     documentTarget.removeEventListener('visibilitychange', visibility);
