@@ -2,6 +2,7 @@ import React, { type CSSProperties, type ReactNode } from 'react';
 import type { WebsiteDocument, WebsitePage, WebsiteSection } from '@hon/contracts';
 import { siteHref, siteImage, siteParagraphs, siteVideoUrl, type SiteLink } from './site-links';
 import { SiteLeadForm } from './site-lead-form';
+import { SitePolicyFooter } from './site-policy-footer';
 import styles from './school-site.module.css';
 
 /**
@@ -131,6 +132,6 @@ export function SiteView({ schoolName, document, pageSlug, base, mode }: SiteVie
         <a href={p.slug === 'home' ? base : `${base}/${p.slug}`} aria-current={p.slug === page.slug ? 'page' : undefined}>{p.title}</a></li>)}</ul></nav>}
     </header>
     <main className={styles.main}>{page.sections.map(s => <Section key={s.id} section={s} base={base} mode={mode} pageSlug={page.slug} />)}</main>
-    <footer className={styles.footer}><p>© {schoolName}</p></footer>
+    <SitePolicyFooter schoolName={schoolName} base={base} />
   </div>;
 }
