@@ -65,11 +65,27 @@ test('operations snapshot service allowlists aggregate output and excludes injec
     }
     return { rows: [selected], rowCount: 1 };
   } }) });
-  const output = await service.read({ organizationId, schoolId, principalId: '33333333-3333-4333-8333-333333333333', principalType: 'HUMAN_USER', requestId: '44444444-4444-4444-8444-444444444444' }, { from, to });
+  const output = await service.read({ organizationId, schoolId, principalId: '33333333-3333-4333-8333-333333333333', principalType: 'HUMAN_USER', requestId: '44444444-4444-4444-8444-444444444444' }, { from, to }, 'verified-subject');
   assert.doesNotMatch(JSON.stringify(output), /PRIVATE_|personName|rawNote|paymentMethodToken|actionEvidence/);
   assert.deepEqual(Object.keys(output), ['organizationId', 'schoolId', 'generatedAt', 'from', 'to', 'studentProfiles', 'leads', 'classSessions', 'attendance', 'memberships', 'invoices', 'paymentAttempts']);
-  assert.equal(statements.length, 2);
-  assert.doesNotMatch(statements[1].statement, /notes|payment_method|provider|action_requests|action_approvals/i);
+  // #177 (0632): the aggregate no longer reads hon.class_sessions; session and attendance counts come from the definer
+  // read with the verified subject and the normalized range.
+  assert.equal(statements.length, 3);
+  assert.doesNotMatch(statements[1].statement, /notes|payment_method|provider|action_requests|action_approvals|class_sessions/i);
+  assert.match(statements[2].statement, /FROM hon\.read_operations_report_session_counts\(\$1, \$2::timestamptz, \$3::timestamptz\)/);
+  assert.deepEqual(statements[2].args, ['verified-subject', from, to]);
+  assert.equal(output.classSessions.inRange.completed, 6);
+  assert.equal(output.attendance.inRangeByStatus.MAKEUP, 12);
+});
+
+test('#177: a refused session-count read is 403, any other database error stays a server error', async () => {
+  const run = (error) => new OperationsReportService({ withTenantTransaction: async (_context, work) => work({ query: async (statement) => {
+    if (statement.includes('hon.read_current_organization_entitlement()')) return { rows: [{ tier: 'ESSENTIAL' }], rowCount: 1 };
+    if (statement.includes('read_operations_report_session_counts')) throw error;
+    return { rows: [{}], rowCount: 1 };
+  } }) }).read({ organizationId, schoolId, principalId: '33333333-3333-4333-8333-333333333333', principalType: 'HUMAN_USER', requestId: '44444444-4444-4444-8444-444444444444' }, { from, to }, 'verified-subject');
+  await assert.rejects(() => run(Object.assign(new Error('CLASS_SESSIONS_READ_FORBIDDEN'), { code: '42501' })), (e) => e.getStatus?.() === 403);
+  await assert.rejects(() => run(Object.assign(new Error('permission denied for function'), { code: '42501' })), (e) => !e.getStatus && e.code === '42501');
 });
 
 test('operations report denies a missing active school-operations entitlement before aggregation', async () => {

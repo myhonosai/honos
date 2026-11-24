@@ -1,4 +1,7 @@
-import { validateSchoolReportsQuery, verifySchoolReportLocations, verifySchoolReports, type SchoolReportLocations, type SchoolReports } from '@hon/contracts';
+import {
+  validateAttendanceReportQuery, validateSchoolDashboardQuery, validateSchoolReportsQuery, verifyAttendanceReport, verifySchoolDashboard, verifySchoolReportLocations, verifySchoolReports,
+  type AttendanceReport, type AttendanceReportQuery, type SchoolDashboard, type SchoolDashboardRange, type SchoolReportLocations, type SchoolReports,
+} from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /** School reports (R1, 0331): one same-origin GET with no key and no command header. The server decides every permission. */
@@ -19,9 +22,13 @@ export function reportsErrorFor(status: number, code: string | null): ReportsErr
 
 async function get<T>(scope: ReportsScope, suffix: string, months: number, signal: AbortSignal, owned: () => boolean,
   verify: (data: unknown, query: { months?: number }) => T): Promise<T> {
-  let query;
+  let query: { months?: number };
   try { query = validateSchoolReportsQuery({ months }); } catch { throw new ReportsError('UNAVAILABLE'); }
-  const path = `/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/reports/monthly${suffix}?months=${query.months}`;
+  return fetchVerified(`/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/reports/monthly${suffix}?months=${query.months}`,
+    signal, owned, (data) => verify(data, query));
+}
+
+async function fetchVerified<T>(path: string, signal: AbortSignal, owned: () => boolean, verify: (data: unknown) => T): Promise<T> {
   let r: Response;
   try {
     r = await fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer',
@@ -39,11 +46,29 @@ async function get<T>(scope: ReportsScope, suffix: string, months: number, signa
   if (r.status !== 200) throw reportsErrorFor(r.status, code);
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value) || !Object.hasOwn(value, 'data') || !Object.hasOwn(value, 'meta')) throw new Error('shape');
-    return verify((value as { data: unknown }).data, query);
+    return verify((value as { data: unknown }).data);
   } catch { throw new ReportsError('UNAVAILABLE'); }
 }
 
 export const schoolReportsApi = {
+  /** AR1 (0633): the attendance report; week is any day of the week wanted, month is YYYY-MM or ALL (reporting.view here). */
+  async attendance(scope: ReportsScope, input: AttendanceReportQuery, signal: AbortSignal, owned: () => boolean): Promise<AttendanceReport> {
+    let query: AttendanceReportQuery;
+    try { query = validateAttendanceReportQuery(input); } catch { throw new ReportsError('UNAVAILABLE'); }
+    const search = new URLSearchParams();
+    if (query.week !== undefined) search.set('week', query.week);
+    if (query.month !== undefined) search.set('month', query.month);
+    const suffix = search.size ? `?${search.toString()}` : '';
+    return fetchVerified(`/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/reports/attendance${suffix}`,
+      signal, owned, (data) => verifyAttendanceReport(data, scope.schoolId, query));
+  },
+  /** R3 (0520): the dashboard for one range in school time (reporting.view here). */
+  async dashboard(scope: ReportsScope, range: SchoolDashboardRange, signal: AbortSignal, owned: () => boolean): Promise<SchoolDashboard> {
+    let query: { range?: SchoolDashboardRange };
+    try { query = validateSchoolDashboardQuery({ range }); } catch { throw new ReportsError('UNAVAILABLE'); }
+    return fetchVerified(`/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/reports/dashboard?range=${query.range}`,
+      signal, owned, (data) => verifySchoolDashboard(data, scope.schoolId, query));
+  },
   /** This school's months (reporting.view here). */
   read(scope: ReportsScope, months: number, signal: AbortSignal, owned: () => boolean): Promise<SchoolReports> {
     return get(scope, '', months, signal, owned, (data, query) => verifySchoolReports(data, scope.schoolId, query));

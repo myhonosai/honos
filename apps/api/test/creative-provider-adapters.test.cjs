@@ -80,7 +80,7 @@ test('Higgsfield image: one submit with only the prompt and fixed parameters, th
     assert.equal(fake.requests[2].url, '/requests/req_abc123/status'); assert.equal(fake.requests[2].method, 'GET');
     assert.equal(done.state, 'DONE');
     assert.deepEqual(done.downloads, [{ url: 'https://cdn.example.test/a.png', mediaType: 'image/png' }, { url: 'https://img.cdn.example.test/b.png', mediaType: 'image/png' }]);
-    assert.equal(done.result.finalUnits, 2); assert.equal(done.result.providerCostMicrounits, 32000);
+    assert.equal(done.result.finalUnits, 2); assert.equal(done.result.providerCostMicrounits, 32000); assert.equal(done.result.providerCostBasis, 'HON_ESTIMATE');
     assert.ok(!JSON.stringify(done.result).includes('cdn.example.test'), 'the provider URL is never part of the recorded result');
     const outcome = verifiedOutcome(done.result, { mediaKind: 'IMAGE', units: 2 });
     assert.equal(outcome.outcome, 'SUCCEEDED');
@@ -99,7 +99,7 @@ test('Higgsfield video and avatar look: duration, aspect and the look style; nev
     assert.deepEqual(fake.requests[0].body, { prompt: video.prompt, aspect_ratio: '9:16', duration: 5 });
     const v = await r.poll(jobOf(video, 'req_1'));
     assert.equal(verifiedOutcome(v.result, { mediaKind: 'VIDEO', units: 5 }).outcome, 'SUCCEEDED');
-    assert.equal(v.result.providerCostMicrounits, 600000); assert.equal(v.result.assets[0].durationSeconds, 5);
+    assert.equal(v.result.providerCostMicrounits, 600000); assert.equal(v.result.providerCostBasis, 'HON_ESTIMATE'); assert.equal(v.result.assets[0].durationSeconds, 5);
     const look = invocation({ operationCode: 'avatar.create', units: 1, format: 'PORTRAIT', prompt: 'Calm, smiling, wears a black belt',
       avatar: { name: 'Coach Kim Secret Name', style: 'CHIBI' } });
     await r.submit(look);
@@ -175,7 +175,7 @@ test('HeyGen: stock avatar per look style and stock voice, X-Api-Key, charged by
     script.push({ body: { code: 100, data: { status: 'completed', video_url: 'https://cdn.example.test/v.mp4', duration: 28.4 } } });
     const done = await r.poll(job);
     assert.deepEqual(done.downloads, [{ url: 'https://cdn.example.test/v.mp4', mediaType: 'video/mp4' }]);
-    assert.equal(done.result.finalUnits, 29); assert.equal(done.result.providerCostMicrounits, 29 * 80500);
+    assert.equal(done.result.finalUnits, 29); assert.equal(done.result.providerCostMicrounits, 29 * 80500); assert.equal(done.result.providerCostBasis, 'HON_ESTIMATE');
     const ok = verifiedOutcome(done.result, { mediaKind: 'VIDEO', units: 30 });
     assert.equal(ok.outcome, 'SUCCEEDED'); assert.equal(ok.assets[0].providerAssetReference, 'heygen:vid_123:1');
     script.push({ body: { data: { status: 'completed', video_url: 'https://cdn.example.test/v.mp4', duration: 31.2 } } });
@@ -237,4 +237,24 @@ test('worker: a real result with downloads is never recorded before HON storage 
     assert.equal(fake.requests.length, 1);
     assert.equal(thrownOutcome(new Error('x')).outcome, 'UNKNOWN');
   } finally { await fake.close(); }
+});
+
+// Review [22] / 0637: an adapter's own rate is an estimate, never the provider's actual cost; the basis travels with the cost.
+test('cost basis: verified and thrown outcomes carry the basis exactly when a cost is present', () => {
+  const asset = { mediaType: 'image/png', width: 1024, height: 1024, durationSeconds: null, providerAssetReference: 'hf:job:1' };
+  const g = { mediaKind: 'IMAGE', units: 1 };
+  assert.deepEqual(verifiedOutcome({ finalUnits: 1, providerCostMicrounits: 16000, providerCostBasis: 'HON_ESTIMATE', assets: [asset] }, g).providerCostBasis, 'HON_ESTIMATE');
+  assert.equal(verifiedOutcome({ finalUnits: 1, providerCostMicrounits: 16000, providerCostBasis: 'PROVIDER_REPORTED', assets: [asset] }, g).providerCostBasis, 'PROVIDER_REPORTED');
+  for (const basis of [undefined, null, 'ACTUAL', 'hon_estimate']) {
+    const o = verifiedOutcome({ finalUnits: 1, providerCostMicrounits: 16000, providerCostBasis: basis, assets: [asset] }, g);
+    assert.deepEqual([o.outcome, o.failureReason, o.providerCostBasis], ['UNKNOWN', 'UNVERIFIED_RESULT', null], `basis ${basis} is not trusted`);
+  }
+  assert.deepEqual(Object.keys(verifiedOutcome({ finalUnits: 1, providerCostMicrounits: 1, providerCostBasis: 'HON_ESTIMATE', assets: [asset] }, g)).sort(),
+    ['assets', 'failureReason', 'finalUnits', 'outcome', 'providerCostBasis', 'providerCostMicrounits']);
+  const rejectedWithCost = thrownOutcome(new CreativeProviderRuntimeError('FAILED', 'PROVIDER_REJECTED', 250));
+  assert.deepEqual([rejectedWithCost.providerCostMicrounits, rejectedWithCost.providerCostBasis], [250, 'HON_ESTIMATE']);
+  const rejected = thrownOutcome(new CreativeProviderRuntimeError('FAILED', 'PROVIDER_REJECTED'));
+  assert.deepEqual([rejected.providerCostMicrounits, rejected.providerCostBasis], [null, null]);
+  assert.equal(thrownOutcome(new Error('lost')).providerCostBasis, null);
+  assert.equal(thrownOutcome(new CreativeProviderRuntimeError('PRE_SEND', 'INVALID_REQUEST')).providerCostBasis, null);
 });

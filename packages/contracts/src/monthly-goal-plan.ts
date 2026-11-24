@@ -1,5 +1,5 @@
 /**
- * G1 (0503): monthly goal plan. A monthly revenue goal broken down into renewals, upgrades, new enrollments, shows,
+ * G1 (0666): monthly goal plan. A monthly revenue goal broken down into renewals, upgrades, new enrollments, shows,
  * appointments and leads from the school's own records, with the rates used and how many records each is based on, and
  * pace through the month. Counts and money totals only; nothing is written. Doc: docs/architecture/MONTHLY_GOAL_PLANNER.md.
  */

@@ -36,25 +36,65 @@ export function classify(question: string): EianIntent {
   return 'help';
 }
 
+const namedIn = (question: string, view: ParentJourneyView): number[] => {
+  const q = question.toLowerCase();
+  return view.children.map((ch, i) => [ch.name.toLowerCase().split(/\s+/)[0] ?? '', i] as const)
+    .filter(([first]) => first.length > 1 && new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(q)).map(([, i]) => i);
+};
+
 /** Children the question names (by first name), or all children when none is named. */
 export function childrenFor(question: string, view: ParentJourneyView): number[] {
-  const q = question.toLowerCase();
-  const named = view.children.map((ch, i) => [ch.name.toLowerCase().split(/\s+/)[0] ?? '', i] as const)
-    .filter(([first]) => first.length > 1 && new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(q)).map(([, i]) => i);
+  const named = namedIn(question, view);
   return named.length ? named : view.children.map((_, i) => i);
+}
+
+/**
+ * What Eian remembers from the last guided answer: the topic and the children it was about (full names, null when
+ * the parent named none). It lives in the open screen only. It is never stored, never sent to HON or to an AI
+ * provider, and it is gone when the parent leaves Eian.
+ */
+export interface EianMemory { intent: EianIntent; children: string[] | null }
+export interface EianResolved { intent: EianIntent; children: number[]; followUp: boolean; memory: EianMemory | null }
+
+const REFERS_BACK = /\b(he|she|they|him|her|them|his|hers|their|theirs)\b/;
+const LEADS_ON = /^(and|also|what about|how about|same for|then|ok(ay)? (and|so)|so)\b/;
+
+/**
+ * Reads a question in the light of the last one. "And for Mia?" keeps the topic and changes the child; "when is his
+ * next test?" changes the topic and keeps the child. A question that stands on its own is read on its own.
+ * Remembered children are matched by name against the current view, so a child no longer shared is simply dropped.
+ */
+export function resolve(question: string, view: ParentJourneyView, last: EianMemory | null = null): EianResolved {
+  const q = question.trim().toLowerCase();
+  const own = classify(q);
+  const named = namedIn(q, view);
+  const all = view.children.map((_, i) => i);
+  const linked = !!last && (REFERS_BACK.test(q) || LEADS_ON.test(q));
+  const followUp = !!last && own === 'help' && (linked || (named.length > 0 && q.split(/\s+/).length <= 4));
+  const intent = followUp ? last!.intent : own;
+  const kept = last?.children ? all.filter(i => last.children!.includes(view.children[i]!.name)) : [];
+  const carried = !named.length && linked && kept.length > 0;
+  const children = named.length ? named : carried ? kept : all;
+  const memory: EianMemory | null = intent === 'help' ? last
+    : { intent, children: named.length || carried ? children.map(i => view.children[i]!.name) : null };
+  return { intent, children, followUp, memory };
 }
 
 export interface EianFacts {
   journey: ParentJourneyView; timeZone: string | null; now: Date;
+  /** The last guided answer in this conversation, when there was one. */
+  last?: EianMemory | null;
   billing?: ParentBillingView | null; testing?: ParentTestingStatusView | null; messages?: ParentFamilyMessages | null;
 }
 
 const HELP = 'I can tell you about your next class, this week\'s schedule, belt requirements, belt testing, invoices and messages from your school. I can also take you to report an absence or book a class.';
 
 export function answer(question: string, facts: EianFacts): EianAnswer {
-  const intent = classify(question);
   const { journey, timeZone, now } = facts;
-  const kids = childrenFor(question, journey).map(i => journey.children[i]!);
+  const read = resolve(question, journey, facts.last ?? null);
+  const intent = read.intent;
+  const kids = read.children.map(i => journey.children[i]!);
+  const some = kids.length < journey.children.length;
   const upcoming = kids.flatMap(ch => ch.schedule.status === 'AVAILABLE'
     ? ch.schedule.items.filter(b => Date.parse(b.startsAt) > now.getTime() && b.bookingStatus !== 'CANCELLED' && b.sessionStatus !== 'CANCELLED').map(b => ({ ch, b })) : [])
     .sort((x, y) => Date.parse(x.b.startsAt) - Date.parse(y.b.startsAt));
@@ -86,7 +126,9 @@ export function answer(question: string, facts: EianFacts): EianAnswer {
     case 'testing': {
       const view = facts.testing;
       if (!view) return { intent, lines: ['I can\'t see belt testing records right now.'], source: null };
-      const lines = view.children.items.map(ch => {
+      // The testing read names children on its own, so a narrowed question is matched by name; no match shows everyone.
+      const wanted = some ? view.children.items.filter(ch => kids.some(k => k.name === ch.displayName)) : [];
+      const lines = (wanted.length ? wanted : view.children.items).map(ch => {
         const last = [...ch.candidates.items].sort((a, b) => Date.parse(b.event.startsAt) - Date.parse(a.event.startsAt))[0];
         const next = ch.upcomingEvent ? `next test is ${ch.upcomingEvent.label} on ${formatDay(ch.upcomingEvent.startsAt, timeZone)}` : 'no upcoming test is scheduled';
         return `${ch.displayName}: ${next}.${last ? ` Last result: ${CANDIDATE_LABEL[last.overallStatus].toLowerCase()} (${last.event.label}).` : ''}`;

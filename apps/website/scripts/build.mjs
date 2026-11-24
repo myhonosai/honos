@@ -1,5 +1,6 @@
 // Builds the static HON OS marketing site: copies src/ to dist/ and fills in the build-time values.
 //   HON_WEBSITE_APP_URL   origin of the HON OS app (default http://localhost:3000)
+//   HON_WEBSITE_ORIGIN    public origin of this site, for canonical and share links (default https://myhonos.com)
 //   HON_WEBSITE_INDEXABLE set to 1 only when the site is approved to go live; otherwise pages are noindex.
 import { cpSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { localize, markLanguage } from './i18n.mjs';
 import { loadPosts, blogPages } from './blog.mjs';
 import { legalPages } from './legal.mjs';
+import { siteOrigin, seoHead, urlPath, robotsTxt, sitemapXml } from './seo.mjs';
 
 export const LANGUAGES = ['ko', 'es'];
 
@@ -42,13 +44,15 @@ function versionCss(out) {
 }
 
 function versionPage(html, out) {
-  return html.replace(/(href|src)="\/((?:fonts\/[^"?]+\.woff2)|styles\.css|site\.js|flow\.js)"/g,
+  return html.replace(/(href|src)="\/((?:fonts\/[^"?]+\.woff2)|styles\.css|story\.css|boot\.js|loader\.js|story\.js|site\.js)"/g,
     (_, attr, file) => `${attr}="/${file}?v=${contentVersion(join(out, file))}"`);
 }
 
 export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {}) {
   const app = appOrigin(env.HON_WEBSITE_APP_URL);
-  const robots = env.HON_WEBSITE_INDEXABLE === '1' ? 'index, follow' : 'noindex, nofollow';
+  const origin = siteOrigin(env.HON_WEBSITE_ORIGIN);
+  const indexable = env.HON_WEBSITE_INDEXABLE === '1';
+  const robots = indexable ? 'index, follow' : 'noindex, nofollow';
   const out = resolve(outDir);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
@@ -64,24 +68,28 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
   };
   const english = readFileSync(join(root, 'src', 'index.html'), 'utf8');
   const homes = { en: fill(markLanguage(english, 'en'), 'index.html') };
-  writeFileSync(join(out, 'index.html'), homes.en);
   for (const lang of LANGUAGES) {
     const dict = JSON.parse(readFileSync(join(root, 'src', 'i18n', `${lang}.json`), 'utf8'));
-    mkdirSync(join(out, lang), { recursive: true });
     // Site paths outside the home page (the blog) live under the language folder too.
     homes[lang] = fill(localize(english, dict, lang), `${lang}/index.html`).replaceAll('href="/blog/"', `href="/${lang}/blog/"`);
-    writeFileSync(join(out, lang, 'index.html'), homes[lang]);
   }
+  const pages = [];
+  for (const [lang, html] of Object.entries(homes)) pages.push({ file: lang === 'en' ? 'index.html' : `${lang}/index.html`, html, lang, home: true });
   const posts = loadPosts(join(root, 'src', 'blog', 'posts'));
-  for (const { file, html } of blogPages({ posts, homes, app })) {
+  for (const { file, html } of blogPages({ posts, homes, app })) pages.push({ file, html });
+  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en })) pages.push({ file, html });
+  const sitemap = [];
+  for (const { file, html, home = false } of pages) {
+    const path = urlPath(file);
+    const lang = html.match(/<html lang="([a-z]+)">/)?.[1] ?? 'en';
+    const alternates = Object.fromEntries([...html.matchAll(/<link rel="alternate" hreflang="([a-z]{2})" href="([^"]+)">/g)].map((m) => [m[1], m[2]]));
+    sitemap.push({ path, alternates: Object.keys(alternates).length > 1 ? alternates : undefined });
     mkdirSync(dirname(join(out, file)), { recursive: true });
-    writeFileSync(join(out, file), html);
+    writeFileSync(join(out, file), seoHead(html, { origin, path, lang, home }));
   }
-  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en })) {
-    mkdirSync(dirname(join(out, file)), { recursive: true });
-    writeFileSync(join(out, file), html);
-  }
-  return { outDir: out, app, robots, posts: posts.map((p) => p.slug) };
+  writeFileSync(join(out, 'robots.txt'), robotsTxt({ origin, indexable }));
+  writeFileSync(join(out, 'sitemap.xml'), sitemapXml({ origin, pages: sitemap }));
+  return { outDir: out, app, origin, robots, posts: posts.map((p) => p.slug) };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

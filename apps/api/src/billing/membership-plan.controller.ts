@@ -1,6 +1,6 @@
 import { Body, Controller, ForbiddenException, Headers, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { CRM_ADULT_MEMBERSHIP_DRAFT_UUID, type CrmAdultMembershipDraftFromPlanApiResponse, type CrmAdultMembershipPlanOptionsApiResponse, type MembershipPlanCatalogApiResponse, type MembershipPlanCommandApiResponse, type MembershipPlanContext } from '@hon/contracts';
+import { CRM_ADULT_MEMBERSHIP_DRAFT_UUID, type CrmAdultMembershipDraftFromPlanApiResponse, type CrmAdultMembershipPlanOptionsApiResponse, type MembershipPlanCatalogApiResponse, type MembershipPlanCommandApiResponse, type MembershipPlanContext, type MembershipPlanSetupsApiResponse, type MembershipPlanWithOptionsApiResponse } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -8,6 +8,8 @@ import { CrmAdultMembershipNoStoreGuard } from './crm-adult-membership-draft.dto
 import {
   CreateMembershipPlanDto, CrmAdultMembershipDraftFromPlanDto, CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard,
   MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReadDto, MembershipPlanReviseHumanUiGuard, ReviseMembershipPlanDto,
+  CreateMembershipPlanWithOptionsDto, MembershipPlanCreateWithOptionsHumanUiGuard, MembershipPlanReviseWithOptionsHumanUiGuard, MembershipPlanSetupsHumanUiGuard,
+  ReviseMembershipPlanWithOptionsDto,
 } from './membership-plan.dto.js';
 import { MembershipPlanService } from './membership-plan.service.js';
 
@@ -32,6 +34,23 @@ export class MembershipPlanController {
   async catalog(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Body() _input: MembershipPlanReadDto, @Req() req: HonRequest): Promise<MembershipPlanCatalogApiResponse> {
     const context = await this.context(organizationId, schoolId, '', req);
     return { data: await this.plans.catalog(context), meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: false } };
+  }
+  @Post('setups') @HttpCode(200) @UseGuards(MembershipPlanSetupsHumanUiGuard)
+  async setups(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Body() _input: MembershipPlanReadDto, @Req() req: HonRequest): Promise<MembershipPlanSetupsApiResponse> {
+    const context = await this.context(organizationId, schoolId, '', req);
+    return { data: await this.plans.setups(context), meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: false } };
+  }
+  @Post('with-options') @HttpCode(200) @UseGuards(MembershipPlanCreateWithOptionsHumanUiGuard)
+  async createWithOptions(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Headers('idempotency-key') key: string, @Body() input: CreateMembershipPlanWithOptionsDto, @Req() req: HonRequest): Promise<MembershipPlanWithOptionsApiResponse> {
+    const context = await this.context(organizationId, schoolId, key, req);
+    const { replayed, ...data } = await this.plans.createWithOptions(context, input as never);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed } };
+  }
+  @Post(':planId/option-revisions') @HttpCode(200) @UseGuards(MembershipPlanReviseWithOptionsHumanUiGuard)
+  async reviseWithOptions(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Param('planId') planId: string, @Headers('idempotency-key') key: string, @Body() input: ReviseMembershipPlanWithOptionsDto, @Req() req: HonRequest): Promise<MembershipPlanWithOptionsApiResponse> {
+    const context = await this.context(organizationId, schoolId, key, req);
+    const { replayed, ...data } = await this.plans.reviseWithOptions(context, planId, input as never);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed } };
   }
   @Post() @HttpCode(200) @UseGuards(MembershipPlanCreateHumanUiGuard)
   async create(@Param('organizationId') organizationId: string, @Param('schoolId') schoolId: string, @Headers('idempotency-key') key: string, @Body() input: CreateMembershipPlanDto, @Req() req: HonRequest): Promise<MembershipPlanCommandApiResponse> {

@@ -1,4 +1,4 @@
-import { COMMUNICATION_CONSENT_SOURCES, accountClosed, accountUuid, type CommunicationConsentStatus, type CommunicationConsentSummary } from '@hon/contracts';
+import { COMMUNICATION_CONSENT_SOURCES, INTAKE_CONSENT_METHODS, accountClosed, accountUuid, type CommunicationConsentStatus, type CommunicationConsentSummary } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import type { PeopleScope } from './http';
 
@@ -43,10 +43,11 @@ export function consentErrorFor(status: number, code: string | null): ConsentErr
 export const keepConsentForRetry = (error: unknown) => !(error instanceof ConsentError) || error.kind === 'UNKNOWN' || error.kind === 'BUSY';
 
 function summary(v: unknown): CommunicationConsentSummary {
-  const o = accountClosed(v, ['channel', 'status', 'source', 'capturedAt', 'version', 'updatedAt']);
+  const o = accountClosed(v, ['channel', 'status', 'source', 'capturedAt', 'version', 'updatedAt', 'captureMethod']);
   if (!['SMS', 'EMAIL', 'PUSH'].includes(o.channel as string) || (o.status !== 'OPTED_IN' && o.status !== 'OPTED_OUT')
     || !(COMMUNICATION_CONSENT_SOURCES as readonly unknown[]).includes(o.source) || typeof o.capturedAt !== 'string' || !ISO.test(o.capturedAt)
-    || typeof o.updatedAt !== 'string' || !ISO.test(o.updatedAt) || !Number.isSafeInteger(o.version) || (o.version as number) < 1) throw new Error('shape');
+    || typeof o.updatedAt !== 'string' || !ISO.test(o.updatedAt) || !Number.isSafeInteger(o.version) || (o.version as number) < 1
+    || (o.captureMethod !== null && !(INTAKE_CONSENT_METHODS as readonly unknown[]).includes(o.captureMethod))) throw new Error('shape');
   return o as unknown as CommunicationConsentSummary;
 }
 function data(v: unknown): unknown {
