@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HQ_HON_AGENTS, SAAS_COMMANDS } from '@hon/contracts';
 import { hqHonApi, hqHonAskError, hqHonBudgetError } from '../src/components/hq-hon/http';
-import { HqHonPanelView, type HqHonPanelViewProps } from '../src/components/hq-hon/hq-hon-panel';
+import { HQ_HON_NO_CAP, HqHonPanelView, type HqHonPanelViewProps } from '../src/components/hq-hon/hq-hon-panel';
 import { HQ_HON_COPY_TABLES, hqHonText } from '../src/components/hq-hon/copy';
 import { MarketingError } from '../src/components/hq-marketing/http';
 import { HqExecutiveRecords, PerformanceView, TaskHistoryView } from '../src/components/hq-hon/hq-executive-records';
@@ -193,4 +193,16 @@ it('can start with a written question and, compact, leaves out the budget form (
   const compact = renderToStaticMarkup(<HqHonPanelView {...props} state={owner} question="Help" compact/>);
   expect(compact).not.toContain('hq-hon-chase-budget'); expect(compact).toContain('hq-hon-chase-q');
   expect(readFileSync('src/components/hq-hon/hq-hon-panel.tsx', 'utf8')).toMatch(/useState\(initialQuestion \?\? ''\)/);
+});
+
+it('offers the owner one tap for no monthly limit (the highest cap the server allows) and says each question keeps its own limit', () => {
+  const onBudget = vi.fn();
+  const owner = props({ onBudget, state: { kind: 'READY', view: conv({ viewer: { ...viewer, isOwner: true } }) as never } });
+  const html = renderToStaticMarkup(<HqHonPanelView {...owner}/>);
+  expect(html).toContain('data-hq-hon-no-cap'); expect(html).toContain('Use no monthly limit'); expect(html).toContain('Each question still has its own cost limit');
+  expect(HQ_HON_NO_CAP).toBe(10_000_000);
+  const capped = budget({ creditCap: HQ_HON_NO_CAP, availableCredits: HQ_HON_NO_CAP - 30 });
+  const shown = renderToStaticMarkup(<HqHonPanelView {...props({ state: { kind: 'READY', view: conv({ budget: capped }) as never } })}/>);
+  expect(shown).toContain('HQ AI text: no monthly limit (20 credits used this month, 10 held).');
+  expect(renderToStaticMarkup(<HqHonPanelView {...props()}/>)).not.toContain('data-hq-hon-no-cap');
 });
