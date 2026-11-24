@@ -42,7 +42,7 @@ export class ParentJourneyViewService {
       if (initial.familyId !== scope.familyId || initial.accessLevel !== scope.accessLevel || initial.students.length > 100) throw new Error('Unverified child scope');
       const from = new Date().toISOString(), to = new Date(Date.parse(from) + 30 * 86400000).toISOString();
       const context: AchievementContext = { ...scope, externalSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId, correlationId: requestId };
-      const schedule = await this.optional(() => this.schedules.get(scope, scope.familyId, { from, to }, requestId));
+      const schedule = await this.optional(() => this.schedules.get(scope, scope.familyId, { from, to }, requestId, externalSubject));
       const awards = new Map<string, JourneyList<JourneyAchievement>>();
       for (const s of initial.students) {
         if (s.studentProfile?.status !== 'ACTIVE') continue;

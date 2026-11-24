@@ -47,6 +47,21 @@ function parseAccess(value: unknown): InstructorQualificationAccess {
   return x as unknown as InstructorQualificationAccess;
 }
 
+export type InstructorQualificationStaffRow = { principalId: string; displayName: string; evidenceCount: number };
+export const QUALIFICATION_LIST_LIMIT = 200, EVIDENCE_LIST_LIMIT = 100;
+/** A closed {items:[...]} list of at most `limit` rows with unique ids, each checked by `row`. */
+function items<T>(value: unknown, limit: number, row: (item: unknown) => T, id: (item: T) => string): T[] {
+  if (!exact(value, ['items']) || !Array.isArray((value as { items: unknown }).items)) throw new Error('Unsafe qualification list response.');
+  const list = (value as { items: unknown[] }).items; if (list.length > limit) throw new Error('Unsafe qualification list response.');
+  const parsed = list.map(row); if (new Set(parsed.map(id)).size !== parsed.length) throw new Error('Unsafe qualification list response.');
+  return parsed;
+}
+function parseStaffRow(value: unknown): InstructorQualificationStaffRow {
+  if (!exact(value, ['principalId', 'displayName', 'evidenceCount'])) throw new Error('Unsafe qualification staff response.'); const x = value as Record<string, unknown>;
+  if (!uuid(x.principalId) || typeof x.displayName !== 'string' || !x.displayName || x.displayName.length > 120 || !version(x.evidenceCount, true)) throw new Error('Unsafe qualification staff response.');
+  return x as unknown as InstructorQualificationStaffRow;
+}
+
 @Injectable()
 export class InstructorQualificationsService {
   constructor(private readonly database: RuntimeDatabaseService) {}
@@ -71,6 +86,22 @@ export class InstructorQualificationsService {
   }
   async evidence(context: InstructorQualificationContext, staffPrincipalId: string, evidenceId: string): Promise<InstructorQualificationEvidence> {
     validateInstructorQualificationUuid(staffPrincipalId); validateInstructorQualificationUuid(evidenceId); const raw = await this.boundary<unknown>(context, "SELECT hon.read_instructor_qualification($1,'EVIDENCE',$2::uuid,$3::uuid) data", [context.externalSubject, staffPrincipalId, evidenceId]); return parseEvidence(raw, staffPrincipalId);
+  }
+  /** 0406: the school's qualification definitions (active first), for picking by name. */
+  async definitions(context: InstructorQualificationContext): Promise<InstructorQualificationDefinition[]> {
+    const raw = await this.boundary<unknown>(context, "SELECT hon.list_instructor_qualifications($1,'DEFINITIONS',NULL) data", [context.externalSubject]);
+    return items(raw, QUALIFICATION_LIST_LIMIT, parseDefinition, (d) => d.id);
+  }
+  /** 0406: eligible staff at this school by display name, with how many evidence records each has. */
+  async staff(context: InstructorQualificationContext): Promise<InstructorQualificationStaffRow[]> {
+    const raw = await this.boundary<unknown>(context, "SELECT hon.list_instructor_qualifications($1,'STAFF',NULL) data", [context.externalSubject]);
+    return items(raw, QUALIFICATION_LIST_LIMIT, parseStaffRow, (r) => r.principalId);
+  }
+  /** 0406: one staff member's redacted evidence records, newest first. */
+  async evidenceList(context: InstructorQualificationContext, staffPrincipalId: string): Promise<InstructorQualificationEvidence[]> {
+    validateInstructorQualificationUuid(staffPrincipalId); const staff = staffPrincipalId.toLowerCase();
+    const raw = await this.boundary<unknown>(context, "SELECT hon.list_instructor_qualifications($1,'EVIDENCE',$2::uuid) data", [context.externalSubject, staff]);
+    return items(raw, EVIDENCE_LIST_LIMIT, (e) => parseEvidence(e, staff), (e) => e.id);
   }
   private async mutate(context: InstructorQualificationContext, action: string, staffPrincipalId: string | null, entityId: string | null, input: object): Promise<{ record: unknown; replayed: boolean }> {
     key(context); if (staffPrincipalId !== null) validateInstructorQualificationUuid(staffPrincipalId); if (entityId !== null) validateInstructorQualificationUuid(entityId);

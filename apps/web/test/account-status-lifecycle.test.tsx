@@ -1,6 +1,7 @@
 import React, { type ReactElement } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-const h = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (() => void)[], language: 'en' }));
+const h = vi.hoisted(() => ({ values: [] as any[], cursor: 0, effects: [] as (() => void)[], language: 'en', shell: null as null | { organizationId: string; schoolId: string } }));
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => h.shell }));
 vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: h.language } }) }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
   useState: (initial: any) => { const i = h.cursor++; if (!(i in h.values)) h.values[i] = typeof initial === 'function' ? initial() : initial; return [h.values[i], (v: any) => { h.values[i] = typeof v === 'function' ? v(h.values[i]) : v; }]; },
@@ -22,7 +23,7 @@ const settle = async () => { for (let i = 0; i < 95; i++) await Promise.resolve(
 const dom = () => { const area = { hidden: false, inert: false, querySelectorAll: () => [] }; byId('account-private').props.ref.current = area; return area; };
 let subject: string, identityStatus: number, accountReply: () => Promise<Response>, standingReply: () => Promise<Response>, walletReply: () => Promise<Response>;
 beforeEach(() => {
-  h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; subject = 'owner-a'; identityStatus = 200;
+  h.values = []; h.cursor = 0; h.effects = []; h.language = 'en'; h.shell = null; subject = 'owner-a'; identityStatus = 200;
   vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
   accountReply = async () => reply(rawAccount(true)); standingReply = async () => reply(rawStanding()); walletReply = async () => reply(rawWallet());
   vi.stubGlobal('fetch', vi.fn(async (path: string, options: RequestInit) => {
@@ -102,4 +103,14 @@ it.each(['en', 'ko', 'es'])('%s supports all three presentation modes without ex
   expect(fetch).toHaveBeenCalledTimes(count); expect(text(render())).toContain(t(language, 'agentTitle'));
   expect(nodes(render()).filter(node => node.type === 'a').some(node => node.props.href === '/staff/subscription')).toBe(false);
   expect(text(render())).not.toContain('12,000'); expect(text(render())).not.toContain('12000');
+});
+it('inside the school shell reads the signed-in school on open with no school fields or IDs', async () => {
+  h.shell = { ...scope }; render(); await settle();
+  const paths = vi.mocked(fetch).mock.calls.map(([path]) => String(path));
+  expect(paths.some(p => p.endsWith('/hon-billing') || p.includes(`/schools/${scope.schoolId}/`))).toBe(true);
+  expect(paths.filter(p => p !== '/api/identity/me').every(p => p.includes(scope.schoolId))).toBe(true);
+  const tree = render(), page = text(tree);
+  expect(nodes(tree).find(n => n.props['data-testid'] === 'account-org')).toBeUndefined(); expect(nodes(tree).find(n => n.props['data-testid'] === 'account-school')).toBeUndefined();
+  for (const key of ['selectors', 'selectorHelp'] as const) expect(page).not.toContain(t('en', key));
+  expect(page).not.toContain(scope.organizationId); expect(page).not.toContain(scope.schoolId);
 });

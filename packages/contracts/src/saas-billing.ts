@@ -50,6 +50,7 @@ export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
   decideSchoolNumberOrder: 'hq-school-number-order-decide',
   settleSchoolNumberOrder: 'hq-school-number-order-settle',
+  decideSchoolA2pRegistration: 'hq-school-a2p-registration-decide',
   setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
   setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
@@ -108,6 +109,8 @@ export const SAAS_COMMANDS = {
   aiExceptionAllowance: 'ai-exception-allowance',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
+  // CA2a (0420): the Conversation AI program switch (HQ owner).
+  conversationAiProgram: 'conversation-ai-program',
   setCreativeProgram: 'saas-creative-program',
   publishCreativeRates: 'saas-creative-rates-publish',
   grantCreativeCredits: 'saas-creative-grant',

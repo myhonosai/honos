@@ -54,8 +54,8 @@ Each school connects its own Facebook Page and Instagram professional account th
 | S1 | School social connections: Zernio profile per school, connect hand-off with single-use state, account list, per-account capability switches, disconnect | 0347 |
 | S1-web | Marketing → Social accounts page (connect, switches, disconnect) and the return page; 3 languages | none |
 | S2 | Posts: drafts (staff and agent drafts), human approval, publish now / schedule, cancel, worker publish with lease, `post.*` webhook receipts, calendar list | 0348 |
-| S3 | Inbox: `message.received` / `comment.received` webhook into school conversations, staff replies (24-hour Messenger window and Instagram rules checked at send), comment reply/hide, link to CRM person/lead, unread/assignment | 0349 |
-| S4 | Ads: school monthly ad spend cap (set by owner), boost post / simple campaign drafts, human approval inside the cap, created PAUSED, separate human activate/pause, daily insights sync | 0350 |
+| S3 | Inbox: `message.received` / `comment.received` webhook into school conversations, staff replies (24-hour Messenger window and Instagram rules checked at send), comment reply/hide, link to CRM person/lead, unread/assignment | 0435 |
+| S4 | Ads: school monthly ad spend cap (set by owner), boost post / simple campaign drafts, human approval inside the cap, created PAUSED, separate human activate/pause, daily insights sync | 0445 |
 
 Each PR gets its own section here before it is built, its own DB proof, API tests, and an independent review.
 
@@ -162,6 +162,120 @@ checks as S1, re-checked after the writes.
    recorded as a definite refusal (FAILED); a later piece may return it to PENDING with a later due time instead.
 7. **Read** `GET …/marketing/social/posts?from&to`: the calendar list with targets and statuses, at most 200.
 
+## 4B. S3 design (0435): inbox (Messenger, Instagram DMs and comments)
+
+### 4B.1 Scope
+
+Messenger conversations and Instagram DMs on the school's connected accounts, and comments on the school's own posts,
+arrive in one school inbox. Staff read them, reply, hide or unhide a comment, mark a conversation read, assign it to a
+staff member, and link it to a CRM lead or person of the same school. Nothing is sent automatically; agent reply
+drafts come later with the AI Action Engine.
+
+### 4B.2 Records
+
+- `hon.school_social_conversations`: one per (account, provider conversation id): `kind` (`DM`, `COMMENT`; a comment
+  conversation is one top-level comment and its replies), the participant's display name (at most 120, as Meta gives
+  it; no Meta user id is stored), `last_inbound_at` (for the reply window), `last_message_at`, `unread` count,
+  `assigned_principal_id`, `linked_lead_id` / `linked_person_id` (same school only), `comment_hidden`, `version`.
+- `hon.school_social_messages`: one per message: `direction` (`INBOUND`, `OUTBOUND`), `body` (1 to 2,000 characters,
+  control characters removed), the provider message or comment id (unique per account), and for outbound messages the
+  person who sent it and a send state (`SENDING`, `SENT`, `FAILED`, `UNKNOWN`) with a 60-second lease.
+- `hon.school_social_inbox_receipts`: one per Zernio event id.
+- Message text is school-private CRM data. It is never written to audit or outbox.
+
+### 4B.3 Who
+
+New permission `marketing.social.inbox` (read the inbox, reply, hide comments, mark read, assign, link; staff
+assignable, sensitive because it shows private messages). The same 0331 actor checks, re-checked after the writes.
+Linking also needs the lead or person to belong to the same school.
+
+### 4B.4 Flow
+
+1. **Receive** (only when inbox is READY: `HON_ZERNIO_INBOX_APPROVED=true` with a key, or the fake): signed
+   `message.received` / `comment.received` on the existing endpoint, as the worker role. The account must be bound to a
+   school with its inbox switch on; otherwise the event is acknowledged and nothing is stored (not even the text).
+   Deduplicated by event id and by provider message id. A comment on a post that is not the school's own still lands
+   (Meta only sends comments on the Page's own posts).
+2. **Reply** `POST …/inbox/conversations/:id/reply {text}` (the idempotency key makes a retry safe): refused with
+   nothing recorded while replying is off (`SOCIAL_INBOX_NOT_ENABLED`). DB checks the account still has inbox on
+   and, for a DM, that the person wrote within the last 24 hours (Meta's standard messaging window; HON does not use
+   message tags). It records the outbound message as SENDING with a lease and returns its id; the API then asks Zernio
+   to send it once (idempotency key = HON's message id) and records SENT (with the provider id), FAILED or UNKNOWN. A
+   SENDING message whose lease ran out reads as UNKNOWN and is never resent; a person can mark it as sent or not sent.
+3. **Comment actions** `POST …/inbox/conversations/:id/comment {action: HIDE | UNHIDE}`: same once-only pattern
+   (one request in flight per comment); the conversation records the hidden state only after Zernio confirms. An
+   UNKNOWN or FAILED request leaves the shown state unchanged and a new request may follow (hiding is repeatable).
+   A person settles an UNKNOWN reply with `POST …/inbox/messages/:id/resolve {outcome: SENT | NOT_SENT, expectedVersion}`.
+4. **Read / assign / link** `POST …/inbox/conversations/:id {read?, assignedPrincipalId?, linkedLeadId?,
+   linkedPersonId?, expectedVersion}`. Assignment needs an eligible staff member at this school.
+5. **List** `GET …/inbox?view=ALL|UNREAD|MINE&before=` (at most 50 per page, newest activity first) and
+   `GET …/inbox/conversations/:id` (the last 200 messages).
+
+## 4C. S4 design (0445): ads (boost a published post, inside a monthly cap)
+
+### 4C.1 Scope
+
+S4 boosts a Facebook post that HON already published (an S2 target that is PUBLISHED, so HON holds its provider post
+id). A simple campaign with its own creative and targeting needs media and location data HON does not have yet; it is a
+later piece with its own number. Meta charges the school's own ad account; HON never pays for, marks up or holds the
+spend. Every ad is created PAUSED, and turning it on is a separate human command.
+
+### 4C.2 Records
+
+- `school_social_ad_budgets`: one row per school: `monthly_cap_cents` (0 to 1,000,000, i.e. at most 10,000.00 in the
+  ad account's currency), `currency` (3 letters, fixed once any ad exists), `version`, set by. No row, or a cap of 0,
+  means no ad can be approved.
+- `school_social_ads`: `account_id` (the school's connected Facebook account with ads on), `target_id` (the PUBLISHED
+  S2 target being boosted), `budget_cents` (lifetime, 1.00 up to the cap), `starts_on` / `ends_on` (1 to 31 days,
+  starting today or later in the school's time zone, at most 90 days ahead), `status` (`DRAFT`, `CREATING`, `PAUSED`,
+  `ACTIVATING`, `ACTIVE`, `PAUSING`, `FAILED`, `UNKNOWN`, `CANCELLED`), the operation in flight and the state to return
+  to if Zernio refuses it, a lease, `provider_ad_id` (unique, never changed once set), who created, approved, turned on
+  and resolved it, `version`.
+
+### 4C.3 Who
+
+New permissions, backfilled to OWNER only: `marketing.social.ads` (read, draft, approve, turn on, pause, cancel a
+draft, resolve) and `marketing.social.ads.budget` (set the monthly cap). Same 0331 actor rule; agents never call these.
+
+### 4C.4 The cap rule
+
+Meta never spends more than an ad's lifetime budget. HON counts the **whole** budget of every ad that may still spend,
+or might exist at Meta (`CREATING`, `PAUSED`, `ACTIVATING`, `ACTIVE`, `PAUSING`, `UNKNOWN`), against **every calendar
+month** its date range touches. Approving and turning on are refused unless each of those months still fits the cap.
+So in any month the most Meta can be allowed to spend is the cap, with no spend reports needed. Lowering the cap stops
+new approvals and turn-ons; it does not pause what is already on.
+
+### 4C.5 Flow
+
+1. **Read** `GET …/marketing/social/ads`: the cap, what is committed this month, the newest 100 ads, `adsEnabled`
+   (CREATE and ACTIVATE can reach Zernio) and `pauseEnabled` (PAUSE can reach Zernio).
+2. **Cap** `POST …/ads/budget {monthlyCapCents, currency, expectedVersion?}` (expectedVersion once a cap exists).
+3. **Draft** `POST …/ads {targetId, budgetCents, startsOn, endsOn}`: the target must be PUBLISHED on a CONNECTED
+   Facebook account of this school with ads on; the budget must fit the cap.
+4. **Approve** `POST …/ads/:id/operation {operation: CREATE, expectedVersion}`: the cap rule under a per-school lock,
+   then CREATING under a 60-second lease; the API asks Zernio once (idempotency key = HON's ad id) to create the boost
+   PAUSED, and records PAUSED (with the provider ad id), FAILED or UNKNOWN. Nothing spends yet.
+5. **Turn on** `{operation: ACTIVATE}`: only a PAUSED ad not past its end date, account still on, cap rule re-checked.
+   ACTIVATING, then ACTIVE, PAUSED (Zernio refused) or UNKNOWN. This is the only step that spends the school's money.
+6. **Pause** `{operation: PAUSE}`: from ACTIVE, or from UNKNOWN when HON holds the provider ad id. PAUSING, then
+   PAUSED, the earlier state (refused) or UNKNOWN. Pausing never needs the cap, the account switch or
+   `HON_ZERNIO_ADS_APPROVED`: a well-formed Zernio key is enough, because pausing only lowers spend. While a
+   turn-on is still in flight (its lease, up to 60 seconds) pausing waits for it; afterwards it is always allowed.
+7. **Cancel** `POST …/ads/:id/cancel {expectedVersion}`: drafts only. An ad that may exist at Meta is paused instead.
+8. **Resolve** `POST …/ads/:id/resolve {state, expectedVersion}`: a person who checked Meta Ads Manager settles an
+   UNKNOWN. An unknown create can only become NOT_CREATED (if Meta did create it, it sits paused there and spends
+   nothing; the person removes it in Ads Manager). An unknown turn-on or pause becomes ACTIVE or PAUSED.
+
+### 4C.6 Later (own migration numbers)
+
+- Daily spend and results sync (impressions, clicks, spend per day) shown in Marketing.
+- Simple campaigns with their own creative and audience, after media storage exists.
+
+### 4C.7 Owner decisions (defaults built, change before activation)
+
+- The highest cap a school may set (built: 10,000.00 a month).
+- Who sets the cap (built: the school's OWNER role through `marketing.social.ads.budget`).
+
 ## 5. Provider facts to confirm before any switch is turned on
 
 docs.zernio.com is blocked from the build container, so the adapter is written against these assumptions, each one
@@ -175,6 +289,17 @@ allowed) before activation:
 4. Account disconnect endpoint.
 5. (S2–S4) post create/schedule/cancel fields and statuses, inbox send/reply endpoints, ad create/budget units
    (cents vs currency), PAUSED creation, insights, and webhook event names.
+6. (S3) In `comment.received`, whether `from.id` is the Zernio account id or the Meta Page id. HON drops a comment
+   whose author is the school's own account as an echo; if Zernio sends the Page id instead, the echo check must
+   compare against that id, or the school's own replies would be stored as inbound.
+7. (S4) Ads: the boost endpoint (assumed `POST /ads/boost {accountId, postId, status: PAUSED, budget: {type:
+   lifetime, amount, currency}, schedule: {startDate, endDate, timezone}}` answering `{ad: {id}}`), that an ad can be
+   created PAUSED, whether `amount` is in cents or in currency units (HON sends cents), that Meta uses the ad
+   account's own currency (HON compares an ad only with the school's cap currency and never reads the Meta ad
+   account's currency, so before activation HON must read the account currency, or Zernio must refuse a mismatch),
+   how zero-decimal currencies such as JPY and KRW are counted (HON stores and sends minor units), the status endpoint
+   (assumed `POST /ads/{id}/status {status: ACTIVE | PAUSED}`), that both honour `Idempotency-Key`, and which Meta ad
+   account a Page's boost is charged to (it must be the school's own).
 
 ## 6. What David changes in Zernio when a piece is approved
 
@@ -183,7 +308,13 @@ allowed) before activation:
   ads for S4). Keep it in Render `hon-api` as `ZERNIO_API_KEY`; never in the web service.
 - **Webhook:** keep the same endpoint `/api/v1/communications/webhooks/zernio` and secret, and add the events each
   piece consumes (S2: post published/failed and account disconnected; S3: message and comment received; S4: none
-  required). Lead intake keeps `lead.received`.
+  required: HON learns an ad's state only from its own calls, and a person settles an unknown one). Lead intake keeps
+  `lead.received`.
+- **Ads (S4) also need, outside Zernio:** the school's Facebook Page connected to a Meta ad account the school owns,
+  with a payment method on file in Meta. Meta charges that account; HON never pays or holds ad money. Turning
+  `HON_ZERNIO_ADS_APPROVED` off stops HON from creating or turning on ads, but does not pause ads already running at
+  Meta. Staff can still pause them from HON while the Zernio key stays set (or from Ads Manager); removing the key
+  removes that too.
 - **Switch:** set only the approved piece's `HON_ZERNIO_*_APPROVED=true` in `hon-api`.
 
 ## 7. Tests (TDD)

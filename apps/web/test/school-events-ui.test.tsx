@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
+import { SCHOOL_SHELL_NAV, SCHOOL_SHELL_UNLISTED_ROUTES } from '../src/components/school-shell/catalog';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { EventError, eventErrorFor, keepEventForRetry, publicEventApi, schoolEventsApi } from '../src/components/school-events/http';
 import { EVENTS_COPY, eventsText } from '../src/components/school-events/copy';
@@ -201,8 +201,9 @@ it('family page: spots left only, a full slot cannot be picked, the code is show
   expect(renderToStaticMarkup(<PublicEventView {...pub({ language: 'ko' })}/>)).toContain('2자리 남음');
 });
 
-it('the Events page is in the classes nav, and every wording key has the same {placeholders} in all three languages', () => {
-  expect(SCHOOL_SHELL_NAV.flatMap((g) => g.routes.map((r) => r.href))).toContain('/staff/schedule/events');
+it('the Events page is a Calendar tab (old address listed as moved), and every wording key has the same {placeholders} in all three languages', () => {
+  expect(SCHOOL_SHELL_UNLISTED_ROUTES).toContain('/staff/schedule/events');
+  expect(SCHOOL_SHELL_NAV.flatMap((g) => g.routes.map((r) => r.href))).toContain('/staff/schedule');
   const vars = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
   const keys = Object.keys(EVENTS_COPY.en) as (keyof typeof EVENTS_COPY.en)[];
   expect(keys.length).toBeGreaterThan(90);

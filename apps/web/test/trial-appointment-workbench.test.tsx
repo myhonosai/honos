@@ -2,6 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ preferences: { language: 'en' } }), useOptionalLocale: () => null }));
+import { NO_SCHOOL_SHELL, SchoolShellProvider, type SchoolShellState } from '../src/components/school-shell/context';
 import { TrialAppointmentWorkbench } from '../src/components/trial-appointment-workbench';
 import { recordTrialOutcome, scheduleTrial, trialOutcomePath, trialSchedulePath } from '../src/components/trial-appointment-http';
 
@@ -19,11 +21,20 @@ describe('human trial appointment workbench', () => {
     try {
       const html = renderToStaticMarkup(<TrialAppointmentWorkbench />);
       expect(fetcher).not.toHaveBeenCalled();
-      expect(html).toContain('Schedule and record a trial');
-      expect(html).toContain('Appointment facts only.');
+      expect(html).toContain('Trial appointments');
       expect(html).not.toContain('Current command receipt');
       expect(html).not.toContain('calendar invitation');
       expect(html).not.toContain('Record final outcome');
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('inside the shell picks the lead by name and shows no IDs, permission codes or receipts wording', () => {
+    const ready: SchoolShellState = { ...NO_SCHOOL_SHELL, phase: 'READY', selection: { organizationId, schoolId }, schoolName: 'Sunrise' };
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<SchoolShellProvider value={ready}><TrialAppointmentWorkbench /></SchoolShellProvider>);
+      expect(html).toContain('Reading leads…');
+      for (const text of ['UUID', 'crm.trial', 'command receipt', 'retained']) expect(html).not.toContain(text);
     } finally { fetcher.mockRestore(); }
   });
 
@@ -59,8 +70,8 @@ describe('human trial appointment workbench', () => {
     const source = readFileSync('src/components/trial-appointment-workbench.tsx', 'utf8');
     const route = readFileSync('src/app/staff/crm/trials/page.tsx', 'utf8');
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
-    expect(source).toContain('Retry exact retained request');
-    expect(source).toContain('immediately verified scheduled receipt');
+    expect(source).toContain('LeadPicker');
+    expect(source).not.toMatch(/Known CRM lead UUID|immediately verified scheduled receipt|crm\.trial\.(schedule|manage)/);
     expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|invokeLLM|sendMessage|executeAction|calendarDelivery/);
     expect(route).toContain('TrialAppointmentWorkbench');
     expect(manifest.routes.filter((entry: { path: string }) => entry.path === '/staff/crm/trials')).toHaveLength(1);

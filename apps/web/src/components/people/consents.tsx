@@ -48,7 +48,7 @@ export function ConsentCard(p: ConsentCardProps): React.ReactElement {
           <strong>{t(c)}</strong>
           <span className={styles.status} data-tone={status === 'OPTED_IN' ? 'ready' : 'planned'}>{t(status)}</span>
         </div>
-        {row ? <small className={styles.meta}>{t('consentRecorded', { time: moment(row.capturedAt), source: t(`src_${row.source}`) })}</small> : null}
+        {row ? <small className={styles.meta}>{row.captureMethod ? t('consentRecordedVia', { time: moment(row.capturedAt), method: t(`m_${row.captureMethod}`) }) : t('consentRecorded', { time: moment(row.capturedAt), source: t(`src_${row.source}`) })}</small> : null}
         {rows && p.canEdit && !open ? <button type="button" className={styles.secondary} disabled={p.locked || p.form !== null}
           onClick={() => p.onOpen?.({ channel: c, status: next })}>{t(next === 'OPTED_OUT' ? 'recordOptOut' : 'recordOptIn')}</button> : null}
         {open && p.form ? <form className={styles.form} data-testid="consent-form" onSubmit={(e) => { e.preventDefault(); p.onConfirm?.(); }}>

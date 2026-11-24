@@ -19,7 +19,7 @@ export interface CreativeJobWorkerStore {
   recordPoll(jobId: string, leaseToken: string): Promise<{ status: string; nextPollAt: string }>;
   /** RECORDED, or REQUESTER_UNAVAILABLE / RESOLVED_ELSEWHERE when the answer is kept on the job for HQ. */
   recordResult(jobId: string, leaseToken: string, outcome: CreativeOutcome): Promise<{ status: string }>;
-  /** C3 (0355): a provider success together with its stored files, one object per asset in order. */
+  /** C3 (0671): a provider success together with its stored files, one object per asset in order. */
   recordStoredResult(jobId: string, leaseToken: string, outcome: CreativeOutcome, objects: StoredCreativeObject[]): Promise<{ status: string }>;
 }
 export const CREATIVE_JOB_WORKER_STORE = Symbol('CREATIVE_JOB_WORKER_STORE');
@@ -136,7 +136,7 @@ export class CreativeJobWorker {
     }
     if (answer?.state === 'PENDING') return null;
     if (answer?.state !== 'DONE') return null;
-    // A provider success is recorded only together with its files in HON's storage (0355): credits are never charged for
+    // A provider success is recorded only together with its files in HON's storage (0671): credits are never charged for
     // media HON does not hold. A success without files cannot be trusted (UNKNOWN for HQ).
     const claimed = verifiedOutcome(answer.result, { mediaKind, units });
     if (claimed.outcome !== 'SUCCEEDED') return { outcome: claimed };

@@ -1,5 +1,6 @@
 /** People screen wording (en / ko / es). */
 const en = {
+  profileTitle: 'Edit profile', profileIntro: 'Review this person’s details, then save each part. Membership, billing and messages are not changed here.', profileClose: 'Close',
   title: 'People', intro: 'Find a student, parent or contact at your school and correct their name, email, phone or a child’s birth date.',
   refresh: 'Refresh', searchLabel: 'Search by name, email or phone', searchButton: 'Search', listTitle: 'People at this school',
   listNone: 'No one matches this search.', listCapped: 'Showing the first {n}. Search to narrow the list.', listLoading: 'Reading people…',
@@ -32,7 +33,7 @@ const en = {
   consentIntro: 'What this person told your school they agree to receive. Recording a choice sends nothing.',
   consentLoading: 'Reading consent…', consentReadDenied: 'Your access does not include consent records. Showing the saved summary only.',
   consentReadUnavailable: 'Consent records could not be read. Showing the saved summary only.', consentReload: 'Read again',
-  consentRecorded: 'Recorded {time} by {source}', src_STAFF: 'school staff', src_PARENT: 'the parent', src_IMPORT: 'an import', src_RECIPIENT: 'the person (unsubscribe or STOP reply)',
+  consentRecorded: 'Recorded {time} by {source}', consentRecordedVia: 'Recorded {time} from {method}', m_LEAD_FORM: 'the website form', m_WALK_IN_KIOSK: 'the walk-in kiosk', m_FACEBOOK_LEAD_FORM: 'a Facebook or Instagram lead form', m_INBOUND_TEXT: 'their text to the school', m_STAFF_ADD: 'a staff add', m_LEAD_IMPORT: 'a lead import', m_STUDENT_IMPORT: 'a student import', m_PRIOR_OPT_OUT: 'an earlier opt-out for this address', src_STAFF: 'school staff', src_PARENT: 'the parent', src_IMPORT: 'an import', src_RECIPIENT: 'the person (unsubscribe or STOP reply)',
   recordOptOut: 'Record opt-out', recordOptIn: 'Record agreement', consentBack: 'Back',
   optOutAsk: 'Record that {name} no longer wants {channel} from this school.', optOutConfirm: 'Record opt-out now',
   optInAsk: 'Record that {name} agreed to {channel} from this school.',
@@ -49,6 +50,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  profileTitle: '프로필 수정', profileIntro: '이 사람의 정보를 확인한 뒤 항목별로 저장하세요. 회원권, 결제, 메시지는 여기서 바뀌지 않습니다.', profileClose: '닫기',
   title: '사람', intro: '도장의 학생, 보호자 또는 연락처를 찾아 이름, 이메일, 전화번호 또는 자녀의 생년월일을 고칩니다.',
   refresh: '새로 고침', searchLabel: '이름, 이메일 또는 전화번호로 검색', searchButton: '검색', listTitle: '이 도장의 사람',
   listNone: '검색과 일치하는 사람이 없습니다.', listCapped: '처음 {n}명을 보여 줍니다. 검색으로 범위를 좁히세요.', listLoading: '사람을 읽는 중…',
@@ -81,7 +83,7 @@ const ko: Record<Key, string> = {
   consentIntro: '이 사람이 도장에 수신을 동의한 내용입니다. 선택을 기록해도 아무것도 발송되지 않습니다.',
   consentLoading: '동의 기록을 읽는 중…', consentReadDenied: '동의 기록에 대한 접근 권한이 없습니다. 저장된 요약만 표시합니다.',
   consentReadUnavailable: '동의 기록을 읽을 수 없습니다. 저장된 요약만 표시합니다.', consentReload: '다시 읽기',
-  consentRecorded: '{time}에 {source}이(가) 기록', src_STAFF: '도장 직원', src_PARENT: '보호자', src_IMPORT: '가져오기', src_RECIPIENT: '본인 (수신 거부 또는 STOP 답장)',
+  consentRecorded: '{time}에 {source}이(가) 기록', consentRecordedVia: '{time}에 {method}에서 기록', m_LEAD_FORM: '웹사이트 양식', m_WALK_IN_KIOSK: '방문 키오스크', m_FACEBOOK_LEAD_FORM: '페이스북/인스타그램 리드 양식', m_INBOUND_TEXT: '본인이 보낸 문자', m_STAFF_ADD: '직원 추가', m_LEAD_IMPORT: '리드 가져오기', m_STUDENT_IMPORT: '학생 가져오기', m_PRIOR_OPT_OUT: '같은 주소의 이전 수신 거부', src_STAFF: '도장 직원', src_PARENT: '보호자', src_IMPORT: '가져오기', src_RECIPIENT: '본인 (수신 거부 또는 STOP 답장)',
   recordOptOut: '수신 거부 기록', recordOptIn: '동의 기록', consentBack: '뒤로',
   optOutAsk: '{name} 님이 이 도장의 {channel} 수신을 더 이상 원하지 않는다고 기록합니다.', optOutConfirm: '지금 수신 거부 기록',
   optInAsk: '{name} 님이 이 도장의 {channel} 수신에 동의했다고 기록합니다.',
@@ -97,6 +99,7 @@ const ko: Record<Key, string> = {
   waiting: '도장을 확인하는 중…', noSchool: '사람을 보려면 도장을 선택하세요.', concealed: '사람 목록이 숨겨졌습니다. 이 탭으로 돌아오면 도장을 다시 확인합니다.',
 };
 const es: Record<Key, string> = {
+  profileTitle: 'Editar perfil', profileIntro: 'Revise los datos de esta persona y guarde cada parte. La membresía, la facturación y los mensajes no cambian aquí.', profileClose: 'Cerrar',
   title: 'Personas', intro: 'Busca un estudiante, padre o contacto de tu escuela y corrige su nombre, correo, teléfono o la fecha de nacimiento de un niño.',
   refresh: 'Actualizar', searchLabel: 'Buscar por nombre, correo o teléfono', searchButton: 'Buscar', listTitle: 'Personas de esta escuela',
   listNone: 'Nadie coincide con esta búsqueda.', listCapped: 'Se muestran los primeros {n}. Busca para acotar la lista.', listLoading: 'Leyendo personas…',
@@ -129,7 +132,7 @@ const es: Record<Key, string> = {
   consentIntro: 'Lo que esta persona le dijo a tu escuela que acepta recibir. Registrar una elección no envía nada.',
   consentLoading: 'Leyendo el consentimiento…', consentReadDenied: 'Tu acceso no incluye los registros de consentimiento. Solo se muestra el resumen guardado.',
   consentReadUnavailable: 'No se pudieron leer los registros de consentimiento. Solo se muestra el resumen guardado.', consentReload: 'Leer de nuevo',
-  consentRecorded: 'Registrado {time} por {source}', src_STAFF: 'personal de la escuela', src_PARENT: 'el padre o madre', src_IMPORT: 'una importación', src_RECIPIENT: 'la persona (baja o respuesta STOP)',
+  consentRecorded: 'Registrado {time} por {source}', consentRecordedVia: 'Registrado {time} desde {method}', m_LEAD_FORM: 'el formulario web', m_WALK_IN_KIOSK: 'el quiosco de visitas', m_FACEBOOK_LEAD_FORM: 'un formulario de Facebook o Instagram', m_INBOUND_TEXT: 'su mensaje de texto a la escuela', m_STAFF_ADD: 'un alta del personal', m_LEAD_IMPORT: 'una importación de prospectos', m_STUDENT_IMPORT: 'una importación de alumnos', m_PRIOR_OPT_OUT: 'una baja anterior de esta dirección', src_STAFF: 'personal de la escuela', src_PARENT: 'el padre o madre', src_IMPORT: 'una importación', src_RECIPIENT: 'la persona (baja o respuesta STOP)',
   recordOptOut: 'Registrar baja', recordOptIn: 'Registrar aceptación', consentBack: 'Volver',
   optOutAsk: 'Registrar que {name} ya no quiere recibir {channel} de esta escuela.', optOutConfirm: 'Registrar baja ahora',
   optInAsk: 'Registrar que {name} aceptó recibir {channel} de esta escuela.',

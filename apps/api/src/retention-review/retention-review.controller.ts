@@ -22,6 +22,20 @@ export class RetentionReviewController {
     const requestId = randomUUID();
     return { ...scope, externalSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId, correlationId: requestId };
   }
+  @Get('memberships')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async memberships(@Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    if (!query || Object.keys(query).length !== 1 || !Object.hasOwn(query, 'schoolId')) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    retentionReviewId(query.schoolId);
+    if (!request.honIdentity) throw new ForbiddenException({ code: 'IDENTITY_REQUIRED' });
+    const externalSubject = request.honIdentity.externalSubject;
+    const scope = await this.database.resolveRetentionReviewScope(externalSubject, query.schoolId);
+    if (!scope) throw new ForbiddenException({ code: 'RETENTION_REVIEW_SCOPE_DENIED' });
+    const requestId = randomUUID();
+    const context: RetentionReviewSignalsContext = { ...scope, externalSubject, principalType: 'HUMAN_USER', source: 'HUMAN_UI', requestId, correlationId: requestId };
+    return { data: { items: await this.retention.memberships(context) }, meta: { requestId, correlationId: requestId } };
+  }
   @Get('attention-alerts')
   @Header('Cache-Control', 'private, no-store')
   @Header('Referrer-Policy', 'no-referrer')

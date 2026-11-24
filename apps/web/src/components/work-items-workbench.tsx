@@ -1,11 +1,15 @@
 'use client';
-import React, { useRef, useState, type FormEvent } from 'react';
-import { HUMAN_WORK_HELP, HUMAN_WORK_STATUSES, type HumanWorkInput, type HumanWorkTransition, type HumanWorkOperation, type HumanWorkQueue, type HumanWorkRecord, type HumanWorkStatus } from '@hon/contracts';
+import React, { useEffect, useRef, useState, type FormEvent } from 'react';
+import { HUMAN_WORK_STATUSES, type HumanWorkInput, type HumanWorkTransition, type HumanWorkOperation, type HumanWorkQueue, type HumanWorkRecord, type HumanWorkStatus } from '@hon/contracts';
 import { loadHumanWork, readHumanWork, mutateHumanWork, workFingerprint, WorkAccessError } from './work-items-http';
+import { useShellSchool } from './school-shell/page-school';
+import { IdFields, StaffPicker, personLabel, type ListState } from './school-pickers/pickers';
 import styles from './staff-availability-workbench.module.css';
 const initial = (assigneeId: string|null = null): HumanWorkInput => ({expectedVersion:0,title:'',description:'',priority:'NORMAL',dueAt:null,assigneeId});
 const fields = (r: HumanWorkRecord): HumanWorkInput => ({expectedVersion:r.version,title:r.title,description:r.description,priority:r.priority,dueAt:r.dueAt,assigneeId:r.assigneeId});
-const labels: Record<HumanWorkStatus,string> = {READY:'New · READY',WORKING:'In progress · WORKING',WAITING:'Blocked / waiting · WAITING',NEEDS_ATTENTION:'Human triage · NEEDS_ATTENTION',COMPLETED:'Completed',FAILED:'Closed unsuccessful · FAILED'};
+const labels: Record<HumanWorkStatus,string> = {READY:'New',WORKING:'In progress',WAITING:'Waiting',NEEDS_ATTENTION:'Needs attention',COMPLETED:'Completed',FAILED:'Closed, not done'};
+const PRIORITY: Record<HumanWorkInput['priority'],string> = {LOW:'Low priority',NORMAL:'Normal priority',HIGH:'High priority'};
+const OPERATION: Record<string,string> = {CREATE:'Created',UPDATE:'Edited',TRANSITION:'Status changed'};
 const targets: Record<HumanWorkStatus,HumanWorkStatus[]> = {READY:['WORKING','WAITING','NEEDS_ATTENTION','FAILED'],WORKING:['WAITING','COMPLETED','NEEDS_ATTENTION','FAILED'],WAITING:['READY','WORKING','NEEDS_ATTENTION','FAILED'],NEEDS_ATTENTION:['READY','FAILED'],COMPLETED:[],FAILED:[]};
 export function WorkItemsWorkbench(): React.ReactElement {
   const [context,setContext] = useState<HumanWorkQueue|null>(null), [selected,setSelected] = useState<HumanWorkRecord|null>(null), [draft,setDraft] = useState<HumanWorkInput>(initial);
@@ -13,13 +17,19 @@ export function WorkItemsWorkbench(): React.ReactElement {
   const [uncertain,setUncertain] = useState(false), [needsRefresh,setNeedsRefresh] = useState(false);
   const retry = useRef<{fingerprint:string;key:string;op:HumanWorkOperation;id:string|null;input:HumanWorkInput|HumanWorkTransition}|null>(null);
   const active = useRef(false);
+  const [staff,setStaff] = useState<ReadonlyMap<string,string>>(new Map()), [staffList,setStaffList] = useState<ListState<unknown>['state']>('LOADING');
+  // The staff list only for the shell's verified school, and only when it is the school the queue came from.
+  const shell = useShellSchool(), pickScope = shell && context && context.canManage && shell.schoolId === context.schoolId ? shell : null;
+  const manualStaff = !pickScope || staffList === 'DENIED' || staffList === 'UNAVAILABLE';
+  const who = (id: string|null) => personLabel(id, context?.principalId ?? '', staff);
+  useEffect(() => { void load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- open on the signed-in school right away
   async function run(work:()=>Promise<void>) {
     if(active.current) return; active.current=true; setBusy(true); setError(''); setNotice('');
     try { await work(); } catch(e) {
       // Never leave an old private detail visible on a failed scope/record check.
       setSelected(null); setDraft(initial());
       if(e instanceof WorkAccessError) { setContext(null); retry.current=null; setUncertain(false); }
-      setError(e instanceof Error?e.message:'No verified result.');
+      setError(e instanceof Error?e.message:'Nothing could be confirmed.');
     } finally { active.current=false; setBusy(false); }
   }
   function choose(r:HumanWorkRecord|null) { setNeedsRefresh(false); setSelected(r); setDraft(r?fields(r):initial(context?.principalId??null)); }
@@ -30,54 +40,55 @@ export function WorkItemsWorkbench(): React.ReactElement {
   }); }
   async function open(id:string,beforeVersion:number|null=null) { await run(async()=>{
     setSelected(null); setDraft(initial()); const r=await readHumanWork(id,beforeVersion);
-    if(!context || r.schoolId!==context.schoolId) throw new WorkAccessError('School changed. Reload the authorized queue.'); choose(r);
+    if(!context || r.schoolId!==context.schoolId) throw new WorkAccessError('School changed. Refresh the list.'); choose(r);
   }); }
   async function submit(op:HumanWorkOperation,id:string|null,input:HumanWorkInput|HumanWorkTransition) {
     const fingerprint=workFingerprint({op,id,input});
     if(retry.current?.fingerprint!==fingerprint) retry.current={fingerprint,key:crypto.randomUUID(),op,id,input:structuredClone(input)};
     setUncertain(true); const saved=await mutateHumanWork(op,id,input,retry.current.key);
-    if(!context || saved.schoolId!==context.schoolId) throw new WorkAccessError('School changed. Reload current records; no save assumed.');
+    if(!context || saved.schoolId!==context.schoolId) throw new WorkAccessError('School changed. Nothing is assumed saved; refresh the list.');
     setUncertain(false); setNeedsRefresh(true); setSelected(saved); setDraft(fields(saved));
     setContext({...context,items:context.items.filter(r=>r.workItemId!==saved.workItemId)});
-    setNotice(`Verified saved revision ${saved.version}: ${labels[saved.status]}. Human recordkeeping only. Reload current detail before more edits; a retry may return an older saved revision.`);
+    setNotice(`Saved: ${labels[saved.status].toLowerCase()}. Reload current detail before editing again.`);
   }
   async function save(e:FormEvent) { e.preventDefault(); await run(()=>submit(selected?'UPDATE':'CREATE',selected?.workItemId??null,draft)); }
   function resetFilter() { setContext(null); setSelected(null); setDraft(initial()); }
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/hon">Ask HON</a><a href="/staff/search">Staff search</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN WORK · ESSENTIAL / CORE / COMPLETE</p><h1>Work items</h1><p>A clear next step. A durable human record.</p></header>
-    <aside><strong>Human work, not an AI execution queue.</strong><p>{HUMAN_WORK_HELP}</p><p>Exact school work_item.manage for team detail/revisions/assignment; work_item.self_manage for current-assignee state updates. work_item.create for self/unassigned creation and creator visibility. No identity directory. Avoid personal/contact data or raw AI prompts in titles and descriptions.</p></aside>
-    <section><h2>Authorized school queue</h2><div className={styles.row}>
-      <label>Queue<select disabled={busy||uncertain} value={queue} onChange={e=>{setQueue(e.target.value as 'mine'|'team');resetFilter();}}><option value="mine">My assignments / created records</option><option value="team">School team · managers only</option></select></label>
-      <label>Status<select disabled={busy||uncertain} value={status} onChange={e=>{setStatus(e.target.value as HumanWorkStatus|'ACTIVE'|'ALL');resetFilter();}}><option value="ACTIVE">Active work</option>{HUMAN_WORK_STATUSES.map(s=><option key={s} value={s}>{labels[s]}</option>)}<option value="ALL">All states</option></select></label>
-      <button disabled={busy} onClick={()=>void load()}>Load / refresh queue</button></div><p>Up to 50 human records per page, ordered by stable ID. Due dates are UTC planning metadata only. Private descriptions, directory fields and raw AI data never enter queues.</p></section>
-    {busy&&<p role="status">Checking current human school authority…</p>}
-    {error&&<p role="alert" className={styles.error}>{error} No save is assumed after an uncertain response.</p>}
+    <header><p>Home</p><h1>Work</h1><p>Your team’s to-do list: what needs doing, who has it, and where it stands.</p></header>
+    <aside data-plain-note=""><strong>Work items are for people. The AI team does not run them.</strong></aside>
+    <section><h2>Show</h2><div className={styles.row}>
+      <label>Whose<select disabled={busy||uncertain} value={queue} onChange={e=>{setQueue(e.target.value as 'mine'|'team');resetFilter();}}><option value="mine">Mine (assigned to me or created by me)</option><option value="team">Whole team (managers)</option></select></label>
+      <label>Status<select disabled={busy||uncertain} value={status} onChange={e=>{setStatus(e.target.value as HumanWorkStatus|'ACTIVE'|'ALL');resetFilter();}}><option value="ACTIVE">Active work</option>{HUMAN_WORK_STATUSES.map(s=><option key={s} value={s}>{labels[s]}</option>)}<option value="ALL">All</option></select></label>
+      <button disabled={busy} onClick={()=>void load()}>Refresh</button></div><p>Due dates are in UTC and are for planning only. Descriptions stay private to the open item.</p></section>
+    {busy&&<p role="status">Working…</p>}
+    {error&&<p role="alert" className={styles.error}>{error} No save is assumed until the page confirms it.</p>}
     {notice&&<p role="status" className={styles.notice}>{notice}</p>}
-    {uncertain&&retry.current&&<aside><p>An unverified request is retained in this page memory only. No automatic retries or new mutations while it is unresolved.</p><button disabled={busy||!context} onClick={()=>void run(async()=>{const r=retry.current!;await submit(r.op,r.id,r.input);})}>Retry exact retained request</button><button disabled={busy} onClick={()=>{retry.current=null;setUncertain(false);resetFilter();setNotice('Retained request discarded, not cancelled. A previous write may have committed. Reload and inspect current records before creating or changing work.');}}>Discard retry and clear private view</button></aside>}
-    {context&&<><section><h2>{context.queue==='team'?'School team records':'My human work'}</h2><p>School {context.schoolId} · signed-in human {context.principalId}</p>
-      {context.canCreate&&<button disabled={busy||uncertain} onClick={()=>choose(null)}>New human work item</button>}
-      {context.items.length===0&&<p>No human work items on this page. Choose another state or create a human record if authorized. Future AI work is not shown here.</p>}
-      <div className={styles.actions}>{context.items.map(r=><button key={r.workItemId} disabled={busy||uncertain} onClick={()=>void open(r.workItemId)}><strong>{r.title}</strong><br/>{labels[r.status]} · {r.priority} · v{r.version}<br/>Due {r.dueAt??'not set'}<br/>{r.assigneeId?`Human assignee ${r.assigneeId}`:'Unassigned'}<br/>Record {r.workItemId}</button>)}</div>
+    {uncertain&&retry.current&&<aside><p>The last save was not confirmed. Retry sends the same request again; nothing else can be saved until you retry or discard it.</p><button disabled={busy||!context} onClick={()=>void run(async()=>{const r=retry.current!;await submit(r.op,r.id,r.input);})}>Retry exact retained request</button><button disabled={busy} onClick={()=>{retry.current=null;setUncertain(false);resetFilter();setNotice('Retry discarded. The earlier save may still have gone through, so refresh and check before changing work.');}}>Discard retry and clear private view</button></aside>}
+    {context&&<><section><h2>{context.queue==='team'?'Team work':'My work'}</h2>
+      {context.canCreate&&<button disabled={busy||uncertain} onClick={()=>choose(null)}>New work item</button>}
+      {context.items.length===0&&<p>No work items here. Choose another status or create one.</p>}
+      <div className={styles.actions}>{context.items.map(r=><button key={r.workItemId} disabled={busy||uncertain} onClick={()=>void open(r.workItemId)}><strong>{r.title}</strong><br/>{labels[r.status]} · {PRIORITY[r.priority]} · due {r.dueAt??'not set'}<br/>Assigned to: {who(r.assigneeId)}</button>)}</div>
       {context.nextAfter&&<button disabled={busy||uncertain} onClick={()=>void load(context.nextAfter)}>Next 50 records</button>}
-      <form onSubmit={e=>{e.preventDefault();void open(knownId);}}><label>Already-known work-item ID<input required value={knownId} disabled={busy||uncertain} onChange={e=>setKnownId(e.target.value)} placeholder="Record UUID"/></label><button disabled={busy||uncertain}>Load current detail</button></form>
+      <IdFields manual={false}><form onSubmit={e=>{e.preventDefault();void open(knownId);}}><label>Work item record ID<input required value={knownId} disabled={busy||uncertain} onChange={e=>setKnownId(e.target.value)}/></label><button disabled={busy||uncertain}>Open</button></form></IdFields>
     </section>
-    {selected&&<section><h2>{selected.title}</h2><p>{labels[selected.status]} · human record · saved v{selected.version}</p><p>{selected.workItemId} · created by human {selected.createdBy} at {selected.createdAt}</p><p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{selected.description||'No description recorded.'}</p><p>{selected.priority} · due {selected.dueAt??'not set'} · {selected.assigneeId?`Human assignee ${selected.assigneeId}`:'Unassigned'}</p>
-      <div className={styles.actions}><button disabled={busy||uncertain} onClick={()=>void open(selected.workItemId)}>Reload current detail</button>{selected.canTransition&&targets[selected.status].map(target=><button key={target} disabled={busy||uncertain||needsRefresh} onClick={()=>void run(()=>submit('TRANSITION',selected.workItemId,{expectedVersion:selected.version,targetStatus:target}))}>{target==='COMPLETED'?'Mark completed (human record only)':labels[target]}</button>)}</div>
-      {['COMPLETED','FAILED'].includes(selected.status)&&<p>Terminal record. No reopen or invented cancellation state is available.</p>}
-      <h3>Human assignment / state history</h3><p>Metadata only; no old private descriptions or directory/contact data.</p><ol>{selected.history.map(h=><li key={h.version}>v{h.version} · {h.operation} · {labels[h.status]} · {h.assigneeId?`assignee ${h.assigneeId}`:'unassigned'} · human actor {h.actorId} · {h.recordedAt}</li>)}</ol>
+    {selected&&<section><h2>{selected.title}</h2><p>{labels[selected.status]} · created by {who(selected.createdBy)} at {selected.createdAt}</p><p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{selected.description||'No description recorded.'}</p><p>{PRIORITY[selected.priority]} · due {selected.dueAt??'not set'} · assigned to: {who(selected.assigneeId)}</p>
+      <div className={styles.actions}><button disabled={busy||uncertain} onClick={()=>void open(selected.workItemId)}>Reload current detail</button>{selected.canTransition&&targets[selected.status].map(target=><button key={target} disabled={busy||uncertain||needsRefresh} onClick={()=>void run(()=>submit('TRANSITION',selected.workItemId,{expectedVersion:selected.version,targetStatus:target}))}>{target==='COMPLETED'?'Mark completed':`Move to ${labels[target].toLowerCase()}`}</button>)}</div>
+      {['COMPLETED','FAILED'].includes(selected.status)&&<p>This item is closed and cannot be reopened.</p>}
+      <h3>History</h3><ol>{selected.history.map(h=><li key={h.version}>{OPERATION[h.operation]??'Changed'} · {labels[h.status]} · assigned to: {who(h.assigneeId)} · by {who(h.actorId)} · {h.recordedAt}</li>)}</ol>
       {selected.nextBeforeVersion&&<button disabled={busy||uncertain} onClick={()=>void open(selected.workItemId,selected.nextBeforeVersion)}>Older history</button>}
-      {selected.aiPlanIds.length>0&&<aside><h3>Existing planning references only</h3><p>No AI execution or AI employee completion is implied.</p>{selected.aiPlanIds.map(id=><p key={id}>AI plan ID {id}</p>)}</aside>}
+      {selected.aiPlanIds.length>0&&<aside><h3>Linked AI plans</h3><p>{selected.aiPlanIds.length === 1 ? 'One AI plan refers to this item.' : `${selected.aiPlanIds.length} AI plans refer to this item.`} No AI execution or AI employee completion is implied.</p></aside>}
     </section>}
-    {((!selected&&context.canCreate)||selected?.canEdit)&&<section><h2>{selected?'Revise / reassign human work':'Create human work item'}</h2><p>Expected version {draft.expectedVersion}. Optional assignment uses a known eligible human staff ID in this school only. Managers can recover inactive assignments; nobody is assigned automatically.</p>
+    {((!selected&&context.canCreate)||selected?.canEdit)&&<section><h2>{selected?'Edit or reassign':'New work item'}</h2><p>Nobody is assigned automatically.</p>
       <form onSubmit={save}><fieldset disabled={busy||uncertain||needsRefresh}>
         <label>Title<input required maxLength={120} value={draft.title} onChange={e=>edit({title:e.target.value})}/></label>
         <label>Private description<textarea maxLength={2000} rows={5} value={draft.description} onChange={e=>edit({description:e.target.value})}/></label>
-        <label>Known human assignee ID (optional)<input readOnly={!context.canManage} value={draft.assigneeId??''} onChange={e=>edit({assigneeId:e.target.value||null})}/></label>
-        {!context.canManage&&<button type="button" onClick={()=>edit({assigneeId:draft.assigneeId?null:context.principalId})}>{draft.assigneeId?'Leave unassigned':'Assign to myself'}</button>}
+        {context.canManage ? <>{pickScope&&<StaffPicker scope={pickScope} purpose="work" label="Assign to (optional)" value={draft.assigneeId??''} disabled={busy} onState={setStaffList} onItems={items=>setStaff(m=>new Map([...m,...items.map(p=>[p.principalId,p.displayName] as const)]))} onPick={person=>edit({assigneeId:person?.principalId??null})}/>}
+          {(()=>{ const input=<label>Staff record ID (optional)<input value={draft.assigneeId??''} onChange={e=>edit({assigneeId:e.target.value||null})}/></label>; return manualStaff?input:<IdFields manual={false}>{input}</IdFields>; })()}</>
+          : <><p>Assigned to: {who(draft.assigneeId)}</p><button type="button" onClick={()=>edit({assigneeId:draft.assigneeId?null:context.principalId})}>{draft.assigneeId?'Leave unassigned':'Assign to myself'}</button></>}
         <div className={styles.row}><label>Due at UTC (optional)<input type="datetime-local" step="0.001" min="2000-01-01T00:00" max="2099-12-31T23:59:59.999" value={draft.dueAt?.slice(0,-1)??''} onChange={e=>{const value=e.target.value;const date=value?new Date(`${value}Z`):null;if(!date||Number.isFinite(date.getTime()))edit({dueAt:date?.toISOString()??null});}}/></label>
-        <label>Priority<select value={draft.priority} onChange={e=>edit({priority:e.target.value as HumanWorkInput['priority']})}><option>LOW</option><option>NORMAL</option><option>HIGH</option></select></label></div>
-        <button type="submit">{selected?'Save human revision':'Create human work record'}</button>
+        <label>Priority<select value={draft.priority} onChange={e=>edit({priority:e.target.value as HumanWorkInput['priority']})}><option value="LOW">Low</option><option value="NORMAL">Normal</option><option value="HIGH">High</option></select></label></div>
+        <button type="submit">{selected?'Save changes':'Create work item'}</button>
       </fieldset></form></section>}
     </>}
   </main>;

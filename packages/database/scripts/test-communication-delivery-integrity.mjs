@@ -92,6 +92,7 @@ async function cleanup() {
     await admin.query('DELETE FROM hon.organization_entitlements WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.school_text_senders WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.hq_operator_grants WHERE principal_id = $1', [ids.hqPrincipal]);
+    await admin.query('DELETE FROM hon.communication_consent_captures WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.communication_consents WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.people WHERE organization_id = $1', [ids.org]);
     await admin.query('DELETE FROM hon.principal_role_grants WHERE organization_id = $1', [ids.org]);
@@ -586,7 +587,10 @@ try {
   check(leadRow.given_name === 'Ada' && leadRow.family_name === 'King Lovelace' && leadRow.email === 'ada@example.test' && leadRow.phone_e164 === '+15555550111', 'name, email and phone are normalized from the mapped keys');
   check(leadRow.attribution.zernio.formId === '777' && leadRow.attribution.zernio.adCampaignId === '77' && !JSON.stringify(leadRow.attribution).includes('ignored'), 'attribution carries form and ad ids, never unmapped answers');
   check((await admin.query('SELECT count(*)::int AS n FROM hon.crm_lead_attributions WHERE lead_id = $1', [zCreated.lead_id])).rows[0].n === 1, 'the immutable lead attribution is captured');
-  check((await admin.query("SELECT count(*)::int AS n FROM hon.communication_consents WHERE person_id = $1", [leadRow.primary_person_id])).rows[0].n === 0, 'an ad lead records no message consent');
+  // IC1 (0634): a Meta lead gets email consent automatically; never text consent (HON cannot show the wording on Meta's form).
+  // ada@example.test unsubscribed earlier in this school, so the address-level opt-out wins (PRIOR_OPT_OUT, never OPTED_IN).
+  const adConsents = (await admin.query("SELECT c.channel::text, c.status::text, c.source::text, k.method FROM hon.communication_consents c JOIN hon.communication_consent_captures k ON k.consent_id = c.id WHERE c.person_id = $1", [leadRow.primary_person_id])).rows;
+  check(JSON.stringify(adConsents) === JSON.stringify([{ channel: 'EMAIL', status: 'OPTED_OUT', source: 'RECIPIENT', method: 'PRIOR_OPT_OUT' }]), `an ad lead records email only, and the earlier unsubscribe of the same address wins: ${JSON.stringify(adConsents)}`);
   check((await zlead('evt_1', '9001', '12345', '777', { full_name: 'Ada', email: 'ada@example.test' })).outcome === 'REPLAYED', 'a redelivered event is a replay');
   const sameLead = await zlead('evt_2', '9001', '12345', '777', { full_name: 'Ada', email: 'ada@example.test' });
   check(sameLead.outcome === 'REPLAYED' && sameLead.lead_id === zCreated.lead_id, 'the same Meta lead under a new event id is still one lead');

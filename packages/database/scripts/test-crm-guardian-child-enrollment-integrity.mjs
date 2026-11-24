@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
 import { activateWithPreview, confirmationFor } from './membership-activation-test-support.mjs';
+import { bodyAfterDemoData } from './demo-data-guard-line.mjs';
 
 // Disposable-localhost proof for 0176 guardian/child CRM enrollment. Every step runs through the real services:
 // guardian/child registration (0160/0169, unchanged), the guardian's canonical billing account (0159 command),
@@ -74,7 +75,7 @@ try {
     assert.ok(body, `0176 (or 0218 for the child relation) defines ${name}`);
     const row = (await admin.query(`SELECT p.prosrc=$2 exact,p.prosecdef definer,p.proconfig config,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,
       has_function_privilege('public',p.oid,'EXECUTE') public_execute,(SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)::int overloads
-      FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, body, `hon.${signature}`])).rows[0];
+      FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, bodyAfterDemoData(name, body), `hon.${signature}`])).rows[0];
     assert.deepEqual(row, { exact: true, definer: name !== 'guard_crm_guardian_child_enrollment_history', config: ['search_path=pg_catalog, hon'],
       runtime_execute: runtimeFns.includes(signature), public_execute: false, overloads: 1 }, signature);
     assertions++;

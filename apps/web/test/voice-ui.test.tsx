@@ -40,3 +40,9 @@ describe('provider-independent human voice handoff UI',()=>{
   const page=readFileSync(new URL('../src/app/staff/voice/page.tsx',import.meta.url),'utf8');expect(page).toContain('verifySession');expect(page).toContain("redirect('/auth/login')");expect(page).toContain('force-dynamic');
  });
 });
+it('inside the school shell shows no School ID box; the signed-in school is used',async()=>{
+  const { SchoolShellProvider, NO_SCHOOL_SHELL } = await import('../src/components/school-shell/context');
+  const organizationId='00000000-0000-4000-8000-000000000001',schoolId='00000000-0000-4000-8000-000000000002';
+  const html=renderToStaticMarkup(<SchoolShellProvider value={{...NO_SCHOOL_SHELL,phase:'READY',selection:{organizationId,schoolId},schoolName:'Sunrise'}}><VoiceWorkspace/></SchoolShellProvider>);
+  expect(html).not.toContain('School ID');expect(html).not.toContain('Authorized school UUID');expect(html).not.toContain(schoolId);expect(html).toContain('Voice unavailable');expect(html).toContain('For staff at your school');
+});
