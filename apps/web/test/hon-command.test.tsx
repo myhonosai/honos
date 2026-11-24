@@ -64,12 +64,12 @@ describe('HON command roster', () => {
     }
   });
 
-  it('shows Maya as answering with her at-risk list, never as planned or drafting', () => {
+  it('shows Maya as answering with her at-risk list and renewal prep, never as planned or drafting', () => {
     const maya = HON_COMMAND_ROSTER.find((agent) => agent.id === 'maya')!;
     expect(maya.availability).toBe('ANSWERS');
     expect(maya.draftWorkKey).toBeNull();
     expect(maya.workspace).toBeNull();
-    expect(maya.capabilities.filter((c) => c.state === 'AVAILABLE').map((c) => c.href)).toEqual(['/staff/retention/at-risk', '/staff/retention/at-risk']);
+    expect(maya.capabilities.filter((c) => c.state === 'AVAILABLE').map((c) => c.href)).toEqual(['/staff/retention/at-risk', '/staff/retention/at-risk', undefined]);
     expect(maya.workflows.map((w) => w.href)).toContain('/staff/retention/at-risk');
     expect(maya.approval).toMatch(/never sends/);
   });
@@ -131,6 +131,26 @@ describe('HON command roster', () => {
     for (const bad of ['https://evil.example', '//evil.example', '/staff/../hq', '/hq', '/staff/hon', '/staff/dashboard?x=1', 'javascript:alert(1)', undefined, 42]) expect(safeHonReturnPath(bad)).toBe('/staff/dashboard');
     expect(honExpandHref('/staff/crm/leads', 'chad')).toBe('/staff/hon?return=%2Fstaff%2Fcrm%2Fleads&agent=chad');
     expect(honExpandHref('https://evil.example', 'root')).toBe('/staff/hon?return=%2Fstaff%2Fdashboard');
+  });
+});
+
+describe('Plan with Alex in the team view', () => {
+  it('shows the Alex planning panel only on Alex, and only for a verified school', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'team', 'alex')).toContain('id="alex-plan"');
+    expect(view(snapshot, 'team', 'chad')).not.toContain('id="alex-plan"');
+    const unverified = (await loaded({ resolveScope: vi.fn(async () => ({ state: 'MANUAL_ENTRY_REQUIRED' as const })) }, null)).snapshot;
+    expect(view(unverified, 'team', 'alex')).not.toContain('id="alex-plan"');
+  });
+
+  it('shows the Jordan follow-through panel only on Jordan, for a verified school', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'team', 'jordan')).toContain('id="jordan-follow-up"');
+    expect(view(snapshot, 'team', 'alex')).not.toContain('id="jordan-follow-up"');
+    expect(view(snapshot, 'team', 'marcus')).toContain('id="marcus-review"');
+    expect(view(snapshot, 'team', 'jordan')).not.toContain('id="marcus-review"');
+    expect(view(snapshot, 'team', 'claire')).toContain('id="claire-kpi"');
+    expect(view(snapshot, 'team', 'marcus')).not.toContain('id="claire-kpi"');
   });
 });
 

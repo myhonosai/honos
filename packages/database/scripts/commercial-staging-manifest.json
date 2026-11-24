@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "527ca07e02efdf31f718a2d702a545f59536d49a23e0ce145996563d7259e1b1",
+  "chainSha256": "90cf73b19b5ce75ca94ad96aa795774133eded3b7edf94af46f8c6b52195f1f1",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -891,8 +891,40 @@
       "sha256": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
     },
     {
+      "file": "0639_alex_delegation_plans.sql",
+      "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
+    },
+    {
+      "file": "0640_jordan_follow_through.sql",
+      "sha256": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d"
+    },
+    {
+      "file": "0641_marcus_marketing_review.sql",
+      "sha256": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47"
+    },
+    {
+      "file": "0642_membership_plan_payment_options.sql",
+      "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
+    },
+    {
+      "file": "0643_claire_kpi_report.sql",
+      "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
+    },
+    {
       "file": "0644_booking_invoice_security_hygiene.sql",
       "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
+    },
+    {
+      "file": "0645_class_session_minimum_duration.sql",
+      "sha256": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe"
+    },
+    {
+      "file": "0646_maya_renewal_prep.sql",
+      "sha256": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0"
+    },
+    {
+      "file": "0647_chad_approved_draft_send.sql",
+      "sha256": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9"
     },
     {
       "file": "0653_school_blast_pictures.sql",

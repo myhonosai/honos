@@ -30,7 +30,7 @@ test('builds /privacy/ and /terms/ as English pages with the site header and foo
     assert.match(html, /<meta name="robots" content="noindex, nofollow">/, 'same robots rule as the rest of the site');
     assert.match(html, /<header>/);
     assert.match(html, /<footer>/);
-    assert.doesNotMatch(html, /<script\b/, 'legal pages run no script');
+    assert.doesNotMatch(html, /<script\b(?! type="application\/ld\+json")/, 'legal pages run no script');
     assert.doesNotMatch(html, /<form\b|<input\b/i, 'legal pages collect no data');
     assert.match(html, /<time datetime="\d{4}-\d{2}-\d{2}">/, 'shows the last-updated date');
   }

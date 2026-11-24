@@ -171,7 +171,7 @@ function waitText(t: T, s: Send): string {
 /** One line of the message for the flow box, with merge fields shown as plain names. */
 function preview(t: T, s: Send): string {
   const text = (s.channel === 'EMAIL' && s.subject.trim() ? s.subject : s.text).replace(/\s+/g, ' ').trim()
-    .replace(/\{\{(first_name|school_name|staff_name)\}\}/g, (_, f: typeof MERGE_FIELDS[number]) => `[${t(`field${f}`)}]`);
+    .replace(/\{\{(first_name|school_name)\}\}/g, (_, f: typeof MERGE_FIELDS[number]) => `[${t(`field${f}`)}]`);
   return text.length > 90 ? `${text.slice(0, 89)}…` : text;
 }
 function whoText(t: T, a: SimpleAutomation): string {

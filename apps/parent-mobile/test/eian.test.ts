@@ -1,5 +1,5 @@
 import { verifyParentJourneyView } from '@hon/contracts/parent-journey-view';
-import { answer, childrenFor, classify } from '../src/eian/eian-engine';
+import { answer, childrenFor, classify, resolve } from '../src/eian/eian-engine';
 import { createSampleApi } from '../src/sample/sample-api';
 import { journeyBody, NOW } from './fixtures';
 
@@ -47,6 +47,45 @@ describe('Eian guided answers', () => {
     expect(a.lines[0]).toBe('You have 1 open invoice:');
     expect(a.lines[1]).toMatch(/^\$149\.00 for Mia Sample, due /);
     expect(a.lines[2]).toMatch(/can't take payments/);
+  });
+});
+
+describe('Eian follow-up questions', () => {
+  const sample = async () => { const r = await createSampleApi(() => new Date(NOW)).journey(); if (!r.ok) throw new Error('sample journey'); return r.data; };
+
+  it('"and for Leo?" keeps the topic and changes the child', async () => {
+    const view = await sample();
+    const first = resolve('What does Mia need for her next belt?', view);
+    expect(first).toMatchObject({ intent: 'belt', children: [0], followUp: false, memory: { intent: 'belt', children: [view.children[0]!.name] } });
+    const next = resolve('And for Leo?', view, first.memory);
+    expect(next).toMatchObject({ intent: 'belt', children: [1], followUp: true });
+    expect(resolve('Leo?', view, first.memory)).toMatchObject({ intent: 'belt', children: [1], followUp: true });
+    const a = answer('And for Leo?', { ...base, journey: view, last: first.memory });
+    expect(a.intent).toBe('belt');
+    expect(a.lines.every(l => l.startsWith(view.children[1]!.name))).toBe(true);
+  });
+
+  it('"when is his next class?" changes the topic and keeps the child', async () => {
+    const view = await sample();
+    const first = resolve('What does Leo need for his next belt?', view);
+    const next = resolve('When is his next class?', view, first.memory);
+    expect(next).toMatchObject({ intent: 'next-class', children: [1], followUp: false, memory: { intent: 'next-class', children: [view.children[1]!.name] } });
+    expect(resolve('And the schedule?', view, first.memory)).toMatchObject({ intent: 'schedule', children: [1] });
+  });
+
+  it('a question that stands on its own is read on its own', async () => {
+    const view = await sample();
+    const first = resolve('What does Leo need for his next belt?', view);
+    expect(resolve("What's on this week?", view, first.memory)).toMatchObject({ intent: 'schedule', children: [0, 1], memory: { intent: 'schedule', children: null } });
+    expect(resolve('Tell me a joke', view, first.memory)).toMatchObject({ intent: 'help', followUp: false, memory: first.memory });
+    expect(resolve('Tell me a long story about Leo and dragons', view, first.memory).intent).toBe('help');
+  });
+
+  it('nothing is carried without a first question, or for a child no longer shared', async () => {
+    const view = await sample();
+    expect(resolve('And for Leo?', view)).toMatchObject({ intent: 'help', followUp: false, memory: null });
+    expect(resolve('When is their next class?', view, { intent: 'belt', children: ['Someone Else'] })).toMatchObject({ intent: 'next-class', children: [0, 1] });
+    expect(resolve('What about them?', view, { intent: 'belt', children: null })).toMatchObject({ intent: 'belt', children: [0, 1], followUp: true });
   });
 });
 

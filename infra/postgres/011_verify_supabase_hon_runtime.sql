@@ -6243,6 +6243,14 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unexpected owner-launch first booking overload'; END IF;
 END $$;
 -- End owner-launch first booking lifecycle exact verification.
+-- Class session minimum duration exact verification (0645, launch-readiness [25]): one validated check of at least a minute.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.class_sessions'::regclass AND conname='class_sessions_minimum_duration'
+      AND contype='c' AND convalidated
+      AND pg_get_constraintdef(oid)=$def$CHECK (((ends_at - starts_at) >= '00:01:00'::interval))$def$) THEN
+    RAISE EXCEPTION 'Missing or altered class session minimum duration'; END IF;
+END $$;
+-- End class session minimum duration exact verification.
 
 -- Checkout page share links exact verification (0620): the link guard, the public page selector, two runtime entry points
 -- (the public read's hash is the 0627 body, which adds the sign-up form fields)
@@ -6581,6 +6589,302 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End Eian natural voice exact verification.
+-- Alex delegation plans exact verification (0639): the ALEX_DELEGATION_PLAN kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.alex_plan_actor(text)',true,false,'search_path=pg_catalog, hon','22540944e18d1532801571e43641cdfba7ce511b82b4bbfb9ed3cbc67702debd'),
+('hon.alex_plan_areas()',false,false,'search_path=pg_catalog','b544cbcaeee47589e51d5085b9a2f129f259080e389a8381ddfb16049e5da5ec'),
+('hon.alex_plan_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6e25173e1aff182e791cb66833fbba01f7e589cefa6f3174de953a6664a92e21'),
+('hon.alex_plan_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','ace4e38b2e69f261eae603326cc7826632bd2a8c407a6cdabb67e619f10ff6dd'),
+('hon.alex_plan_fix_refs(uuid)',true,false,'search_path=pg_catalog, hon','748bb2493566563bafa034d07d4ab8ede2e8b19d1f8f6e1e6aa4fbe8dd9ea9af'),
+('hon.alex_plan_keys_are(jsonb,text[])',false,false,'search_path=pg_catalog','7556a96f17a68188dd305a64c9279afd187b13bee9774d8bbdfc6d7fd4a64547'),
+('hon.alex_plan_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','a94feea13748dbf9238ad9643bf8672aad450dde7b306ae1dee557fd2594df24'),
+('hon.alex_plan_ok(jsonb)',false,false,'search_path=pg_catalog, hon','080cf9284e2c960a52f37e4b90a2cf51edf7b5cf0a0727ec88ec8975bf3fb01c'),
+('hon.alex_plan_reader(text)',true,false,'search_path=pg_catalog, hon','b5727b67b28d305bf03e12a7d799419fce65e452131bbfd35074e4df8430a702'),
+('hon.alex_plan_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','06377522a66212c93123cbd99c9c6774eeebc1c9164b1a8e33a2913e3434a9a3'),
+('hon.begin_alex_plan(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','4321ac79a6e8a0af106cac30f8db481add9ddda646a48b3363bcfc0f28fcc24d'),
+('hon.close_alex_plan(text,uuid,text)',true,true,'search_path=pg_catalog, hon','ea8d36657128325bb03fa680e7507b15f54cce03433a44613275f11f2b6cab42'),
+('hon.create_alex_plan_tasks(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','78f3b2a285aef267191d32ed3617a68ccbe63c8ab9dde620b9ae66481b51c5ee'),
+('hon.fail_alex_plan(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','3c3dce1d6e5f49b7fff54234e6695be294819a105d426f638250b48ebc206e72'),
+('hon.guard_alex_plan_rows()',false,false,'search_path=pg_catalog','60c2ac1f79fdd66d9c79e5d5afcbdbe6d0e3a368a4fc9e62b48cf513972189b4'),
+('hon.plan_alex_plan(text,uuid)',true,true,'search_path=pg_catalog, hon','a794107e1e8f58044a6dbea8b9426f8f420ce1b94f76e3eaa72a1b2b4ad623c6'),
+('hon.prepare_alex_plan(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','27b8323521edc2bf33bf62a56968f3fa26f9f8d8c34179aa5cfeb1e0a7e64c23'),
+('hon.read_alex_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','78a11d2f2019fdee42f498953ac3823ca8cf3f34700c8e8d7ddd2542d7bdd93b'),
+('hon.record_alex_plan(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','ae4c53483ce5cbb80ee45853885f931213d9c2f58f2e963a7adf29d3554243f3'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Alex delegation plan function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='ALEX_DELEGATION_PLAN' AND k.agent_key='alex' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='GENERAL_MANAGEMENT') THEN
+    RAISE EXCEPTION 'Alex delegation plan kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.alex_plan_staff_refs','hon.alex_plan_created_tasks'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Alex delegation plan table is not closed: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Alex delegation plans exact verification.
+-- Jordan follow-through exact verification (0640): the JORDAN_FOLLOW_UP kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers, the eight runtime entry points and the two closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.apply_jordan_follow_ups(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71580d68700d4344b4b923b43ecf421c14c7d8949bfeacc465e62282492f4db4'),
+('hon.begin_jordan_follow_up(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','c49dab6593b04a32d649f0f636747080716066c673ba40a55880de8f3a39cf54'),
+('hon.close_jordan_follow_up(text,uuid,text)',true,true,'search_path=pg_catalog, hon','61b3c4d269c9a6a3a94e38e72d6e1fbc305fb2f0b3cb88e639fe62de9c7bded4'),
+('hon.fail_jordan_follow_up(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','863eb8592e10c24ce5a5ea72ae325ebe8ed25f3ac07ff6479c06d7651313ae45'),
+('hon.jordan_follow_up_actor(text)',true,false,'search_path=pg_catalog, hon','a09db56bfae320bb92380bbdef7f958361f2f73c67fc2ba77e85043c28136036'),
+('hon.jordan_follow_up_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8f9505deae9d2b72d5b4f75746f8fda28804e2aeb70bef9637ba65c971354d30'),
+('hon.jordan_follow_up_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','3f18611dab685f303dc9feb71a96cfc7aa4cdb01c463880b47748868e9e428b0'),
+('hon.jordan_follow_up_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','45e96c1a62ab74e22933872de37195c0ec1bfb356cd05281819516e4dfc008ac'),
+('hon.jordan_follow_up_ok(jsonb)',false,false,'search_path=pg_catalog, hon','8decd425e207f37e69cfea3df17b6b537ca08394c9e87d9ad4925950ca8ba385'),
+('hon.jordan_follow_up_reader(text)',true,false,'search_path=pg_catalog, hon','571180164c33b1583afc894dbadcbefe8069073f4602ef20d38487c2bd1745c4'),
+('hon.jordan_follow_up_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6a144ec30ecdd7c568e6ce5c33da850433ff0b89b580e62851cb86359c594feb'),
+('hon.plan_jordan_follow_up(text,uuid)',true,true,'search_path=pg_catalog, hon','6de64de3eab93acc85375285ade9b13f5e5954e6c955c6e03d6ece81eda736a3'),
+('hon.prepare_jordan_follow_up(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','c8fed74689159c3c4b7c23bec2f78c04c482eb1974abf5bb289f57187de2293b'),
+('hon.read_jordan_follow_ups(text,uuid)',true,true,'search_path=pg_catalog, hon','e61b0aafc840386e625d9e5e36eb2af211996c21a4be2294e90c13c8f1c7e0a9'),
+('hon.record_jordan_follow_up(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','8112c275ce565e9a9be551ee8e3141cd93d02829265ac3f8aa98fd1d3a9e5bed'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Jordan follow-through function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='JORDAN_FOLLOW_UP' AND k.agent_key='jordan' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='OPERATIONS') THEN
+    RAISE EXCEPTION 'Jordan follow-through kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.jordan_follow_up_refs','hon.jordan_follow_up_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Jordan follow-through table is not closed: %',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Jordan follow-through exact verification.
+-- Marcus marketing review exact verification (0641): the MARCUS_MARKETING_REVIEW kind row on the shared AI text proposals (0550),
+-- the closed brief and answer shapes, the private helpers and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_marcus_review(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','2ad3a975099aaec3a4ec82cb18dbafd6671ebf4ef7cd20bbb0246298b6875212'),
+('hon.close_marcus_review(text,uuid,text)',true,true,'search_path=pg_catalog, hon','165c2276b3a5957f06ffd6825cc671308e92a7e06602bba1d42a4ea2b47c9645'),
+('hon.fail_marcus_review(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','d1ac39fd09bb62757a42b1abaa0ca9071bfd33e454d30a874e9a5abbcab7c487'),
+('hon.marcus_review_actor(text)',true,false,'search_path=pg_catalog, hon','97a653a441b6eb73720f65283fe701c2ac212b50eb0d76797ea45a430f4949e0'),
+('hon.marcus_review_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','626bf9f0cf6ed4d905eafba7b4488a52ca5662ea00420cd1a9947d477040f380'),
+('hon.marcus_review_facts(jsonb)',true,false,'search_path=pg_catalog, hon','d0adfa53cb92f83907972a63325862ecc2c0de7046e77f825c708c204d5cc430'),
+('hon.marcus_review_ok(jsonb)',false,false,'search_path=pg_catalog, hon','79b4e8efa0b207265f0976ce16f5b54c80ea12f10ab902ed2cb249ec7cf7b856'),
+('hon.marcus_review_reader(text)',true,false,'search_path=pg_catalog, hon','5f65e154600d5c17cdbddbc646f77ba1278dd26831f6ac0ead8cd583a1441b10'),
+('hon.marcus_review_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','041558bd5d70d30ea2e843d402d8521729c5a61137ef8c9f95cd7d3155f86389'),
+('hon.plan_marcus_review(text,uuid)',true,true,'search_path=pg_catalog, hon','b63cd8706d097b7d53cf586b0ca1231e080e939135f9d4d696e19dd9265f1ef4'),
+('hon.prepare_marcus_review(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','d4d3798d9eedec7821b719462edaad28bfc8718e9e6b912f235ca10a5210d50f'),
+('hon.read_marcus_reviews(text,uuid)',true,true,'search_path=pg_catalog, hon','3fece2d2ebc567e71a90ddb812d09161547fbeae870c539a4549ddad4b09bccb'),
+('hon.record_marcus_review(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','f60968161d8eac8492793035f2dc0956d8f156d5160a5f73e14ec3c97134c772'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Marcus marketing review function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MARCUS_MARKETING_REVIEW' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='MARKETING') THEN
+    RAISE EXCEPTION 'Marcus marketing review kind row missing or changed';
+  END IF;
+END $$;
+-- End Marcus marketing review exact verification.
+-- Claire KPI report exact verification (0643): the CLAIRE_KPI_REPORT kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private helpers, the seven runtime entry points and the closed counted-numbers table.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_claire_kpi_report(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','2811b1522b63df712ef83488fa829f20edb230e77271a06d1d19bc0a8076cb89'),
+('hon.claire_kpi_actor(text)',true,false,'search_path=pg_catalog, hon','42ba0cdba67ce8a8bb2f802d907fa6100f0c920281c344ffbcb6641bee12a1e2'),
+('hon.claire_kpi_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','14a7de81c5514f8695b22bee2007c231b7c8c9c45261f9eba26d6e66e88f5cbd'),
+('hon.claire_kpi_codes()',false,false,'search_path=pg_catalog','342f0db44634580b5927ec2040ebde82f6cabf06f9cb07ad4aa79f2423b7c127'),
+('hon.claire_kpi_count(integer)',true,false,'search_path=pg_catalog, hon','530271cbc77858de32410cda666b122e02e9ccd91419442264c35ec8bd299d3b'),
+('hon.claire_kpi_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','ff127274dcaab7b1747d263fb8f4ab82aedf374b398085cc95a4ca7e1cae6d15'),
+('hon.claire_kpi_ok(jsonb)',false,false,'search_path=pg_catalog, hon','02f5f7e50651ad10f8d8bd82c03983bae4e853c618ce6f6d21ee81db07816a2a'),
+('hon.claire_kpi_reader(text)',true,false,'search_path=pg_catalog, hon','a5e93d7891f06baed5503d25f510a3f9d6aa84f17e19fa6fac9b881303ee2745'),
+('hon.claire_kpi_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6acc8eb345d5543895292abbf0d2c03e2b3cca942727478d41579faf36b99136'),
+('hon.close_claire_kpi_report(text,uuid,text)',true,true,'search_path=pg_catalog, hon','d3695bed80061ef5c863bc2340e178b66f9f7935fb654c34a19bc063687cbf04'),
+('hon.fail_claire_kpi_report(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','98720caf46d89096838312bdd011be4a9446e656f66682215039b6c81549e293'),
+('hon.plan_claire_kpi_report(text,uuid)',true,true,'search_path=pg_catalog, hon','22a610d704fa3433d7f8b41082eebc9bd999c19f5cc9cbf6641174fa20243308'),
+('hon.prepare_claire_kpi_report(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','5841a374817a36fb179bd0fb9b9bc3750cae0cc30ffeb6716ac3563e374d2558'),
+('hon.read_claire_kpi_reports(text,uuid)',true,true,'search_path=pg_catalog, hon','7a2f1787e4516c1b7aee5d143288bf1bc183d17d0b62ae3f5b67f3edc83b14ca'),
+('hon.record_claire_kpi_report(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','a533b111176938276ea34a3f460fd6793313cb3bf06c5636e475f6839e9c472f'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Claire KPI report function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='CLAIRE_KPI_REPORT' AND k.agent_key='claire' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='BUSINESS_PERFORMANCE') THEN
+    RAISE EXCEPTION 'Claire KPI report kind row missing or changed';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.claire_kpi_report_numbers'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','SELECT') OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','INSERT')
+    OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','UPDATE') OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','DELETE') THEN
+    RAISE EXCEPTION 'Claire KPI report numbers table is not closed';
+  END IF;
+END $$;
+-- End Claire KPI report exact verification.
+
+-- Membership plan payment options exact verification (0642): three runtime entry points, six private helpers, two forced-RLS tables.
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_membership_plan_setups(text)','hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)',
+      'hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_plan_setup()','hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','hon.membership_plan_validated_setup(jsonb)',
+      'hon.membership_plan_setup_summary(uuid,integer)','hon.membership_plan_setup_terms(jsonb,jsonb)','hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['membership_plan_version_setups','membership_plan_payment_options'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('guard_membership_plan_setup','membership_plan_setup_int','membership_plan_validated_setup',
+      'membership_plan_setup_summary','membership_plan_setup_terms','membership_plan_insert_setup','read_school_membership_plan_setups',
+      'create_school_membership_plan_with_options','revise_school_membership_plan_with_options'))<>9 THEN
+    RAISE EXCEPTION 'Unexpected membership plan option overload'; END IF;
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)','5651355218ada7e3c5e45d33746c8bf1','v',true,'search_path=pg_catalog, hon'),
+    ('hon.guard_membership_plan_setup()','f580ad9acbae46a1c09263ce987ccd4a','v',false,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)','dab3c3a4fb662dbc2e180bb1131b5286','v',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','64ad633ebdcf89c8cc469aafdbd1d5f7','i',false,'search_path=pg_catalog'),
+    ('hon.membership_plan_setup_summary(uuid,integer)','22fca18a051aefb49e2e6873f8fd087c','s',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_setup_terms(jsonb,jsonb)','205c334ad93ba9649df12d2a7116a79b','i',false,'search_path=pg_catalog'),
+    ('hon.membership_plan_validated_setup(jsonb)','bb1d8330497d542e5322b9d23a787d9e','i',false,'search_path=pg_catalog, hon'),
+    ('hon.read_school_membership_plan_setups(text)','8a44c2bfb7fb9830d47c9b971c0e64e8','v',true,'search_path=pg_catalog, hon'),
+    ('hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)','5eb4d2e5618734fb43e94a6d0715ad96','v',true,'search_path=pg_catalog, hon')) x(f,t,c,d,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s]) THEN
+      RAISE EXCEPTION 'Membership plan option function body/posture drift: %',f; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['membership_plan_version_setups','membership_plan_payment_options']) LOOP
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_membership_plan_setup()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'Membership plan option guard missing: %',t; END IF;
+  END LOOP;
+END $$;
+-- End membership plan payment options exact verification.
+-- Maya renewal prep exact verification (0646): the MAYA_RENEWAL_PREP kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private helpers, the eight runtime entry points and the closed evidence tables.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.apply_maya_renewal_preps(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','381cceb33f5b9ee2e0b8de06a1bbe41b664afcb333fe7ab40c64a6065f74a306'),
+('hon.begin_maya_renewal_prep(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','3c43136521e6037c5744d5628c358de5d69556232d1eef2cb8b1eeb57c524b2a'),
+('hon.close_maya_renewal_prep(text,uuid,text)',true,true,'search_path=pg_catalog, hon','32631fe9cc520e717d6bff69526b009ad82041efcbae5104d936971320e12699'),
+('hon.fail_maya_renewal_prep(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','e9829fd4e57970525b289dcf0e3cc04f4e29034245fd2672051b776c6bdbdddf'),
+('hon.maya_renewal_actor(text)',true,false,'search_path=pg_catalog, hon','3ed4b7dab927666f7fd9f9652592795ac682e4036c3cfcfe99b63e248bea4201'),
+('hon.maya_renewal_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','26df06331ef2328dd4024dbb52136813c981c81bbbc45c8ea79e67fe65bdbc9a'),
+('hon.maya_renewal_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','226865b50b6658ed8216fdd93bfec63cd5857741f7818444abd107d9408d4c06'),
+('hon.maya_renewal_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','50b42686f6d9cfea4bbde2712834a7a3bdfbd192b862109b50f553e0760a0a4e'),
+('hon.maya_renewal_ok(jsonb)',false,false,'search_path=pg_catalog, hon','d9ef19b4af02325cb2834db40cb49a1895f67919f47ddb1f7d8a4bafcfa3fe84'),
+('hon.maya_renewal_open_review(uuid)',true,false,'search_path=pg_catalog, hon','269b591fe0b745d4965bf672fb0dc69fbf0dfadf932a1dab0dd0f8508749d2d3'),
+('hon.maya_renewal_reader(text)',true,false,'search_path=pg_catalog, hon','793d832e85e4f0a10bead4244753e00af8babf82204e73675c0f87c63382551f'),
+('hon.maya_renewal_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6229c4035c798f5e2ce05481a79fd77777fc4153fee5dfa9388fb4ee9fcccaa8'),
+('hon.plan_maya_renewal_prep(text,uuid)',true,true,'search_path=pg_catalog, hon','4193f12edfcdc50fc48e0913a82d38943de350a7d240b9d9e810181f6f80f239'),
+('hon.prepare_maya_renewal_prep(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','f7f1390539db71e0af34ef72786398074b51b4e44109365e0ffba41285d0e7d9'),
+('hon.read_maya_renewal_preps(text,uuid)',true,true,'search_path=pg_catalog, hon','03c79714a5fcda319e910874c23aea987f9531420f914d7c320053559a00ea27'),
+('hon.record_maya_renewal_prep(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','661f8416ce070e204de226ca065c592dbd304f3389c1897bd97c3148f81bd9c5'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya renewal prep function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_RENEWAL_PREP' AND k.agent_key='maya' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RETENTION') THEN
+    RAISE EXCEPTION 'Maya renewal prep kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.maya_renewal_refs','hon.maya_renewal_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE') THEN
+      RAISE EXCEPTION 'Maya renewal prep table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Maya renewal prep exact verification.
+-- Chad approved-draft send exact verification (0647): the plan/read/cancel entry points, the approval transition that queues one
+-- message, the closed helpers, the closed plan and send evidence tables with their guard triggers, and the message origin.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.ai_draft_reachable(uuid,text)',true,false,'search_path=pg_catalog, hon','0de6c26e8a8414882839b932fa82d75ec0fcb1468f95e8c1ea0573e4cb54c8a2'),
+('hon.cancel_chad_draft_send(text,uuid)',true,true,'search_path=pg_catalog, hon','4d399c86a2b65648a62c045e2e1f62e16d809cc3b4c3d5cc367df38d7829a0b8'),
+('hon.chad_draft_send_view(uuid)',true,false,'search_path=pg_catalog, hon','6c7027683c02151c1b777d717c99ea205143df084ed1782d828cb043c919736d'),
+('hon.guard_ai_draft_send_rows()',false,false,'search_path=pg_catalog, hon','6bbb67a3df181e7e8d4c1be17c44c5eb725cdfacd9f52c5a0ea343211ee8d2bb'),
+('hon.read_chad_draft_send_for_review(uuid)',true,true,'search_path=pg_catalog, hon','09d0023943dacfe373344656bb4ce18d4322fbec95d208fb3f36b8c2dc47af7d'),
+('hon.read_chad_draft_send(text,uuid)',true,true,'search_path=pg_catalog, hon','bb422d037818d2d2b197dbbc2007a7515a8257e9ab682e544013784f350c49f7'),
+('hon.set_chad_draft_send_plan(text,uuid,jsonb,text)',true,true,'search_path=pg_catalog, hon','f146c7bfede96ce3753edf30ea5d9264fa29d6385f8a1e6f0cbfe7ad132167cb'),
+('hon.transition_chad_follow_up_draft(uuid,text)',true,true,'search_path=pg_catalog, hon','3ce82eaaf2aa4f3941452d507cc05e77fac9369429a7e50d508d8f81aa5ddde2'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad approved-draft send function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.ai_draft_send_plans','hon.ai_draft_sends'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_ai_draft_send_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Chad approved-draft send table % is not closed',t;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.communication_messages'::regclass AND conname='communication_messages_origin_kind_check'
+      AND convalidated AND pg_get_constraintdef(oid) LIKE '%AI_APPROVED_DRAFT%') THEN
+    RAISE EXCEPTION 'Message origin AI_APPROVED_DRAFT missing';
+  END IF;
+END $$;
+-- End Chad approved-draft send exact verification.
 -- Blast pictures exact verification (0653)
 -- Three private helpers, the worker-only campaign picture lookup, and the 0653 body check on hon.school_blasts in place of
 -- the 0621 one.

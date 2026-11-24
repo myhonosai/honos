@@ -60,7 +60,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Whole-school view and weekly priorities from verified facts (Ask HON → Alex)', state: 'AVAILABLE' },
-      { label: 'Coordinate and delegate work across the team', state: 'BACKEND_REQUIRED' },
+      { label: 'Turn a goal into tasks for your team (Plan with Alex, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'School Command Center', href: '/staff/command-center' },
@@ -77,7 +77,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'GOVERNED_DRAFTS',
     capabilities: [
       { label: 'Prepare a follow-up draft for a known CRM lead', state: 'AVAILABLE', href: '/staff/leads/assistant' },
-      { label: 'Send or schedule a follow-up message', state: 'BACKEND_REQUIRED' },
+      { label: 'Send or schedule an approved follow-up (you pick text or email and when; it goes out once a teammate approves)', state: 'AVAILABLE', href: '/staff/leads/assistant' },
       { label: 'Book trials or change lead records', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
@@ -97,7 +97,7 @@ const DEFINITIONS: readonly Definition[] = [
       { label: 'At-risk students with reasons and one suggested next step (read only)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
       { label: 'Explain one at-risk student and suggest a check-in message you can send yourself (Ask Maya)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
       { label: 'Send, schedule or track outreach', state: 'BACKEND_REQUIRED' },
-      { label: 'Renewal preparation', state: 'BACKEND_REQUIRED' },
+      { label: 'Renewal prep: who to talk to first and what to say, opened as renewal reviews you tick (Renewal prep with Maya, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'At-risk students', href: '/staff/retention/at-risk' },
@@ -116,8 +116,8 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Draft content for an existing school campaign', state: 'AVAILABLE', href: '/staff/marketing/assistant' },
       { label: 'Publish, advertise or spend', state: 'BACKEND_REQUIRED' },
+      { label: 'Marketing performance review of leads, sources, campaigns and forms (Marketing review with Marcus, below)', state: 'AVAILABLE' },
       { label: 'Merchandise ideas and store presentation review in the Shopify Merch Studio', state: 'AVAILABLE', href: '/staff/billing/shopify' },
-      { label: 'Marketing performance analysis', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
@@ -133,7 +133,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Class schedule, capacity, instructor coverage and attendance analysis (Ask HON → Jordan)', state: 'AVAILABLE' },
-      { label: 'Operational task follow-through', state: 'BACKEND_REQUIRED' },
+      { label: 'Follow through on open and overdue team tasks (Follow through with Jordan, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Class sessions', href: '/staff/schedule/sessions' },
@@ -150,7 +150,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Business performance analysis from verified school metrics (Ask HON → Claire)', state: 'AVAILABLE' },
-      { label: 'KPI reports and dashboards', state: 'BACKEND_REQUIRED' },
+      { label: 'KPI report on leads, memberships and attendance against the period before (KPI report with Claire, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Operations dashboard', href: '/staff/dashboard' },
