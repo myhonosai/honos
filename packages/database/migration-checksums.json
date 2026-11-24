@@ -398,8 +398,10 @@
     "0639_alex_delegation_plans.sql": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d",
     "0640_jordan_follow_through.sql": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d",
     "0641_marcus_marketing_review.sql": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47",
+    "0642_membership_plan_payment_options.sql": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251",
     "0643_claire_kpi_report.sql": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf",
     "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
+    "0645_class_session_minimum_duration.sql": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe",
     "0646_maya_renewal_prep.sql": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0",
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
   }

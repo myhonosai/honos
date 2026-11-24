@@ -5170,6 +5170,9 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
   END IF;
 END $$;
 
+  END IF;
+END $$;
+
 -- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];
@@ -5360,5 +5363,29 @@ DO $$ DECLARE r text; f text; BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_eian_speech_status(text,boolean), hon.begin_eian_speech(text,text,text,integer),
       hon.prepare_eian_speech(text,uuid,boolean), hon.fail_eian_speech(text,uuid,text,text), hon.record_eian_speech_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0642 Membership plan payment options: three staff entry points (setups read, publish with options, revise with options).
+-- Both tables keep forced RLS with no runtime privilege; every helper stays migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_membership_plan_setups(text)','hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)',
+    'hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.membership_plan_version_setups') IS NULL OR to_regclass('hon.membership_plan_payment_options') IS NULL THEN
+    RAISE EXCEPTION 'Apply migration 0642 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.membership_plan_version_setups','hon.membership_plan_payment_options'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_plan_setup()','hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','hon.membership_plan_validated_setup(jsonb)',
+      'hon.membership_plan_setup_summary(uuid,integer)','hon.membership_plan_setup_terms(jsonb,jsonb)','hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;

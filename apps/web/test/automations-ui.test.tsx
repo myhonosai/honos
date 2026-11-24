@@ -8,7 +8,9 @@ import { commandErrorKey, editorFor, locksEditor, turnOnFailure } from '../src/c
 import {
   AutomationCommandError, AutomationReadError, automationsPath, listAutomations, prepareActivate, prepareCreate, preparePause, prepareSave, submitAutomationCommand,
 } from '../src/components/automations/http';
-import { TEMPLATE_KEYS, blankAutomation, delayMinutes, fromDefinition, fromTemplate, problems, toDefinition, type SimpleAutomation } from '../src/components/automations/model';
+import {
+  CHANNELS, GROUPS, MERGE_FIELDS, STOPS, TEMPLATE_KEYS, WHEN_DAYS, WHEN_KINDS, blankAutomation, delayMinutes, fromDefinition, fromTemplate, problems, toDefinition, type SimpleAutomation,
+} from '../src/components/automations/model';
 import { AutomationsView, type AutomationsViewProps } from '../src/components/automations/view';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { id, scope } from './account-status-fixtures';
@@ -42,7 +44,7 @@ describe('model', () => {
     const d = toDefinition(fromTemplate('MIA'));
     expect(d.trigger).toEqual({ kind: 'ABSENT_DAYS', config: { days: 14 } });
     expect(d.entry).toEqual({ reentry: 'EVERY_TIME', reentryDays: null, conditions: [{ kind: 'IS_ACTIVE_STUDENT', negate: false }] });
-    expect(d.exitWhen).toEqual(['REPLIED']);
+    expect(d.exitWhen).toEqual([]);
     expect(d.steps.map(s => [s.id, s.type, s.next])).toEqual([['send_1', 'SEND_SMS', 'wait_2'], ['wait_2', 'WAIT', 'send_2'], ['send_2', 'NOTIFY_STAFF', null]]);
     expect(d.steps[1]).toMatchObject({ minutes: 3 * 1440, localTime: null });
     const tagged: SimpleAutomation = { ...fromTemplate('BIRTHDAY'), onlyTag: 'Black belt', days: 3 };
@@ -75,11 +77,11 @@ describe('model', () => {
   });
   it('a task opens in the simple form only when it is the task the form writes, so saving never changes its due time or assignee', () => {
     const lead = toDefinition(fromTemplate('NO_SHOW')), task = lead.steps.findIndex(x => x.type === 'CREATE_TASK');
-    expect(lead.steps[task]).toMatchObject({ dueInHours: 24, assignTo: 'LEAD_ASSIGNEE' });
+    expect(lead.steps[task]).toMatchObject({ dueInHours: 24, assignTo: 'SCHOOL_OWNERS' });
     const withTask = (over: Record<string, unknown>): AutomationDefinition => ({ ...lead, steps: lead.steps.map((x, i) => (i === task ? { ...x, ...over } as typeof x : x)) });
     expect(fromDefinition('x', withTask({}))).not.toBeNull();
     expect(fromDefinition('x', withTask({ dueInHours: 48 }))).toBeNull();
-    expect(fromDefinition('x', withTask({ assignTo: 'SCHOOL_OWNERS' }))).toBeNull();
+    expect(fromDefinition('x', withTask({ assignTo: 'LEAD_ASSIGNEE' }))).toBeNull();
     const students: SimpleAutomation = { ...fromTemplate('MIA'), sends: [{ channel: 'TASK', delayUnit: 'NOW', delayAmount: 1, subject: '', text: 'Call {{first_name}}', videoUrl: '' }] };
     const d = toDefinition(students);
     expect(d.steps[0]).toMatchObject({ type: 'CREATE_TASK', dueInHours: 24, assignTo: 'SCHOOL_OWNERS' });
@@ -219,5 +221,25 @@ describe('copy and wiring', () => {
     expect(manifest.routes.filter((r: { path: string }) => r.path === '/staff/automations')).toHaveLength(1);
     const source = ['automations.tsx', 'view.tsx', 'http.ts', 'model.ts'].map(f => readFileSync(`src/components/automations/${f}`, 'utf8')).join('\n');
     expect(source).not.toMatch(/localStorage|sessionStorage|setInterval|dangerouslySetInnerHTML|eval\(/);
+  });
+  it('every starter and every menu choice is something the automation engine runs today, so Turn on never fails on a part', () => {
+    // Mirrors hon.automation_unavailable (migration 0574): parts the engine refuses to turn on.
+    const NOT_YET_TRIGGERS = ['MANUAL', 'SCHEDULE', 'MEMBERSHIP_ANNIVERSARY', 'MISSED_CALL', 'CUSTOM_TOOL_RECORD'];
+    const offRunnable = (d: AutomationDefinition): string | null => {
+      if (NOT_YET_TRIGGERS.includes(d.trigger.kind) || /^(CONVERSATION_|EVENT_BOOKING_)/.test(d.trigger.kind)) return d.trigger.kind;
+      if (d.exitWhen.includes('REPLIED' as never)) return 'exit REPLIED';
+      for (const c of d.entry.conditions) if (['REPLIED', 'IN_PROGRAM', 'CUSTOM_FIELD_EQUALS'].includes(c.kind)) return c.kind;
+      const text = JSON.stringify(d.steps);
+      if (/"type":"(ASSIGN_LEAD|REQUEST_APPROVAL)"/.test(text) || text.includes('LEAD_ASSIGNEE')) return 'step';
+      if (/\{\{(program_name|trial_time|booking_link|staff_name)\}\}/.test(text)) return 'merge field';
+      return null;
+    };
+    for (const key of TEMPLATE_KEYS) expect(offRunnable(toDefinition(fromTemplate(key))), key).toBeNull();
+    const base = fromTemplate('WELCOME');
+    for (const when of WHEN_KINDS) for (const group of GROUPS) for (const channel of CHANNELS) {
+      const a: SimpleAutomation = { ...base, when, group, tag: when === 'TAG_ADDED' ? 'Trial' : '', days: WHEN_DAYS[when]?.fallback ?? base.days, stopWhen: [...STOPS],
+        sends: [{ channel, delayUnit: 'NOW', delayAmount: 1, subject: channel === 'EMAIL' ? 'Hi' : '', text: MERGE_FIELDS.map(f => `{{${f}}}`).join(' '), videoUrl: '' }] };
+      expect(offRunnable(toDefinition(a)), `${when}/${group}/${channel}`).toBeNull();
+    }
   });
 });
