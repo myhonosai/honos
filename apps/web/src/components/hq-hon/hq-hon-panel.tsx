@@ -1,5 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { HQ_HON_LIMITS } from '@hon/contracts';
 import type { HonReplyMode, HqHonAgentKey, HqHonConversation, HqHonStatus, HqHonTurn } from '@hon/contracts';
 import type { Language } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
@@ -17,10 +18,15 @@ export type Outcome = null | { kind: 'SENDING' } | { kind: 'DONE'; status: HqHon
  * attempt keeps its Idempotency-Key until it has a definitive answer, so a retry never asks twice. Every answer is
  * followed by a fresh read; nothing is cached outside this component.
  */
-export function HqHonPanel({ agentKey, name, api = hqHonApi }: { agentKey: HqHonAgentKey; name: string; api?: HqHonApi }): React.ReactElement {
+/**
+ * `initialQuestion` pre-fills the question (nothing is sent until Ask is pressed); `compact` leaves out the budget form and
+ * shows only the latest few answers, for use beside another page (the contest setup page).
+ */
+export function HqHonPanel({ agentKey, name, api = hqHonApi, initialQuestion, compact = false }: { agentKey: HqHonAgentKey; name: string; api?: HqHonApi;
+  initialQuestion?: string; compact?: boolean }): React.ReactElement {
   const { preferences, number } = useLocale();
   const [state, setState] = useState<State>({ kind: 'LOADING' });
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(initialQuestion ?? '');
   const [mode, setMode] = useState<HonReplyMode>('STANDARD');
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [refresh, setRefresh] = useState(0);
@@ -87,7 +93,7 @@ export function HqHonPanel({ agentKey, name, api = hqHonApi }: { agentKey: HqHon
 
   return <HqHonPanelView agentKey={agentKey} name={name} language={preferences.language} number={number} state={state} question={question} mode={mode}
     outcome={outcome} onQuestion={setQuestion} onMode={setMode} onAsk={onAsk} onRefresh={() => { if (unconfirmed(outcome)) setOutcome(null); if (unconfirmed(budgetOutcome)) setBudgetOutcome(null); setRefresh(n => n + 1); }}
-    budgetOutcome={budgetOutcome} onBudget={onBudget}/>;
+    budgetOutcome={budgetOutcome} onBudget={onBudget} compact={compact}/>;
 }
 
 /** An unconfirmed result keeps Ask off until a refresh, so editing the question cannot start a second attempt. */
@@ -96,22 +102,22 @@ const unconfirmed = (o: Outcome | BudgetOutcome): boolean => o?.kind === 'ERROR'
 export type HqHonPanelViewProps = {
   agentKey: HqHonAgentKey; name: string; language: Language; number: (n: number) => string; state: State; question: string; mode: HonReplyMode;
   outcome: Outcome; onQuestion: (v: string) => void; onMode: (m: HonReplyMode) => void; onAsk: (e: React.FormEvent) => void; onRefresh: () => void;
-  budgetOutcome: BudgetOutcome; onBudget: (cap: string, reason: string) => void;
+  budgetOutcome: BudgetOutcome; onBudget: (cap: string, reason: string) => void; compact?: boolean;
 };
 /** Pure view: everything it shows comes from the props; it decides nothing. */
-export function HqHonPanelView({ agentKey, name, language, number, state, question, mode, outcome, onQuestion, onMode, onAsk, onRefresh, budgetOutcome, onBudget }: HqHonPanelViewProps): React.ReactElement {
+export function HqHonPanelView({ agentKey, name, language, number, state, question, mode, outcome, onQuestion, onMode, onAsk, onRefresh, budgetOutcome, onBudget, compact = false }: HqHonPanelViewProps): React.ReactElement {
   const t = (key: HqHonCopyKey, p: Readonly<Record<string, string | number>> = {}) => hqHonText(language, key, { name, ...p });
   if (state.kind === 'LOADING') return <section aria-busy="true"><p>{t('loading')}</p></section>;
   if (state.kind === 'DENIED') return <section><p>{t('denied')}</p></section>;
   if (state.kind === 'UNAVAILABLE') return <section><p role="alert">{t('unavailable')}</p><button type="button" onClick={() => onRefresh()}>{t('refresh')}</button></section>;
   const view = state.view, allowed = view.availableAgents.includes(agentKey), connected = view.provider === 'CONNECTED';
-  const mine = view.turns.filter(turn => turn.agentKey === agentKey);
+  const all = view.turns.filter(turn => turn.agentKey === agentKey), mine = compact ? all.slice(0, 3) : all;
   const b = view.budget;
   return <section aria-labelledby={`hq-hon-${agentKey}-title`} data-hq-hon-agent={agentKey}>
     <h2 id={`hq-hon-${agentKey}-title`}>{t('askTitle')}</h2>
     <p>{t('askIntro')}</p>
-    <p>{b.creditCap === null ? t('noBudget') : t('budget', { available: number(b.availableCredits), cap: number(b.creditCap), used: number(b.usedCredits), held: number(b.heldCredits) })}</p>
-    {view.viewer.isOwner && <BudgetForm agentKey={agentKey} t={t} outcome={budgetOutcome} onBudget={onBudget} onRefresh={onRefresh} language={language}
+    <p>{b.creditCap === null ? t('noBudget') : b.creditCap >= HQ_HON_NO_CAP ? t('budgetNoCap', { used: number(b.usedCredits), held: number(b.heldCredits) }) : t('budget', { available: number(b.availableCredits), cap: number(b.creditCap), used: number(b.usedCredits), held: number(b.heldCredits) })}</p>
+    {view.viewer.isOwner && !compact && <BudgetForm agentKey={agentKey} t={t} outcome={budgetOutcome} onBudget={onBudget} onRefresh={onRefresh} language={language}
       history={view.budgetHistory} number={number}/>}
     {!allowed ? <p role="note">{t('notYours')}</p> : !connected ? <p role="note">{t('providerOff')}</p> :
       <form onSubmit={onAsk}>
@@ -133,6 +139,10 @@ export function HqHonPanelView({ agentKey, name, language, number, state, questi
   </section>;
 }
 
+/** The highest cap the server accepts (HQ_HON_LIMITS.maxCap, 0263 CHECK credit_cap <= 10,000,000). The owner chose no monthly cap on HQ AI (2026-11-24),
+ * so this is offered as one tap; every question still carries its own per-request cost limit on the server. */
+export const HQ_HON_NO_CAP = HQ_HON_LIMITS.maxCap;
+
 function BudgetForm({ agentKey, t, outcome, onBudget, onRefresh, language, history, number }: { agentKey: string; t: (k: HqHonCopyKey, p?: Readonly<Record<string, string | number>>) => string;
   outcome: BudgetOutcome; onBudget: (cap: string, reason: string) => void; onRefresh: () => void; language: Language; history: HqHonConversation['budgetHistory']; number: (n: number) => string }): React.ReactElement {
   const locked = outcome?.kind === 'SENDING' || unconfirmed(outcome), id = `hq-hon-${agentKey}-budget`;
@@ -147,6 +157,11 @@ function BudgetForm({ agentKey, t, outcome, onBudget, onRefresh, language, histo
       <label htmlFor={`${id}-reason`}>{t('reasonLabel')}</label>
       <input id={`${id}-reason`} name="reason" required minLength={3} maxLength={300} autoComplete="off"/>
       <button type="submit">{outcome?.kind === 'SENDING' ? t('savingBudget') : t('saveBudget')}</button>
+    </fieldset>
+    <fieldset disabled={locked} data-hq-hon-no-cap="">
+      <legend>{t('noCapTitle')}</legend>
+      <small>{t('noCapHelp')}</small>
+      <button type="button" onClick={() => onBudget(String(HQ_HON_NO_CAP), t('noCapReason'))}>{t('noCapButton')}</button>
     </fieldset>
     <div aria-live="polite">{outcome?.kind === 'DONE' && <p>{t('budgetSaved')}</p>}
       {outcome?.kind === 'ERROR' && <p role="alert">{outcome.error.kind === 'REFUSED' && outcome.error.code

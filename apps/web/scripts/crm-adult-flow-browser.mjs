@@ -17,7 +17,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { issueSession, verifySession, cookieValue, HON_SESSION_COOKIE, SESSION_SECONDS } from '@hon/auth';
-import { validateRegisterCrmLeadInput, validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery, validateCreateMembershipPlanInput, validateReviseMembershipPlanInput, validateCrmAdultMembershipDraftFromPlanInput, verifyMembershipPlanCatalog, verifyCrmAdultMembershipDraftFromPlan } from '@hon/contracts';
+import { validateRegisterCrmLeadInput, validateCreateBillingAccountInput, validateCrmAdultMembershipDraftInput, validateCrmLeadRegistrationRecoveryInput, verifyCrmLeadRegistrationRecovery, validateCreateMembershipPlanInput, validateReviseMembershipPlanInput, validateCreateMembershipPlanWithOptionsInput, validateReviseMembershipPlanWithOptionsInput, verifyMembershipPlanSetups, verifyMembershipPlanWithOptions, validateCrmAdultMembershipDraftFromPlanInput, verifyMembershipPlanCatalog, verifyCrmAdultMembershipDraftFromPlan } from '@hon/contracts';
 
 assert(process.env.GITHUB_ACTIONS === 'true');
 for (const key of ['DATABASE_URL', 'HON_RUNTIME_DATABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'STRIPE_SECRET_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) assert(!process.env[key], 'No database/provider credentials allowed.');
@@ -38,7 +38,7 @@ const origin = `http://127.0.0.1:${port}`, session = { mode: 'OIDC', audience: '
 const prefix = `/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}`;
 const program = { programId: id(38), name: 'Adult martial arts' };
 const seedPlan = { planId: id(30), planCode: receipt.planCode, version: 1, displayName: 'Adult Monthly', description: 'Training for adult students', programId: program.programId, availability: 'AVAILABLE', currency: 'USD', priceMinor: 14900, billingFrequency: 'MONTHLY', termKind: 'OPEN_ENDED', termMonths: null, publishedAt: date, programName: program.name };
-let publishedPlans, mode, registered, accounted, drafted, keys, commands, recoveryReads;
+let publishedPlans, planSetups, mode, registered, accounted, drafted, keys, commands, recoveryReads;
 let language = 'en';
 const closeFixture = createCloseFixture({id,scope,date,origin,send,rejected});
 const activationFixture = createActivationFixture({id,scope,origin,send,rejected});
@@ -48,7 +48,7 @@ const dateFixture = createDateFixture({id,scope,origin,send,rejected});
 const familyFixture = createFamilyFixture({ id, scope, date, origin, send, rejected, plans: () => publishedPlans });
 function plainPlan(p) { const { programName, ...terms } = p; return terms; }
 function rejected(res, status, code) { res.writeHead(status, { 'Content-Type':'application/json', 'Cache-Control':'private, no-store' }); res.end(JSON.stringify({code})); }
-function reset(value = 'ready') { publishedPlans = [{ ...seedPlan }, { ...seedPlan, planId:id(31), planCode:'KRW-ADULT', displayName:'Korean won plan', currency:'KRW',priceMinor:160000 }, { ...seedPlan,planId:id(32),planCode:'CLOSED',displayName:'Previous offer',availability:'UNAVAILABLE' }, { ...seedPlan,planId:id(34),planCode:'JUNIOR',displayName:'Junior Monthly',description:'Junior martial arts',programId:null,programName:null,priceMinor:9900 }]; mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
+function reset(value = 'ready') { planSetups = new Map(); publishedPlans = [{ ...seedPlan }, { ...seedPlan, planId:id(31), planCode:'KRW-ADULT', displayName:'Korean won plan', currency:'KRW',priceMinor:160000 }, { ...seedPlan,planId:id(32),planCode:'CLOSED',displayName:'Previous offer',availability:'UNAVAILABLE' }, { ...seedPlan,planId:id(34),planCode:'JUNIOR',displayName:'Junior Monthly',description:'Junior martial arts',programId:null,programName:null,priceMinor:9900 }]; mode = value; registered = false; accounted = false; drafted = false; keys = new Map(); commands = []; recoveryReads = [];
   familyFixture.reset(value); closeFixture.reset(value);
   if (value.startsWith('recovery-')) { const state = value.slice(9); registered = !['NOT_REGISTERED', 'NEEDS_STAFF_REVIEW'].includes(state); accounted = ['READY_FOR_DRAFT', 'CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); drafted = ['CURRENT_DRAFT', 'CURRENT_DRAFT_BY_OTHER_STAFF'].includes(state); }
 }
@@ -73,17 +73,20 @@ const api = createServer(async (req, res) => {
     if (await familyFixture.handle(req, res, url)) return;
     const plansRoot = `${prefix}/billing/membership-plans`, draftsRoot = `${prefix}/billing/crm-adult-membership-drafts`;
     const planStep = url.pathname === plansRoot + '/catalog' ? 'catalog' : url.pathname === plansRoot ? 'create'
+      : url.pathname === plansRoot + '/setups' ? 'setups' : url.pathname === plansRoot + '/with-options' ? 'createOptions'
+      : url.pathname.startsWith(plansRoot + '/') && url.pathname.endsWith('/option-revisions') ? 'reviseOptions'
       : url.pathname.startsWith(plansRoot + '/') && url.pathname.endsWith('/revisions') ? 'revise'
       : url.pathname === draftsRoot + '/plan-options' ? 'options' : url.pathname === draftsRoot + '/from-plan' ? 'plan-draft' : null;
     if (planStep) {
-      const markers = { catalog:'membership-plan-catalog-read',create:'membership-plan-create',revise:'membership-plan-revise',options:'crm-adult-membership-plan-options','plan-draft':'crm-adult-membership-draft-from-plan' };
+      const markers = { catalog:'membership-plan-catalog-read',create:'membership-plan-create',revise:'membership-plan-revise',setups:'membership-plan-setups-read',createOptions:'membership-plan-create-with-options',reviseOptions:'membership-plan-revise-with-options',options:'crm-adult-membership-plan-options','plan-draft':'crm-adult-membership-draft-from-plan' };
       if (req.method !== 'POST' || url.search || req.headers.origin !== origin || req.headers['sec-fetch-site'] !== 'same-origin' || req.headers['sec-fetch-mode'] !== 'same-origin' || req.headers['sec-fetch-dest'] !== 'empty' || req.headers['x-hon-human-command'] !== markers[planStep]) { rejected(res,403,'HUMAN_UI_REQUIRED'); return; }
       let raw = ''; for await (const chunk of req) { raw += chunk; assert(raw.length < 4000); } const input = JSON.parse(raw), key = req.headers['idempotency-key'];
       if (mode === 'plan-denied') { rejected(res,403,'MEMBERSHIP_PLAN_FORBIDDEN'); return; }
-      if (['catalog','options'].includes(planStep)) {
+      if (['catalog','options','setups'].includes(planStep)) {
         assert.deepEqual(input,{}); assert.equal(key,undefined);
         if (mode === 'plan-slow') await new Promise(done => setTimeout(done,450));
         if (planStep === 'catalog') { const data = {plans:publishedPlans,programs:[program]}; verifyMembershipPlanCatalog(data); send(res,200,data); }
+        else if (planStep === 'setups') { const data = {setups:publishedPlans.map(p => planSetups.get(`${p.planId}:${p.version}`) ?? {planId:p.planId,version:p.version,derived:true,classesPerWeek:null,features:[],paymentOptions:[{optionNo:1,label:null,priceMinor:p.priceMinor,billingFrequency:p.billingFrequency,payments:null,termMonths:p.termMonths,downPaymentMinor:null,checkoutEnabled:true}]})}; verifyMembershipPlanSetups(data); send(res,200,data); }
         else send(res,200,{plans:publishedPlans.filter(p => p.availability === 'AVAILABLE')});
         return;
       }
@@ -98,6 +101,18 @@ const api = createServer(async (req, res) => {
         const {confirmation,expectedVersion,planCode,...reviewed} = terms;
         const p = {...reviewed,description:reviewed.description ?? null,programId:reviewed.programId ?? null,termMonths:reviewed.termMonths ?? null,planId:prior?.planId ?? id(40),planCode:prior?.planCode ?? planCode,version:prior ? prior.version+1 : 1,publishedAt:date,programName:reviewed.programId ? program.name : null};
         publishedPlans = prior ? publishedPlans.map(old => old.planId === prior.planId ? p : old) : [...publishedPlans,p]; data = plainPlan(p);
+      } else if (planStep === 'createOptions' || planStep === 'reviseOptions') {
+        const terms = planStep === 'createOptions' ? validateCreateMembershipPlanWithOptionsInput(input) : validateReviseMembershipPlanWithOptionsInput(input);
+        const prior = planStep === 'reviseOptions' ? publishedPlans.find(p => p.planId === url.pathname.split('/').at(-2)) : null;
+        if (planStep === 'reviseOptions' && (!prior || prior.version !== input.expectedVersion)) { rejected(res,409,'MEMBERSHIP_PLAN_VERSION_STALE'); return; }
+        const first = terms.paymentOptions[0], frequency = first.billingFrequency;
+        assert.notEqual(first.billingFrequency,'PAID_IN_FULL'); // the browser flow uses recurring first options only
+        const p = {displayName:terms.displayName,description:terms.description ?? null,programId:terms.programId ?? null,availability:terms.availability,currency:terms.currency,priceMinor:first.priceMinor,billingFrequency:frequency,
+          termKind:first.termMonths ? 'FIXED_MONTHS' : 'OPEN_ENDED',termMonths:first.termMonths ?? null,planId:prior?.planId ?? id(40),planCode:prior?.planCode ?? terms.planCode,version:prior ? prior.version+1 : 1,publishedAt:date,programName:terms.programId ? program.name : null};
+        const setup = {planId:p.planId,version:p.version,derived:false,classesPerWeek:terms.classesPerWeek ?? null,features:terms.features ?? [],
+          paymentOptions:terms.paymentOptions.map((o,i) => ({optionNo:i+1,label:o.label,priceMinor:o.priceMinor,billingFrequency:o.billingFrequency,payments:o.payments ?? null,termMonths:o.termMonths ?? null,downPaymentMinor:o.downPaymentMinor ?? null,checkoutEnabled:o.checkoutEnabled}))};
+        publishedPlans = prior ? publishedPlans.map(old => old.planId === prior.planId ? p : old) : [...publishedPlans,p]; planSetups.set(`${p.planId}:${p.version}`,setup);
+        data = {plan:plainPlan(p),setup}; verifyMembershipPlanWithOptions(data);
       } else {
         validateCrmAdultMembershipDraftFromPlanInput(input); assert(accounted); assert.equal(input.studentProfileId,id(5));
         const p = publishedPlans.find(p => p.planId === input.membershipPlanId && p.version === input.membershipPlanVersion && p.availability === 'AVAILABLE'); assert(p); assert.equal(p.currency,'USD');
@@ -307,18 +322,21 @@ try {
         await page.goto(`${origin}/staff/billing/membership-plans`); assert.equal(commands.length,0);
         await page.getByRole('button',{name:'Load my school plans',exact:true}).focus(); await page.keyboard.press('Enter');
         await page.getByRole('heading',{name:'Adult Monthly',exact:true}).waitFor(); await visual(page,`${size}-membership-catalog`);
-        await page.getByRole('button',{name:'Create plan',exact:true}).click();
-        await page.getByLabel('Plan name',{exact:true}).fill('Adult Weekly'); await page.getByLabel('Plan code',{exact:false}).fill('ADULT-WEEKLY');
-        await page.getByLabel('School program',{exact:true}).selectOption(program.programId); await page.getByLabel('Published price',{exact:false}).fill('39.50');
-        await page.getByLabel('Billing frequency',{exact:true}).selectOption('WEEKLY'); await page.getByRole('button',{name:'Review plan',exact:true}).click();
-        await page.getByRole('heading',{name:'Review published terms',exact:true}).waitFor(); assert.equal(commands.length,0); assert(await page.getByRole('button',{name:'Publish plan',exact:true}).isDisabled());
-        await visual(page,`${size}-membership-plan-review`); await page.getByRole('checkbox',{name:/confirm publishing/}).check(); await page.getByRole('button',{name:'Publish plan',exact:true}).click();
-        await page.getByRole('heading',{name:'Recorded publication: Adult Weekly',exact:true}).waitFor(); assert.equal(commands.length,1);
-        await page.getByRole('button',{name:'Reload catalog',exact:true}).click(); await page.getByRole('button',{name:'Revise Adult Weekly',exact:true}).click();
-        assert(await page.getByLabel('Plan code',{exact:false}).getAttribute('readonly') !== null); await page.getByLabel('Published price',{exact:false}).fill('42.00'); await page.getByLabel('Availability',{exact:true}).selectOption('UNAVAILABLE');
-        await page.getByRole('button',{name:'Review plan',exact:true}).click(); await page.getByRole('checkbox',{name:/confirm publishing/}).check(); await page.getByRole('button',{name:'Publish new version',exact:true}).click();
-        await page.getByRole('heading',{name:'Recorded publication: Adult Weekly',exact:true}).waitFor(); assert.equal(publishedPlans.at(-1).version,2); assert.equal(publishedPlans.at(-1).availability,'UNAVAILABLE');
-        assert.equal(JSON.parse(commands[1].raw).expectedVersion,1); await visual(page,`${size}-membership-plan-revision`);
+        await page.getByRole('button',{name:'New plan',exact:true}).click();
+        await page.getByLabel('Plan name',{exact:true}).fill('Adult Weekly'); await page.getByLabel('Program',{exact:true}).selectOption(program.programId);
+        const first = page.getByRole('group',{name:'Option 1',exact:true}); await first.getByLabel('Amount',{exact:true}).fill('39.50'); await first.getByLabel('How often',{exact:true}).selectOption('WEEKLY');
+        await page.getByRole('button',{name:'Add option',exact:true}).click(); const second = page.getByRole('group',{name:'Option 2',exact:true});
+        await second.getByLabel('Option name',{exact:true}).fill('1 year paid in full'); await second.getByLabel('Amount',{exact:true}).fill('1590'); await second.getByLabel('How often',{exact:true}).selectOption('PAID_IN_FULL'); await second.getByLabel('Length in months',{exact:true}).fill('12');
+        await page.getByLabel('Classes per week',{exact:true}).fill('2'); await page.getByRole('button',{name:'Review plan',exact:true}).click();
+        await page.getByRole('heading',{name:'Check and publish',exact:true}).waitFor(); assert.equal(commands.length,0); assert(await page.getByRole('button',{name:'Publish plan',exact:true}).isDisabled());
+        await visual(page,`${size}-membership-plan-review`); await page.getByRole('checkbox',{name:/want to publish it/}).check(); await page.getByRole('button',{name:'Publish plan',exact:true}).click();
+        await page.getByRole('heading',{name:'Recorded publication: Adult Weekly',exact:true}).waitFor(); assert.equal(commands.length,1); assert.equal(commands[0].step,'createOptions'); assert.equal(JSON.parse(commands[0].raw).planCode,'ADULT-WEEKLY');
+        await page.getByRole('button',{name:'Reload catalog',exact:true}).click(); await page.getByRole('list',{name:'Adult Weekly payment options',exact:true}).getByText('1 year paid in full',{exact:true}).waitFor();
+        await page.getByRole('button',{name:'Edit Adult Weekly',exact:true}).click(); await page.getByText('Plan code and currency',{exact:true}).click();
+        assert(await page.getByLabel('Plan code',{exact:false}).getAttribute('readonly') !== null); await page.getByRole('group',{name:'Option 1',exact:true}).getByLabel('Amount',{exact:true}).fill('42.00'); await page.getByLabel('Offered to new students',{exact:true}).selectOption('UNAVAILABLE');
+        await page.getByRole('button',{name:'Review plan',exact:true}).click(); await page.getByRole('checkbox',{name:/want to publish it/}).check(); await page.getByRole('button',{name:'Publish changes',exact:true}).click();
+        await page.getByRole('heading',{name:'Recorded publication: Adult Weekly',exact:true}).waitFor(); assert.equal(publishedPlans.at(-1).version,2); assert.equal(publishedPlans.at(-1).availability,'UNAVAILABLE'); assert.equal(publishedPlans.at(-1).priceMinor,4200);
+        assert.equal(commands[1].step,'reviseOptions'); assert.equal(JSON.parse(commands[1].raw).expectedVersion,1); assert.equal(planSetups.get(`${id(40)}:2`).paymentOptions.length,2); await visual(page,`${size}-membership-plan-revision`);
       } finally { await context.close(); }
     });
     await check(`${size}: Resume Setup to version-bound DRAFT preserves historical/current distinction`,async () => {

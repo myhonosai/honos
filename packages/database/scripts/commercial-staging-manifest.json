@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "a95eb29667febfe1e5f26000fd4c688ea2e9dcffbc58d65f56f7dd4ba4f3ee54",
+  "chainSha256": "e6d6ce4299c01df9f0b5e3dc7d2dda69b97e15f4741330cd9a32feb58b2676d1",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -903,12 +903,20 @@
       "sha256": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47"
     },
     {
+      "file": "0642_membership_plan_payment_options.sql",
+      "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
+    },
+    {
       "file": "0643_claire_kpi_report.sql",
       "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
     },
     {
       "file": "0644_booking_invoice_security_hygiene.sql",
       "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
+    },
+    {
+      "file": "0645_class_session_minimum_duration.sql",
+      "sha256": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe"
     },
     {
       "file": "0646_maya_renewal_prep.sql",
