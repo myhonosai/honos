@@ -90,7 +90,7 @@ export async function verifyInvoiceViewport({ page, origin, label, check, screen
         await screenshot(page, `${label}-invoice-detail`); await accessibility(page, `${label}-invoice-detail`);
         await page.getByRole('button', { name: page.viewportSize().width <= 600 ? 'Expand HON assistant' : 'Ask HON anywhere', exact: true }).click();
         const assistant = page.getByRole(page.viewportSize().width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
-        await assistant.getByText('Current page: Invoice detail', { exact: true }).waitFor(); assert(await assistant.getByRole('button', { name: /^Send unavailable/ }).isDisabled());
+        await assistant.getByText('Current page: Invoice detail', { exact: true }).waitFor(); assert.equal(await assistant.getByRole('textbox').count(), 0);
         await assistant.getByRole('button', { name: 'Minimize HON assistant' }).click(); await assistant.waitFor({ state: 'detached' });
       } finally { page.off('request', listener); }
     });

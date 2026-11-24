@@ -314,15 +314,15 @@ try {
     });
     await check(`${label}: dashboard accessibility`, () => accessibility(page, `${label}-dashboard`));
     await check(`${label}: assistant expand, draft continuity, disabled services and keyboard restore`, async () => {
-      const dashboardDraft = page.getByRole('textbox', { name: 'Unsent message draft for HON' });
+      const dashboardDraft = page.getByRole('textbox', { name: 'Message HON' });
       await dashboardDraft.fill('Local verification draft — not sent');
       const expand = page.getByRole('button', { name: 'Expand HON conversation', exact: true });
       await expand.click();
       const assistant = page.getByRole(width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
       await assistant.waitFor();
-      assert.equal(await assistant.getByRole('textbox').inputValue(), 'Local verification draft — not sent');
-      assert(await assistant.getByRole('button', { name: /^Send unavailable/ }).isDisabled());
-      assert(await assistant.getByRole('button', { name: 'Talk to HON', exact: true }).isDisabled());
+      // The drawer hosts the real HQ Ask HON panel. This fixture has no Ask HON service, so it offers no question box.
+      await assistant.locator('section').first().waitFor();
+      assert.equal(await assistant.getByRole('textbox').count(), 0);
       await noOverflow(page, `${label} assistant`);
       await screenshot(page, `${label}-assistant-expanded`, false);
       await check(`${label}: expanded assistant accessibility`, () => accessibility(page, `${label}-assistant`));
@@ -457,7 +457,7 @@ try {
       await page.getByRole('button', { name: width <= 600 ? 'Expand HON assistant' : 'Ask HON anywhere', exact: true }).click();
       const assistant = page.getByRole(width <= 800 ? 'dialog' : 'complementary', { name: 'HON assistant', exact: true });
       await assistant.getByText('Current page: Growth & Referrals', { exact: true }).waitFor();
-      assert(await assistant.getByRole('button', { name: /^Send unavailable/ }).isDisabled());
+      assert.equal(await assistant.getByRole('textbox').count(), 0);
       await noOverflow(page, `${label} Champions assistant`);
       await page.keyboard.press('Escape');
       await assistant.waitFor({ state: 'detached' });

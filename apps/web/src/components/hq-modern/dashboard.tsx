@@ -75,7 +75,7 @@ function CommandStage(): React.ReactElement {
         <div className={styles.honDock} data-hq-conversation-dock>
           <div className={styles.coreCaption}><h2>{t("HON")}</h2><p>{t("Executive AI Coordinator")}</p></div>
           <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label={t("Expand HON conversation")}><HqIcon name="mic" size={22}/><span>{t("Ask HON anything")}</span><HqIcon name="expand" size={15}/></button>
-          <small className={styles.coreState}>{t("Conversation unavailable · Microphone off")}</small>
+          
         </div>
       </div>
       <div className={styles.stageTeam}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.stageExecutive} style={{ '--stage-column': index < 3 ? index + 1 : index + 2 } as CSSProperties} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={t("View {name}'s {role} workspace",{name:executive.displayName,role:text(executive.domain.replaceAll('_',' ').toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()))})}>
@@ -84,7 +84,7 @@ function CommandStage(): React.ReactElement {
         <span className={styles.workspaceEntry}>{t("Workspace")}{" "}<HqIcon name="arrow" size={14}/></span>
       </Link>)}</div>
     </div>
-    <div className={styles.commandBar}><div className={styles.commandPrompt}><HqIcon name="mic" size={22}/><h2>{t("How can HON help today?")}</h2><span>{t("No recorded work · Executive task services are not active")}</span></div><HonComposer context="Overview"/><div className={styles.commandShortcuts}><Link href="/hq/schools">{t("Review schools")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/revenue">{t("Revenue overview")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/ai-costs">{t("Review AI costs")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/growth">{t("Growth & Referrals")}{" "}<HqIcon name="chevron" size={13}/></Link></div></div>
+    <div className={styles.commandBar}><div className={styles.commandPrompt}><HqIcon name="mic" size={22}/><h2>{t("How can HON help today?")}</h2><span>{t("Ask about schools, plans, costs or growth. HON answers here; it never changes records on its own.")}</span></div><HonComposer context="Overview"/><div className={styles.commandShortcuts}><Link href="/hq/schools">{t("Review schools")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/revenue">{t("Revenue overview")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/ai-costs">{t("Review AI costs")}{" "}<HqIcon name="chevron" size={13}/></Link><Link href="/hq/growth">{t("Growth & Referrals")}{" "}<HqIcon name="chevron" size={13}/></Link></div></div>
   </section>;
 }
 
