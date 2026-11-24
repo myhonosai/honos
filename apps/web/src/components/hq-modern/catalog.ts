@@ -128,7 +128,6 @@ export function hqPageLabel(path: string): string {
   if (/^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path)) return 'HQ message';
   if (/^\/hq\/growth\/prospects\/[0-9a-f-]{36}$/i.test(path)) return 'Prospect';
   if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
-  if (path === '/hq/revenue') return 'Revenue';
   if (path === '/hq/schools') return 'Schools';
   if (path === '/hq/marketing/creative') return 'Creative Studio';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_INBOX, ...HQ_SETTINGS, ...HQ_SCHOOLS, ...HQ_NAV].find((item) => item.path === path);

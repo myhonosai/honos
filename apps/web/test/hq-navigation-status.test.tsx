@@ -41,7 +41,7 @@ describe('HQ navigation groups', () => {
   });
 
   it('keeps page labels and opens only the group that holds the current page', () => {
-    expect(hqPageLabel('/hq/revenue')).toBe('Revenue');
+    expect(hqPageLabel('/hq/revenue')).toBe('Subscriptions');
     expect(hqPageLabel('/hq/schools')).toBe('Schools');
     expect(hqPageLabel('/hq/pricing-offers')).toBe('Pricing & Offers');
     expect(hqPageLabel('/hq/ai-providers')).toBe('AI Providers');
