@@ -6746,3 +6746,52 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End Claire KPI report exact verification.
+
+-- Membership plan payment options exact verification (0642): three runtime entry points, six private helpers, two forced-RLS tables.
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_membership_plan_setups(text)','hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)',
+      'hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_plan_setup()','hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','hon.membership_plan_validated_setup(jsonb)',
+      'hon.membership_plan_setup_summary(uuid,integer)','hon.membership_plan_setup_terms(jsonb,jsonb)','hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['membership_plan_version_setups','membership_plan_payment_options'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('guard_membership_plan_setup','membership_plan_setup_int','membership_plan_validated_setup',
+      'membership_plan_setup_summary','membership_plan_setup_terms','membership_plan_insert_setup','read_school_membership_plan_setups',
+      'create_school_membership_plan_with_options','revise_school_membership_plan_with_options'))<>9 THEN
+    RAISE EXCEPTION 'Unexpected membership plan option overload'; END IF;
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)','5651355218ada7e3c5e45d33746c8bf1','v',true,'search_path=pg_catalog, hon'),
+    ('hon.guard_membership_plan_setup()','f580ad9acbae46a1c09263ce987ccd4a','v',false,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)','dab3c3a4fb662dbc2e180bb1131b5286','v',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','64ad633ebdcf89c8cc469aafdbd1d5f7','i',false,'search_path=pg_catalog'),
+    ('hon.membership_plan_setup_summary(uuid,integer)','22fca18a051aefb49e2e6873f8fd087c','s',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_setup_terms(jsonb,jsonb)','205c334ad93ba9649df12d2a7116a79b','i',false,'search_path=pg_catalog'),
+    ('hon.membership_plan_validated_setup(jsonb)','bb1d8330497d542e5322b9d23a787d9e','i',false,'search_path=pg_catalog, hon'),
+    ('hon.read_school_membership_plan_setups(text)','8a44c2bfb7fb9830d47c9b971c0e64e8','v',true,'search_path=pg_catalog, hon'),
+    ('hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)','5eb4d2e5618734fb43e94a6d0715ad96','v',true,'search_path=pg_catalog, hon')) x(f,t,c,d,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s]) THEN
+      RAISE EXCEPTION 'Membership plan option function body/posture drift: %',f; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['membership_plan_version_setups','membership_plan_payment_options']) LOOP
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_membership_plan_setup()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'Membership plan option guard missing: %',t; END IF;
+  END LOOP;
+END $$;
+-- End membership plan payment options exact verification.
