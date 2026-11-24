@@ -98,6 +98,12 @@ test('/llms.txt is a Markdown guide with absolute links to real pages', () => {
   assert.match(txt, /^# HON OS\n\n> .{40,}\n/);
   assert.match(txt, /\n## Key facts\n/);
   for (const p of PLANS) assert.ok(txt.includes(p.shown), `llms.txt has ${p.shown}`);
+  // The hand-written key facts stay true to the home page.
+  const home = read('index.html');
+  for (const [fact, onPage] of [['Free trial: 14 days', '14-day free trial'], ['within 30 days of the first HON OS payment', 'within 30 days of your first HON OS payment'], ['HON takes no fee on tuition', 'HON takes no fee on your tuition']]) {
+    assert.ok(txt.includes(fact), `llms.txt says "${fact}"`);
+    assert.ok(home.includes(onPage), `home page backs "${fact}" with "${onPage}"`);
+  }
   for (const { q } of faqFromHtml(read('index.html'))) assert.ok(txt.includes(q), `llms.txt has "${q}"`);
   const links = [...txt.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1]);
   assert.ok(links.length >= 8);
