@@ -62,12 +62,14 @@ try{
  const member=(p,role)=>q('INSERT INTO hon.family_members(organization_id,school_id,family_id,person_id,member_role) VALUES($1,$2,$3,$4,$5)',[A.organizationId,A.schoolId,family,p,role]);
  const guardian=await addPerson('Elena');await member(guardian,'GUARDIAN');
  const account=(await q("INSERT INTO hon.billing_accounts(organization_id,school_id,responsible_person_id,currency) VALUES($1,$2,$3,'USD') RETURNING id",[A.organizationId,A.schoolId,guardian]))[0].id;
- const plan=async(code,termKind='FIXED_MONTHS',termMonths=12)=>{const id=K();
+ const plan=async(code,termKind='FIXED_MONTHS',termMonths=12,programId=null)=>{const id=K();
   await q('INSERT INTO hon.membership_plans(id,organization_id,school_id,plan_code,current_version,created_by_principal_id) VALUES($1,$2,$3,$4,1,$5)',[id,A.organizationId,A.schoolId,code,hq.principal]);
   await q(`INSERT INTO hon.membership_plan_versions(plan_id,version,organization_id,school_id,display_name,program_id,availability,currency,price_minor,billing_frequency,term_kind,term_months,actor_principal_id)
-    VALUES($1,1,$2,$3,$4,NULL,'AVAILABLE','USD',15000,'MONTHLY',$5,$6,$7)`,[id,A.organizationId,A.schoolId,'Plan '+code,termKind,termKind==='FIXED_MONTHS'?termMonths:null,hq.principal]);
+    VALUES($1,1,$2,$3,$4,$8,'AVAILABLE','USD',15000,'MONTHLY',$5,$6,$7)`,[id,A.organizationId,A.schoolId,'Plan '+code,termKind,termKind==='FIXED_MONTHS'?termMonths:null,hq.principal,programId]);
   return {id,code};};
  const yearly=await plan('SIGN_YEARLY'),open=await plan('SIGN_OPEN','OPEN_ENDED');
+ const programOf=async name=>(await q("INSERT INTO hon.programs(organization_id,school_id,name,status) VALUES($1,$2,$3,'SCHEDULED') RETURNING id",[A.organizationId,A.schoolId,name]))[0].id;
+ const karate=await plan('SIGN_KARATE','FIXED_MONTHS',12,await programOf('Karate')),judo=await plan('SIGN_JUDO','FIXED_MONTHS',6,await programOf('Judo'));
  const draft=async(personId,{p=null,code='SYNTHETIC_FREE_TEXT',start=today})=>{
   const id=(await q("INSERT INTO hon.memberships(organization_id,school_id,billing_account_id,participant_person_id,plan_code,state,term_started_at,term_ends_at) VALUES($1,$2,$3,$4,$5,'DRAFT',$6,NULL) RETURNING id",[A.organizationId,A.schoolId,account,personId,p?p.code:code,start?midnight(start):null]))[0].id;
   if(p)await q('INSERT INTO hon.membership_plan_selections(membership_id,organization_id,school_id,plan_id,plan_version,actor_principal_id) VALUES($1,$2,$3,$4,1,$5)',[id,A.organizationId,A.schoolId,p.id,hq.principal]);
@@ -79,7 +81,8 @@ try{
   nobirth:await child('Ines',null),locked:await child('Pablo','2016-06-01'),twice:await child('Rosa','2016-07-01')};
  const m={today:await draft(kids.today.personId,{p:yearly}),late:await draft(kids.late.personId,{p:yearly,start:addDays(today,-10)}),
   future:await draft(kids.future.personId,{p:open,start:addDays(today,30)}),free:await draft(kids.free.personId,{}),nobirth:await draft(kids.nobirth.personId,{p:yearly}),
-  locked:await draft(kids.locked.personId,{p:yearly}),twice:await draft(kids.twice.personId,{p:yearly})};
+  locked:await draft(kids.locked.personId,{p:yearly}),twice:await draft(kids.twice.personId,{p:karate})};
+ m.twiceOther=await draft(kids.twice.personId,{p:judo});
  const body='1. Synthetic test text only.';const digest=sha('Membership agreement\n\n'+body);
  await admin.query('BEGIN');
  const versionId=(await q("INSERT INTO hon.membership_agreement_versions(organization_id,school_id,number,published_by_principal_id) VALUES($1,$2,1,$3) RETURNING id",[A.organizationId,A.schoolId,hq.principal]))[0].id;
@@ -160,11 +163,16 @@ try{
  // 7. Only the signed child's DRAFTs, only once: an ACTIVE membership is untouched; a DRAFT made after the signature waits for staff Start.
  {const second=await draft(kids.today.personId,{p:open,start:addDays(today,400)});
   const t=await link([kids.twice]);assert.equal(await sign(t,input([kids.twice])),'SIGNED');
+  // One signature starts the child's DRAFT in each program, each with its own decision naming the same signature.
+  const both=await q('SELECT membership_id,signature_id FROM hon.membership_activation_decisions WHERE membership_id=ANY($1)',[[m.twice,m.twiceOther]]);
+  assert.equal(both.length,2);assert.equal(both[0].signature_id,both[1].signature_id);
   assert.equal((await membership(m.twice)).state,'ACTIVE');
+  const other=await membership(m.twiceOther);assert.equal(other.state,'ACTIVE');assert.equal(other.term_ends_at.toISOString(),midnight(addMonths(today,6)));
+  for(const id of [m.twice,m.twiceOther])assert.equal((await outcomes(id))[0].outcome,'STARTED');
   assert.deepEqual(await membership(second).then(x=>[x.state,x.version]),['DRAFT',1]);assert.deepEqual(await outcomes(second),[]);
   assert.deepEqual(await membership(m.today).then(x=>[x.state,x.version]),['ACTIVE',2]);
   assert.equal((await q('SELECT count(*)::int n FROM hon.membership_activation_decisions WHERE membership_id=$1',[m.today]))[0].n,1);}
- pass('a signing looks only at its own child\'s DRAFTs; an ACTIVE membership is untouched; a DRAFT made after the signature stays for staff Start');
+ pass('one signature starts the child\'s DRAFT in each program (two decisions, one signature); a signing looks only at its own child\'s DRAFTs; an ACTIVE membership is untouched; a DRAFT made after the signature stays for staff Start');
 
  // 8. Evidence: outcomes are immutable, and the widened 0177 checks still bind each basis to its own rules.
  {const any=(await q('SELECT signature_id,membership_id FROM hon.membership_signing_activations LIMIT 1'))[0];
@@ -184,10 +192,10 @@ try{
   assert.equal(await tryDecision({}),'23514');// a signing basis with no signature
   assert.equal(await tryDecision({decision_basis:'STAFF_ACTIVATION_PRE_POLICY'}),'23514');// a staff basis with the signing permission
   assert.equal(await tryDecision({decision_basis:'STAFF_ACTIVATION_PRE_POLICY',authorizing_permission:'billing.membership.activate'}),'23514');// a staff basis that leaves out AGREEMENT
-  assert.equal(await tryDecision({signature_id:d.signature_id,membership_id:m.nobirth}),'23505');// one decision per signature
+  assert.equal(await tryDecision({signature_id:d.signature_id,membership_id:m.today}),'23505');// one decision per membership, whatever the signature
   assert.equal(await tryDecision({signature_id:(await q('SELECT id FROM hon.membership_agreement_signatures WHERE student_profile_id=$1',[kids.nobirth.studentProfileId]))[0].id,reason_code:'OTHER',reason_text:'Synthetic.'}),'23514');
   await admin.query('ROLLBACK');}
- pass('outcome rows are immutable; a signing decision needs its signature, the signing permission and ROUTINE_ENROLLMENT, a staff decision keeps the 0177 permission and still lists the agreement as not evaluated, and a signature backs one decision');
+ pass('outcome rows are immutable; a signing decision needs its signature, the signing permission and ROUTINE_ENROLLMENT, a staff decision keeps the 0177 permission and still lists the agreement as not evaluated, and a membership has one decision');
 
  console.log('Membership activates on signing proof (0680): '+groups+' groups passed');
 }finally{

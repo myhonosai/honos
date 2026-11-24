@@ -51,7 +51,9 @@ END $$;
 
 -- 0177 evidence gains a second basis. A staff decision keeps every 0177 rule; a signing decision names its signature and
 -- records that the agreement was evaluated. Columns are only added, so no existing row changes.
-ALTER TABLE hon.membership_activation_decisions ADD COLUMN signature_id uuid UNIQUE REFERENCES hon.membership_agreement_signatures(id) ON DELETE RESTRICT;
+-- One signature can start several DRAFTs (one per program); each membership still has at most one decision (0177 UNIQUE).
+ALTER TABLE hon.membership_activation_decisions ADD COLUMN signature_id uuid REFERENCES hon.membership_agreement_signatures(id) ON DELETE RESTRICT;
+CREATE INDEX membership_activation_decisions_signature ON hon.membership_activation_decisions(signature_id) WHERE signature_id IS NOT NULL;
 ALTER TABLE hon.membership_activation_decisions DROP CONSTRAINT membership_activation_decisions_decision_basis_check,
   DROP CONSTRAINT membership_activation_decisions_authorizing_permission_check,
   DROP CONSTRAINT membership_activation_decision_requirements_not_evaluated_check;

@@ -60,13 +60,16 @@ Columns and checks are only added or widened, so no existing row changes.
 | Item | Change |
 |---|---|
 | `decision_basis` | New value `AGREEMENT_SIGNED` |
-| `signature_id` (new column, unique, FK to the signature) | Set exactly when the basis is `AGREEMENT_SIGNED` |
+| `signature_id` (new column, FK to the signature, indexed) | Set exactly when the basis is `AGREEMENT_SIGNED`. One signature can start the child's DRAFT in each program; each membership still has one decision. |
 | `authorizing_permission` | `membership_agreement.signed` for a signing; staff decisions keep `billing.membership.activate`. The effective-period check is widened the same way. |
 | `requirements_not_evaluated` | A signing decision no longer lists `AGREEMENT`. A staff decision still lists it. |
 | Signing decision limits | No override, no adult attestation, reason `ROUTINE_ENROLLMENT` |
 | Actor | The signer principal: the guardian in the portal, or the 0499 link principal for a link. Audit source is `HUMAN_UI` or `PUBLIC_API`. |
 
 ## Security boundary
+
+- Who can start a membership this way: a guardian signed in to the parent portal, or whoever holds a live signing link (0499), which stays under the link's guardian, family, school and entitlement checks. A link signing records the link principal as the actor, and the typed name is not verified, as for any link signature. This follows David's decision that signing starts the membership.
+- On a busy school, the 0177 table locks are taken at commit under the API's lock timeout, so more DRAFTs may be left for staff (`START_FAILED_55P03`). This fails safe.
 
 - No new runtime entry point, and nothing is granted to any client role. Both functions are SECURITY DEFINER with a pinned search_path and are owner-only.
 - The trigger sets the tenant context from the signature row and restores it afterwards. The per-membership function refuses to run if the context does not match the signature.
