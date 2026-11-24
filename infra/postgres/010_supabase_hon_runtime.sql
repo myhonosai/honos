@@ -5347,6 +5347,7 @@ BEGIN
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
+END $$;
 -- 0661 staff timesheets: no self-approval except the school's system OWNER. One more private helper; the week decision stays the only entry point.
 DO $$ DECLARE r text; f text:='hon.staff_time_actor_is_owner(uuid,uuid,uuid)';
 BEGIN
