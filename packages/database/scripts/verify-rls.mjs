@@ -290,6 +290,8 @@ const expectedRlsTables = [
   'jordan_follow_up_refs',
   'jordan_follow_up_applied',
   'claire_kpi_report_numbers',
+  'maya_renewal_refs',
+  'maya_renewal_applied',
   'school_onboarding_profiles',
   'school_onboarding_requests',
   'school_support_requests',

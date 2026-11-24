@@ -1182,6 +1182,7 @@ export * from './alex-delegation.js';
 export * from './jordan-follow-through.js';
 export * from './marcus-marketing-review.js';
 export * from './claire-kpi-report.js';
+export * from './maya-renewal-prep.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';
 export * from './membership-agreement.js';

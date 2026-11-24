@@ -5150,6 +5150,26 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
   END IF;
 END $$;
 
+-- 0646 Maya renewal prep (P5): the MAYA_RENEWAL_PREP kind on the shared AI text proposals; eight runtime entry points,
+-- every helper closed, and no runtime access to the alias or applied-link evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_maya_renewal_prep(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0646 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.maya_renewal_brief_ok(jsonb)','hon.maya_renewal_ok(jsonb)','hon.maya_renewal_reader(text)','hon.maya_renewal_actor(text)',
+    'hon.maya_renewal_open_review(uuid)','hon.maya_renewal_fix_refs(uuid,text)','hon.maya_renewal_facts(text,uuid,jsonb)','hon.maya_renewal_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.maya_renewal_refs','hon.maya_renewal_applied'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_maya_renewal_prep(text,jsonb,uuid), hon.plan_maya_renewal_prep(text,uuid), hon.prepare_maya_renewal_prep(text,uuid,uuid,boolean),
+      hon.fail_maya_renewal_prep(text,uuid,text,text), hon.record_maya_renewal_prep(text,uuid,jsonb), hon.read_maya_renewal_preps(text,uuid),
+      hon.apply_maya_renewal_preps(text,uuid,jsonb,text,uuid,uuid), hon.close_maya_renewal_prep(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];
