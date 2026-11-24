@@ -678,11 +678,13 @@ try {
   // The 0474 eian_facts_ok matches only because 'memberships' is a key of the Eian facts shape it validates; it reads no table.
   // The 0530 parent_invoice_pay_invoices reader only joins an invoice to its membership to prove the family billing path
   // (as 0102); it lets a guardian pay an invoice and grants no booking, check-in or benefit.
+  // The 0643 claire_kpi_count reader only counts new, ended and active memberships for Claire's read-only KPI report;
+  // it grants no booking, attendance or check-in benefit.
   // The 0623 read_school_contact_list reader only shows the current membership's state on the staff contacts list and filters
   // by it; it is read-only and grants no booking, attendance or check-in benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
   assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'automation_condition_holds', 'automation_date_candidates',
-    'automation_enrolled', 'automation_event_subject', 'begin_hon_turn_0284', 'billing_import_has_membership', 'cancel_school_membership', 'crm_adult_membership_draft_is_current',
+    'automation_enrolled', 'automation_event_subject', 'begin_hon_turn_0284', 'billing_import_has_membership', 'cancel_school_membership', 'claire_kpi_count', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan',
     'draft_crm_guardian_child_membership_from_plan', 'draft_owner_launch_membership', 'eian_facts_ok', 'evaluate_membership_activation', 'evaluate_membership_date_revision',
     'guard_membership_date_revision_insert', 'guard_membership_pause', 'guard_person_membership_overlap', 'list_retention_review_members', 'membership_agreement_covered',
