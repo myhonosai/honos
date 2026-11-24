@@ -199,7 +199,7 @@ it('offers the owner one tap for no monthly limit (the highest cap the server al
   const onBudget = vi.fn();
   const owner = props({ onBudget, state: { kind: 'READY', view: conv({ viewer: { ...viewer, isOwner: true } }) as never } });
   const html = renderToStaticMarkup(<HqHonPanelView {...owner}/>);
-  expect(html).toContain('data-hq-hon-no-cap'); expect(html).toContain('Use no monthly limit'); expect(html).toContain('Each question still has its own cost limit');
+  expect(html.match(/data-hq-hon-no-cap/g)).toHaveLength(1); expect(html).toContain('Use no monthly limit'); expect(html).toContain('Each question still has its own cost limit');
   expect(HQ_HON_NO_CAP).toBe(10_000_000);
   const capped = budget({ creditCap: HQ_HON_NO_CAP, availableCredits: HQ_HON_NO_CAP - 30 });
   const shown = renderToStaticMarkup(<HqHonPanelView {...props({ state: { kind: 'READY', view: conv({ budget: capped }) as never } })}/>);

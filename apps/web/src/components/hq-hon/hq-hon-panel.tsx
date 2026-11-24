@@ -163,11 +163,6 @@ function BudgetForm({ agentKey, t, outcome, onBudget, onRefresh, language, histo
       <small>{t('noCapHelp')}</small>
       <button type="button" onClick={() => onBudget(String(HQ_HON_NO_CAP), t('noCapReason'))}>{t('noCapButton')}</button>
     </fieldset>
-    <fieldset disabled={locked} data-hq-hon-no-cap="">
-      <legend>{t('noCapTitle')}</legend>
-      <small>{t('noCapHelp')}</small>
-      <button type="button" onClick={() => onBudget(String(HQ_HON_NO_CAP), t('noCapReason'))}>{t('noCapButton')}</button>
-    </fieldset>
     <div aria-live="polite">{outcome?.kind === 'DONE' && <p>{t('budgetSaved')}</p>}
       {outcome?.kind === 'ERROR' && <p role="alert">{outcome.error.kind === 'REFUSED' && outcome.error.code
         ? t('budgetNotSaved', { reason: hqHonText(language, outcome.error.code as HqHonCopyKey) })
