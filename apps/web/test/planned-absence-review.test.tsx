@@ -11,7 +11,7 @@ const envelope=(data:unknown,command=false)=>Response.json({data,meta:{requestId
 afterEach(()=>vi.restoreAllMocks());
 describe('bounded direct-human review workbench',()=>{
  it('starts empty with no calls, explains no downstream effect and links only attendance/core/signin',()=>{
-  const fetcher=vi.spyOn(globalThis,'fetch');const html=renderToStaticMarkup(<PlannedAbsenceReviewWorkbench/>);expect(fetcher).not.toHaveBeenCalled();expect(html).toContain('No verified review queue is loaded');expect(html).toContain('At most 50');expect(html).toContain('Decision record only');expect(html).not.toContain('Private rationale');expect(html).not.toContain('11111111');expect(html).not.toMatch(/type="(?:email|file)"/);
+  const fetcher=vi.spyOn(globalThis,'fetch');const html=renderToStaticMarkup(<PlannedAbsenceReviewWorkbench/>);expect(fetcher).not.toHaveBeenCalled();expect(html).toContain('No verified review queue is loaded');expect(html).toContain('oldest first');expect(html).not.toContain('Private rationale');expect(html).not.toContain('11111111');expect(html).not.toMatch(/type="(?:email|file)"/);
  });
  it('uses fixed same-origin no-store GET and existing exact version/idempotent POST paths without response notes',async()=>{
   const fetcher=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(envelope(queue)).mockResolvedValueOnce(envelope(receipt,true));expect(await loadPlannedAbsenceReviewQueue()).toEqual(queue);

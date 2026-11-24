@@ -49,7 +49,7 @@ export class OperationsReportController {
       ...scope,
       principalType: 'HUMAN_USER',
       requestId,
-    }, query);
+    }, query, identity.externalSubject);
     return {
       data: { operationalSnapshot },
       meta: { requestId, correlationId: requestId },

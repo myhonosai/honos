@@ -7,6 +7,6 @@ export const metadata = { title: 'HON | Family child achievements', robots: { in
 export default async function Page() {
   let authenticated = false;
   try { const value = (await cookies()).get(HON_SESSION_COOKIE)?.value; authenticated = Boolean(value && verifySession(value, sessionConfig(process.env))); } catch { /* fail closed */ }
-  if (!authenticated) redirect('/auth/login');
+  if (!authenticated) redirect('/auth/login?for=parent');
   return <ParentAchievements/>;
 }

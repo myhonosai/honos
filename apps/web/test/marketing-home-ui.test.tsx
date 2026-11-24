@@ -115,8 +115,11 @@ it('a selected campaign shows its plan, a planned (not spent) budget, its own co
 it('has every phrase in Korean and Spanish; the page is first in the shell’s marketing group and in the route manifest', () => {
   for (const language of ['ko', 'es'] as const) expect(Object.keys(MARKETING_LANGUAGES[language]).sort()).toEqual(Object.keys(MARKETING_LANGUAGES.en).sort());
   expect(marketingText('ko', 'title')).toBe('마케팅'); expect(marketingText('es', 'title')).toBe('Marketing');
+  // Marketing is its own page: its home comes right before campaigns.
   const group = SCHOOL_SHELL_NAV.find((g) => g.routes.some((r) => r.href === '/staff/marketing/campaigns'));
-  expect(group?.routes[0]?.href).toBe('/staff/marketing');
+  expect(group?.key).toBe('marketing');
+  const hrefs = group?.routes.map((r) => r.href) ?? [];
+  expect(hrefs.indexOf('/staff/marketing')).toBe(hrefs.indexOf('/staff/marketing/campaigns') - 1);
   const manifest = JSON.parse(readFileSync(new URL('../public/manus-routes.json', import.meta.url), 'utf8')) as { routes: { path: string; title: string }[] };
   expect(manifest.routes).toContainEqual({ path: '/staff/marketing', title: 'HON | Marketing' });
 });

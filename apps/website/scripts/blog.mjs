@@ -128,11 +128,11 @@ function niceDate(date, lang) {
 }
 
 /** Header, footer and logo sprite of a built home page, with links fixed for a page under /blog/. */
-function chrome(home, lang, path) {
+function chrome(home, lang, path, langPath = (l) => `${base(l)}${path}`) {
   const pick = (re, name) => { const m = home.match(re); if (!m) throw new Error(`home page has no ${name}`); return m[0]; };
   const fix = (html) => html
     .replace(/(<a\b[^>]*\shref=")#([^"]+)"/g, (m, a, id) => `${a}${base(lang)}/#${id}"`)
-    .replace(/(<a href=")[^"]*("[^>]*\sdata-lang="(en|ko|es)")/g, (m, a, b, l) => `${a}${base(l)}${path}${b}`);
+    .replace(/(<a href=")[^"]*("[^>]*\sdata-lang="(en|ko|es)")/g, (m, a, b, l) => `${a}${langPath(l)}${b}`);
   return {
     sprite: pick(/<svg width="0" height="0"[\s\S]*?<\/svg>/, 'logo sprite'),
     header: fix(pick(/<header>[\s\S]*?<\/header>/, 'header')),
@@ -143,9 +143,9 @@ function chrome(home, lang, path) {
   };
 }
 
-function page({ lang, path, title, description, ogType, home, main }) {
-  const c = chrome(home, lang, path);
-  const alternates = BLOG_LANGS.map((l) => `<link rel="alternate" hreflang="${l}" href="${base(l)}${path}">`).join('\n')
+export function page({ lang, path, title, description, ogType, home, main, langs = BLOG_LANGS, bodyClass = 'blog', langPath }) {
+  const c = chrome(home, lang, path, langPath);
+  const alternates = langs.map((l) => `<link rel="alternate" hreflang="${l}" href="${base(l)}${path}">`).join('\n')
     + `\n<link rel="alternate" hreflang="x-default" href="${path}">`;
   return `<!doctype html>
 <html lang="${lang}">
@@ -155,14 +155,14 @@ function page({ lang, path, title, description, ogType, home, main }) {
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 ${c.robots}
-<meta name="theme-color" content="#0a0b0a">
+<meta name="theme-color" content="#060d1f">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:type" content="${ogType}">
 ${alternates}
 ${c.head}
 </head>
-<body class="blog">
+<body class="${bodyClass}">
 ${c.skip}
 ${c.sprite}
 ${c.header}

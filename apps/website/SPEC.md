@@ -46,7 +46,7 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 ## Plan
 
 1. Tests first (`apps/website/test/*.test.mjs`, Node's built-in test runner): content rules above, every `#anchor` resolves, every image exists and has alt text, every link to the app goes to an allowed path through the build placeholder, the build substitutes the app address and the `noindex` guard.
-2. Source: `src/index.html`, `src/styles.css`, `src/site.js`, `src/flow.js` (background animation, honours reduced motion), `src/assets/*.webp` (each photo at full size and 800px wide), `src/favicon.svg`.
+2. Source: `src/index.html`, `src/styles.css`, `src/story.css`, `src/boot.js`, `src/loader.js`, `src/story.js` (scroll story and loading screen, honour reduced motion), `src/site.js`, `src/assets/*.webp` (each picture at full size and a phone size) and `src/assets/story-door-*.mp4` (door film), `src/favicon.svg`.
 3. Build: `scripts/build.mjs` copies `src` to `dist`, replaces `{{APP_URL}}` and `{{ROBOTS}}`, and refuses a non-http(s) app address.
 4. Wire `build` and `test` scripts so the root `pnpm build` / `pnpm test` include the site.
 5. Verify in a real browser at desktop and phone widths, then review and open the PR.
@@ -58,3 +58,38 @@ Source of truth for every claim: `/mnt/project-files/website/HON_OS_WEBSITE_SUMM
 - Blog pages reuse the home page header and footer of the same language, load only the stylesheet (no scripts, no background animation) and end with a "Start a new school" card. Blog-only labels are in `scripts/blog.mjs`.
 - `test/blog.test.mjs` applies the same banned-claims rules to every post in all three languages and checks that every link on every page resolves.
 - The two first posts are general school-owner advice written by Claude, and need David's OK and a native-speaker read like the rest of the KO/ES copy.
+
+## Privacy Policy and Terms of Service (2026-11-17)
+
+Owner request (David, 2026-11-17): "we need privacy policy and terms on website". Trigger: the Shopify app review asks whether HON tells merchants what data it collects and why, and whether the merchant agreement covers data protection. No such text existed.
+
+**Status (2026-11-18):** written by Claude to the best of its ability. David supplied the company (HON OS Labs LLC), address and contact email, confirmed the refund, founder-lapse and 30-day price-notice terms, and chose not to use a lawyer ("no lawyer. just create to best ability"). Claude chose the remaining values: California law and Los Angeles County courts (no arbitration), a 30-day export window after an account closes, 24-month audit/security logs, about 7 days of rolling backups, and breach notice within 72 hours.
+
+- Source: `src/legal/privacy.md` and `src/legal/terms.md` (front matter `title`, `description`, `updated` as YYYY-MM-DD, then the blog's Markdown subset). The Terms include the school data processing terms (HON processes student, family and staff data on the school's instructions).
+- Pages: `/privacy/` and `/terms/`, English only for now (a legal translation needs a professional translator, not a dictionary). They reuse the English home page header and footer, load only the stylesheet, and carry the same `robots` tag as the rest of the site. `/privacy/` is the URL to give app stores (Shopify, Apple, Google).
+- Blanks are written `[[Like this]]` and render highlighted. A page with any blank left shows a banner: "Draft for review. These terms are not yet in effect." The published pages have no blanks, so no banner.
+- Links: the footer of every language has a "legal" column with Privacy and Terms (Korean and Spanish footers link to the English pages, marked `hreflang="en"`). The app's sign-in landing page links to `/privacy` and `/terms` on the app, which redirect (308) to the website pages, so `app.myhonos.com/privacy` also works as an app-store URL. The website address defaults to `https://myhonos.com` and can be set with `HON_WEBSITE_ORIGIN` (plain http(s) origin only).
+- Facts in the text come from the code and architecture docs on `main` (Shopify mirror without customer contact details and `shop/redact` erase; face check-in consent, no stored camera pictures and the template retention rules; Stripe/Square payments; texting STOP/HELP; Meta/Google/Zernio connections; AI features), described as what HON does when the feature is turned on. Nothing claims a certification HON does not have.
+- Tests: the legal pages build with no blanks or banner, a page with a blank shows the banner, link only to built pages, pass the same banned-claims rules, and cover each required topic (Shopify, minors and parental consent, face check-in, AI, payments, texting STOP/HELP, retention, security, subprocessors, school data processing, contact). The app tests check the landing links and the redirect, including a refused bad origin.
+- Out of scope: a click-to-accept step at sign-up (needs David's decision on wording and the final text), translated legal pages, a cookie banner (the site sets no cookies and loads nothing from other hosts), and redeploying the website (David's OK).
+
+## Pricing section redesign (2026-11-19)
+
+Owner request (David, 2026-11-19): rework the pricing section using the patterns in three Mobbin screenshots (a Yearly/Quarterly switch with a "Save 33% on a yearly subscription" line, plan cards with a discount badge and a "Popular" badge, the original price struck through above the discounted price with "per month, billed yearly", a big rounded button, a checklist of features, and a "X has applied a 20% discount on your first year" banner). Use the patterns, not Mobbin's look: keep the site's dark style, Geist type and blue accent.
+
+Prices are the owner-approved ones already on the page. Nothing new is invented; the per-month figures for yearly billing are the yearly price divided by 12.
+
+| Plan | Monthly | Yearly | Yearly, per month |
+| --- | --- | --- | --- |
+| Founder 50 | $199.20 | $1,494 | $124.50 |
+| HON OS | $249 | $2,097 | $174.75 |
+
+- **Switch:** "Yearly" and "Monthly" (HON has no quarterly price). Yearly is selected first, as in the pattern. Under it: "Save up to 37% on a yearly subscription" (Founder 50 yearly vs monthly is 37.5%, HON OS 29.8%; figures are rounded down, never up). Without JavaScript the yearly prices show and nothing breaks.
+- **Struck-through price:** always the standard monthly price, $249, labelled for screen readers as the standard monthly price. The discount badge is the saving against it, rounded down: Founder 50 yearly -50%, monthly -20%; HON OS yearly -29%; HON OS monthly has no strike and no badge.
+- **Badges:** the discount badge, and "Best value" on Founder 50 instead of "Popular". HON has no customers yet, so "Popular" would be a claim we can't back.
+- **Price line:** big per-month price with "per month / billed yearly" (or "billed monthly"), then the yearly total in mono.
+- **Button:** big rounded "Start a new school" to the app's `/account/start` (unchanged link).
+- **Checklist:** the same eight items on both cards, from what the section already says (platform, AI team with no per-message charges, 12,000 studio credits, no HON fee on tuition, 14-day trial with no automatic charge, 30-day money-back guarantee). Top-ups ($30, $60, $120) move to a line under the cards.
+- **Discount banner:** shows the discount that really applies today, Founder 50: 20% off the standard price for the first 50 schools while they stay subscribed. A promo or referral variant ("{name} has applied a {n}% discount on your first year of HON OS") is built into `site.js` but switched off (`OFFER = null`), because no billing path applies promo or referral discounts yet (Champions Club records referrals only). A test keeps it off. Turning it on needs David's decision and a billing path.
+- **Languages:** every new phrase is in the Korean and Spanish dictionaries; the banner variant has its own Korean and Spanish strings in `site.js`.
+- **Out of scope:** live billing, founder billing (B2), checkout, the app's old `/pricing` page, redeploying the site.

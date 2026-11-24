@@ -12,8 +12,9 @@
 .flow button { min-height: 44px; white-space: normal; }
 .flow button:focus-visible, .flow input:focus-visible, .flow select:focus-visible { outline: 3px solid #0987b1; outline-offset: 3px; }
 .children { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; }
-.children button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; background: white; color: #142d48; border: 1px solid #86aeba; border-radius: 10px; padding: 16px; text-align: start; }
-.children button[aria-pressed=true] { border: 2px solid #087898; background: #e2f4fa; }
+.flow .children button { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; background: white; color: #142d48; border: 1px solid #86aeba; border-radius: 10px; padding: 16px; text-align: start; }
+/* Scoped under .flow so the host page's own `.page button` colours never win by stylesheet order. */
+.flow .children button[aria-pressed=true] { border: 2px solid #087898; background: #e2f4fa; color: #142d48; }
 .children span { font-size: .85rem; }
 .child { border-top: 1px solid #86aeba; padding-top: 20px; }
 .notice, .error { padding: 16px; border-radius: 10px; margin-block: 16px; }

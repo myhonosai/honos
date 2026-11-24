@@ -6,6 +6,7 @@ import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { AccessOverviewError, accessApi, type AccessApi } from './http';
 import { commandOutcome, grantInput, revokeReason, type AccessOutcome, type GrantDraft, type OverviewState } from './model';
 import { HqAccessView, type OpenForm } from './view';
+import { HqExceptionAi } from './exception-ai';
 
 /**
  * A grant or revoke whose outcome is not known: the exact request and key, in memory only, so Try again replays it.
@@ -128,7 +129,11 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
   const onReveal = useCallback(() => { setConcealed(false); }, []);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
 
-  return <HqAccessView language={preferences.language} concealed={concealed} state={state} filter={filter} outcome={outcome} locked={lock !== 'NONE'}
-    canRetry={lock === 'KEPT'} form={form} onFilter={onFilter} onMore={onMore} onRefresh={onRefresh} onReveal={onReveal} onOpenForm={onOpenForm}
-    onGrant={onGrant} onRevoke={onRevoke} onTryAgain={onTryAgain}/>;
+  // 0353: AI limits for exception schools, shown only while the overview shows customer facts (it unmounts when concealed).
+  return <>
+    <HqAccessView language={preferences.language} concealed={concealed} state={state} filter={filter} outcome={outcome} locked={lock !== 'NONE'}
+      canRetry={lock === 'KEPT'} form={form} onFilter={onFilter} onMore={onMore} onRefresh={onRefresh} onReveal={onReveal} onOpenForm={onOpenForm}
+      onGrant={onGrant} onRevoke={onRevoke} onTryAgain={onTryAgain}/>
+    {!concealed && ready ? <HqExceptionAi language={preferences.language} owner={ready.viewer.canGrantAndRevokeExceptions} refresh={refresh}/> : null}
+  </>;
 }

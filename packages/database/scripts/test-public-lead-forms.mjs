@@ -29,8 +29,9 @@ const count = async table => Number((await admin.query(`SELECT count(*) n FROM h
 const primary = ['people','crm_leads','crm_lead_attributions','public_lead_forms','public_lead_form_receipts','audit_events','outbox_events'];
 const countTables = async tables => { const result = {}; for (const table of tables) result[table] = await count(table); return result; };
 const counts = () => countTables(primary);
-const noEffects = ['communication_consents','communication_messages','crm_appointments','class_bookings','attendance_records','memberships','membership_payment_schedules','billing_accounts','invoices','payment_attempts','action_requests','action_approvals','ai_usage_ledger','ai_invocation_plans','work_items','crm_activities','student_profiles','outbox_delivery_attempts'];
-const monitorReadTables=[...new Set([...primary,'public_lead_form_versions','public_lead_form_requests',...noEffects])];
+// IC1 (0634): form submits now record email consent; that is checked on its own below.
+const noEffects = ['communication_messages','crm_appointments','class_bookings','attendance_records','memberships','membership_payment_schedules','billing_accounts','invoices','payment_attempts','action_requests','action_approvals','ai_usage_ledger','ai_invocation_plans','work_items','crm_activities','student_profiles','outbox_delivery_attempts'];
+const monitorReadTables=[...new Set([...primary,'public_lead_form_versions','public_lead_form_requests','communication_consents',...noEffects])];
 const monitorFootprint=async()=>({
   ...await countTables(monitorReadTables),
   public_lead_form_rates:Number((await admin.query('SELECT count(*) n FROM hon.public_lead_form_rates r JOIN hon.public_lead_forms f ON f.id=r.form_id WHERE f.organization_id=ANY($1::uuid[])',[[id.org,id.otherOrg]])).rows[0].n),
@@ -93,7 +94,7 @@ try {
   assert.equal(await forms.submit('f'.repeat(48),body(),randomUUID()),'invalid');
   const publishCtx=c(); const f=(await forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1})).form;
   assert((await forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1})).replayed);
-  const projection=await forms.published(f.publicId); assert.deepEqual(Object.keys(projection).sort(),['description','optionalFields','publicId','title']);
+  const projection=await forms.published(f.publicId); assert.deepEqual(Object.keys(projection).sort(),['description','optionalFields','publicId','schoolName','title']);
   // Create the sibling form through the public current API only. Its unique fields
   // must never cross the server-side single-school monitor boundary.
   const siblingForm=(await forms.mutate(c('sibling',id.sibling),'configure',null,config({title:'SIBLING_SENTINEL',description:'SIBLING_PRIVATE_DESCRIPTION',pipelineId:id.siblingPipeline,pipelineStageId:id.siblingStage}))).form;
@@ -218,9 +219,12 @@ try {
     assert.equal(await submit(f,body(),key),'invalid'); assert.equal(await forms.published(f.publicId),null);
     await admin.query(`UPDATE hon.${table} SET status='ACTIVE' WHERE id=$1`,[target]);
   }
+  // 0417 guards stage rows; this fixture-only flip of a stage to terminal bypasses it for the admin connection only.
+  await admin.query('ALTER TABLE hon.crm_pipeline_stages DISABLE TRIGGER crm_pipeline_stage_update_guard');
   await admin.query("UPDATE hon.crm_pipeline_stages SET terminal_status='WON' WHERE id=$1",[id.stage]);
   assert.equal(await submit(f,body(),key),'invalid'); assert.equal(await forms.published(f.publicId),null);
   await admin.query('UPDATE hon.crm_pipeline_stages SET terminal_status=NULL WHERE id=$1',[id.stage]);
+  await admin.query('ALTER TABLE hon.crm_pipeline_stages ENABLE TRIGGER crm_pipeline_stage_update_guard');
   // Exact permission revocation denies fresh commands and unchanged staff replay.
   await admin.query("DELETE FROM hon.role_permissions WHERE role_id=$1 AND permission_code='marketing.form.publish'",[id.role]); await deny(()=>forms.mutate(publishCtx,'publish',draft.id,{expectedVersion:1}));
   await admin.query("INSERT INTO hon.role_permissions VALUES($1,$2,'marketing.form.publish')",[id.role,id.org]);
@@ -324,8 +328,10 @@ try {
   await admin.query('UPDATE hon.organization_entitlements SET status=\'INACTIVE\' WHERE organization_id=$1',[id.org]).catch(async()=>{ await admin.query('UPDATE hon.organization_entitlements SET effective_until=clock_timestamp() WHERE organization_id=$1',[id.org]); });
   assert.equal(await submit(f),'invalid');
   assert.deepEqual(await countTables(noEffects),effectsBefore);
+  const ic1=(await admin.query("SELECT c.channel::text, c.status::text, c.source::text, k.method, count(*)::int n FROM hon.communication_consents c LEFT JOIN hon.communication_consent_captures k ON k.consent_id=c.id WHERE c.organization_id=ANY($1::uuid[]) GROUP BY 1,2,3,4 ORDER BY 4",[[id.org,id.otherOrg]])).rows;
+  assert.ok(ic1.length>0&&ic1.every(r=>r.channel==='EMAIL'&&r.status==='OPTED_IN'&&((r.source==='RECIPIENT'&&r.method==='LEAD_FORM')||(r.source==='STAFF'&&r.method==='STAFF_ADD'))),`IC1: form leads get email consent only (no text without the tick) ${JSON.stringify(ic1)}`);
   assert.equal((await admin.query("SELECT count(*) n FROM pg_trigger WHERE tgenabled='D' AND tgrelid IN('hon.public_lead_forms'::regclass,'hon.crm_leads'::regclass,'hon.crm_lead_attributions'::regclass)")).rows[0].n,'0');
-  console.log('Public form integration passed: exact human scope/lifecycle/revocation/lock waits, active campaign derivation, validation/honeypot, bounded contact/form rate controls, replay/duplicate races, no merge, immutable attribution, redaction, atomic rollback, no consent/messages/billing/AI/actions, private RLS/helper denial.');
+  console.log('Public form integration passed: exact human scope/lifecycle/revocation/lock waits, active campaign derivation, validation/honeypot, bounded contact/form rate controls, replay/duplicate races, no merge, immutable attribution, redaction, atomic rollback, email consent only (IC1), no messages/billing/AI/actions, private RLS/helper denial.');
 } finally {
   await admin.query('ROLLBACK');
   if(injection) await admin.query(`DROP TRIGGER IF EXISTS form_fixture_failure ON hon.${injection}`);

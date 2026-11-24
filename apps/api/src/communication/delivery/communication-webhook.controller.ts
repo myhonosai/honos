@@ -11,6 +11,7 @@ import {
 import { ZERNIO_LEAD_PATH, ZernioLeadWebhookVerifier, ZernioWebhookError } from './zernio-lead-webhook.js';
 import { HQ_MESSAGE_WORKER_STORE, type HqMessageWorkerStore } from '../../hq-communications/hq-message-dispatcher.js';
 import { EMPTY_VOICE_TWIML, REJECT_VOICE_TWIML, voiceForwardTwiml } from './missed-call-text-back.js';
+import { TWILIO_SUBACCOUNT_DIRECTORY, type TwilioSubaccountCredential, type TwilioSubaccountDirectory } from './twilio-subaccounts.js';
 
 const inboundLog = new Logger('CommunicationInboundText');
 
@@ -91,12 +92,39 @@ export class CommunicationWebhookController {
     @Inject(TWILIO_WEBHOOK_VERIFIER) private readonly twilio: TwilioWebhookVerifier,
     @Optional() @Inject(ZERNIO_LEAD_VERIFIER) private readonly zernio: ZernioLeadWebhookVerifier = new ZernioLeadWebhookVerifier(() => ({})),
     @Optional() @Inject(HQ_MESSAGE_WORKER_STORE) private readonly hqStore?: HqMessageWorkerStore,
+    @Optional() @Inject(TWILIO_SUBACCOUNT_DIRECTORY) private readonly subaccounts?: TwilioSubaccountDirectory,
   ) {}
+
+  /**
+   * T1 (0351): the credential for a school-subaccount webhook. The body's AccountSid only chooses which token to try;
+   * the signature decides. Parent-account events (HQ, hand-entered 0248 senders) return undefined and verify as before.
+   * An unknown or inactive subaccount is refused like a bad signature; directory trouble is a retry.
+   */
+  private async subaccountFor(body: Buffer): Promise<TwilioSubaccountCredential | undefined> {
+    const sid = this.twilio.accountSidOf(body);
+    if (!sid || this.twilio.isParentAccount(sid)) return undefined;
+    if (!this.subaccounts) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    let credential;
+    try { credential = await this.subaccounts.webhookCredential(sid); }
+    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+    if (!credential) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    return { accountSid: credential.accountSid, authToken: credential.authToken };
+  }
+
+  /** A verified subaccount event must be about a number of that subaccount's school (never another school's). */
+  private async requireNumberInSubaccount(subaccount: TwilioSubaccountCredential | undefined, phone: string | null | undefined): Promise<void> {
+    if (!subaccount) return;
+    let owned = false;
+    try { owned = Boolean(phone) && await this.subaccounts!.numberInAccount(subaccount.accountSid, phone!); }
+    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+    if (!owned) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+  }
 
   /** 0281: status callbacks for HQ texts, signed over their own path and resolved only against HQ deliveries. */
   @Post('twilio/hq-status') @HttpCode(200)
   async twilioHqStatus(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<WebhookIngestSummary> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    // HQ texts go only from the parent account; a subaccount event fails the parent-only signature check.
     let receipt;
     try { receipt = this.twilio.hqStatus(req.body, signature); }
     catch (error) { throw twilioError(error); }
@@ -105,19 +133,44 @@ export class CommunicationWebhookController {
 
   /**
    * 0250 Zernio `lead.received`: a signed Meta Lead Gen lead becomes a CRM lead only through an HQ-mapped form.
+   * 0348 adds signed `post.published`, `post.failed` and `account.disconnected` receipts on the same endpoint, and
+   * 0435 signed `message.received` / `comment.received` inbox events.
    * An unmapped form answers 422 (Zernio does not retry; the event waits in its dead-letter queue for redelivery
    * once HQ maps the form). A rate limit answers 429 and database trouble 503, which Zernio retries.
    */
   @Post('zernio') @HttpCode(200)
   async zernioLead(@Req() req: Request, @Headers('x-zernio-signature') signature: string | undefined): Promise<{ received: true }> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
-    let lead;
-    try { lead = this.zernio.verify(req.body, signature); }
+    let delivery;
+    try { delivery = this.zernio.receive(req.body, signature); }
     catch (error) {
       if (error instanceof ZernioWebhookError && error.reason === 'NOT_CONFIGURED') throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
       throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
     }
-    if (!lead) return { received: true };
+    if (!delivery) return { received: true };
+    if (delivery.kind === 'SOCIAL') {
+      // 0348: a post or account receipt. Unmatched receipts are acknowledged (they are not HON's posts); database
+      // trouble answers 503 so Zernio retries.
+      if (!this.store.isConfigured() || !this.store.recordSocialPostEvent) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+      try { await this.store.recordSocialPostEvent(delivery.event); }
+      catch (error) {
+        if ((error as { code?: string })?.code === '22023') throw new UnprocessableEntityException({ code: 'ZERNIO_EVENT_INVALID' });
+        throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+      }
+      return { received: true };
+    }
+    if (delivery.kind === 'INBOX') {
+      // 0435: an inbound DM or comment. Unmatched or switched-off accounts are acknowledged; database trouble answers
+      // 503 so Zernio retries, and a retried event id is recorded once.
+      if (!this.store.isConfigured() || !this.store.recordSocialInboxEvent) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+      try { await this.store.recordSocialInboxEvent(delivery.event); }
+      catch (error) {
+        if ((error as { code?: string })?.code === '22023') throw new UnprocessableEntityException({ code: 'ZERNIO_EVENT_INVALID' });
+        throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+      }
+      return { received: true };
+    }
+    const lead = delivery.lead;
     if (!this.store.isConfigured() || !this.store.recordZernioLead) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     let result;
     try { result = await this.store.recordZernioLead(lead); }
@@ -133,9 +186,12 @@ export class CommunicationWebhookController {
   @Post('twilio/status') @HttpCode(200)
   async twilioStatus(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<WebhookIngestSummary> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    const subaccount = await this.subaccountFor(req.body);
     let receipt;
-    try { receipt = this.twilio.status(req.body, signature); }
+    try { receipt = this.twilio.status(req.body, signature, subaccount); }
     catch (error) { throw twilioError(error); }
+    // The school number a status callback is about is the sender (From).
+    await this.requireNumberInSubaccount(subaccount, formValue(req.body, 'From'));
     return ingestReceipts(this.store, receipt ? [receipt] : [], receipt ? 0 : 1);
   }
 
@@ -148,11 +204,14 @@ export class CommunicationWebhookController {
   @Post('twilio/inbound') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
   async twilioInbound(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    const subaccount = await this.subaccountFor(req.body);
     let keyword;
     let text;
-    try { keyword = this.twilio.inbound(req.body, signature); text = this.twilio.inboundText(req.body, signature); }
+    try { keyword = this.twilio.inbound(req.body, signature, subaccount); text = this.twilio.inboundText(req.body, signature, subaccount); }
     catch (error) { throw twilioError(error); }
-    if (text && this.hqStore?.recordInbound && this.hqStore.isConfigured()) {
+    await this.requireNumberInSubaccount(subaccount, formValue(req.body, 'To'));
+    // HQ's Messaging Service is on the parent account, so a school subaccount text is never offered to HQ.
+    if (!subaccount && text && this.hqStore?.recordInbound && this.hqStore.isConfigured()) {
       let result;
       try { result = await this.hqStore.recordInbound({ provider: 'TWILIO', ...text }); }
       catch {
@@ -161,7 +220,7 @@ export class CommunicationWebhookController {
       }
       if (result.outcome !== 'NOT_HQ') return hqInboundTwiml(result);
     }
-    if (!keyword) return EMPTY_TWIML;
+    if (!keyword) return this.recordConversationText(req.body, signature, subaccount);
     if (!this.store.isConfigured() || !this.store.recordInboundKeyword) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     try { await this.store.recordInboundKeyword(keyword); }
     catch {
@@ -174,15 +233,36 @@ export class CommunicationWebhookController {
   }
 
   /**
+   * 0364: any other text to a school number is a message in that school's conversations inbox (unknown, disabled or
+   * lapsed schools are UNROUTED and nothing is stored). Nothing is answered here: replies go through the delivery queue.
+   */
+  private async recordConversationText(body: Buffer, signature: string | undefined, subaccount: TwilioSubaccountCredential | undefined): Promise<string> {
+    if (!this.store.recordInboundConversationText) return EMPTY_TWIML;
+    if (!this.store.isConfigured()) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
+    let text;
+    try { text = this.twilio.inboundMessage(body, signature, subaccount); }
+    catch (error) { throw twilioError(error); }
+    try { await this.store.recordInboundConversationText(text); }
+    catch {
+      // Twilio does not retry inbound webhooks: log the message id only (never numbers or text) for reconciliation.
+      inboundLog.warn(`Inbound conversation text not recorded; reconcile Twilio message ${text.providerMessageId}.`);
+      throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+    }
+    return EMPTY_TWIML;
+  }
+
+  /**
    * 0249 incoming call to a school number: forward to the school's own phone, or, with no forwarding phone,
    * record the call as missed and hang up. A number that is not an ACTIVE school sender is rejected.
    */
   @Post('twilio/voice') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
   async twilioVoice(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    const subaccount = await this.subaccountFor(req.body);
     let call;
-    try { call = this.twilio.voice(req.body, signature); }
+    try { call = this.twilio.voice(req.body, signature, subaccount); }
     catch (error) { throw twilioError(error); }
+    await this.requireNumberInSubaccount(subaccount, call.to);
     const origin = twilioPublicOrigin(process.env);
     if (!this.store.isConfigured() || !this.store.readMissedCallRoute || !this.store.recordMissedCall || !origin) {
       throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
@@ -204,9 +284,11 @@ export class CommunicationWebhookController {
   @Post('twilio/voice-result') @HttpCode(200) @Header('content-type', 'text/xml; charset=utf-8')
   async twilioVoiceResult(@Req() req: Request, @Headers('x-twilio-signature') signature: string | undefined): Promise<string> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    const subaccount = await this.subaccountFor(req.body);
     let missed;
-    try { missed = this.twilio.voiceResult(req.body, signature); }
+    try { missed = this.twilio.voiceResult(req.body, signature, subaccount); }
     catch (error) { throw twilioError(error); }
+    await this.requireNumberInSubaccount(subaccount, formValue(req.body, 'To'));
     if (!missed) return EMPTY_VOICE_TWIML;
     if (!this.store.isConfigured() || !this.store.recordMissedCall) throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     try { await this.store.recordMissedCall(missed); }
@@ -248,6 +330,12 @@ export function hqInboundTwiml(result: { reply: string | null; replyText: string
   if (result.replayed || !result.reply || !result.replyText || !HQ_TWIML_REPLY_KINDS.has(result.reply)) return EMPTY_TWIML;
   const body = result.replyText.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${body}</Message></Response>`;
+}
+
+/** One form field of an already verified Twilio body. */
+function formValue(body: Buffer, name: string): string | null {
+  const values = new URLSearchParams(body.toString('utf8')).getAll(name);
+  return values.length === 1 ? values[0]! : null;
 }
 
 function twilioError(error: unknown): Error {

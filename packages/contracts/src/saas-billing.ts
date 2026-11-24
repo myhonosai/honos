@@ -48,6 +48,9 @@ export const SAAS_PLAN_CAPABILITIES: Record<SaasPlanCode, readonly string[]> = {
 /** Human-command header values, one per command route. */
 export const SAAS_COMMANDS = {
   setSchoolTextSender: 'hq-school-text-sender-set',
+  decideSchoolNumberOrder: 'hq-school-number-order-decide',
+  settleSchoolNumberOrder: 'hq-school-number-order-settle',
+  decideSchoolA2pRegistration: 'hq-school-a2p-registration-decide',
   setSchoolMissedCallSettings: 'hq-school-missed-call-settings-set',
   setZernioLeadForm: 'hq-zernio-lead-form-set',
   recordSubscriptionGeneration: 'saas-subscription-generation-record',
@@ -103,8 +106,11 @@ export const SAAS_COMMANDS = {
   decideExceptionPolicy: 'saas-access-exception-policy-decision',
   aiSpendPause: 'ai-spend-pause',
   aiSchoolCostLimit: 'ai-school-cost-limit',
+  aiExceptionAllowance: 'ai-exception-allowance',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
+  // CA2a (0420): the Conversation AI program switch (HQ owner).
+  conversationAiProgram: 'conversation-ai-program',
   setCreativeProgram: 'saas-creative-program',
   publishCreativeRates: 'saas-creative-rates-publish',
   grantCreativeCredits: 'saas-creative-grant',
@@ -116,6 +122,8 @@ export const SAAS_COMMANDS = {
   createCreativeGeneration: 'saas-creative-generation-create',
   // A1 (0276): Creative Studio avatars.
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
+  // C1 (0354): HON's daily provider spend guard and per-school daily caps (HQ owner).
+  creativeProviderDailyLimit: 'saas-creative-provider-daily-limit', creativeSchoolDailyCaps: 'saas-creative-school-daily-caps',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
