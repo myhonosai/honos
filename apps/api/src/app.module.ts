@@ -167,6 +167,9 @@ import { JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, JORDAN_FOLLOW_UP_TEXT_PROFILE } from
 import { MarcusReviewController } from './marcus-review/marcus-review.controller.js';
 import { MarcusReviewService } from './marcus-review/marcus-review.service.js';
 import { MARCUS_REVIEW_PROVIDER_RUNTIME, MARCUS_REVIEW_TEXT_PROFILE } from './marcus-review/marcus-review-provider.js';
+import { ClaireKpiController } from './claire-kpi/claire-kpi.controller.js';
+import { ClaireKpiService } from './claire-kpi/claire-kpi.service.js';
+import { CLAIRE_KPI_PROVIDER_RUNTIME, CLAIRE_KPI_TEXT_PROFILE } from './claire-kpi/claire-kpi-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -688,6 +691,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AlexPlanController,
     JordanFollowUpController,
     MarcusReviewController,
+    ClaireKpiController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -999,10 +1003,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AlexPlanService,
     JordanFollowUpService,
     MarcusReviewService,
+    ClaireKpiService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
     { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
     { provide: JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, JORDAN_FOLLOW_UP_TEXT_PROFILE) },
     { provide: MARCUS_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MARCUS_REVIEW_TEXT_PROFILE) },
+    { provide: CLAIRE_KPI_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CLAIRE_KPI_TEXT_PROFILE) },
     { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,

@@ -6705,6 +6705,47 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End Marcus marketing review exact verification.
+-- Claire KPI report exact verification (0643): the CLAIRE_KPI_REPORT kind row on the shared AI text proposals (0550), the
+-- closed brief and answer shapes, the private helpers, the seven runtime entry points and the closed counted-numbers table.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_claire_kpi_report(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','2811b1522b63df712ef83488fa829f20edb230e77271a06d1d19bc0a8076cb89'),
+('hon.claire_kpi_actor(text)',true,false,'search_path=pg_catalog, hon','42ba0cdba67ce8a8bb2f802d907fa6100f0c920281c344ffbcb6641bee12a1e2'),
+('hon.claire_kpi_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','14a7de81c5514f8695b22bee2007c231b7c8c9c45261f9eba26d6e66e88f5cbd'),
+('hon.claire_kpi_codes()',false,false,'search_path=pg_catalog','342f0db44634580b5927ec2040ebde82f6cabf06f9cb07ad4aa79f2423b7c127'),
+('hon.claire_kpi_count(integer)',true,false,'search_path=pg_catalog, hon','530271cbc77858de32410cda666b122e02e9ccd91419442264c35ec8bd299d3b'),
+('hon.claire_kpi_facts(text,uuid,jsonb)',true,false,'search_path=pg_catalog, hon','ff127274dcaab7b1747d263fb8f4ab82aedf374b398085cc95a4ca7e1cae6d15'),
+('hon.claire_kpi_ok(jsonb)',false,false,'search_path=pg_catalog, hon','02f5f7e50651ad10f8d8bd82c03983bae4e853c618ce6f6d21ee81db07816a2a'),
+('hon.claire_kpi_reader(text)',true,false,'search_path=pg_catalog, hon','a5e93d7891f06baed5503d25f510a3f9d6aa84f17e19fa6fac9b881303ee2745'),
+('hon.claire_kpi_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','6acc8eb345d5543895292abbf0d2c03e2b3cca942727478d41579faf36b99136'),
+('hon.close_claire_kpi_report(text,uuid,text)',true,true,'search_path=pg_catalog, hon','d3695bed80061ef5c863bc2340e178b66f9f7935fb654c34a19bc063687cbf04'),
+('hon.fail_claire_kpi_report(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','98720caf46d89096838312bdd011be4a9446e656f66682215039b6c81549e293'),
+('hon.plan_claire_kpi_report(text,uuid)',true,true,'search_path=pg_catalog, hon','22a610d704fa3433d7f8b41082eebc9bd999c19f5cc9cbf6641174fa20243308'),
+('hon.prepare_claire_kpi_report(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','5841a374817a36fb179bd0fb9b9bc3750cae0cc30ffeb6716ac3563e374d2558'),
+('hon.read_claire_kpi_reports(text,uuid)',true,true,'search_path=pg_catalog, hon','7a2f1787e4516c1b7aee5d143288bf1bc183d17d0b62ae3f5b67f3edc83b14ca'),
+('hon.record_claire_kpi_report(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','a533b111176938276ea34a3f460fd6793313cb3bf06c5636e475f6839e9c472f'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Claire KPI report function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='CLAIRE_KPI_REPORT' AND k.agent_key='claire' AND k.task_class='ANALYZE'
+      AND k.input_budget=12000 AND k.output_budget=3000 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='BUSINESS_PERFORMANCE') THEN
+    RAISE EXCEPTION 'Claire KPI report kind row missing or changed';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.claire_kpi_report_numbers'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','SELECT') OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','INSERT')
+    OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','UPDATE') OR has_table_privilege('hon_runtime','hon.claire_kpi_report_numbers','DELETE') THEN
+    RAISE EXCEPTION 'Claire KPI report numbers table is not closed';
+  END IF;
+END $$;
+-- End Claire KPI report exact verification.
 
 -- Membership plan payment options exact verification (0642): three runtime entry points, six private helpers, two forced-RLS tables.
 DO $$ DECLARE f text; t text; c text; d boolean; s text;

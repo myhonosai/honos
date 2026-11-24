@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "52a198a793f4dd58f4701d8d84b71c862fca6d044b024f24ed5dd4a3b4a40a8c",
+  "chainSha256": "027307de33d8f36e6e8241d662b5303f0eec2158ecaaef2f8a6e07e70533aee5",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -905,6 +905,10 @@
     {
       "file": "0642_membership_plan_payment_options.sql",
       "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
+    },
+    {
+      "file": "0643_claire_kpi_report.sql",
+      "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
     },
     {
       "file": "0644_booking_invoice_security_hygiene.sql",

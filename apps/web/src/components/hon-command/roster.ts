@@ -150,7 +150,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Business performance analysis from verified school metrics (Ask HON → Claire)', state: 'AVAILABLE' },
-      { label: 'KPI reports and dashboards', state: 'BACKEND_REQUIRED' },
+      { label: 'KPI report on leads, memberships and attendance against the period before (KPI report with Claire, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Operations dashboard', href: '/staff/dashboard' },
