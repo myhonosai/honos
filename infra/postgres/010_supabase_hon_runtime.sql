@@ -5170,9 +5170,6 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
   END IF;
 END $$;
 
-  END IF;
-END $$;
-
 -- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];
