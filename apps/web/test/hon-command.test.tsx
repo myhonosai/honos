@@ -147,6 +147,8 @@ describe('Plan with Alex in the team view', () => {
     const { snapshot } = await loaded();
     expect(view(snapshot, 'team', 'jordan')).toContain('id="jordan-follow-up"');
     expect(view(snapshot, 'team', 'alex')).not.toContain('id="jordan-follow-up"');
+    expect(view(snapshot, 'team', 'marcus')).toContain('id="marcus-review"');
+    expect(view(snapshot, 'team', 'jordan')).not.toContain('id="marcus-review"');
   });
 });
 
