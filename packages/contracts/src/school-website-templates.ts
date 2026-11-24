@@ -2,7 +2,7 @@
 // deterministic fill of school facts HON already holds (name, contact details); it is not AI. The same edit operations
 // are what the owner's editor applies today and what AI edit proposals (WB5) will be limited to.
 import {
-  WEBSITE_MAX_PAGES, WEBSITE_MAX_SECTIONS, WEBSITE_SECTION_SPECS, WEBSITE_SECTION_ID, WEBSITE_PAGE_SLUG, validateWebsiteDocument,
+  WEBSITE_MAX_PAGES, WEBSITE_MAX_SECTIONS, WEBSITE_SECTION_SPECS, WEBSITE_SECTION_ID, WEBSITE_PAGE_SLUG, validateWebsiteDocument, websiteBuiltInPageSlug,
   type WebsiteDocument, type WebsitePage, type WebsitePageKind, type WebsiteSection, type WebsiteSectionType, type WebsiteTemplate, type WebsiteTheme,
 } from './school-website.js';
 
@@ -132,7 +132,7 @@ export function applyWebsiteEdit(document: WebsiteDocument, edit: WebsiteEdit): 
       [p.sections[i], p.sections[j]] = [p.sections[j]!, p.sections[i]!]; break;
     }
     case 'addPage': {
-      if (doc.pages.length >= WEBSITE_MAX_PAGES || !WEBSITE_PAGE_SLUG.test(edit.slug) || doc.pages.some(p => p.slug === edit.slug)) throw new Error('Invalid website edit.');
+      if (doc.pages.length >= WEBSITE_MAX_PAGES || !WEBSITE_PAGE_SLUG.test(edit.slug) || websiteBuiltInPageSlug(edit.slug) || doc.pages.some(p => p.slug === edit.slug)) throw new Error('Invalid website edit.');
       doc.pages.push(page(edit.slug, edit.kind, edit.title, [section('HERO', 'hero', { heading: edit.title })], edit.kind === 'PROGRAM' || edit.kind === 'CUSTOM')); break;
     }
     case 'removePage': {

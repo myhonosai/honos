@@ -52,3 +52,7 @@ membership, schedule, price or payment.
 provider and refused network: custody, what is and is not sent, apply through 0080 with replay, refusals (open review, changed
 membership), rejected answers, unknown outcome and RETENTION usage, gates and isolation, append-only evidence, and the 0646 exact
 011 section.
+
+The 0177 membership benefit-path guard (`test-membership-activation-gate-integrity.mjs`) lists the five 0646 functions that
+read `hon.memberships` (`apply_maya_renewal_preps`, `maya_renewal_facts`, `maya_renewal_fix_refs`, `maya_renewal_view`,
+`record_maya_renewal_prep`) as reviewed readers. None of them changes a membership or grants a booking, attendance or check-in benefit.
