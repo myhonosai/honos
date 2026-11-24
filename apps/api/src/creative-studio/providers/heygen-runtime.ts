@@ -103,7 +103,7 @@ export class HeyGenCreativeRuntime implements AsyncCreativeProviderRuntime {
     const seconds = Math.ceil(duration);
     const [width, height] = SIZE[job.format];
     return { state: 'DONE', downloads: [{ url, mediaType: 'video/mp4' }], result: { finalUnits: seconds,
-      providerCostMicrounits: (HEYGEN_API.costMicrosPerSecond[job.operationCode] ?? 0) * seconds,
+      providerCostMicrounits: (HEYGEN_API.costMicrosPerSecond[job.operationCode] ?? 0) * seconds, providerCostBasis: 'HON_ESTIMATE',
       assets: [{ mediaType: 'video/mp4', width, height, durationSeconds: seconds, providerAssetReference: `heygen:${job.providerJobId}:1` }] } };
   }
 

@@ -35,7 +35,9 @@ export function LocaleProvider({initial,scope,children}:{initial:LocalePreferenc
     catch(e){if(!owned())return;setRemote(null);setSync(attempt.current?'unknown':e instanceof LanguageApiError&&e.kind==='DENIED'?'denied':'unavailable');}
   },[scope,apply]);
   const retarget=useCallback(()=>{const next=claims.current.page??claims.current.shell;if(school.current===next||busy.current)return;school.current=next;void refresh();},[refresh]);
-  useEffect(()=>{void refresh();return()=>{++epoch.current;readAbort.current?.abort();};},[refresh]);
+  // A scope change or unmount retires every read and command still out, as a session end does: the retired save's
+  // finally no longer owns the provider, so busy and any held command are cleared here or language stays blocked.
+  useEffect(()=>{void refresh();return()=>{++epoch.current;readAbort.current?.abort();readAbort.current=null;busy.current=false;attempt.current=null;};},[refresh]);
   useEffect(()=>{
     // A session end retires the remote view, any held command and every read or answer still out.
     const retire=()=>{++epoch.current;readAbort.current?.abort();readAbort.current=null;attempt.current=null;busy.current=false;claims.current={shell:null,page:null};school.current=null;setRemote(null);setSync(scope?'denied':'unavailable');};
