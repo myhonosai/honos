@@ -1,12 +1,12 @@
 import React from 'react';
-import { PAPER_IMPORT_KINDS, PAPER_IMPORT_MAX_PAGES, type PaperImportDetail, type PaperImportKind, type PaperImportList, type PaperImportSummary } from '@hon/contracts';
+import { PAPER_IMPORT_KINDS, PAPER_IMPORT_MAX_PAGES, type PaperImportDetail, type PaperReadingState, type PaperImportKind, type PaperImportList, type PaperImportSummary } from '@hon/contracts';
 import { paperCopy, type PaperCopyKey } from './copy';
 import type { PaperErrorKind } from './http';
 import shared from '../student-import/student-import.module.css';
 import styles from './paper-import.module.css';
 
 type T = (key: PaperCopyKey, values?: Record<string, string | number>) => string;
-export type PaperAction = 'create' | 'page' | 'read' | 'save' | 'send' | 'remove';
+export type PaperAction = 'create' | 'page' | 'read' | 'type' | 'save' | 'send' | 'remove';
 export type PaperListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; list: PaperImportList };
 export type PaperDetailState = { state: 'IDLE' | 'LOADING' | 'DENIED' | 'GONE' | 'UNAVAILABLE' } | { state: 'READY'; detail: PaperImportDetail };
 /** The table as staff edit it, for one set at one version. `dirty` means the server does not have these edits yet. */
@@ -22,7 +22,7 @@ export type PaperImportViewProps = Readonly<{
   onRefresh?: (() => void) | undefined; onOpen?: ((setId: string | null) => void) | undefined;
   onStartKind?: ((kind: PaperImportKind) => void) | undefined; onStart?: (() => void) | undefined;
   onFiles?: ((files: readonly File[]) => void) | undefined; onSample?: (() => void) | undefined; onView?: ((pageNo: number) => void) | undefined;
-  onRead?: (() => void) | undefined; onCell?: ((row: number, column: number, value: string) => void) | undefined;
+  onRead?: (() => void) | undefined; onType?: (() => void) | undefined; onCell?: ((row: number, column: number, value: string) => void) | undefined;
   onAddRow?: (() => void) | undefined; onRemoveRow?: ((row: number) => void) | undefined; onSave?: (() => void) | undefined;
   onSend?: (() => void) | undefined; onDelete?: ((confirmed: boolean | null) => void) | undefined; onTryAgain?: (() => void) | undefined;
 }>;
@@ -33,6 +33,16 @@ export function shownDetail(p: Pick<PaperImportViewProps, 'detail' | 'selected'>
   return p.detail.state === 'READY' && p.detail.detail.set.id.toLowerCase() === p.selected?.toLowerCase() ? p.detail.detail : null;
 }
 /** Rows with at least one filled cell: what Send to review sends (the server drops blank rows the same way). */
+/** HON may be asked to read only while its one reading is not yet claimed (the server's own rule); typing is always open. */
+export const canAskHon = (a: PaperReadingState | null) => a === null || a.status === 'PENDING' || a.status === 'CONFIGURATION_REQUIRED' || a.status === 'BLOCKED';
+const NOT_SET_UP: readonly string[] = ['CONFIGURATION_REQUIRED', 'NO_ELIGIBLE_ROUTE', 'UNSUPPORTED_PROVIDER', 'ROUTE_STALE', 'GATE_CLOSED'];
+/** What HON's reading state means for an open set, or null when there is nothing to say. */
+export function readingNotice(a: PaperReadingState | null): PaperCopyKey | null {
+  if (a === null || a.status === 'PENDING') return null;
+  if (a.status === 'CONFIGURATION_REQUIRED') return 'ai_NOT_SET_UP';
+  if (a.status === 'BLOCKED') return a.reason && NOT_SET_UP.includes(a.reason) ? 'ai_NOT_SET_UP' : a.reason === 'CUSTOMER_BUDGET_EXCEEDED' || a.reason === 'AI_SPEND_STOPPED' ? 'ai_LIMIT' : 'ai_OTHER';
+  return a.status === 'SENDING' ? 'ai_SENDING' : a.status === 'UNKNOWN' ? 'ai_UNKNOWN' : a.status === 'FAILED' ? 'ai_FAILED' : 'ai_OTHER';
+}
 export const filledRows = (rows: readonly (readonly string[])[]) => rows.filter((r) => r.some((c) => c.trim() !== '')).length;
 
 function Recent({ p, t }: { p: PaperImportViewProps; t: T }) {
@@ -136,7 +146,12 @@ function SetCard({ p, t }: { p: PaperImportViewProps; t: T }) {
         </div>
         {set.status === 'OPEN' ? <div className={shared.form} data-testid="paper-import-read">
           <h3>{t('readTitle')}</h3><p className={shared.meta}>{t('readHelp')}</p>
-          <div className={shared.row}><button type="button" className={shared.primary} disabled={p.locked || detail.pages.length === 0} onClick={p.onRead}>{p.outcome?.kind === 'SENDING' && p.outcome.action === 'read' ? t('reading') : t('read')}</button></div>
+          {readingNotice(detail.aiReading) ? <p className={`${shared.notice} ${shared.warn}`} role="status" data-testid="paper-import-ai-reading" data-status={detail.aiReading?.status}>{t(readingNotice(detail.aiReading)!)}</p> : null}
+          <div className={shared.row}>
+            {canAskHon(detail.aiReading) ? <button type="button" className={shared.primary} disabled={p.locked || detail.pages.length === 0} onClick={p.onRead} data-testid="paper-import-ask-hon">{p.outcome?.kind === 'SENDING' && p.outcome.action === 'read' ? t('reading') : t('read')}</button> : null}
+            <button type="button" className={shared.secondary} disabled={p.locked || detail.pages.length === 0 || detail.aiReading?.status === 'SENDING'} onClick={p.onType} data-testid="paper-import-type">{t('typeRows')}</button>
+          </div>
+          <p className={shared.meta}>{t('typeHelp')}</p>
         </div> : null}
         {set.status === 'READ' && draft ? <div className={shared.form} data-testid="paper-import-send">
           <h3>{t('sendTitle')}</h3><p className={shared.meta}>{t('sendHelp')}</p>

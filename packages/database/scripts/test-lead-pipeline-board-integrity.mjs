@@ -196,7 +196,7 @@ async function seed() {
   };
   await sql("INSERT INTO hon.crm_appointments(organization_id,school_id,crm_lead_id,appointment_type,status,starts_at,ends_at,created_by_principal_id) VALUES($1,$2,$3,'TRIAL','SCHEDULED',now()+interval '2 days',now()+interval '2 days 1 hour',$4)",
     [ids.organization, ids.schoolA, L.c, OWN.principal]);
-  // 0592 text opt-out: Ben opted out of texts; Ava opted out of email only; Cal opted in to texts.
+  // 0662 text opt-out: Ben opted out of texts; Ava opted out of email only; Cal opted in to texts.
   for (const [leadId, channel, status] of [[L.b, 'SMS', 'OPTED_OUT'], [L.a, 'EMAIL', 'OPTED_OUT'], [L.c, 'SMS', 'OPTED_IN']]) {
     await sql(`INSERT INTO hon.communication_consents(organization_id,school_id,person_id,channel,status,source,captured_at,updated_by_principal_id)
       SELECT organization_id,school_id,primary_person_id,$2::hon.communication_consent_channel,$3::hon.communication_consent_status,'STAFF',now(),$4 FROM hon.crm_leads WHERE id=$1`,
@@ -229,7 +229,7 @@ try {
   const ava = open.leads[0], cal = open.leads[2];
   ok(ava.programInterestCode === 'Tiny Tigers' && ava.sourceCode === 'facebook' && ava.nextTrialAt === null, 'program and source on the card');
   ok(cal.nextTrialAt !== null && cal.lastTrialAt === null, 'next trial date on the card');
-  ok(open.leads.map((l) => l.textOptedOut).join(',') === 'false,true,false', 'text opt-out (0592) only for an SMS OPTED_OUT consent of the same person');
+  ok(open.leads.map((l) => l.textOptedOut).join(',') === 'false,true,false', 'text opt-out (0662) only for an SMS OPTED_OUT consent of the same person');
   ok(!JSON.stringify(open).includes('Olly'), 'other organization never shown');
   const closed = (await success(() => board(READER, { query: '?status=CLOSED' }), 'reader closed board')).data;
   ok(closed.leads.map((l) => l.status).sort().join(',') === 'LOST,WON', 'closed shows won and lost');
@@ -332,7 +332,7 @@ try {
     ok(section, begin);
     await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: lead pipeline board (0417, 0592 text opt-out): ${checks} checks.`);
+  console.log(`PASS: lead pipeline board (0417, 0662 text opt-out): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

@@ -3,7 +3,9 @@ import {
   verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult, validateShopifyProposeInput, validateShopifyChangeCommandInput, verifyShopifyProductChanges, verifyShopifyChangeResult,
   type ShopifyCatalog, type ShopifyProductChanges, type ShopifyChangeResult, type ShopifyDraftChanges, type ShopifyUpdateChanges, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
-  type ShopifySyncResult,
+  type ShopifySyncResult, type ShopifyFinanceView, verifyShopifyFinanceView,
+  validateShopifyStorefrontPublish, validateShopifyStorefrontSave, verifyShopifyStorefront, verifyShopifyStorefrontPublishResult,
+  type ShopifyStorefront, type ShopifyStorefrontPublishResult, type ShopifyStorefrontSettings,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -13,7 +15,8 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
  */
 export type ShopifyErrorKind =
   'SESSION' | 'DENIED' | 'NOT_ENABLED' | 'STATE' | 'TAKEN' | 'OTHER_STORE' | 'STALE' | 'BUSY' | 'NOT_CONNECTED' | 'LIMIT' | 'REJECTED' | 'SCOPES' | 'INVALID' | 'UNKNOWN'
-  | 'EDIT_OFF' | 'CHANGE_STALE' | 'CHANGE_OPEN' | 'CHANGE_DONE' | 'ATTEMPTS' | 'TOO_MANY';
+  | 'EDIT_OFF' | 'CHANGE_STALE' | 'CHANGE_OPEN' | 'CHANGE_DONE' | 'ATTEMPTS' | 'TOO_MANY'
+  | 'STOREFRONT_BUSY' | 'STOREFRONT_DONE' | 'STOREFRONT_LIMIT';
 export class ShopifyError extends Error { constructor(readonly kind: ShopifyErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
 
@@ -38,6 +41,9 @@ export function shopifyErrorFor(status: number, code: string | null): ShopifyErr
   if (status === 409 && (code === 'SHOPIFY_CHANGE_NOT_PENDING' || code === 'SHOPIFY_CHANGE_NOT_LEASED')) return new ShopifyError('CHANGE_DONE', code);
   if (status === 409 && code === 'SHOPIFY_CHANGE_ATTEMPTS') return new ShopifyError('ATTEMPTS', code);
   if (status === 409 && code === 'SHOPIFY_TOO_MANY_DRAFTS') return new ShopifyError('TOO_MANY', code);
+  if (status === 409 && code === 'SHOPIFY_STOREFRONT_BUSY') return new ShopifyError('STOREFRONT_BUSY', code);
+  if (status === 409 && code === 'SHOPIFY_STOREFRONT_NOT_LEASED') return new ShopifyError('STOREFRONT_DONE', code);
+  if (status === 429 && code === 'SHOPIFY_STOREFRONT_LIMIT') return new ShopifyError('STOREFRONT_LIMIT', code);
   if ((status === 409 && code === 'SHOPIFY_NOT_CONNECTED') || (status === 404 && code === 'SHOPIFY_NOT_FOUND')) return new ShopifyError('NOT_CONNECTED', code);
   if (status === 429) return new ShopifyError('LIMIT', code);
   if (status === 503 && code === 'SHOPIFY_CONNECT_OFF') return new ShopifyError('NOT_ENABLED', code);
@@ -87,8 +93,10 @@ export const shopifyApi = {
     return out;
   },
   /** Starts a connection. The answer is Shopify's approval page (or, in development, HON's own return page). */
-  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false): Promise<ShopifyConnectStart> {
-    const body = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing });
+  async connect(schoolId: string, shopDomain: string, signal: AbortSignal, owned: Owned, allowEditing = false, allowFinance = false, allowOrders = false): Promise<ShopifyConnectStart> {
+    // allowOrders (0614) is sent only when asked for, so the request is unchanged for everyone else.
+    const { allowOrders: orders, ...plain } = input(validateShopifyConnectInput, { schoolId: school(schoolId), shopDomain, allowEditing, allowFinance, allowOrders });
+    const body = orders ? { ...plain, allowOrders: true } : plain;
     const out = await answer('/api/v1/school/shopify/connect', signal, owned, verifyShopifyConnectStart, JSON.stringify(body));
     if (out.shopDomain !== body.shopDomain) throw new ShopifyError('UNKNOWN');
     const url = new URL(out.authorizeUrl);
@@ -108,6 +116,34 @@ export const shopifyApi = {
     const body = input(validateShopifyDisconnectInput, { schoolId: school(schoolId), connectionId, expectedVersion });
     const out = await answer('/api/v1/school/shopify/disconnect', signal, owned, verifyShopifyDisconnectResult, JSON.stringify(body));
     if (out.connection.connectionId.toLowerCase() !== body.connectionId.toLowerCase()) throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  /** SH-F1 (commerce.shopify.manage): the Shopify Payments balance, payouts and recent balance transactions HON last read. */
+  async finance(schoolId: string, signal: AbortSignal, owned: Owned): Promise<ShopifyFinanceView> {
+    const id = school(schoolId);
+    const out = await answer(`/api/v1/school/schools/${id}/shopify/finance`, signal, owned, verifyShopifyFinanceView);
+    if (out.schoolId.toLowerCase() !== id) throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  /** TB2 (commerce.shopify.manage): the saved storefront settings, whether they are live, and the theme editor links. */
+  async storefront(schoolId: string, signal: AbortSignal, owned: Owned): Promise<ShopifyStorefront> {
+    const id = school(schoolId);
+    const out = await answer(`/api/v1/school/schools/${id}/shopify/storefront`, signal, owned, verifyShopifyStorefront);
+    if (out.schoolId.toLowerCase() !== id) throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  /** Saves the settings in HON (nothing reaches Shopify). expectedVersion is null for the first save. */
+  async saveStorefront(schoolId: string, expectedVersion: number | null, settings: ShopifyStorefrontSettings, signal: AbortSignal, owned: Owned): Promise<ShopifyStorefront> {
+    const body = input(validateShopifyStorefrontSave, { schoolId: school(schoolId), expectedVersion, settings });
+    const out = await answer('/api/v1/school/shopify/storefront', signal, owned, verifyShopifyStorefront, JSON.stringify(body));
+    if (out.schoolId.toLowerCase() !== body.schoolId || out.settingsVersion === null || (expectedVersion !== null && out.settingsVersion <= expectedVersion)) throw new ShopifyError('UNKNOWN');
+    return out;
+  },
+  /** Publishes this exact saved version to the store's HON blocks. Never replayed. */
+  async publishStorefront(schoolId: string, settingsVersion: number, signal: AbortSignal, owned: Owned): Promise<ShopifyStorefrontPublishResult> {
+    const body = input(validateShopifyStorefrontPublish, { schoolId: school(schoolId), settingsVersion });
+    const out = await answer('/api/v1/school/shopify/storefront/publish', signal, owned, verifyShopifyStorefrontPublishResult, JSON.stringify(body));
+    if (out.storefront.schoolId.toLowerCase() !== body.schoolId || (out.outcome === 'PUBLISHED' && out.storefront.publishedVersion === null)) throw new ShopifyError('UNKNOWN');
     return out;
   },
   /** SH4a: whether the store lets HON edit, and the latest product changes (open ones first). */
