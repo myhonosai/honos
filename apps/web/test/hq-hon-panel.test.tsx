@@ -183,3 +183,14 @@ it('0338: the performance read asks for one catalog agent and refuses an answer 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   } finally { vi.unstubAllGlobals(); }
 });
+
+it('can start with a written question and, compact, leaves out the budget form (used beside a contest)', () => {
+  const props = { agentKey: 'chase', name: 'Chase', language: 'en', number: String, mode: 'STANDARD', outcome: null, onQuestion: () => {}, onMode: () => {}, onAsk: () => {},
+    onRefresh: () => {}, budgetOutcome: null, onBudget: () => {} } as unknown as HqHonPanelViewProps;
+  const owner = { kind: 'READY', view: conv({ availableAgents: ['hon', 'chase'], viewer: { ...viewer, isOwner: true } }) } as unknown as HqHonPanelViewProps['state'];
+  const full = renderToStaticMarkup(<HqHonPanelView {...props} state={owner} question="Help me set up this contest"/>);
+  expect(full).toContain('Help me set up this contest'); expect(full).toContain('hq-hon-chase-budget');
+  const compact = renderToStaticMarkup(<HqHonPanelView {...props} state={owner} question="Help" compact/>);
+  expect(compact).not.toContain('hq-hon-chase-budget'); expect(compact).toContain('hq-hon-chase-q');
+  expect(readFileSync('src/components/hq-hon/hq-hon-panel.tsx', 'utf8')).toMatch(/useState\(initialQuestion \?\? ''\)/);
+});
