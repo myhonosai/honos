@@ -7,6 +7,7 @@ import { requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-acco
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import pg from 'pg';
+import { applyMigrationAtomically } from './migration-chain.mjs';
 import { verifiedDatabaseConnection } from '../dist/index.js';
 
 const { Client } = pg;
@@ -249,8 +250,8 @@ try {
         }
       }
     }
-    await client.query(sql);
-    await client.query('INSERT INTO hon.schema_migrations (filename) VALUES ($1)', [file]);
+    // The migration and its ledger row commit together (launch-readiness P2): no crash window can replay a file.
+    await applyMigrationAtomically(client, file, sql);
     console.log(`Applied ${file}`);
   }
   console.log('HON PostgreSQL migrations are current.');

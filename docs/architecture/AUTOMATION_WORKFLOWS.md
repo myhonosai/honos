@@ -72,7 +72,8 @@ Audit and outbox payloads carry ids, versions and trigger kinds only, never mess
 
 **What runs today.** Turning on refuses, by name (`422 AUTOMATION_NOT_AVAILABLE_YET` with `part`), anything this engine
 does not run yet: triggers other than lead created, form lead, Meta lead, trial booked/cancelled/attended/no-show, class
-booking, membership activated/cancelled, testing registration and tag added; the REPLIED exit, wait and condition;
+booking, membership activated/cancelled, testing registration, tag added and (since 0574) absent N days, birthday and
+membership ends in N days (so SCHEDULE and CUSTOM_TOOL_RECORD are still refused); the REPLIED exit, wait and condition;
 IN_PROGRAM and CUSTOM_FIELD_EQUALS conditions; ASSIGN_LEAD and REQUEST_APPROVAL steps; LEAD_ASSIGNEE as a staff target;
 and the `program_name`, `trial_time`, `booking_link` and `staff_name` merge fields. Stage, form and START_WORKFLOW ids
 must belong to the school (`422 AUTOMATION_REFERENCE_INVALID`); a workflow cannot start itself. AI wording is not called:
@@ -114,8 +115,28 @@ steps (at least 10) failed the workflow pauses `FAILURE_RATE`.
 Runs and steps only move forward (`hon.guard_automation_run`); receipts never change. History reads return the contact's
 first name only and step outcomes, branches, message and task ids and delivery status, never message text.
 
+**Date triggers (0574).** `hon.scan_automation_schedules(limit)` looks at each ACTIVE workflow whose active version has an
+ABSENT_DAYS, BIRTHDAY or MEMBERSHIP_ENDS_IN_DAYS trigger once per school-local day, at or after 09:00 school time
+(schools with an unknown time zone are skipped). Under the workflow's row lock (`SKIP LOCKED`, so a workflow a staff
+command holds waits for the next scan) it re-proves the activator (otherwise the workflow pauses `AUTHORITY_LOST` and
+nothing starts), finds at most 1000 qualifying contacts and starts runs through the same `automation_start_run` (open
+run, reentry rule, 500 runs per workflow per day, entry conditions). One receipt per workflow and local date
+(`hon.automation_schedule_scans`, never changed); a scan that errors is receipted `SCAN_ERROR` with none of its runs
+kept, and the next workflow in the batch is still scanned.
+
+- ABSENT_DAYS {days}: students with an ACTIVE membership and an ACTIVE student profile whose last PRESENT, LATE or MAKEUP
+  attendance (else the start of their earliest active term) is at least `days` days ago. Key `abs:<last attendance id>`,
+  or `abs:<membership id>` for a student who never attended, so each absence episode starts once.
+- BIRTHDAY {daysBefore}: ACTIVE student profiles with a birth date whose next birthday (29 February is kept on 28 February
+  in other years) is within `daysBefore` days of the school's local today. Key `bday:<md5(person:year)>`, one per birthday year.
+- MEMBERSHIP_ENDS_IN_DAYS {days}: ACTIVE memberships whose term ends after now and on or before the school's local today
+  plus `days`. Key `mend:<md5(membership:term end)>`, so a renewed term is a new subject.
+
+A missed day catches up at the next scan: a birthday or term end still inside its window, a student still absent.
+
 **Worker.** The engine functions are callable only by the `hon_automation_worker` login (`infra/postgres/014_supabase_hon_automation_worker.sql`:
-NOSUPERUSER, NOBYPASSRLS, NOINHERIT, EXECUTE on the two functions only). The API runs them in-process only when both
+NOSUPERUSER, NOBYPASSRLS, NOINHERIT, EXECUTE on the three functions only). Each tick consumes events, then scans dates, then
+runs due steps. The API runs them in-process only when both
 `HON_AUTOMATION_WORKER_DATABASE_URL` and `HON_AUTOMATION_ENGINE_INTERVAL_SECONDS` (15–3600) are set; it refuses a URL
 reused from the runtime, migration or communication worker login (`AUTOMATION_WORKER_ROLE_REUSED` in deployment
 configuration) and a role that is a superuser, bypasses RLS or inherits. Nothing is switched on by default.
@@ -125,5 +146,7 @@ configuration) and a role that is a superuser, bypasses RLS or inherits. Nothing
 - `packages/database/scripts/test-automation-workflows-integrity.mjs` (champions-club fixture, 8 groups).
 - `packages/database/scripts/test-automation-engine-integrity.mjs` (champions-club fixture, 15 groups, incl. the 011
   exact verification for 0416 and 0423 and drift refusals).
+- `packages/database/scripts/test-automation-date-triggers-integrity.mjs` (champions-club fixture, 11 groups, incl. the 011
+  exact verification for 0423 and 0574 and drift refusals).
 - `apps/api/test/automation-workflows.test.cjs`, `apps/api/test/automation-engine.test.cjs` (mocked boundary, worker,
   scheduler and deployment configuration).

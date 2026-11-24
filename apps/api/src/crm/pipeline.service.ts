@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { tierIncludesFeature } from '@hon/config';
-import type { CommandContext, HonTier } from '@hon/contracts';
+import { CRM_PIPELINE_MAX, crmPipelineTemplate, type CommandContext, type CrmStageColor, type HonTier } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
 import { assertCrmEntitlementInEffect } from './crm-entitlement.js';
@@ -103,15 +103,51 @@ export class PipelineService {
     });
   }
 
-  private async insertPipeline(client: Queryable, context: CommandContext, name: string, cleanStages: Array<{ name: string; terminalStatus: string | null }>): Promise<PipelineSummary> {
+  /**
+   * Adds one of the server-defined martial-arts funnels (CRM_PIPELINE_TEMPLATES) as another pipeline. It takes the same
+   * per-school lock as the starter funnel, re-checks pipeline management inside the transaction, returns the school's
+   * existing pipeline of that name instead of making a second one, and refuses past CRM_PIPELINE_MAX pipelines.
+   */
+  async createFromTemplate(context: CommandContext, authority: { externalSubject: string }, code: string): Promise<StarterResponse & { replayed: boolean }> {
+    const template = crmPipelineTemplate(code);
+    if (!template) throw new BadRequestException({ code: 'VALIDATION_FAILED', detail: 'Choose one of the listed pipeline templates.' });
+    const requestFingerprint = createHash('sha256').update(`crm.pipeline.template:v1:${template.code}`).digest('hex');
+    return this.database.withTenantTransaction(context, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('hon.crm.pipeline.starter:' || $1::text, 0))", [context.schoolId]);
+      await assertCurrentCrmAuthority(client, authority.externalSubject, context, 'crm.pipeline.manage', 'HON pipeline management is no longer authorized for this school.');
+      await assertCrmEntitlementInEffect(client, 'An active HON CRM entitlement is required for pipeline setup.');
+      const reserve = await client.query<{ id: string }>(`INSERT INTO hon.idempotency_records (organization_id,school_id,principal_id,idempotency_key,request_fingerprint,status,expires_at) VALUES ($1,$2,$3,$4,$5,'IN_PROGRESS',now()+interval '24 hours') ON CONFLICT (organization_id,school_id,principal_id,idempotency_key) DO NOTHING RETURNING id`, [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey, requestFingerprint]);
+      if (!reserve.rowCount) {
+        const previous = await client.query<{ request_fingerprint:string; status:'IN_PROGRESS'|'COMPLETED'; response_body:StarterResponse|null }>(`SELECT request_fingerprint,status,response_body FROM hon.idempotency_records WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4 FOR UPDATE`, [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey]);
+        const record = previous.rows[0];
+        if (!record) throw new Error('HON template pipeline idempotency record unexpectedly missing.');
+        if (record.request_fingerprint !== requestFingerprint) throw new ConflictException({ code:'IDEMPOTENCY_KEY_REUSED', detail:'The idempotency key was already used for another command.' });
+        if (record.status === 'COMPLETED' && record.response_body) return { ...record.response_body, replayed:true };
+        throw new ConflictException({ code:'IDEMPOTENCY_IN_PROGRESS', detail:'The matching template pipeline command is being processed.' });
+      }
+      const existing = (await client.query<PipelineSummary>(LIST_SQL, [context.organizationId, context.schoolId])).rows;
+      const same = existing.find((pipeline) => pipeline.name === template.name);
+      if (!same && existing.length >= CRM_PIPELINE_MAX) throw new ConflictException({ code: 'CRM_PIPELINE_LIMIT', detail: `A school can keep up to ${CRM_PIPELINE_MAX} pipelines.` });
+      const response: StarterResponse = same
+        ? { pipeline: normalize(same), created: false }
+        : { pipeline: await this.insertPipeline(client, context, template.name, template.stages.map((stage) => ({ name: stage.name, terminalStatus: stage.terminalStatus ?? null, color: stage.color }))), created: true };
+      await client.query(`UPDATE hon.idempotency_records SET status='COMPLETED',response_status=$6,response_body=$5::jsonb WHERE organization_id=$1 AND school_id=$2 AND principal_id=$3 AND idempotency_key=$4`, [context.organizationId, context.schoolId, context.principalId, context.idempotencyKey, JSON.stringify(response), response.created ? 201 : 200]);
+      return { ...response, replayed:false };
+    });
+  }
+
+  private async insertPipeline(client: Queryable, context: CommandContext, name: string, cleanStages: Array<{ name: string; terminalStatus: string | null; color?: CrmStageColor }>): Promise<PipelineSummary> {
       const created = await client.query<{id:string;name:string;version:number;createdAt:string}>(`INSERT INTO hon.crm_pipelines (organization_id,school_id,name) VALUES ($1,$2,$3) RETURNING id,name,version,created_at AS "createdAt"`, [context.organizationId, context.schoolId, name]);
       const pipeline = created.rows[0];
       if (!pipeline) throw new Error('HON pipeline insert did not return a record.');
       const stages: PipelineSummary['stages'] = [];
       for (const [index, stage] of cleanStages.entries()) {
-        const result = await client.query<{id:string;name:string;position:number;terminalStatus:string|null}>(`INSERT INTO hon.crm_pipeline_stages (organization_id,school_id,pipeline_id,name,position,terminal_status) VALUES ($1,$2,$3::uuid,$4,$5,$6::hon.lead_status) RETURNING id,name,position,terminal_status AS "terminalStatus"`, [context.organizationId, context.schoolId, pipeline.id, stage.name, index + 1, stage.terminalStatus]);
+        // A template's colour is stored; otherwise the 0417 column default applies, as before.
+        const result = stage.color
+          ? await client.query<{id:string;name:string;position:number;terminalStatus:string|null}>(`INSERT INTO hon.crm_pipeline_stages (organization_id,school_id,pipeline_id,name,position,terminal_status,color) VALUES ($1,$2,$3::uuid,$4,$5,$6::hon.lead_status,$7) RETURNING id,name,position,terminal_status AS "terminalStatus"`, [context.organizationId, context.schoolId, pipeline.id, stage.name, index + 1, stage.terminalStatus, stage.color])
+          : await client.query<{id:string;name:string;position:number;terminalStatus:string|null}>(`INSERT INTO hon.crm_pipeline_stages (organization_id,school_id,pipeline_id,name,position,terminal_status) VALUES ($1,$2,$3::uuid,$4,$5,$6::hon.lead_status) RETURNING id,name,position,terminal_status AS "terminalStatus"`, [context.organizationId, context.schoolId, pipeline.id, stage.name, index + 1, stage.terminalStatus]);
         const record = result.rows[0]; if (!record) throw new Error('HON pipeline stage insert did not return a record.');
-        stages.push({ ...record, terminalStatus: record.terminalStatus ?? undefined });
+        stages.push({ id: record.id, name: record.name, position: record.position, terminalStatus: record.terminalStatus ?? undefined });
       }
       const response: PipelineSummary = { ...pipeline, stages };
       await client.query(`INSERT INTO hon.audit_events (organization_id,school_id,actor_principal_id,source,action_code,entity_type,entity_id,prior_state,next_state,result,request_id,correlation_id,occurred_at) VALUES ($1,$2,$3,$4,'crm.pipeline.create','CRM_PIPELINE',$5::uuid,NULL,$6::jsonb,'SUCCEEDED',$7::uuid,$8::uuid,now())`, [context.organizationId, context.schoolId, context.principalId, context.source, pipeline.id, JSON.stringify(response), context.requestId, context.correlationId]);

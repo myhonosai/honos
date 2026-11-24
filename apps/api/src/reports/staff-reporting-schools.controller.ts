@@ -22,11 +22,14 @@ export class StaffReportingSchoolsController {
     if (site !== undefined && site !== 'same-origin' && site !== 'none') {
       throw new ForbiddenException('A same-origin staff read is required.');
     }
+    // S0: the HON Staff app's bearer is its verified session (HonIdentityGuard), never a selector. Only that app may send it.
+    const staffApp = request.honChannel === 'MOBILE' && request.honMobileApp === 'STAFF';
     const authorityHeaders = ['authorization', 'idempotency-key', 'x-subject', 'x-user-id', 'x-principal-id', 'x-organization-id', 'x-school-id', 'x-role', 'x-tier', 'x-source', 'x-delegated-by-principal-id', 'x-action-request-id'];
     if (Object.keys(request.query ?? {}).length || request.body !== undefined
       || request.headers['transfer-encoding'] !== undefined
       || (request.headers['content-length'] !== undefined && request.headers['content-length'] !== '0')
-      || Object.keys(request.headers).some((header) => header.toLowerCase().startsWith('x-hon-') || authorityHeaders.includes(header.toLowerCase()))) {
+      || Object.keys(request.headers).some((header) => header.toLowerCase().startsWith('x-hon-')
+        || (authorityHeaders.includes(header.toLowerCase()) && !(header.toLowerCase() === 'authorization' && staffApp)))) {
       throw new BadRequestException('This fixed staff read accepts no selector, role, tier, delegation or command input.');
     }
     try {

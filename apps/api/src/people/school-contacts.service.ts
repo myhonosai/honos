@@ -23,7 +23,7 @@ function translate(error: unknown): never {
 /**
  * C1 (0521): the contacts list for the session school. One protected definer function re-proves the direct human subject
  * and live people.read and returns one page in name order with segment counts. The cursor is signed and bound to the school
- * and every filter. Nothing is written, sent or charged.
+ * and every filter. C4 (0623) adds sort and more filters; paging stays on the last person id. Nothing is written, sent or charged.
  */
 @Injectable()
 export class SchoolContactsService {
@@ -38,7 +38,10 @@ export class SchoolContactsService {
     let query: SchoolContactQuery;
     try { query = validateSchoolContactQuery(value); } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
     // A fixed key order, so the same filters in any query order sign the same cursor.
-    const filter = [query.segment ?? 'ALL', query.query ?? null, query.rankId ?? null, query.programId ?? null, query.planId ?? null, query.endsWithinDays ?? null];
+    const filter = [query.segment ?? 'ALL', query.query ?? null, query.rankId ?? null, query.programId ?? null, query.planId ?? null, query.endsWithinDays ?? null,
+      // C4 (0623): the order and the added filters are part of what the cursor is signed to.
+      query.sort ?? 'NAME', query.membership ?? null, query.noBelt ?? null, query.endsFrom ?? null, query.endsTo ?? null, query.ageMin ?? null,
+      query.ageMax ?? null, query.tag?.toLowerCase() ?? null];
     const after = decodeListCursor(cursor, 'people.contacts', context.schoolId, filter, CURSOR);
     const input = { ...query, ...(after ? { afterId: after[0] } : {}) };
     try {

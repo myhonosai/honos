@@ -74,3 +74,13 @@ identity-provider registration and no provider secret on the phone.
 
 ## Not in M2
 Biometric unlock, push, refresh tokens, server-side session revocation list, staff mobile use.
+
+## Single-use hand-off codes (0655, GitHub security review 2026-11-22)
+
+Each hand-off code carries a random `jti`. Before the API issues a mobile session it calls
+`hon.redeem_mobile_handoff(app, jti, expires_at)` (SECURITY DEFINER, `hon_runtime` EXECUTE only). The first call for an
+(app, jti) answers true; any later trade of the same code + verifier answers false and the API returns 401
+`MOBILE_SIGN_IN_INVALID`. If the ledger cannot answer, nothing is issued and the API returns 503
+`MOBILE_SIGN_IN_UNAVAILABLE` (the app shows "sign-in did not finish" and the person tries again). The ledger
+`hon.mobile_handoff_redemptions` holds only app, jti and times, is forced RLS with no policies and no table grants, and
+prunes rows five minutes after they expire. Codes issued before 0655 have no `jti` and are refused (they live 60 s).
