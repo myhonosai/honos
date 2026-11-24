@@ -182,7 +182,9 @@ seven piece 1 routes.
 
 ## 9. Piece 9a as built (0269): checkout page settings
 
-Status: source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
+Status: superseded by section 21 (0402). 0402 copies every 0269 page into the new model as a draft and retires the
+runtime's EXECUTE on both 0269 entry points; the 0269 tables stay as history. The text below describes 0269 as built.
+Source only, not deployed. Nothing is public yet; the family-facing checkout page and its public read come in a
 later piece, together with promo codes and the sibling-discount display (P4).
 
 - **Database:** `school_checkout_pages` (one row per school and kind, `ENROLLMENT` or `TUITION`, `DRAFT` or `PUBLISHED`) and
@@ -197,12 +199,11 @@ later piece, together with promo codes and the sibling-discount display (P4).
   parent principals are refused.
 - **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages` (save needs
   Idempotency-Key and the `school_checkout.page.save` human-command header).
-- **Evidence:** `pnpm --filter @hon/database db:test-school-checkout-pages` (CI: `run-db-proofs.sh`), 94 checks over signed
-  HTTP; `apps/api/test/school-checkout.test.cjs`.
+- **Evidence (at 0269):** 94 checks over signed HTTP in the 0269 proof, since renamed and rewritten for 0402 (section 21).
 
 ## 10. Piece 9b as built: checkout settings page for staff
 
-Status: source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
+Status: superseded by section 21 (the same route now edits the 0402 pages). Source only, not deployed. Web only, over the 0269 routes; no migration and no API change.
 
 - **Page:** `/staff/billing/checkout-pages` (Billing menu, "Checkout pages"; EN/KO/ES menu label), protected, dynamic,
   noindex, no-referrer. Tabs for the enrollment checkout and the tuition payment page.
@@ -217,4 +218,514 @@ Status: source only, not deployed. Web only, over the 0269 routes; no migration 
   keeps the exact request and key for Try again. Every answer is followed by a fresh read.
 - **Privacy:** blur or a hidden tab hides the page but keeps unsaved edits in memory; a school change or session end drops
   them. Nothing is kept in browser storage.
-- **Evidence:** `apps/web/test/school-checkout-ui.test.tsx` (9 tests).
+- **Evidence (at 0269):** 9 tests, since rewritten for 0402 (section 21).
+
+## 11. Piece 2 design (0320): real sandbox adapters and the credential vault
+
+Status: spec and plan. Test/sandbox mode only. Owner decisions (David, 2026-11-13): each school is the merchant of
+record (direct charges, HON takes no cut); Stripe Connect accounts with the full Stripe Dashboard ("Standard"-type
+controller: the school pays Stripe's fees, Stripe carries losses, Stripe collects requirements); Stripe-hosted
+onboarding. Embedded components may come later (separate decision doc).
+
+### Configuration (names only; values live in the environment, never in the repo or chat)
+
+| Variable | Use | Refused when |
+| --- | --- | --- |
+| `HON_TUITION_STRIPE_TEST_SECRET_KEY` | Secret key of the **separate** Stripe Connect test platform (not HON's SaaS account) | not `sk_test_`/`rk_test_` |
+| `HON_TUITION_SQUARE_SANDBOX_APP_ID` | Square Developer application id (sandbox) | not `sandbox-sq0idb-` |
+| `HON_TUITION_SQUARE_SANDBOX_APP_SECRET` | Square sandbox application secret | not `sandbox-sq0csb-` |
+| `HON_SCHOOL_PAY_VAULT_KEY` / `HON_SCHOOL_PAY_VAULT_KEY_ID` | 32-byte AES-256-GCM key (base64) and its id for sealing per-school tokens | key not exactly 32 bytes, id not `^[a-z0-9-]{1,40}$` |
+
+Selection per provider: `HON_SCHOOL_PAY_SIMULATORS=1` (never in production) keeps the piece 1 simulators; otherwise a
+provider whose variables are all present and valid gets its real sandbox adapter; otherwise it stays NOT_CONFIGURED
+(503). A live-looking key (`sk_live_`, `rk_live_`, a non-sandbox Square id) is refused and the provider stays
+NOT_CONFIGURED. Square also needs the vault key. Hosts are fixed in code: `api.stripe.com` and
+`connect.squareupsandbox.com` only; Square's production host is never used.
+
+### Stripe Connect (test mode)
+
+- `beginOnboarding`: with no account yet, `POST /v1/accounts` with `controller[stripe_dashboard][type]=full`,
+  `controller[fees][payer]=account`, `controller[losses][payments]=stripe`, `controller[requirement_collection]=stripe`,
+  `metadata[hon_connection_id]`, and the Stripe `Idempotency-Key` `hon-school-pay-account-<connectionId>` (a retry within
+  24 h returns the same account). No school name, email or other personal data is sent. Then
+  `POST /v1/account_links` (`type=account_onboarding`, `return_url` = HON return with `state`, `refresh_url` = the HON
+  page with `connection` only, so an expired link asks for a new one).
+- `completeOnboarding`: no code; the account is the one stored on the connection.
+- `retrieveStatus`: `GET /v1/accounts/<id>`: `charges_enabled`, `payouts_enabled`, requirements due = any
+  `currently_due` or `past_due` entry or a `disabled_reason`; capabilities from `card_payments` /
+  `us_bank_account_ach_payments` being `active`; a 403 or `account_invalid` answer means
+  reauthorization required (a 401 means HON's own platform key is wrong and is reported as a provider refusal).
+- `disconnect`: a Standard account belongs to the school and the platform cannot revoke it with the secret key alone, so
+  the adapter does not call Stripe and the API reports `providerRevoked: false` (the school removes HON in its own
+  Stripe Dashboard). No account is ever deleted.
+- No call carries `application_fee_amount` or any fee field.
+
+### Square (sandbox)
+
+- `beginOnboarding`: `https://connect.squareupsandbox.com/oauth2/authorize?client_id&scope&session=false&state` with the
+  fixed scope list `MERCHANT_PROFILE_READ PAYMENTS_READ PAYMENTS_WRITE CUSTOMERS_READ CUSTOMERS_WRITE` (what pieces 3
+  and 5 need; no ORDERS, BANK_ACCOUNTS, EMPLOYEES or payouts). The redirect URL is the one set in the Square app.
+- **Before** the code exchange the API checks the one-time state against the stored hash
+  (`check_school_payment_onboarding_state`, read-only), so a wrong or replayed state never spends the code.
+- `completeOnboarding`: `POST /oauth2/token` (`authorization_code`) → `merchant_id`, access token, refresh token,
+  expiry. The tokens go to the vault, never to logs, responses or the database in clear.
+- `retrieveStatus`: `GET /v2/merchants/<id>` (status `ACTIVE`) and `GET /v2/locations` (any active location with
+  `CREDIT_CARD_PROCESSING`); a 401 means reauthorization required. An access token that expires within 7 days is renewed
+  first with `POST /oauth2/token` (`refresh_token`); the renewed token is stored with the same status record.
+- `disconnect`: `POST /oauth2/revoke` (`Authorization: Client <secret>`, `merchant_id`), reported, never assumed.
+
+### Credential vault (0320)
+
+- **Table** `hon.school_pay_credentials` (private, forced RLS, no runtime privilege): one row per connection; provider,
+  key id, `sealed` (AES-256-GCM `v1.<iv>.<ciphertext>.<tag>`, base64url), access-token expiry, credential version,
+  stored/rotated/destroyed times. A settings-free guard trigger: no delete or truncate, scope never changes, the
+  version bumps by one, a destroyed row never changes again and holds no sealed value.
+- **Registry** `hon.school_pay_provider_credentials(provider_code, credential_kind)`: which providers keep per-school
+  credentials (`SQUARE` → `OAUTH_TOKENS`); Stripe keeps none. HON's own processor later is one row.
+- **Sealing happens in the API**; the database sees only the sealed text. The additional data binds the blob to
+  `connectionId`, provider and account, so a blob copied to another connection does not open.
+- **Entry points** (direct human, `school_pay.connection.manage`, live re-checks):
+  - `check_school_payment_onboarding_state(subject, connection, {expectedVersion, onboardingState})`: read-only state check.
+  - `store_school_payment_credential(subject, connection, {keyId, sealed, accessExpiresAt, expectedCredentialVersion})`:
+    accepted only when the same transaction has just recorded that connection's FINISH or REFRESH (the connection row
+    was written by the current transaction) and the connection is connected. So tokens are stored only if the database
+    accepts the finish, in the same commit.
+  - `read_school_payment_credential(subject, connection)`: the sealed record of an open, connected connection.
+  - `destroy_school_payment_credential(subject, connection)`: accepted only in the transaction that ended the
+    connection; clears the sealed value.
+  Each write adds an audit event (no secret in it). Replays of the finish/refresh command store nothing.
+- If the finish write is refused after a Square code exchange, the new tokens are dropped from memory and **not**
+  revoked: Square revokes per merchant, so a revoke could cut off another connection on the same account. The owner
+  starts again.
+
+### Plan (TDD, one PR)
+
+1. Contracts: credential record verifier; observation unchanged.
+2. Vault module (seal/open, key checks) with unit tests.
+3. Real adapters over an injected HTTPS transport, unit-tested against recorded-shape fakes (no network in tests):
+   Stripe account + link + status, Square authorize URL + token + status + renew + revoke; live keys refused.
+4. Migration 0320 + DB/HTTP proof (simulated Square returns synthetic tokens): stored only with a finish, sealed only,
+   wrong-transaction store refused, read needs manage, destroyed with disconnect, runtime ACL, history.
+5. Service wiring: state check before exchange, store in the finish/refresh transaction, renew, destroy on disconnect.
+6. Sandbox smoke check (manual, owner-visible): Square sandbox token endpoint reachable with the app credentials;
+   Stripe calls only once the environment stops replacing the key on `api.stripe.com` (owner choice).
+
+## 12. Piece 2 as built (0320)
+
+Status: source only, not deployed. Test/sandbox only.
+
+- **API:** `school-payment-sandbox-adapters.ts` (`StripeConnectTestAdapter`, `SquareSandboxAdapter`, fixed hosts, an
+  injectable transport with a 15 s limit and no redirects), `school-payment-vault.ts` (AES-256-GCM seal/open bound to
+  connection, provider and account), adapter selection in `schoolPaymentAdaptersFromEnvironment`, and the service wiring:
+  state check before the Square exchange, sealed credential stored with the FINISH/REFRESH record, renewal within 7 days
+  of expiry (a grant the seller revoked, Square 401 or `invalid_grant`, is recorded as `REAUTHORIZATION_REQUIRED` with
+  no rotation; timeouts, 429 and 5xx stay `UNKNOWN`), and disconnect skipping the provider revoke while another open connection uses the same account (school B in
+  the same organization may share it; this also changes the piece 1 behaviour, which revoked unconditionally).
+- **Simulators:** the simulated Square now hands back synthetic tokens, so the vault path runs end to end without a
+  network. With simulators on (never in production) and no vault key, the API uses a random per-process key.
+- **Database:** `school_pay_provider_credentials`, `school_pay_credentials` (private, forced RLS, no runtime privilege),
+  the destroy-on-end trigger, the deferred credential check, and four runtime entry points
+  (`check_school_payment_onboarding_state`, `record_school_payment_status_with_credential`,
+  `read_school_payment_credential`, `read_school_payment_account_use`); grants in 010, exact section in 011.
+- **Evidence:** `apps/api/test/school-payments-sandbox.test.cjs` (8 tests: vault, environment selection, Stripe and
+  Square request shapes and answer mapping over a recording transport); `pnpm --filter @hon/database
+  db:test-school-payment-credential-vault` (89 checks over signed HTTP); the 0258 proof now runs with the vault (141).
+- **Real sandbox check (2026-11-13, from the build container):** Square sandbox answered with the configured app: a made-up
+  code is refused (`FAILED`), a made-up token reads as reauthorization required. Stripe was **not** called: this
+  container's network proxy replaces the `Authorization` header on `api.stripe.com` with HON's SaaS sandbox key, which
+  must never be used for tuition. A full connect needs a browser sign-in to a Square sandbox seller and the Square app's
+  redirect URL set to `<web origin>/staff/billing/payment-processors`.
+- **Real Stripe check (2026-11-13, separate test environment without the key injection, head 3f5f77c):** with the tuition
+  `sk_test_` key, the adapter created a Standard connected account, created an Account Link (a repeated request returned
+  the same account) and read its status (not ready, requirements due). No code changed.
+- **Assumption:** in the code flow Square's refresh token stays reusable and comes back in every renewal answer; the
+  token from the answer is stored. An answer without one is treated as `UNKNOWN` and nothing is rotated.
+- **Still needed before any real use:** `HON_SCHOOL_PAY_VAULT_KEY`/`_KEY_ID` in each environment (a secret, owner
+  adds), Square redirect URL, Stripe calls from an environment without the SaaS key injection, key rotation (old key ids
+  are not yet kept, so rotating the single vault key strands stored credentials until reconnect), two disconnects of
+  connections sharing one Square merchant that race can both skip the provider revoke (no lock across connections yet),
+  and the Manus final review (live-money/credential item).
+
+## 13. Piece 3 as built (0321): a payer's saved cards and bank accounts
+
+Status: source only, not deployed, test mode only, on the in-process simulators (no real Stripe or Square call yet; piece
+2 adds the sandbox adapters with test keys the owner enters). No charge, autopay or message; HON takes no fee.
+
+- **Permission:** `school_pay.method.manage` (sensitive, staff-assignable, granted to OWNER) saves, chooses the default
+  for, or removes a method; `school_pay.read` or the manage permission reads. Live direct-human authority at the route
+  school is re-checked before and after every command, as in 0258.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_customers` (one provider customer per payer and
+  connection, set once), `school_pay_method_setups` (hosted setup: one-time state kept only as SHA-256, one hour, newer
+  replaces older, recently completed listed for one hour so a retried finish replays), `school_pay_methods` (provider
+  reference, kind CARD or US_BANK_ACCOUNT, brand, last four, card expiry, consent text version, ACTIVE or REMOVED, one
+  default per payer), `school_pay_method_events` (append-only history). No card number, bank number, CVC or token
+  secret exists anywhere in HON.
+- **Flow:** staff pick a connection and method kinds and show the payer the consent text (its version is recorded). The
+  API creates the payer's provider customer once, then a hosted setup page (Stripe SetupIntent or Checkout setup mode;
+  Square Web Payments SDK card on file) that returns to `/staff/billing/saved-payment-methods?payer=..&setup=..&state=..`.
+  On return the API retrieves the saved method from the provider with its own credentials (never from the browser),
+  then records it; the payer's first method becomes the default. Square takes cards only.
+- **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
+  payers/:billingAccountId/methods`, `GET saved-methods/expiring` (expired or expiring this or next school month),
+  `POST payers/:id/method-setups`, `POST payers/:id/method-setups/:setupId/finish`, `POST payers/:id/methods/:methodId/default`,
+  `POST payers/:id/methods/:methodId/remove` (reason required; the provider detach is reported as `providerDetached`).
+  Provider account, customer and method references stay in the API and never reach the browser.
+- **Known limits:** a disconnected connection's saved methods stay ACTIVE in HON but cannot be used (autopay, piece 4,
+  checks the connection); card expiry updates from the provider come with webhooks (pieces 5 and 6).
+- **Bank accounts verified by microdeposits:** when Stripe cannot verify a US bank account instantly, the SetupIntent
+  stays unfinished until the payer confirms the microdeposits, so finishing the setup returns `SETUP_INCOMPLETE` (409)
+  and nothing is saved. The payer finishes later on a new setup; recording the account once the deposits clear needs
+  the webhooks in piece 5b.
+- **Real sandboxes (after piece 2, 0320):** the Stripe Connect test adapter saves methods for real: the customer and a
+  Checkout session in setup mode are created on the school's own account (`Stripe-Account`), each with an idempotency key
+  (so a retry never leaves an orphan customer or setup), and the saved card or bank account is read back with the platform
+  key. Square's sandbox adapter refuses saved-method calls before sending anything (`SCHOOL_PAY_PROVIDER_NOT_CONFIGURED`):
+  saving a Square card needs the Web Payments SDK on a HON page plus the seller's vaulted token, a later piece.
+- **Evidence:** `packages/database/scripts/test-school-pay-methods-integrity.mjs` (188 checks over signed HTTP);
+  `apps/api/test/school-payments.test.cjs` (0321 contract, simulator and route tests).
+
+## 14. Piece 3-web as built: saved payment methods page for staff
+
+- **Page:** `/staff/billing/saved-payment-methods` (Billing menu, "Saved payment methods"), dynamic, noindex,
+  `no-referrer`, behind the verified web session. The page holds no school or payer id of its own; it uses the shell's
+  verified school, and the API decides every permission (`school_pay.method.manage` to change, the read permission to see).
+- **Payer picker:** payers come from the existing membership list read (one option per billing account, named from its
+  participants); a `?payer=` link opens one directly, and the expiring list links to each payer.
+- **Adding:** staff choose the processor connection and card or US bank account (bank only where the connection can
+  debit), and the payer ticks the consent text, which names the school (`card-on-file-v1` or `ach-mandate-v1`). The page
+  then opens the processor's hosted page. A replayed start answers with no link, and the page says to start again.
+- **Return:** the query (`payer`, `setup`, `state`) is read once and removed from the address bar at once; the one-time
+  state is kept only in memory, never in storage, and is sent only when staff choose Finish saving. A session end, a
+  school change or picking another payer drops it; blur or a hidden tab hides the page but keeps it.
+- **Commands:** each sends its own `X-HON-Human-Command` and `Idempotency-Key`; an unknown or rate-limited outcome keeps
+  the exact request and key in memory for Try again. Every answer is followed by a fresh read. Remove needs a reason and
+  says plainly when the processor did not confirm the detach.
+- **Evidence:** `apps/web/test/saved-methods-ui.test.tsx` (http shape and verification, refusal mapping, query cleaning,
+  body building, view states, page and menu wiring).
+
+## 15. Piece 4 as built (0322): autopay plans and sibling discounts
+
+Test mode only. A payer's autopay plan points at one of their saved methods (0321), and preparing a cycle turns that
+payer's due membership schedules into invoices with the school's sibling discount. **Nothing is charged here**: piece 5
+sends the cycle to the processor. No message is sent and HON takes no fee.
+
+- **Permissions:** `school_pay.autopay.manage` enrolls, changes the method, pauses, resumes, cancels and prepares cycles;
+  `school_pay.discount.manage` sets the sibling discount. Both are sensitive, staff-assignable and granted to OWNER.
+  Reads accept either one or `school_pay.read`. Live direct-human authority at the route school is re-checked before
+  and after every command, as in 0258 and 0321.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_discount_rules` (append-only versions per
+  school: NONE, PERCENT 0 to 100, or FIXED minor units in one currency, with one value for the 2nd student and one for
+  the 3rd and later), `school_pay_autopay_plans` (one open plan per payer; ACTIVE, PAUSED or CANCELLED with a reason;
+  the saved method, the consent text version and an expected version on every change), `school_pay_autopay_cycles`
+  and `school_pay_autopay_cycle_lines` (immutable; one line per billed schedule period, unique per schedule and
+  period, each with its own invoice), and `school_pay_autopay_events` (append-only history). Each command writes one
+  history row, one audit row and one inert outbox event; each cycle invoice also gets an audit row.
+- **Method rule:** the plan's method must be ACTIVE, belong to the same payer, and sit on a connection that is
+  CONNECTED_ACTIVE and allows off-session recurring charges. Otherwise the command is refused with
+  `SCHOOL_PAY_AUTOPAY_METHOD_UNUSABLE`.
+- **Cycle rule:** a cycle can be prepared for an ACTIVE plan for today or up to seven days ahead (school time zone).
+  Due lines are the payer's ACTIVE memberships whose ACTIVE WEEKLY, MONTHLY or ANNUAL schedule is in the payer's
+  currency, has its next charge on or before the cycle date, and has not been billed for that period. Students are
+  ranked by their largest due line; the 1st pays full price, the 2nd and later get the rule's discount (a percentage
+  rounds down; a fixed amount never exceeds the line and applies only in its currency). Each line becomes one ISSUED
+  invoice due at the end of the cycle day, and its schedule moves to the next period (or ends at the term end). One
+  schedule period is billed per cycle, so a schedule that is several periods behind catches up over several cycles.
+  Months and years count from the schedule's first autopay period, so a short month clamps only that one period
+  (Jan 31, Feb 28, Mar 31; a Feb 29 annual schedule bills Feb 28 in other years and Feb 29 again in leap years). A
+  schedule staff move off that series starts a new one. Local time of day is kept across daylight-saving changes.
+- **Routes** (`/v1/organizations/:org/schools/:school/payments/...`, human-UI guards, no-store): `GET
+  payers/:billingAccountId/autopay`, `GET sibling-discount`, `POST sibling-discount`, `POST payers/:billingAccountId/autopay`,
+  `POST autopay/:planId/method`, `POST autopay/:planId/state` (ACTIVE or PAUSED), `POST autopay/:planId/cancel` (reason
+  required), `POST autopay/:planId/cycles`. Every command takes an Idempotency-Key; a replay returns the stored receipt.
+- **Defaults to confirm with the owner:** ranking students by their largest due line; one period per cycle; schedules
+  advance when the cycle is prepared (not when it is paid); a seven-day preparation window. Screens for staff come in a
+  later web piece.
+- **Review P3s carried forward:** the consent text version is free text today; before 5a charges anything it must be
+  one of the recurring-charge consent texts and match the method kind, re-checked when the method changes. A discount
+  that would make a line free refuses the cycle (`SCHOOL_PAY_AUTOPAY_ZERO_LINE`), since an ISSUED invoice is never zero. Sibling rank counts only lines due in the same cycle. Manual
+  invoices can overlap autopay periods, and a backdated cycle issues invoices that are already overdue.
+- **Evidence:** `packages/database/scripts/test-school-pay-autopay-integrity.mjs` (246 checks over signed HTTP, including month-end,
+  leap-year and daylight-saving periods);
+  `apps/api/test/school-payments.test.cjs` (0322 contract, discount and route tests).
+
+## 16. Piece 5a as built (0337): charging a prepared autopay cycle, test mode only
+
+Status: source only, not deployed, test/sandbox mode only (live keys stay refused, 0320). HON takes no fee, so no charge
+request carries one. Webhook inboxes (5b) and the retry schedule plus failed-payments list (5c) follow as separate PRs on
+the same tables. Owner check still open: the autopay defaults listed in section 14.
+
+- **What is charged:** one prepared cycle (0322) as one off-session charge of its total, on the plan's current saved
+  method, into the school's own account: Stripe direct charge (`Stripe-Account`, PaymentIntent with `off_session` and
+  `confirm`, no fee field). Square's sandbox adapter refuses before sending until its card page exists (the simulator
+  covers the flow). 0322 cycles stay immutable; a cycle's paid state is derived from its attempts.
+- **Who starts it:** a direct human command, `POST .../payments/autopay/cycles/:cycleId/charge` with the cycle total and
+  currency the staff member confirmed (`{ totalMinor, currency }`), permission `school_pay.autopay.manage`,
+  Idempotency-Key required, live authority re-checked before and after, like 0321/0322. An unattended runner is 5c.
+- **Three steps, never a guessed outcome:**
+  1. `begin_school_pay_charge` checks the total, the plan ACTIVE, its method usable (0322 rule) on a TEST connection,
+     no attempt for the cycle that is not FAILED, and every cycle invoice still ISSUED with nothing recorded; it writes
+     the attempt `PENDING` and commits.
+  2. The API calls `chargeOffSession` with the provider key `hon-school-pay-charge-<attemptId>` (no transaction open).
+  3. `finish_school_pay_charge` records the answer: `SUCCEEDED` (charge id; amount and currency must equal the
+     attempt), `PROCESSING` (a bank debit still clearing), `FAILED` with a class (`DECLINED`,
+     `AUTHENTICATION_REQUIRED`, `INSUFFICIENT_FUNDS`, `EXPIRED_CARD`, `NOT_SENT`, `OTHER`; never provider text), or
+     `UNKNOWN` (timeout, 5xx, 429, a concurrent key, a malformed or mismatched answer).
+- **Paid:** on `SUCCEEDED` each cycle invoice gets one `invoice_payment_records` row with the new method `PROVIDER`
+  (0240 CHECK replaced; a PROVIDER row must carry the processor's charge id as its reference), received on the school's
+  today, and becomes `PAID` through the 0240 status guard. Staff entry stays manual-only, and a PROVIDER row cannot be
+  voided by hand (refunds are a later piece).
+- **Open attempts hold the invoices:** while an attempt is PENDING, PROCESSING or UNKNOWN, its cycle invoices take no
+  manual payment and only move from ISSUED to PAID (two settings-free triggers), and the cycle cannot be charged again.
+- **Reconcile:** `POST .../payments/autopay/charges/:attemptId/reconcile` (body `{}`; the browser never sends an
+  outcome) looks the attempt up at the processor (Stripe: PaymentIntents of the payer's customer from ten minutes before
+  the attempt, matched by metadata `hon_attempt_id`; more than one, or a further page, is UNKNOWN). Found: recorded as
+  the processor says. Not found: inside 23 hours (Stripe keeps idempotency keys 24 hours) the charge is resent with the
+  same key; after that it is `FAILED NOT_SENT`. A replay of the charge request that finds its attempt still PENDING
+  (the earlier request stopped after step 1) does the same lookup before any resend. A provider with no test credentials
+  in the environment is `FAILED NOT_SENT` before anything is sent.
+- **Failed:** invoices stay ISSUED and the cycle can be charged again with a new attempt (the 5c retry schedule will
+  automate that).
+- **Data (private, forced RLS, EXECUTE-only runtime):** `school_pay_charge_attempts` (cycle, plan, method, connection,
+  provider, amount, currency, state, failure class, processor charge id, version; one non-FAILED attempt per cycle; a
+  settled attempt never changes; nothing returns to PENDING), `school_pay_charge_events` (append-only), with audit rows
+  and inert outbox events per change and per paid invoice. Runtime entry points: `read_school_pay_autopay_charges`
+  (staff list without references), `read_school_pay_charge_attempt` (manage only; the API's references, never sent on),
+  `begin_school_pay_charge`, `finish_school_pay_charge`. Read route: `GET .../payers/:billingAccountId/autopay/charges`.
+- **Consent and time zone at begin (review P3s):** a charge starts only under the plan's `autopay-v1` agreement and the
+  method's own mandate for its kind (`card-on-file-v1`, `ach-mandate-v1`); the school time zone is checked before
+  sending so a confirmed success can always be recorded. The version check names the text, it does not prove the payer
+  saw it: staff still enter consent, which stays a gate before any live use.
+- **Known follow-ups:** an off-session `requires_action` is recorded FAILED while the PaymentIntent stays open at Stripe;
+  5c cancels it before a new attempt and 5b holds a late success on a FAILED attempt for review. A same-key double
+  submit can record UNKNOWN first and drop the original's answer; reconcile recovers it.
+- **Evidence:** `packages/database/scripts/test-school-pay-charges-integrity.mjs` (195 checks over signed HTTP with the
+  simulators: success, replay, re-charge refused, bank debit PROCESSING then cleared, decline then a new attempt, lost
+  answer reconciled without a resend, a request that never arrived resent once, a stopped request recovered or FAILED
+  NOT_SENT after the key window, Square, an unconfigured provider, paused plan, changed invoice, guards, ACL, 011);
+  `apps/api/test/school-payments-sandbox.test.cjs` (Stripe request fields, outcomes, decline classes, UNKNOWN cases,
+  lookup) and `apps/api/test/school-payments.test.cjs` (contracts and routes); verify-rls; 010/011; staging pin 0337.
+
+## 21. Checkout pages as built (0402, CP1 + CP2): many named pages, modeled on the owner's current CRM
+
+Status: source only, not deployed. At first staff only; the HON Family app page came with §24 and each page's family share
+link with §25. Promo codes are CP4. Nothing here takes a payment, and HON adds no fee.
+
+- **Database (0402):** `school_checkouts` (many pages per school: a fixed address `slug`, a group, `DRAFT`, `PUBLISHED` or
+  `ARCHIVED`, closed content, optimistic version; up to 200 pages), the append-only `school_checkout_versions`, and
+  `school_checkout_settings` (the school's page groups and the staff order of the grid; defaults Trial, Membership, Event,
+  Tournament, Test, Equipment, Camp, Sales). Private, forced RLS, no table privilege for the runtime; no delete.
+- **Content (closed shape, CHECKed in the table):** title and description, text sections above or below the options,
+  multi-participant (2 to 10 per order), questions (with uniform, belt, shoe and T-shirt size presets), add-ons in the page
+  currency, an optional page waiver, receipt note and thank-you. Pricing options (up to 10): one-time (0 allowed for a
+  free trial) or monthly (amount, 0 to 120 payments where 0 is ongoing, collection AUTO_CHARGE, IN_HOUSE or
+  REVIEW_REQUIRED, optional down payment with its own label), an optional extra-participant fee, capacity, "available
+  through" date, at most one "Most popular", and an optional catalog plan with "creates membership". An option is a copy
+  for the page: editing it never changes the catalog plan. A live page needs at least one option; a named plan must be
+  AVAILABLE unless the page is archived.
+- **Entry points:** `read_school_checkouts`, `save_school_checkout` (create with no page id and version 0, then optimistic
+  version; refusals VERSION_CONFLICT, CHECKOUT_SLUG_TAKEN, CHECKOUT_SLUG_FIXED, CHECKOUT_NOT_FOUND, CHECKOUT_GROUP_UNKNOWN,
+  CHECKOUT_PLAN_UNAVAILABLE, CHECKOUT_OPTIONS_REQUIRED, CHECKOUT_LIMIT_REACHED) and `save_school_checkout_settings`
+  (refuses removing a group a page still uses). Idempotent, audited, with an outbox event. Permission
+  `school_checkout.manage`, as in 0269.
+- **Carry-over:** each 0269 page becomes a draft 0402 page (address `enrollment` or `tuition`, group Membership, no options,
+  its add-ons, questions and texts kept), so staff choose prices and publish it themselves.
+- **API:** `GET` and `POST organizations/:organizationId/schools/:schoolId/payments/checkout-pages`, and `POST .../settings`
+  (`school_checkout.page.save` and `school_checkout.settings.save` human-command headers, each with an Idempotency-Key).
+- **Staff page (CP2):** the same route `/staff/billing/checkout-pages`. A grid of page cards with group filters (and
+  Archived), the "From" price, status, Edit, Duplicate page, Publish or Put in draft, Archive or Restore, and Earlier or
+  Later; Manage groups. The editor has Page details, Pricing options and Agreement tabs, one language switch, the plain
+  summary under each monthly option ("Customer pays ... today, then .../mo ..."), and a display-only family preview.
+  Unsaved edits stay in memory only; an unknown result keeps the exact request and key for Try again.
+- **Later, by other pieces:** the membership thread's shared payment options and agreement signing replace the page copy
+  and the page waiver; the family page and the shared one-time sandbox payment (CP3), promo codes (CP4).
+  A plan can become unavailable after a page is published (0402 checks availability only when saving), so the family
+  checkout (CP3) must check the option's plan again, under lock, at purchase.
+- **Evidence:** `pnpm --filter @hon/database db:test-school-checkouts` (CI: `run-db-proofs.sh`), 157 checks including the
+  carry-over in a rolled-back transaction; `apps/api/test/school-checkout.test.cjs` (3 tests);
+  `apps/web/test/school-checkout-ui.test.tsx` (11 tests); 011 exact verification passes.
+
+## 22. Shared one-time payment as built (0529): one whole payment for checkout, the kiosk and the point of sale
+
+Status: source only, not deployed. TEST/SANDBOX mode only (the connection table already refuses LIVE). HON adds no fee.
+No route of its own: the family checkout page (CP3), the walk-in kiosk tablet (WK3) and the point of sale each call it
+from their own database function and their own route, which decide who may pay and how much.
+
+- **Open (internal, never the runtime):** a caller's SECURITY DEFINER function calls
+  `hon.school_pay_once_open(organization, school, source, source_id, amount_minor, currency, label, payer, expires_at)`
+  → payment id. `source` is `CHECKOUT_PAGE`, `WALKIN_VISIT` or `POS_SALE`; `label` is `{"name": "..."}` (1 to 120
+  characters, the line the payer sees); `payer` is `{}` or `{"email": "..."}` (the email is the only payer detail ever sent
+  to the processor); `expires_at` is 1 to 30 minutes ahead. It uses the school's default connection that is
+  `CONNECTED_ACTIVE`, test mode, charging and able to take a one-time card (`SCHOOL_PAY_ONCE_NOT_AVAILABLE` otherwise).
+  One live payment (OPEN, PROCESSING or SUCCEEDED) per caller record: the same call while it is OPEN returns the same id,
+  another amount, currency or label is `SCHOOL_PAY_ONCE_AMOUNT_MISMATCH`, a PROCESSING or SUCCEEDED one is
+  `SCHOOL_PAY_ONCE_EXISTS`. After FAILED, EXPIRED or CANCELED a new one can be opened.
+- **Other internal helpers:** `hon.school_pay_once_provider(organization, school)` → `STRIPE_CONNECT`, `SQUARE` or NULL
+  (whether to offer card payment at all); `hon.school_pay_once_state(payment)` → `{paymentId, organizationId, schoolId,
+  source, sourceId, state, amountMinor, currency, providerCode, providerOpen, settledAt}`, locked `FOR UPDATE` for the
+  caller's transaction, so no processor answer can be recorded while the caller acts on it; `providerOpen` means the
+  processor may still hold a payable session; `hon.school_pay_once_cancel(payment)` ends a payment that never reached the
+  processor (`SCHOOL_PAY_ONCE_PROVIDER_OPEN` for a started one, which must be cancelled through the API first;
+  `SCHOOL_PAY_ONCE_IN_PROGRESS` while PROCESSING; `SCHOOL_PAY_ONCE_PAID` after SUCCEEDED; an ended one is returned as is).
+- **States:** `OPEN`, `PROCESSING` (paid on the form but still clearing), `SUCCEEDED`, `FAILED` (`DECLINED` or `OTHER`),
+  `EXPIRED`, `CANCELED`. The last four are final; PROCESSING only moves on to SUCCEEDED or FAILED.
+- **API (`apps/api/src/school-payments/school-pay-once.service.ts`, no authority of its own):**
+  - `supports(providerCode, surface)`: whether the processor can show it here (`EMBEDDED` = the processor's form inside a
+    HON page; `HOSTED` = the processor's own page, for a QR or link). Today: Stripe both; Square none for real (a Square
+    payment link needs the seller token and location; a later piece) and HOSTED in the simulator.
+  - `start(paymentId, {surface, returnUrl})` → `{paymentId, providerCode, surface, clientSecret, url, accountRef,
+    expiresAt}`. First the database fixes the surface, the return address (https, or http on localhost) and the provider
+    session expiry (31 minutes after start, since Stripe needs at least 30) once, before any provider call; then the
+    processor session is created with the idempotency key `hon-school-pay-once-<paymentId>` from those stored values only,
+    so a resend is identical and returns the same session. Stripe: a Checkout Session `mode=payment`, card only, one line,
+    `client_reference_id` and metadata `hon_pay_once_id` on the session and the PaymentIntent, on the school's account
+    (`Stripe-Account`, a direct charge, no application fee). EMBEDDED returns `clientSecret` and the school's `accountRef`
+    for Stripe.js (`stripeAccount`); HOSTED returns Stripe's `url`. Refused after the payment's own expiry.
+  - `confirm(paymentId)` → `{paymentId, state, amountMinor, currency, settledAt}` from the processor's retrieved session
+    (Stripe: `complete` + `paid` with its PaymentIntent is SUCCEEDED, `complete` + `unpaid` PROCESSING, `expired`
+    EXPIRED). A payable session past the payment's expiry is expired at the processor first. A lost start answer is
+    recovered with the same key. A processor that does not answer is `503 SCHOOL_PAY_PROVIDER_UNKNOWN` and nothing changes.
+  - `cancel(paymentId)`: expires the session at the processor, retrieves it and records CANCELED, or SUCCEEDED when the
+    payer had already paid (so a caller switching to pay at the desk can never double charge). A session the processor
+    refused to create ends CANCELED without one. Refused while PROCESSING.
+  - `reconcileDue(limit)`: confirms every payment past its expiry that is still OPEN or PROCESSING (not scheduled yet).
+- **Database entry points for the API only** (EXECUTE for the runtime, through a fixed allow-list in
+  `RuntimeDatabaseService.runSchoolPayOnceCall`): `read_school_pay_once`, `start_school_pay_once`,
+  `record_school_pay_once` (amount, currency and session must match; SUCCEEDED needs the processor payment id; a settled
+  payment refuses any other answer), `list_due_school_pay_once`. The payment id is the only scope; nothing about people
+  or schools can be read through them, and none can open a payment or choose an amount.
+- **Data (private, forced RLS, no runtime table privilege):** `school_pay_once` (one row per payment; scope, caller
+  record, amount, label, payer email and expiry never change; start facts and each provider reference are written once),
+  `school_pay_once_events` (append-only), an audit row per change by the code-owned principal
+  `00000000-0000-4000-8000-000000000529`, and an inert outbox event `school_pay_once.settled` when a payment settles.
+  Results and history carry no provider reference and no payer email.
+- **Rule for every caller route (review P3):** the four API entry points are scoped by the payment id alone, and the read
+  returns the school's account reference and the payer email to the API. A caller route (CP3, WK3, POS) must therefore
+  never take a payment id from the browser or the URL: it gets the id only from its own scoped definer read (the visit,
+  checkout order or sale it is allowed to act on), and its PR must include a negative proof that a foreign payment id
+  (another record, school or organization) is refused before the service is called.
+- **How a caller uses it (kiosk example):** its definer opens the payment with the frozen offer price and returns the id;
+  its route calls `start` and hands the tablet the client secret; after the form returns, its route calls `confirm`, then
+  its own definer reads `school_pay_once_state` under lock and moves the visit to paid only on SUCCEEDED. To switch to
+  the desk: route calls `cancel`, then the definer records desk-paid only when the state is CANCELED, EXPIRED or FAILED.
+- **Evidence:** `packages/database/scripts/test-school-pay-once-integrity.mjs` (125 checks through the service with the
+  simulators: open rules and validation, embedded and hosted start, idempotent restart, start mismatch, paid, cancel to
+  the desk, cancel after paying, internal cancel, lost and refused session answers, PROCESSING then FAILED, expiry and the
+  sweep, Square hosted only, an unconfigured processor, caller lock, record misuse, guards, ACL, 011);
+  `apps/api/test/school-payments-sandbox.test.cjs` (Stripe Checkout fields, key, account header, outcomes, UNKNOWN
+  cases, expiry; Square not offered; simulators); 010/011; staging pin 0529.
+
+## 23. Parent invoice payment as built (0530): a guardian pays an open invoice in the HON Family app
+
+Status: source only, not deployed. TEST/SANDBOX mode only; live money needs a separate owner decision. HON adds no fee.
+No saved card and no autopay from the app. Owner decision 2026-11-18: parents pay an open invoice through the school's own
+Stripe (or, later, Square) hosted page, using the shared one-time payment (section 22) with the new source `FAMILY_INVOICE`.
+
+- **Who may pay:** the signed-in guardian on the 0102 parent path (exactly one resolved family scope, a PRIMARY or
+  SECONDARY guardian grant), for an invoice of a STUDENT participant on that family's membership whose payer is the
+  family's GUARDIAN billing contact. Only `ISSUED` invoices with a balance of at least 1 minor unit are payable; the amount
+  is always the whole open balance, computed in the database. Nothing about payment, school, family, amount or provider
+  comes from the app: it names an invoice id it read from the pay list, and nothing else.
+- **Database (0530):** `read_parent_invoice_payments(subject)` (the family's invoices with balance, due date, the latest
+  family payment's state NONE/OPEN/PROCESSING/SUCCEEDED, whether an autopay charge is in progress, and the school's
+  provider code for the API only); `read_parent_invoice_payment(subject, invoice)` → the latest payment id and state for
+  that invoice, only after the same scope check; `open_parent_invoice_payment(subject, invoice)` locks the live payment,
+  then the invoice (the order 0529 uses), re-checks scope and payability, refuses while an autopay charge is open
+  (`PARENT_INVOICE_PAY_AUTOPAY_IN_PROGRESS`), and opens a 30-minute payment labelled "Tuition invoice due YYYY-MM-DD".
+  Refusals: `PARENT_INVOICE_PAY_FORBIDDEN` (42501), `PARENT_INVOICE_PAY_NOT_FOUND` (P0002, also a foreign or unknown
+  invoice), `PARENT_INVOICE_PAY_NOT_PAYABLE` (40001). `school_pay_once_open` and its source check gain `FAMILY_INVOICE`
+  and are otherwise unchanged.
+- **Holds while a family payment may still be paid** (PROCESSING, or OPEN before the later of its own and the provider
+  session's expiry): no non-PROVIDER payment record can be added to the invoice, the invoice can only move to PAID, and
+  no autopay charge attempt can start. A stale OPEN payment past its expiry holds nothing.
+- **Settlement:** an AFTER UPDATE trigger on `school_pay_once` (`parent_invoice_pay_settle`) runs on SUCCEEDED for a
+  FAMILY_INVOICE payment: when the invoice is still ISSUED in the same currency and the paid amount still equals its open
+  balance, it writes one PROVIDER `invoice_payment_records` row and sets the invoice PAID; otherwise (the invoice changed
+  meanwhile) it records a `parent_invoice_pay.review_needed` audit and outbox event for staff instead of guessing. Because it is a trigger, any path that records the processor's answer (the parent's
+  confirm, the next start, or a later `reconcileDue`) pays the invoice exactly once.
+- **API (`apps/api/src/parent-pay/`):** `GET /v1/parent/invoice-payments` → `{canPay, testMode: true, invoices:
+  [{invoiceId, childName, currency, totalMinor, balanceMinor, dueAt, payState, payable}]}` (no payment id, provider or
+  account). `POST /v1/parent/invoice-payments/:invoiceId/start|confirm|cancel`, human commands
+  `parent.invoice.pay.start|confirm|cancel` with an Idempotency-Key, empty body, no query. `start` refuses first when the
+  return page is not configured (`HON_PUBLIC_ORIGIN` must be https, or http on localhost; `503
+  PARENT_INVOICE_PAY_NOT_CONFIGURED`, nothing read or opened); a latest OPEN/PROCESSING payment is confirmed at the
+  processor first, so a payment already made is never doubled; otherwise it opens and starts a HOSTED page returning to
+  `${HON_PUBLIC_ORIGIN}/parent/payment-return` (a static web page that records nothing). `confirm` and `cancel` act only
+  on the latest payment id from the scoped read. Unknown errors are `503 PARENT_INVOICE_PAY_UNAVAILABLE`, never success.
+- **App (`apps/parent-mobile`, More → Membership & billing):** a "Pay an invoice" section with a test-mode note, a
+  "Pay $X" button per payable invoice, the processor page in the system browser, then HON's recorded answer (Paid, Still
+  processing, Not paid yet, Failed/Expired/Canceled with "Nothing was charged"). Nothing is claimed from the page closing
+  alone. A start whose answer was lost is retried with the same Idempotency-Key. The sample family offers no payment.
+- **Not done yet:** Square is not offered (no real Square hosted adapter); `reconcileDue` is not scheduled; the autopay
+  hold guards are implemented but not yet covered by the proof.
+- **Evidence:** `packages/database/scripts/test-parent-invoice-payment-integrity.mjs` (80 checks through the service with
+  the simulators: list scope, a foreign or unknown invoice refused with nothing opened, DRAFT not payable, start for
+  exactly the balance and the same page on a second press, holds, paid once on SUCCEEDED, cancel and cancel after paying,
+  expiry and a new page, PROCESSING, the review flag, an unconfigured adapter, SQL refusals, ACL, 011);
+  `apps/api/test/parent-invoice-pay.test.cjs`; `apps/parent-mobile/test/invoice-pay-ui.test.tsx` and
+  `api-client.test.ts`; 010/011; staging pin 0530.
+
+## 24. Family checkout orders as built (0598, CP3 first slice): a guardian buys from a checkout page in the HON Family app
+
+Owner ask (2026-11-19): "event/checkout pages" in the HON Family app. TEST mode only, through the shared one-time payment
+(§22). HON adds no fee. Not in this slice: MONTHLY options, options tied to a catalog plan (`createsMembership`), promo
+codes (CP4) and public links for people without an account.
+
+| Topic | Rule |
+| --- | --- |
+| Who | The signed-in person's one live family (the 0530 parent scope). Anyone with a grant sees the pages; only a PRIMARY or SECONDARY guardian buys, confirms or cancels. |
+| What is sold | PUBLISHED pages of that school with at least one ONE_TIME option that has no plan, does not create a membership and is still available on the school's today. Only those options are shown. |
+| For whom | 1 to the page's `maxPerOrder` distinct ACTIVE children whose primary family is this family. |
+| Checked by the database | The page and version the parent saw (`FAMILY_CHECKOUT_CHANGED`), the option, every answer against the page's questions (required, choice values, yes/no, text up to 500), known add-ons with every required one, the waiver when the page has one, and places left. |
+| Price | The option price for the first child, plus the extra-child fee (or the full price when the page has none) for each other child, plus each chosen add-on once per order. The app never sends an amount. |
+| Places | PAID orders and OPEN orders whose payment may still be paid count against capacity (0 is no limit), under the page row lock. A canceled or expired order frees its places. |
+| Payment | A free order is PAID at once with no payment. Otherwise the order opens a 0529 `CHECKOUT_PAGE` payment for exactly that amount, valid 30 minutes, on the school's default test-mode connection, shown as the processor's hosted page. The payment id never leaves the API and is read only from the family's own order (0529 caller rule). |
+| Settling | An AFTER UPDATE trigger on `school_pay_once` settles the order in the same transaction, whoever recorded the processor's answer (the parent's confirm or the 0529 sweep). SUCCEEDED for the same amount makes the order PAID; FAILED, EXPIRED or CANCELED makes it CANCELED. A success for an order that is no longer OPEN keeps the success on the payment and is flagged for staff review (`family_checkout.review_needed`). A CHECKOUT_PAGE payment with no order is left alone. Nothing is refunded here. |
+| Replay | Exact request idempotency per guardian and key. Another request under the same key is `IDEMPOTENCY_KEY_REUSED`. |
+| Limits | At most 20 orders per family per rolling day (`FAMILY_CHECKOUT_RATE_LIMITED`, 429). |
+| Staff | Billing > Checkout orders (`school_checkout.manage`): the school's latest 200 orders with family, children, answers, add-ons, waiver, amount and state. Read only. |
+| Storage | `hon.family_checkout_orders`: forced RLS, no runtime table privilege, never deleted or truncated; an order moves once from OPEN to PAID, CANCELED or REVIEW. The waiver is kept as the SHA-256 of the page's waiver text. Recorder principal `00000000-0000-4000-8000-000000000582` (code-owned, no authority). |
+
+API: `GET /v1/parent/checkout-pages`, `POST /v1/parent/checkout-pages/orders` (Idempotency-Key required),
+`POST .../orders/:orderId/start`, `.../confirm` and `.../cancel`; staff `GET /v1/organizations/:org/schools/:school/payments/checkout-pages/orders`.
+App: More > Sign up & pay. Proof: `test-family-checkout-integrity.mjs`.
+
+## 25. Checkout page share links as built (0620): a link families open without an account
+
+Owner ask (2026-11-21, testing the live app): "checkout page how do i get link to show the page". Read only: nothing is
+bought, booked, stored or sent from the link, and HON adds no fee. Signing up and paying from the link for people without
+an account came next: see §26 (0627), which also adds the questions, waiver and thank-you text to what the page shows.
+
+| Topic | Rule |
+| --- | --- |
+| The link | One per checkout page, `/checkout/<48 hex>` on the app's own address: 24 random bytes, issued once, never changed, moved or deleted. |
+| Issuing | Staff with `school_checkout.manage` call `POST /v1/organizations/:org/schools/:school/payments/checkout-pages/links` (browser command `school_checkout.links.issue`, no body, no Idempotency-Key). It issues a link for every page of the school that has none (at most 200) and returns all of them; again issues nothing new. One `school_checkout.link_issued` audit row per issued link; no outbox event. |
+| What opens | Only a PUBLISHED page of an ACTIVE school and organization with a live ESSENTIAL, CORE or COMPLETE entitlement (the 0261 public event rule). Draft, archived, unknown or malformed links read as not found. Putting a page in draft stops its link; going live again reopens the same link. |
+| What it shows | `GET /v1/public/checkout-pages/:publicId` (no cookie, session or tenant id): school name, title, description and text blocks in the page's languages, currency, participants per order, the options still available on the school's today (price, or monthly amount, months and down payment; extra-participant fee; most popular; places left from §24's count; whether the HON Family app sells it), add-ons and whether there is a waiver. Never the questions, receipt or thank-you text, collection method, plan, capacity number, ids, orders or staff names. A public read writes nothing. |
+| Transport | One GET path, no query string, no body, `no-store` and `no-referrer`; the per-client read limit shared with the other public links (`public-client-limit.ts`) and a process cap. |
+| Staff screen | Each Live card shows the link with Copy link and Open page (new tab); a draft card says the link opens once the page is live. |
+| Family page | `/checkout/:publicId`, noindex, English, Korean or Spanish by the browser's language with English fallback. It says how to sign up: in the HON Family app (More, Sign up & pay) when an option is sold there, otherwise by contacting the school. |
+| Storage | `hon.school_checkout_links`: forced RLS, no runtime table privilege, insert-only guard (a link belongs to a page of its own school), no truncate. Runtime entry points `issue_school_checkout_links(text)` and `read_public_school_checkout(text)`; helpers `public_school_checkout(text)` and `guard_school_checkout_link()` stay private. |
+
+Proof: `test-checkout-links-integrity.mjs`; `apps/api/test/checkout-links.test.cjs`; `apps/web/test/checkout-links-ui.test.tsx`;
+010/011; verify-rls; staging pin 0620.
+
+## 26. Signing up from a share link as built (0627): no account, test-mode payment only
+
+Owner ask (2026-11-21), second slice of §25: a person who opens a page's link can sign up and pay without a HON account.
+The payment is the shared one-time payment (0529) on the school's own processor page (HOSTED), TEST mode only, with no
+HON fee. Nothing here takes live money, creates a person, family, membership or account, or sends a message.
+
+| Topic | Rule |
+| --- | --- |
+| What can be bought | A ONE_TIME option the page sells online (`inFamilyApp`) with places left, on a page the link shows (§25). Monthly options stay with the school. A priced order needs a processor that can show a hosted page and the app's public address (`HON_PUBLIC_ORIGIN`); otherwise the database refuses it (`NOT_AVAILABLE`) and only free options appear on the form. |
+| The order | `POST /v1/public/checkout-pages/:publicId/orders` with `{ key, order }`: a random key the browser made (32 to 100 base64url characters) and the buyer's name, email and optional mobile (E.164), 1 to `maxPerOrder` participants by name with exactly the page's questions, add-on keys, the waiver box and an empty hidden `website` field. The page version must match (`CHANGED`). The database prices it (first participant, each further one at the extra-participant fee or the price, required add-ons always), holds the places (`FULL`, counted with §24's family orders), keeps a hash of the waiver text and opens the payment with the buyer's email for 30 minutes. A free order is PAID at once with no payment. |
+| Same key | The same key and the same order return the same order (a lost answer is safe to send again); another order under that key is refused. A key belongs to one link only; the database keeps only its hash. |
+| Pay, status, cancel | `.../orders/pay`, `.../orders/status`, `.../orders/cancel` with `{ key }`. Pay confirms the payment first and only opens a processor page while it is still OPEN; it returns to `/checkout/:publicId` (no order, key or payment in the address). Status asks the processor and records its answer; cancel closes an OPEN payment (the processor may answer SUCCEEDED). The payment id never leaves the API. The order settles from the payment: PAID, CANCELED, or REVIEW when a payment succeeds for an order that already ended. |
+| Suspended school | The order call answers INVALID for a page the link no longer shows (taken down, or a suspended school, organization or entitlement) and writes nothing. An order already placed stays reachable through its link to check or cancel, but pay hands out no processor page while the page does not open. Both entry points are reviewed into the B6A open-by-design list (`test-entitlement-enforcement-coverage.mjs`). |
+| Limits | Per page: 300 well-formed new order attempts and 1,200 unknown-key lookups an hour, and 500 placed orders a day; 5 placed orders an hour per email per page. A known key is always answered and a replay is not counted, so guessed keys or spam can never stop a buyer paying for, checking or cancelling their own order. A free option's places are taken at once (no payment to wait for), so someone could fill a free option with made-up emails up to these limits; the school sees every sign-up under From the page link and can raise capacity or take the page down. The per-client limits shared with the other public links (book for order and pay, read for status, cancel for cancel), a process cap, JSON bodies of at most 8 KiB, no query string, `no-store`. Refusals carry no detail. |
+| Family page | The form appears under Sign up: option, participants and their questions, add-ons, the buyer's details, the waiver text and box, and the total (the server prices it again). After sign-up it shows where the order stands: waiting for payment (Pay now, Check again, Cancel), processing, signed up with the thank-you text, school review, or ended (start again). Only the order key is kept in the browser (`localStorage`, per link). |
+| Staff | Checkout orders shows a second list, From the page link: the latest 200 sign-ups with what the buyer typed, participants and answers, add-ons, waiver and status (`GET .../payments/checkout-pages/public-orders`, `school_checkout.manage`, no key, no query). |
+| Storage | `hon.public_checkout_orders` (forced RLS, no runtime table privilege, insert OPEN or free PAID only, the page must belong to the order's school, settled once, never changed otherwise or deleted, no truncate) and `hon.public_checkout_rates` (fixed windows). Runtime entry points `open_public_checkout_order(text,jsonb,text,boolean)`, `read_public_checkout_order(text,text)` and `read_school_public_checkout_orders(text)`; the settle trigger on `school_pay_once` and the helpers stay private. |
+
+Proof: `test-public-checkout-orders-integrity.mjs`; `apps/api/test/checkout-links.test.cjs`; `apps/web/test/checkout-links-ui.test.tsx`;
+`apps/web/test/checkout-orders-http.test.ts`; 010/011; verify-rls; staging pin 0627.

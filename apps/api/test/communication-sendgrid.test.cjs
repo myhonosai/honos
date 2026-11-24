@@ -81,11 +81,72 @@ test('SendGrid signed webhook: valid signature maps HON events, drops opens, cli
   assert.equal(JSON.stringify(receipts).includes('ada@example.test'), false);
 });
 
-test('SendGrid signed webhook acknowledges and ignores internal, HQ and unknown-purpose mail, so it never asks SendGrid to retry them', () => {
+test('SendGrid signed webhook acknowledges and ignores internal and unknown-purpose mail; HQ mail comes back marked scope HQ', () => {
   const batch = [event({ hon_purpose: 'INTERNAL', sg_event_id: 'i1' }), event({ hon_purpose: 'HQ', sg_event_id: 'i2' }), event({ hon_purpose: 'SOMETHING_NEW', sg_event_id: 'i3' }),
-    event({ hon_purpose: 'SCHOOL', sg_event_id: 'i4' }), event({ sg_event_id: 'i5' })];
+    event({ hon_purpose: 'SCHOOL', sg_event_id: 'i4' }), event({ sg_event_id: 'i5' }), event({ hon_purpose: 'hq', sg_event_id: 'i6' })];
   const { body, signature, timestamp } = signed(batch);
-  assert.deepEqual(verifier().verify(body, signature, timestamp).map((r) => r.providerEventId), ['i4', 'i5']);
+  const receipts = verifier().verify(body, signature, timestamp);
+  assert.deepEqual(receipts.map((r) => [r.providerEventId, r.scope]), [['i2', 'HQ'], ['i4', undefined], ['i5', undefined]]);
+});
+
+const hqRequest = (over = {}) => request({ origin: 'HQ', senderEmail: 'support@hon.example', senderName: 'HON "Support"\r\n', hqPurpose: 'SUPPORT', ...over });
+
+test('SendGrid HQ send: HQ sender address and name, hon_purpose HQ, unsubscribe bypass only for billing and account notices', async () => {
+  const adapter = new SendGridEmailProvider(() => approved());
+  assert.equal(adapter.hqSender, true);
+  const body = adapter.requestBody(hqRequest());
+  assert.deepEqual(body.from, { email: 'support@hon.example', name: 'HON  Support' });
+  assert.equal(body.subject, 'A message from HON  Support');
+  assert.deepEqual(body.personalizations[0].custom_args, { hon_delivery_id: request().deliveryId, hon_purpose: 'HQ' });
+  assert.deepEqual(body.mail_settings, { sandbox_mode: { enable: true } });
+  assert.deepEqual(body.tracking_settings.subscription_tracking, { enable: true });
+  for (const hqPurpose of ['BILLING', 'ACCOUNT']) {
+    assert.deepEqual(adapter.requestBody(hqRequest({ hqPurpose })).mail_settings, { sandbox_mode: { enable: true }, bypass_unsubscribe_management: { enable: true } });
+  }
+  for (const hqPurpose of ['SUPPORT', 'ONBOARDING', undefined]) assert.equal(adapter.requestBody(hqRequest({ hqPurpose })).mail_settings.bypass_unsubscribe_management, undefined);
+  // A school send never gets the bypass, whatever an hqPurpose field says.
+  assert.equal(adapter.requestBody(request({ hqPurpose: 'BILLING' })).mail_settings.bypass_unsubscribe_management, undefined);
+  assert.equal(adapter.requestBody(hqRequest({ senderName: '' })).from.name, 'HON OS');
+  let calls = 0;
+  const counting = new SendGridEmailProvider(() => approved(), async () => { calls += 1; return reply(202, { 'x-message-id': 'abc' }); });
+  for (const senderEmail of [undefined, '', 'not an address']) {
+    await assert.rejects(counting.send(hqRequest({ senderEmail })), (e) => isErr('RETRYABLE', 'PROVIDER_FAILED')(e) && e.retryAfterSeconds === 900);
+  }
+  assert.equal(calls, 0);
+  let seen;
+  await new SendGridEmailProvider(() => approved(), async (_url, init) => { seen = JSON.parse(init.body); return reply(202, { 'x-message-id': 'abc' }); }).send(hqRequest());
+  assert.equal(seen.from.email, 'support@hon.example');
+});
+
+test('SendGrid webhook route: school receipts reach school deliveries, HQ receipts reach HQ deliveries', async () => {
+  const { CommunicationWebhookController } = require('../dist/communication/delivery/communication-webhook.controller.js');
+  const { TwilioWebhookVerifier } = require('../dist/communication/delivery/twilio-text-provider.js');
+  const recorder = (outcome = 'RECORDED') => { const seen = []; return { seen, isConfigured: () => true, recordReceipt: async (r) => { seen.push(r.providerEventId); return { outcome }; } }; };
+  const batch = [event({ sg_event_id: 's1' }), event({ hon_purpose: 'HQ', sg_event_id: 'h1' }), event({ hon_purpose: 'HQ', sg_event_id: 'h2', event: 'bounce' }), event({ event: 'open', sg_event_id: 'o1' })];
+  const { body, signature, timestamp } = signed(batch);
+  const school = recorder();
+  const hq = recorder();
+  const controller = new CommunicationWebhookController(school, verifier(), new TwilioWebhookVerifier(() => ({})), undefined, hq);
+  assert.deepEqual(await controller.sendgridEvents({ body }, signature, timestamp), { received: true, recorded: 3, replayed: 0, ignored: 1 });
+  assert.deepEqual(school.seen, ['s1']);
+  assert.deepEqual(hq.seen, ['h1', 'h2']);
+  // An HQ-only batch never touches the school store; a missing or unconfigured HQ store asks SendGrid to redeliver.
+  const hqOnly = signed([event({ hon_purpose: 'HQ', sg_event_id: 'h3' })]);
+  const untouched = recorder();
+  const hq2 = recorder();
+  await new CommunicationWebhookController(untouched, verifier(), new TwilioWebhookVerifier(() => ({})), undefined, hq2).sendgridEvents({ body: hqOnly.body }, hqOnly.signature, hqOnly.timestamp);
+  assert.deepEqual([untouched.seen, hq2.seen], [[], ['h3']]);
+  await assert.rejects(new CommunicationWebhookController(recorder(), verifier(), new TwilioWebhookVerifier(() => ({}))).sendgridEvents({ body: hqOnly.body }, hqOnly.signature, hqOnly.timestamp),
+    (e) => e.getStatus() === 503);
+  await assert.rejects(new CommunicationWebhookController(recorder(), verifier(), new TwilioWebhookVerifier(() => ({})), undefined, { isConfigured: () => true })
+    .sendgridEvents({ body: hqOnly.body }, hqOnly.signature, hqOnly.timestamp), (e) => e.getStatus() === 503);
+  // An HQ receipt whose send result is not committed yet is UNMATCHED: SendGrid retries the batch.
+  await assert.rejects(new CommunicationWebhookController(recorder(), verifier(), new TwilioWebhookVerifier(() => ({})), undefined, recorder('UNMATCHED'))
+    .sendgridEvents({ body: hqOnly.body }, hqOnly.signature, hqOnly.timestamp), (e) => e.getStatus() === 503);
+  // A batch with nothing usable still answers through the school store, as before.
+  const opens = signed([event({ event: 'open', sg_event_id: 'o2' })]);
+  assert.deepEqual(await new CommunicationWebhookController(recorder(), verifier(), new TwilioWebhookVerifier(() => ({}))).sendgridEvents({ body: opens.body }, opens.signature, opens.timestamp),
+    { received: true, recorded: 0, replayed: 0, ignored: 1 });
 });
 
 test('SendGrid signed webhook refuses a tampered body, another key, a stale timestamp, a missing key and malformed JSON', () => {

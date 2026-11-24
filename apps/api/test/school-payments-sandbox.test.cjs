@@ -1,0 +1,496 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { randomBytes } = require('node:crypto');
+
+// B-TUI-2 piece 2 (0320): real Stripe Connect test-mode and Square sandbox adapters over an injected transport (no
+// network in tests), and the per-school credential vault. Test/sandbox only; HON takes no fee on any school payment.
+const loadAdapters = () => import(path.join(__dirname, '../dist/school-payments/school-payment-adapter.js'));
+const loadSandbox = () => import(path.join(__dirname, '../dist/school-payments/school-payment-sandbox-adapters.js'));
+const loadVault = () => import(path.join(__dirname, '../dist/school-payments/school-payment-vault.js'));
+
+const CONNECTION = '44444444-4444-4444-8444-444444444444';
+const STATE = 's'.repeat(43);
+const RETURN = 'https://app.example.test/staff/billing/payment-processors?connection=44444444-4444-4444-8444-444444444444';
+const STRIPE_KEY = `sk_test_${'a'.repeat(99)}`;
+const SQUARE = { HON_TUITION_SQUARE_SANDBOX_APP_ID: 'sandbox-sq0idb-abcdefghijklmnopqrstuv', HON_TUITION_SQUARE_SANDBOX_APP_SECRET: `sandbox-sq0csb-${'b'.repeat(43)}` };
+const VAULT = { HON_SCHOOL_PAY_VAULT_KEY: randomBytes(32).toString('base64'), HON_SCHOOL_PAY_VAULT_KEY_ID: 'proof-1' };
+
+/** A recording fake transport: answers from a route table, keeps every request. */
+function fakeTransport(routes) {
+  const calls = [];
+  const send = async (request) => {
+    calls.push(request);
+    const route = routes.find((r) => r.method === request.method && (typeof r.url === 'string' ? request.url === r.url : r.url.test(request.url)));
+    if (!route) throw new Error(`unexpected ${request.method} ${request.url}`);
+    if (route.throws) throw route.throws;
+    return typeof route.reply === 'function' ? route.reply(request) : route.reply;
+  };
+  return { send, calls };
+}
+const form = (body) => Object.fromEntries(new URLSearchParams(body));
+
+test('0320 vault: seals with AES-256-GCM bound to the connection; wrong key, id or binding never opens', async () => {
+  const { SchoolPaymentVault, schoolPaymentVaultFromEnvironment } = await loadVault();
+  const vault = schoolPaymentVaultFromEnvironment(VAULT);
+  assert.equal(vault.keyId, 'proof-1');
+  const binding = { connectionId: CONNECTION, providerCode: 'SQUARE', accountRef: 'MLABC123' };
+  const secret = { accessToken: 'EAAAtoken-secret', refreshToken: 'EQAArefresh-secret', accessExpiresAt: '2026-12-13T00:00:00.000Z' };
+  const sealed = vault.seal(binding, secret);
+  assert.match(sealed, /^v1\.[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{22}$/);
+  assert.doesNotMatch(sealed, /secret|EAAA|EQAA/);
+  assert.notEqual(vault.seal(binding, secret), sealed, 'a fresh IV each time');
+  assert.deepEqual(vault.open(binding, 'proof-1', sealed), secret);
+  assert.throws(() => vault.open({ ...binding, connectionId: '55555555-5555-4555-8555-555555555555' }, 'proof-1', sealed), /SCHOOL_PAY_VAULT/);
+  assert.throws(() => vault.open({ ...binding, accountRef: 'MLOTHER1' }, 'proof-1', sealed), /SCHOOL_PAY_VAULT/);
+  assert.throws(() => vault.open(binding, 'proof-2', sealed), /SCHOOL_PAY_VAULT/);
+  const tampered = sealed.slice(0, -3) + (sealed.endsWith('AAA') ? 'BBB' : 'AAA');
+  assert.throws(() => vault.open(binding, 'proof-1', tampered), /SCHOOL_PAY_VAULT/);
+  const other = new SchoolPaymentVault(randomBytes(32), 'proof-1');
+  assert.throws(() => other.open(binding, 'proof-1', sealed), /SCHOOL_PAY_VAULT/);
+  for (const bad of [{}, { HON_SCHOOL_PAY_VAULT_KEY: randomBytes(16).toString('base64'), HON_SCHOOL_PAY_VAULT_KEY_ID: 'k' },
+    { HON_SCHOOL_PAY_VAULT_KEY: VAULT.HON_SCHOOL_PAY_VAULT_KEY, HON_SCHOOL_PAY_VAULT_KEY_ID: 'Bad Id' },
+    { HON_SCHOOL_PAY_VAULT_KEY: 'not base64!!', HON_SCHOOL_PAY_VAULT_KEY_ID: 'k' }]) assert.equal(schoolPaymentVaultFromEnvironment(bad), null, JSON.stringify(Object.keys(bad)));
+  assert.throws(() => vault.seal(binding, { ...secret, accessToken: '' }), /SCHOOL_PAY_VAULT/);
+});
+
+test('0320 environment: simulators first, then real sandbox adapters only with valid test keys, never a live key', async () => {
+  const { schoolPaymentAdaptersFromEnvironment } = await loadAdapters();
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const real = schoolPaymentAdaptersFromEnvironment({ HON_TUITION_STRIPE_TEST_SECRET_KEY: STRIPE_KEY, ...SQUARE, ...VAULT });
+  assert.ok(real.get('STRIPE_CONNECT') instanceof StripeConnectTestAdapter);
+  assert.ok(real.get('SQUARE') instanceof SquareSandboxAdapter);
+  assert.ok([...real.values()].every((a) => a.readiness() === 'READY'));
+  assert.equal(real.get('SQUARE').credentialKind, 'OAUTH_TOKENS');
+  assert.equal(real.get('STRIPE_CONNECT').credentialKind, 'NONE');
+  const cases = [
+    [{ HON_TUITION_STRIPE_TEST_SECRET_KEY: `sk_live_${'a'.repeat(99)}` }, 'STRIPE_CONNECT'],
+    [{ HON_TUITION_STRIPE_TEST_SECRET_KEY: `rk_live_${'a'.repeat(99)}` }, 'STRIPE_CONNECT'],
+    [{ HON_TUITION_STRIPE_TEST_SECRET_KEY: 'sk_test_' }, 'STRIPE_CONNECT'],
+    [{ STRIPE_TEST_SECRET_KEY: STRIPE_KEY }, 'STRIPE_CONNECT'], // HON's SaaS key is never used for tuition
+    [{ ...SQUARE, HON_TUITION_SQUARE_SANDBOX_APP_ID: 'sq0idp-production-app-id-123456' , ...VAULT }, 'SQUARE'],
+    [{ ...SQUARE }, 'SQUARE'], // no vault key
+    [{ HON_TUITION_SQUARE_SANDBOX_APP_ID: SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, ...VAULT }, 'SQUARE'],
+  ];
+  for (const [env, code] of cases) assert.equal(schoolPaymentAdaptersFromEnvironment(env).get(code).readiness(), 'NOT_CONFIGURED', JSON.stringify(Object.keys(env)));
+  const simulated = schoolPaymentAdaptersFromEnvironment({ HON_SCHOOL_PAY_SIMULATORS: '1', NODE_ENV: 'test', HON_TUITION_STRIPE_TEST_SECRET_KEY: STRIPE_KEY });
+  assert.ok(!(simulated.get('STRIPE_CONNECT') instanceof StripeConnectTestAdapter), 'simulators win when asked');
+  const production = schoolPaymentAdaptersFromEnvironment({ HON_SCHOOL_PAY_SIMULATORS: '1', NODE_ENV: 'production', HON_TUITION_STRIPE_TEST_SECRET_KEY: STRIPE_KEY });
+  assert.ok(production.get('STRIPE_CONNECT') instanceof StripeConnectTestAdapter, 'production never simulates; test keys still only reach test mode');
+});
+
+test('0320 Stripe: full-dashboard account (no personal data, no fee), idempotent creation, hosted link, status from the account', async () => {
+  const { StripeConnectTestAdapter } = await loadSandbox();
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/accounts', reply: { status: 200, body: { id: 'acct_1TestSchool0001', object: 'account' } } },
+    { method: 'POST', url: 'https://api.stripe.com/v1/account_links', reply: { status: 200, body: { object: 'account_link', url: 'https://connect.stripe.com/setup/s/acct_1TestSchool0001/abc' } } },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  const begun = await stripe.beginOnboarding({ connectionId: CONNECTION, accountRef: null, state: STATE, returnUrl: RETURN });
+  assert.deepEqual(begun, { onboardingUrl: 'https://connect.stripe.com/setup/s/acct_1TestSchool0001/abc', accountRef: 'acct_1TestSchool0001' });
+  const [account, accountLink] = t.calls;
+  assert.equal(account.headers.Authorization, `Bearer ${STRIPE_KEY}`);
+  assert.equal(account.headers['Idempotency-Key'], `hon-school-pay-account-${CONNECTION}`);
+  assert.equal(account.headers['Content-Type'], 'application/x-www-form-urlencoded');
+  assert.deepEqual(form(account.body), {
+    'controller[stripe_dashboard][type]': 'full', 'controller[fees][payer]': 'account', 'controller[losses][payments]': 'stripe',
+    'controller[requirement_collection]': 'stripe', 'metadata[hon_connection_id]': CONNECTION,
+  });
+  const linkBody = form(accountLink.body);
+  assert.equal(linkBody.account, 'acct_1TestSchool0001');
+  assert.equal(linkBody.type, 'account_onboarding');
+  assert.equal(new URL(linkBody.return_url).searchParams.get('state'), STATE);
+  assert.equal(new URL(linkBody.refresh_url).searchParams.get('state'), null, 'an expired link never carries the state');
+  assert.equal(new URL(linkBody.refresh_url).searchParams.get('connection'), CONNECTION);
+  for (const call of t.calls) assert.doesNotMatch(call.body, /application_fee|fee_amount|email|business_profile|individual/);
+
+  const again = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/account_links', reply: { status: 200, body: { url: 'https://connect.stripe.com/setup/s/x/y' } } }]);
+  const reused = await new StripeConnectTestAdapter(STRIPE_KEY, again.send).beginOnboarding({ connectionId: CONNECTION, accountRef: 'acct_1TestSchool0001', state: STATE, returnUrl: RETURN });
+  assert.equal(reused.accountRef, 'acct_1TestSchool0001');
+  assert.equal(again.calls.length, 1, 'an existing account is never created again');
+
+  for (const url of ['http://connect.stripe.com/x', 'https://evil.example.test/setup', 'https://user:pw@connect.stripe.com/x']) {
+    const bad = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/account_links', reply: { status: 200, body: { url } } }]);
+    await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, bad.send).beginOnboarding({ connectionId: CONNECTION, accountRef: 'acct_1TestSchool0001', state: STATE, returnUrl: RETURN }),
+      (e) => e.outcome === 'UNKNOWN', url);
+  }
+  assert.deepEqual(await stripe.completeOnboarding({ connectionId: CONNECTION, accountRef: 'acct_1TestSchool0001' }), { accountRef: 'acct_1TestSchool0001' });
+  await assert.rejects(stripe.completeOnboarding({ connectionId: CONNECTION, accountRef: 'acct_1TestSchool0001', authorizationCode: 'x' }), (e) => e.outcome === 'PRE_SEND');
+
+  const account2 = (patch) => ({ status: 200, body: { id: 'acct_1TestSchool0001', object: 'account', charges_enabled: true, payouts_enabled: true,
+    requirements: { currently_due: [], past_due: [], disabled_reason: null }, capabilities: { card_payments: 'active', us_bank_account_ach_payments: 'active' }, ...patch } });
+  const statusOf = async (reply) => new StripeConnectTestAdapter(STRIPE_KEY, fakeTransport([{ method: 'GET', url: 'https://api.stripe.com/v1/accounts/acct_1TestSchool0001', reply }]).send)
+    .retrieveStatus({ accountRef: 'acct_1TestSchool0001' });
+  const active = await statusOf(account2({}));
+  assert.deepEqual(active, { accountRef: 'acct_1TestSchool0001', chargesEnabled: true, payoutsEnabled: true, requirementsDue: false, reauthorizationRequired: false,
+    capabilities: { bankDebit: true, offSessionRecurring: true, oneTimeCard: true, refunds: true, storedCard: true } });
+  const restricted = await statusOf(account2({ charges_enabled: false, requirements: { currently_due: ['external_account'], past_due: [], disabled_reason: 'requirements.past_due' },
+    capabilities: { card_payments: 'inactive' } }));
+  assert.equal(restricted.requirementsDue, true);
+  assert.equal(restricted.capabilities.oneTimeCard, false);
+  assert.equal(restricted.capabilities.bankDebit, false);
+  assert.equal((await statusOf({ status: 403, body: { error: { type: 'invalid_request_error', code: 'account_invalid' } } })).reauthorizationRequired, true);
+  await assert.rejects(statusOf(account2({ id: 'acct_somethingElse' })), (e) => e.outcome === 'UNKNOWN', 'another account answered');
+  await assert.rejects(statusOf({ status: 500, body: {} }), (e) => e.outcome === 'UNKNOWN');
+  await assert.rejects(statusOf({ status: 400, body: { error: { type: 'invalid_request_error' } } }), (e) => e.outcome === 'FAILED');
+  await assert.rejects(stripe.disconnect({ accountRef: 'acct_1TestSchool0001' }), (e) => e.outcome === 'PRE_SEND' && e.reason === 'REVOKE_NOT_SUPPORTED');
+});
+
+test('0320 Stripe transport: network failure or timeout is UNKNOWN, never success', async () => {
+  const { StripeConnectTestAdapter } = await loadSandbox();
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/accounts', throws: new Error('ECONNRESET') }]).send);
+  await assert.rejects(stripe.beginOnboarding({ connectionId: CONNECTION, accountRef: null, state: STATE, returnUrl: RETURN }), (e) => e.outcome === 'UNKNOWN' && !/ECONNRESET/.test(e.message));
+  assert.throws(() => new StripeConnectTestAdapter(`sk_live_${'a'.repeat(99)}`), (e) => e.reason === 'LIVE_MODE_REFUSED');
+});
+
+test('0320 Square: sandbox authorize URL with fixed scopes, code exchange to vault-ready tokens, renew, status, revoke', async () => {
+  const { SquareSandboxAdapter } = await loadSandbox();
+  const tokenReply = (request) => {
+    const body = JSON.parse(request.body);
+    assert.equal(body.client_id, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID);
+    assert.equal(body.client_secret, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET);
+    if (body.grant_type === 'authorization_code') assert.equal(body.code, 'sandbox-code-123');
+    else { assert.equal(body.grant_type, 'refresh_token'); assert.equal(body.refresh_token, 'EQAArefresh'); }
+    return { status: 200, body: { access_token: body.grant_type === 'refresh_token' ? 'EAAAnew' : 'EAAAfirst', token_type: 'bearer', expires_at: '2026-12-13T05:00:00Z', merchant_id: 'MLMERCHANT01', refresh_token: 'EQAArefresh' } };
+  };
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://connect.squareupsandbox.com/oauth2/token', reply: tokenReply },
+    { method: 'GET', url: 'https://connect.squareupsandbox.com/v2/merchants/MLMERCHANT01', reply: { status: 200, body: { merchant: { id: 'MLMERCHANT01', status: 'ACTIVE' } } } },
+    { method: 'GET', url: 'https://connect.squareupsandbox.com/v2/locations', reply: { status: 200, body: { locations: [{ id: 'L1', status: 'ACTIVE', capabilities: ['CREDIT_CARD_PROCESSING'] }] } } },
+    { method: 'POST', url: 'https://connect.squareupsandbox.com/oauth2/revoke', reply: { status: 200, body: { success: true } } },
+  ]);
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, t.send, () => new Date('2026-11-13T05:00:00Z'));
+  assert.equal(square.manifest.bankDebit, false);
+  const begun = await square.beginOnboarding({ connectionId: CONNECTION, accountRef: null, state: STATE, returnUrl: RETURN });
+  assert.equal(begun.accountRef, null);
+  const authorize = new URL(begun.onboardingUrl);
+  assert.equal(authorize.origin + authorize.pathname, 'https://connect.squareupsandbox.com/oauth2/authorize');
+  assert.equal(authorize.searchParams.get('client_id'), SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID);
+  assert.equal(authorize.searchParams.get('state'), STATE);
+  assert.equal(authorize.searchParams.get('session'), 'false');
+  assert.equal(authorize.searchParams.get('scope'), 'MERCHANT_PROFILE_READ PAYMENTS_READ PAYMENTS_WRITE CUSTOMERS_READ CUSTOMERS_WRITE');
+  assert.equal(t.calls.length, 0, 'building the authorize link sends nothing');
+  assert.doesNotMatch(begun.onboardingUrl, /sq0csb/, 'the secret never reaches the browser');
+
+  const done = await square.completeOnboarding({ connectionId: CONNECTION, accountRef: null, authorizationCode: 'sandbox-code-123' });
+  assert.deepEqual(done, { accountRef: 'MLMERCHANT01', credential: { accessToken: 'EAAAfirst', refreshToken: 'EQAArefresh', accessExpiresAt: '2026-12-13T05:00:00.000Z' } });
+  await assert.rejects(square.completeOnboarding({ connectionId: CONNECTION, accountRef: null }), (e) => e.outcome === 'PRE_SEND');
+
+  const observation = await square.retrieveStatus({ accountRef: 'MLMERCHANT01', credential: done.credential });
+  assert.deepEqual(observation, { accountRef: 'MLMERCHANT01', chargesEnabled: true, payoutsEnabled: true, requirementsDue: false, reauthorizationRequired: false,
+    capabilities: { bankDebit: false, offSessionRecurring: true, oneTimeCard: true, refunds: true, storedCard: true } });
+  const statusCalls = t.calls.filter((c) => c.method === 'GET');
+  assert.ok(statusCalls.every((c) => c.headers.Authorization === 'Bearer EAAAfirst' && c.headers['Square-Version']));
+  await assert.rejects(square.retrieveStatus({ accountRef: 'MLMERCHANT01' }), (e) => e.outcome === 'PRE_SEND', 'no token, no call');
+
+  assert.equal(square.needsRenewal(done.credential), false);
+  assert.equal(square.needsRenewal({ ...done.credential, accessExpiresAt: '2026-11-19T05:00:00.000Z' }), true, 'within 7 days');
+  const renewed = await square.renewCredential({ accountRef: 'MLMERCHANT01', credential: done.credential });
+  assert.equal(renewed.accessToken, 'EAAAnew');
+  assert.equal(renewed.refreshToken, 'EQAArefresh');
+
+  await square.disconnect({ accountRef: 'MLMERCHANT01' });
+  const revoke = t.calls.find((c) => c.url.endsWith('/oauth2/revoke'));
+  assert.equal(revoke.headers.Authorization, `Client ${SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET}`);
+  assert.deepEqual(JSON.parse(revoke.body), { client_id: SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, merchant_id: 'MLMERCHANT01' });
+  for (const call of t.calls) assert.ok(call.url.startsWith('https://connect.squareupsandbox.com/'), 'sandbox host only');
+});
+
+test('0320 Square: refusals, revoked access and lost answers map to FAILED, reauthorization and UNKNOWN', async () => {
+  const { SquareSandboxAdapter } = await loadSandbox();
+  const make = (routes) => new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, fakeTransport(routes).send, () => new Date('2026-11-13T05:00:00Z'));
+  const credential = { accessToken: 'EAAAx', refreshToken: 'EQAAx', accessExpiresAt: '2026-12-13T05:00:00.000Z' };
+  await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply: { status: 401, body: { errors: [{ code: 'UNAUTHORIZED' }] } } }])
+    .completeOnboarding({ connectionId: CONNECTION, accountRef: null, authorizationCode: 'used-code' }), (e) => e.outcome === 'FAILED');
+  await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply: { status: 200, body: { access_token: 'EAAAx', merchant_id: 'bad id!', expires_at: '2026-12-13T05:00:00Z', refresh_token: 'r' } } }])
+    .completeOnboarding({ connectionId: CONNECTION, accountRef: null, authorizationCode: 'c' }), (e) => e.outcome === 'UNKNOWN');
+  await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, throws: new Error('timeout') }])
+    .completeOnboarding({ connectionId: CONNECTION, accountRef: null, authorizationCode: 'c' }), (e) => e.outcome === 'UNKNOWN');
+  const revoked = await make([{ method: 'GET', url: /merchants/, reply: { status: 401, body: { errors: [{ code: 'ACCESS_TOKEN_REVOKED' }] } } }])
+    .retrieveStatus({ accountRef: 'MLMERCHANT01', credential });
+  assert.equal(revoked.reauthorizationRequired, true);
+  const inactive = await make([
+    { method: 'GET', url: /merchants/, reply: { status: 200, body: { merchant: { id: 'MLMERCHANT01', status: 'INACTIVE' } } } },
+    { method: 'GET', url: /locations/, reply: { status: 200, body: { locations: [{ id: 'L1', status: 'ACTIVE', capabilities: [] }] } } },
+  ]).retrieveStatus({ accountRef: 'MLMERCHANT01', credential });
+  assert.equal(inactive.chargesEnabled, false);
+  assert.equal(inactive.requirementsDue, true);
+  await assert.rejects(make([{ method: 'GET', url: /merchants/, reply: { status: 200, body: { merchant: { id: 'MLOTHER', status: 'ACTIVE' } } } }])
+    .retrieveStatus({ accountRef: 'MLMERCHANT01', credential }), (e) => e.outcome === 'UNKNOWN');
+  assert.throws(() => new SquareSandboxAdapter('sq0idp-production', SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET), (e) => e.reason === 'LIVE_MODE_REFUSED');
+  // A seller who revoked HON: the renewal answers 401 or invalid_grant -> GRANT_REVOKED (recorded as reauthorization), never UNKNOWN.
+  for (const reply of [{ status: 401, body: { errors: [{ code: 'UNAUTHORIZED' }] } }, { status: 400, body: { errors: [{ code: 'INVALID_GRANT' }] } }, { status: 400, body: { error: 'invalid_grant' } }]) {
+    await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply }]).renewCredential({ accountRef: 'MLMERCHANT01', credential }),
+      (e) => e.outcome === 'FAILED' && e.reason === 'GRANT_REVOKED', JSON.stringify(reply));
+  }
+  for (const reply of [{ status: 500, body: {} }, { status: 429, body: {} }]) {
+    await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply }]).renewCredential({ accountRef: 'MLMERCHANT01', credential }), (e) => e.outcome === 'UNKNOWN');
+  }
+  await assert.rejects(make([{ method: 'POST', url: /oauth2\/token$/, reply: { status: 400, body: { errors: [{ code: 'BAD_REQUEST' }] } } }]).renewCredential({ accountRef: 'MLMERCHANT01', credential }),
+    (e) => e.outcome === 'FAILED' && e.reason === 'PROVIDER_REJECTED', 'another 400 is a plain refusal');
+});
+
+test('0320 sources: fixed sandbox hosts, tuition keys only, no fee, no secret logged', () => {
+  const dir = path.join(__dirname, '../src/school-payments');
+  const sandbox = fs.readFileSync(path.join(dir, 'school-payment-sandbox-adapters.ts'), 'utf8');
+  const all = fs.readdirSync(dir).map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  assert.doesNotMatch(all, /connect\.squareup\.com|application_fee|app_fee_money|console\.|(?<![A-Z_])STRIPE_TEST_SECRET_KEY|from '\.\.\/payments\//);
+  assert.match(sandbox, /'https:\/\/api\.stripe\.com'/);
+  assert.match(sandbox, /'https:\/\/connect\.squareupsandbox\.com'/);
+  const env = fs.readFileSync(path.join(dir, 'school-payment-adapter.ts'), 'utf8');
+  for (const name of ['HON_TUITION_STRIPE_TEST_SECRET_KEY', 'HON_TUITION_SQUARE_SANDBOX_APP_ID', 'HON_TUITION_SQUARE_SANDBOX_APP_SECRET']) assert.match(env, new RegExp(name));
+});
+
+test('0320 service: state checked before the exchange, credential stored with the status record, revoke skipped while the account is used elsewhere', () => {
+  const service = fs.readFileSync(path.join(__dirname, '../src/school-payments/school-payment.service.ts'), 'utf8');
+  for (const fn of ['check_school_payment_onboarding_state', 'record_school_payment_status_with_credential', 'read_school_payment_credential', 'read_school_payment_account_use']) {
+    assert.match(service, new RegExp(`hon\\.${fn}\\(`), fn);
+  }
+  const finish = service.slice(service.indexOf('async finish('), service.indexOf('async refresh('));
+  assert.ok(finish.indexOf('checkOnboardingState') < finish.indexOf('completeOnboarding'), 'state check before the code exchange');
+  assert.ok(finish.indexOf('vault.seal') < finish.indexOf('this.write('), 'sealed before the one write');
+  const module = fs.readFileSync(path.join(__dirname, '../src/app.module.ts'), 'utf8');
+  assert.match(module, /provide: SCHOOL_PAYMENT_VAULT, useFactory: \(\) => schoolPaymentVaultForProcess\(\)/);
+});
+
+// 0321 saved methods on the real Stripe Connect test adapter: every call on the school's own account (Stripe-Account),
+// idempotent creates, Stripe-hosted setup page, method facts read back with the platform key. Square refuses pre-send.
+test('0321 Stripe saved methods: customer and setup on the school account, idempotent, facts from Stripe, detach', async () => {
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const ACCOUNT = 'acct_1TestSchool0001', PAYER = '55555555-5555-4555-8555-555555555555', SETUP = '66666666-6666-4666-8666-666666666666';
+  const session = (patch = {}) => ({ id: 'cs_test_abc123', mode: 'setup', customer: 'cus_Test123', status: 'complete',
+    setup_intent: { status: 'succeeded', payment_method: { id: 'pm_Test123', customer: 'cus_Test123', type: 'card', card: { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2034 } } }, ...patch });
+  let reply = session();
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/customers', reply: { status: 200, body: { id: 'cus_Test123' } } },
+    { method: 'POST', url: 'https://api.stripe.com/v1/checkout/sessions', reply: { status: 200, body: { id: 'cs_test_abc123', url: 'https://checkout.stripe.com/c/pay/cs_test_abc123' } } },
+    { method: 'GET', url: /^https:\/\/api\.stripe\.com\/v1\/checkout\/sessions\/cs_test_abc123\?expand\[\]=setup_intent\.payment_method$/, reply: () => ({ status: 200, body: reply }) },
+    { method: 'POST', url: 'https://api.stripe.com/v1/payment_methods/pm_Test123/detach', reply: { status: 200, body: { id: 'pm_Test123' } } },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  assert.deepEqual(await stripe.ensureCustomer({ accountRef: ACCOUNT, billingAccountId: PAYER, customerRef: 'cus_Existing1' }), { customerRef: 'cus_Existing1' });
+  assert.equal(t.calls.length, 0, 'an existing customer is never created again');
+  assert.deepEqual(await stripe.ensureCustomer({ accountRef: ACCOUNT, billingAccountId: PAYER, customerRef: null }), { customerRef: 'cus_Test123' });
+  const begun = await stripe.beginMethodSetup({ accountRef: ACCOUNT, customerRef: 'cus_Test123', setupId: SETUP, methodKinds: ['US_BANK_ACCOUNT', 'CARD'], state: STATE, returnUrl: RETURN });
+  assert.deepEqual(begun, { setupRef: 'cs_test_abc123', setupUrl: 'https://checkout.stripe.com/c/pay/cs_test_abc123' });
+  const [customer, checkout] = t.calls;
+  for (const call of [customer, checkout]) { assert.equal(call.headers['Stripe-Account'], ACCOUNT); assert.equal(call.headers.Authorization, `Bearer ${STRIPE_KEY}`); }
+  assert.equal(customer.headers['Idempotency-Key'], `hon-school-pay-customer-${ACCOUNT}-${PAYER}`);
+  assert.equal(checkout.headers['Idempotency-Key'], `hon-school-pay-setup-${SETUP}`);
+  const body = form(checkout.body);
+  assert.equal(body.mode, 'setup'); assert.equal(body.customer, 'cus_Test123');
+  assert.deepEqual([body['payment_method_types[0]'], body['payment_method_types[1]']], ['card', 'us_bank_account']);
+  assert.equal(new URL(body.success_url).searchParams.get('state'), STATE);
+  assert.equal(new URL(body.cancel_url).searchParams.get('state'), null, 'a cancelled setup never carries the state');
+  for (const call of t.calls) assert.doesNotMatch(call.body ?? '', /application_fee|fee_amount|card\[number\]|cvc/);
+
+  const read = (patch) => { reply = session(patch); return stripe.retrieveMethodSetup({ accountRef: ACCOUNT, customerRef: 'cus_Test123', setupRef: 'cs_test_abc123' }); };
+  assert.deepEqual(await read({}), { customerRef: 'cus_Test123', methodRef: 'pm_Test123', kind: 'CARD', brand: 'VISA', last4: '4242', expMonth: 12, expYear: 2034 });
+  assert.deepEqual(await read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_Bank1', customer: 'cus_Test123', type: 'us_bank_account', us_bank_account: { last4: '6789' } } } }),
+    { customerRef: 'cus_Test123', methodRef: 'pm_Bank1', kind: 'US_BANK_ACCOUNT', brand: 'BANK', last4: '6789', expMonth: null, expYear: null });
+  assert.equal((await read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_X', customer: 'cus_Test123', type: 'card', card: { brand: 'cartes_bancaires', last4: '1111', exp_month: 1, exp_year: 2030 } } } })).brand, 'OTHER');
+  await assert.rejects(read({ status: 'open', setup_intent: null }), (e) => e.reason === 'SETUP_INCOMPLETE');
+  await assert.rejects(read({ setup_intent: { status: 'requires_payment_method', payment_method: null } }), (e) => e.reason === 'SETUP_INCOMPLETE');
+  await assert.rejects(read({ customer: 'cus_Other' }), (e) => e.outcome === 'UNKNOWN', 'another customer');
+  await assert.rejects(read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_X', customer: 'cus_Other', type: 'card', card: {} } } }), (e) => e.outcome === 'UNKNOWN');
+  await assert.rejects(read({ setup_intent: { status: 'succeeded', payment_method: { id: 'pm_X', customer: 'cus_Test123', type: 'sepa_debit' } } }), (e) => e.outcome === 'UNKNOWN');
+  await stripe.detachMethod({ accountRef: ACCOUNT, methodRef: 'pm_Test123' });
+  assert.equal(t.calls.at(-1).headers['Stripe-Account'], ACCOUNT);
+
+  const bad = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/checkout/sessions', reply: { status: 200, body: { id: 'cs_test_abc123', url: 'https://evil.example.test/pay' } } }]);
+  await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, bad.send).beginMethodSetup({ accountRef: ACCOUNT, customerRef: 'cus_Test123', setupId: SETUP, methodKinds: ['CARD'], state: STATE, returnUrl: RETURN }),
+    (e) => e.outcome === 'UNKNOWN', 'a setup page off checkout.stripe.com');
+  const down = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/customers', reply: { status: 502, body: null } }]);
+  await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, down.send).ensureCustomer({ accountRef: ACCOUNT, billingAccountId: PAYER, customerRef: null }), (e) => e.outcome === 'UNKNOWN');
+
+  const none = fakeTransport([]);
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, none.send);
+  for (const call of [() => square.ensureCustomer(), () => square.beginMethodSetup(), () => square.retrieveMethodSetup(), () => square.detachMethod()]) {
+    await assert.rejects(call(), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
+  }
+  assert.equal(none.calls.length, 0, 'Square saved methods send nothing yet');
+});
+
+test('0337 Stripe charges: off-session direct charge on the school account, attempt key, outcomes and lookup', async () => {
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const ACCOUNT = 'acct_1TestSchool0001', ATTEMPT = '77777777-7777-4777-8777-777777777777';
+  const intent = (patch = {}) => ({ id: 'pi_Test123', amount: 20000, currency: 'usd', status: 'succeeded', metadata: { hon_attempt_id: ATTEMPT }, ...patch });
+  let reply = { status: 200, body: intent() };
+  let list = { status: 200, body: { data: [intent()], has_more: false } };
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/payment_intents', reply: () => reply },
+    { method: 'GET', url: /^https:\/\/api\.stripe\.com\/v1\/payment_intents\?/, reply: () => list },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  const request = { accountRef: ACCOUNT, customerRef: 'cus_Test123', methodRef: 'pm_Test123', methodKind: 'CARD', attemptId: ATTEMPT, amountMinor: 20000, currency: 'USD' };
+  assert.deepEqual(await stripe.chargeOffSession(request), { outcome: 'SUCCEEDED', chargeRef: 'pi_Test123', failureClass: null, amountMinor: 20000, currency: 'USD' });
+  const sent = t.calls[0];
+  assert.equal(sent.headers['Stripe-Account'], ACCOUNT, 'a direct charge on the school account');
+  assert.equal(sent.headers['Idempotency-Key'], `hon-school-pay-charge-${ATTEMPT}`);
+  const body = form(sent.body);
+  assert.deepEqual(body, { amount: '20000', currency: 'usd', customer: 'cus_Test123', payment_method: 'pm_Test123', 'payment_method_types[0]': 'card', off_session: 'true', confirm: 'true',
+    'metadata[hon_attempt_id]': ATTEMPT }, 'exactly these fields: no fee, no transfer, no on_behalf_of');
+  reply = { status: 200, body: intent({ status: 'processing' }) };
+  assert.equal((await stripe.chargeOffSession({ ...request, methodKind: 'US_BANK_ACCOUNT' })).outcome, 'PROCESSING');
+  assert.equal(form(t.calls.at(-1).body)['payment_method_types[0]'], 'us_bank_account');
+  reply = { status: 200, body: intent({ status: 'requires_action' }) };
+  assert.deepEqual(await stripe.chargeOffSession(request), { outcome: 'FAILED', chargeRef: 'pi_Test123', failureClass: 'AUTHENTICATION_REQUIRED', amountMinor: 20000, currency: 'USD' });
+  const declined = (code, decline) => ({ status: 402, body: { error: { type: 'card_error', code, decline_code: decline,
+    payment_intent: intent({ status: 'requires_payment_method', last_payment_error: { code, decline_code: decline } }) } } });
+  for (const [code, decline, expected] of [['card_declined', 'insufficient_funds', 'INSUFFICIENT_FUNDS'], ['expired_card', undefined, 'EXPIRED_CARD'],
+    ['card_declined', 'generic_decline', 'DECLINED'], ['authentication_required', 'authentication_required', 'AUTHENTICATION_REQUIRED'], ['processing_error', undefined, 'OTHER']]) {
+    reply = declined(code, decline);
+    const seen = await stripe.chargeOffSession(request);
+    assert.equal(seen.outcome, 'FAILED'); assert.equal(seen.failureClass, expected, `${code}/${decline}`); assert.equal(seen.chargeRef, 'pi_Test123');
+  }
+  reply = { status: 402, body: { error: { type: 'card_error', code: 'card_declined' } } };
+  assert.deepEqual(await stripe.chargeOffSession(request), { outcome: 'FAILED', chargeRef: null, failureClass: 'DECLINED', amountMinor: 20000, currency: 'USD' });
+  for (const [bad, label] of [[intent({ amount: 19999 }), 'another amount'], [intent({ currency: 'eur' }), 'another currency'], [intent({ metadata: { hon_attempt_id: 'x' } }), 'another attempt'],
+    [intent({ status: 'requires_capture' }), 'an unexpected status'], [intent({ id: 'ch_123' }), 'not a PaymentIntent']]) {
+    reply = { status: 200, body: bad };
+    await assert.rejects(stripe.chargeOffSession(request), (e) => e.outcome === 'UNKNOWN', label);
+  }
+  for (const status of [500, 502, 429, 409]) { reply = { status, body: { error: { code: 'idempotency_key_in_use' } } }; await assert.rejects(stripe.chargeOffSession(request), (e) => e.outcome === 'UNKNOWN', `HTTP ${status}`); }
+  reply = { status: 400, body: { error: { type: 'invalid_request_error', code: 'resource_missing' } } };
+  await assert.rejects(stripe.chargeOffSession(request), (e) => e.outcome === 'FAILED' && e.reason === 'PROVIDER_REJECTED');
+  const timeout = fakeTransport([{ method: 'POST', url: 'https://api.stripe.com/v1/payment_intents', throws: new Error('timeout') }]);
+  await assert.rejects(new StripeConnectTestAdapter(STRIPE_KEY, timeout.send).chargeOffSession(request), (e) => e.outcome === 'UNKNOWN', 'a timeout is UNKNOWN, never success');
+  await assert.rejects(stripe.chargeOffSession({ ...request, amountMinor: 0 }), (e) => e.outcome === 'PRE_SEND');
+
+  const lookup = { accountRef: ACCOUNT, customerRef: 'cus_Test123', attemptId: ATTEMPT, amountMinor: 20000, currency: 'USD', createdAt: '2026-11-13T07:00:00.000Z' };
+  const before = t.calls.length;
+  assert.equal((await stripe.findCharge(lookup)).outcome, 'SUCCEEDED');
+  const q = new URL(t.calls[before].url);
+  assert.equal(t.calls[before].headers['Stripe-Account'], ACCOUNT);
+  assert.equal(q.searchParams.get('customer'), 'cus_Test123');
+  assert.equal(q.searchParams.get('created[gte]'), String(Date.parse(lookup.createdAt) / 1000 - 600));
+  list = { status: 200, body: { data: [intent({ metadata: { hon_attempt_id: 'other' } })], has_more: false } };
+  assert.equal(await stripe.findCharge(lookup), null, 'none for this attempt');
+  list = { status: 200, body: { data: [], has_more: true } };
+  await assert.rejects(stripe.findCharge(lookup), (e) => e.outcome === 'UNKNOWN', 'a further page might hold it');
+  list = { status: 200, body: { data: [intent(), intent({ id: 'pi_Test456' })], has_more: false } };
+  await assert.rejects(stripe.findCharge(lookup), (e) => e.outcome === 'UNKNOWN', 'two intents for one attempt');
+
+  const none = fakeTransport([]);
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, none.send);
+  for (const call of [() => square.chargeOffSession(request), () => square.findCharge(lookup)]) await assert.rejects(call(), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
+  assert.equal(none.calls.length, 0, 'Square charges send nothing yet');
+});
+
+test('0337 simulators: one charge per attempt key, lost answers, settling a debit, unconfigured refuses', async () => {
+  const { SimulatedStripeConnectAdapter, SimulatedSquareAdapter, UnconfiguredSchoolPaymentAdapter } = await loadAdapters();
+  const sim = new SimulatedStripeConnectAdapter();
+  const base = { accountRef: 'acct_sim1', customerRef: 'cus_sim1', methodRef: 'pm_sim1', methodKind: 'CARD', attemptId: '88888888-8888-4888-8888-888888888888', amountMinor: 500, currency: 'USD' };
+  const first = await sim.chargeOffSession(base);
+  assert.equal(first.outcome, 'SUCCEEDED');
+  assert.deepEqual(await sim.chargeOffSession(base), first, 'a resend returns the same charge');
+  assert.equal(sim.charges.size, 1);
+  const lost = { ...base, attemptId: '99999999-9999-4999-8999-999999999999' };
+  sim.chargeOutcomes.set(lost.attemptId, { lostAnswer: true });
+  await assert.rejects(sim.chargeOffSession(lost), (e) => e.outcome === 'UNKNOWN');
+  assert.equal((await sim.findCharge({ ...lost, createdAt: new Date().toISOString() })).outcome, 'SUCCEEDED', 'the processor charged');
+  const bank = { ...base, methodKind: 'US_BANK_ACCOUNT', attemptId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' };
+  assert.equal((await sim.chargeOffSession(bank)).outcome, 'PROCESSING');
+  sim.settleCharge(bank.attemptId, 'FAILED');
+  assert.deepEqual((await sim.findCharge({ ...bank, createdAt: new Date().toISOString() })).failureClass, 'INSUFFICIENT_FUNDS');
+  await assert.rejects(new SimulatedSquareAdapter().chargeOffSession(bank), (e) => e.outcome === 'PRE_SEND', 'Square takes cards only');
+  const off = new UnconfiguredSchoolPaymentAdapter('STRIPE_CONNECT');
+  await assert.rejects(off.chargeOffSession(base), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED');
+  await assert.rejects(off.findCharge(), (e) => e.outcome === 'PRE_SEND');
+});
+
+test('0529 Stripe one-time payment: Checkout Session on the school account, fixed parameters and key, retrieval and expiry', async () => {
+  const { StripeConnectTestAdapter, SquareSandboxAdapter } = await loadSandbox();
+  const ACCOUNT = 'acct_Test123', PAYMENT = '55555555-5555-4555-8555-555555555555', SESSION = 'cs_test_a1B2c3';
+  const session = (over = {}) => ({ id: SESSION, object: 'checkout.session', mode: 'payment', status: 'open', payment_status: 'unpaid', amount_total: 2500, currency: 'usd',
+    client_reference_id: PAYMENT, metadata: { hon_pay_once_id: PAYMENT }, client_secret: `${SESSION}_secret_x`, url: null, payment_intent: null, ...over });
+  let reply = { status: 200, body: session() }, read = { status: 200, body: session() }, expire = { status: 200, body: session({ status: 'expired' }) };
+  const t = fakeTransport([
+    { method: 'POST', url: 'https://api.stripe.com/v1/checkout/sessions', reply: () => reply },
+    { method: 'GET', url: `https://api.stripe.com/v1/checkout/sessions/${SESSION}`, reply: () => read },
+    { method: 'POST', url: `https://api.stripe.com/v1/checkout/sessions/${SESSION}/expire`, reply: () => expire },
+  ]);
+  const stripe = new StripeConnectTestAdapter(STRIPE_KEY, t.send);
+  assert.deepEqual(stripe.oneTimeSurfaces(), ['EMBEDDED', 'HOSTED']);
+  const request = { accountRef: ACCOUNT, paymentId: PAYMENT, amountMinor: 2500, currency: 'USD', label: 'Trial class', payerEmail: 'pay.er@example.test',
+    surface: 'EMBEDDED', returnUrl: 'https://app.example.test/kiosk/done', providerExpiresAt: '2026-11-17T10:31:00.000Z' };
+  assert.deepEqual(await stripe.beginOneTimePayment(request), { sessionRef: SESSION, clientSecret: `${SESSION}_secret_x`, url: null });
+  const sent = t.calls[0];
+  assert.equal(sent.headers['Stripe-Account'], ACCOUNT, 'a direct charge on the school account');
+  assert.equal(sent.headers['Idempotency-Key'], `hon-school-pay-once-${PAYMENT}`);
+  assert.deepEqual(form(sent.body), {
+    mode: 'payment', ui_mode: 'embedded', 'payment_method_types[0]': 'card', 'line_items[0][quantity]': '1', 'line_items[0][price_data][currency]': 'usd',
+    'line_items[0][price_data][unit_amount]': '2500', 'line_items[0][price_data][product_data][name]': 'Trial class', client_reference_id: PAYMENT,
+    'metadata[hon_pay_once_id]': PAYMENT, 'payment_intent_data[metadata][hon_pay_once_id]': PAYMENT, expires_at: String(Date.parse(request.providerExpiresAt) / 1000),
+    return_url: 'https://app.example.test/kiosk/done', redirect_on_completion: 'if_required', customer_email: 'pay.er@example.test',
+  }, 'exactly these fields: no fee, no transfer, no on_behalf_of; a card payment stays on the page (the kiosk keeps its in-memory token)');
+  reply = { status: 200, body: session({ client_secret: null, url: 'https://checkout.stripe.com/c/pay/cs_test_a1B2c3' }) };
+  assert.deepEqual(await stripe.beginOneTimePayment({ ...request, surface: 'HOSTED', payerEmail: null }), { sessionRef: SESSION, clientSecret: null, url: 'https://checkout.stripe.com/c/pay/cs_test_a1B2c3' });
+  const hosted = form(t.calls.at(-1).body);
+  assert.equal(hosted.ui_mode, 'hosted'); assert.equal(hosted.success_url, request.returnUrl); assert.equal(hosted.cancel_url, request.returnUrl);
+  assert.ok(!('customer_email' in hosted) && !('return_url' in hosted) && !('redirect_on_completion' in hosted));
+  for (const [bad, label, surface = 'EMBEDDED'] of [[session({ amount_total: 2499 }), 'another amount'], [session({ currency: 'eur' }), 'another currency'],
+    [session({ metadata: { hon_pay_once_id: 'x' } }), 'another payment'], [session({ client_reference_id: null }), 'no client reference'], [session({ status: 'complete' }), 'not open'],
+    [session({ id: 'pi_123' }), 'not a session'], [session({ client_secret: null }), 'no client secret'],
+    [session({ client_secret: null, url: 'https://evil.example.test/pay' }), 'a checkout URL off Stripe', 'HOSTED']]) {
+    reply = { status: 200, body: bad };
+    await assert.rejects(stripe.beginOneTimePayment({ ...request, surface }), (e) => e.outcome === 'UNKNOWN', label);
+  }
+  for (const status of [500, 429, 409]) { reply = { status, body: {} }; await assert.rejects(stripe.beginOneTimePayment(request), (e) => e.outcome === 'UNKNOWN', `HTTP ${status}`); }
+  reply = { status: 400, body: { error: { type: 'invalid_request_error' } } };
+  await assert.rejects(stripe.beginOneTimePayment(request), (e) => e.outcome === 'FAILED');
+  const before = t.calls.length;
+  await assert.rejects(stripe.beginOneTimePayment({ ...request, returnUrl: 'http://app.example.test/x' }), (e) => e.outcome === 'PRE_SEND', 'plain http return');
+  await assert.rejects(stripe.beginOneTimePayment({ ...request, amountMinor: 0 }), (e) => e.outcome === 'PRE_SEND');
+  assert.equal(t.calls.length, before, 'nothing sent for a refused request');
+
+  const lookup = { accountRef: ACCOUNT, paymentId: PAYMENT, sessionRef: SESSION, amountMinor: 2500, currency: 'USD' };
+  const seen = async (body) => { read = { status: 200, body }; return stripe.findOneTimePayment(lookup); };
+  assert.deepEqual(await seen(session()), { outcome: 'OPEN', sessionRef: SESSION, paymentRef: null, failureClass: null, amountMinor: 2500, currency: 'USD' });
+  assert.equal(t.calls.at(-1).headers['Stripe-Account'], ACCOUNT);
+  assert.equal((await seen(session({ status: 'expired' }))).outcome, 'EXPIRED');
+  assert.equal((await seen(session({ status: 'complete', payment_status: 'unpaid' }))).outcome, 'PROCESSING');
+  assert.deepEqual(await seen(session({ status: 'complete', payment_status: 'paid', payment_intent: 'pi_Test9' })),
+    { outcome: 'SUCCEEDED', sessionRef: SESSION, paymentRef: 'pi_Test9', failureClass: null, amountMinor: 2500, currency: 'USD' });
+  assert.equal((await seen(session({ status: 'complete', payment_status: 'paid', payment_intent: { id: 'pi_Test8' } }))).paymentRef, 'pi_Test8');
+  for (const [bad, label] of [[session({ status: 'complete', payment_status: 'paid' }), 'paid without a PaymentIntent'], [session({ status: 'complete', payment_status: 'no_payment_required' }), 'no payment'],
+    [session({ amount_total: 1 }), 'another amount'], [session({ id: 'cs_test_other' }), 'another session'], [session({ status: 'weird' }), 'unknown status']]) {
+    await assert.rejects(seen(bad), (e) => e.outcome === 'UNKNOWN', label);
+  }
+  read = { status: 404, body: { error: { code: 'resource_missing' } } };
+  await assert.rejects(stripe.findOneTimePayment(lookup), (e) => e.outcome === 'FAILED');
+  await stripe.expireOneTimePayment(lookup);
+  expire = { status: 400, body: { error: { message: 'Only Checkout Sessions with a status of open can be expired.' } } };
+  await stripe.expireOneTimePayment(lookup); // already closed: the caller retrieves it next
+  expire = { status: 500, body: {} };
+  await assert.rejects(stripe.expireOneTimePayment(lookup), (e) => e.outcome === 'UNKNOWN');
+
+  const square = new SquareSandboxAdapter(SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_ID, SQUARE.HON_TUITION_SQUARE_SANDBOX_APP_SECRET, fakeTransport([]).send);
+  assert.deepEqual(square.oneTimeSurfaces(), [], 'Square payment links are a later piece: not offered');
+  for (const call of ['beginOneTimePayment', 'findOneTimePayment', 'expireOneTimePayment']) {
+    await assert.rejects(square[call]({}), (e) => e.outcome === 'PRE_SEND' && e.reason === 'NOT_CONFIGURED', call);
+  }
+});
+
+test('0529 simulators: one session per payment key, hosted-only Square, faults, unconfigured refuses', async () => {
+  const { SimulatedStripeConnectAdapter, SimulatedSquareAdapter, UnconfiguredSchoolPaymentAdapter } = await loadAdapters();
+  const stripe = new SimulatedStripeConnectAdapter(), square = new SimulatedSquareAdapter();
+  const request = { accountRef: 'acct_simX', paymentId: '66666666-6666-4666-8666-666666666666', amountMinor: 900, currency: 'USD', label: 'Gi', payerEmail: null,
+    surface: 'EMBEDDED', returnUrl: 'https://app.example.test/done', providerExpiresAt: '2026-11-17T10:31:00.000Z' };
+  const first = await stripe.beginOneTimePayment(request);
+  assert.deepEqual(await stripe.beginOneTimePayment(request), first, 'same key, same session');
+  await assert.rejects(stripe.beginOneTimePayment({ ...request, amountMinor: 901 }), (e) => e.outcome === 'FAILED', 'same key, other parameters');
+  const lookup = { accountRef: 'acct_simX', paymentId: request.paymentId, sessionRef: first.sessionRef, amountMinor: 900, currency: 'USD' };
+  assert.equal((await stripe.findOneTimePayment(lookup)).outcome, 'OPEN');
+  await stripe.expireOneTimePayment(lookup);
+  assert.equal((await stripe.findOneTimePayment(lookup)).outcome, 'EXPIRED');
+  stripe.onceFaults.set(request.paymentId, { findLost: true });
+  await assert.rejects(stripe.findOneTimePayment(lookup), (e) => e.outcome === 'UNKNOWN');
+  assert.deepEqual(square.oneTimeSurfaces(), ['HOSTED']);
+  await assert.rejects(square.beginOneTimePayment(request), (e) => e.outcome === 'PRE_SEND', 'Square embedded is not offered');
+  assert.ok((await square.beginOneTimePayment({ ...request, surface: 'HOSTED' })).url.startsWith('https://'));
+  const none = new UnconfiguredSchoolPaymentAdapter('STRIPE_CONNECT');
+  assert.deepEqual(none.oneTimeSurfaces(), []);
+  await assert.rejects(none.beginOneTimePayment(request), (e) => e.reason === 'NOT_CONFIGURED');
+});

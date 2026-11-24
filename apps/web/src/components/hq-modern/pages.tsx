@@ -8,24 +8,30 @@ import { useHqModern } from './shell';
 import { HqIcon } from './icon';
 import { isHqHonAgent } from '@hon/contracts';
 import { HqHonPanel } from '../hq-hon/hq-hon-panel';
+import { HqExecutiveRecords, type HqExecutiveTab } from '../hq-hon/hq-executive-records';
 import styles from './hq-modern.module.css';
 
 export function HqModernExecutives(): React.ReactElement {
   return <><ExecutiveCards/><div className={`${styles.panel} ${styles.explanation}`}><HqIcon name="shield"/><div><h2>Coordinated, governed, separate.</h2><p>HON coordinates the six HQ specialists. A portrait or workspace never grants tools or access to school records. Durable work and delegated execution remain unavailable.</p></div></div></>;
 }
 
+const WORKSPACE_TABS: readonly (readonly [HqExecutiveTab, string])[] = [['tasks', 'Task history'], ['recommendations', 'Recommendations'], ['approvals', 'Approvals'], ['performance', 'Performance']];
+
 export function HqExecutiveWorkspace({ executiveKey }: { executiveKey: string }): React.ReactElement {
   const executive = HQ_EXECUTIVES.find((item) => item.executiveKey === executiveKey);
-  const [tab, setTab] = useState('Task history');
+  const [tab, setTab] = useState<HqExecutiveTab>('tasks');
   const { openAssistant } = useHqModern();
   if (!executive) return <p>Executive workspace unavailable.</p>;
   const index = HQ_EXECUTIVES.indexOf(executive);
   return <>
     <Link href="/hq/executives" className={styles.backLink}>← Executive Team</Link>
-    <section className={`${styles.panel} ${styles.profileHero}`}><ExecutivePortrait index={index} executiveKey={executive.executiveKey} name={executive.displayName}/><div><p className={styles.eyebrow}>HQ executive workspace</p><h2>{executive.displayName}</h2><h3>{executive.title}</h3><p>{HQ_RESPONSIBILITIES[executiveKey]}</p><span className={styles.badge}>No recorded work</span></div><button type="button" className={styles.primary} onClick={openAssistant}>Open HON assistant</button></section>
+    <section className={`${styles.panel} ${styles.profileHero}`}><ExecutivePortrait index={index} executiveKey={executive.executiveKey} name={executive.displayName}/><div><p className={styles.eyebrow}>HQ executive workspace</p><h2>{executive.displayName}</h2><h3>{executive.title}</h3><p>{HQ_RESPONSIBILITIES[executiveKey]}</p></div><button type="button" className={styles.primary} onClick={openAssistant}>Open HON assistant</button></section>
     {isHqHonAgent(executive.executiveKey) && <section className={styles.panel}><HqHonPanel agentKey={executive.executiveKey} name={executive.displayName}/></section>}
-    <div className={styles.tabBar} role="group" aria-label={`${executive.displayName} workspace sections`}>{['Task history', 'Recommendations', 'Approvals', 'Performance'].map((label) => <button type="button" key={label} aria-pressed={tab === label} onClick={() => setTab(label)}>{label}</button>)}</div>
-    <section className={`${styles.panel} ${styles.emptyState}`} aria-live="polite"><HqIcon name="database" size={36}/><h2>{tab} unavailable</h2><p>This executive does not have an active durable HQ workspace service. No tasks, recommendations, decisions or results are inferred.</p><span className={styles.badge}>Planned integration</span></section>
+    <div className={styles.tabBar} role="group" aria-label={`${executive.displayName} workspace sections`}>{WORKSPACE_TABS.map(([key, label]) => <button type="button" key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</div>
+    {/* 0338 (HX-1): recorded questions, this month's aggregate, and plain statements that an HQ executive never acts. */}
+    <section className={styles.panel} aria-live="polite">{isHqHonAgent(executive.executiveKey)
+      ? <HqExecutiveRecords agentKey={executive.executiveKey} name={executive.displayName} tab={tab}/>
+      : <p>This executive has no recorded HQ work.</p>}</section>
   </>;
 }
 

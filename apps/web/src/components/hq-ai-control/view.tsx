@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  AI_SPEND_PAUSE_CLASSES, AI_UNKNOWN_DECISIONS, type AiSchoolUsage, type AiSchoolUsageReport, type AiSpendPause, type AiSpendPauseList,
+  AI_ORG_AGENT_NO_CEILING_UNITS, AI_SPEND_PAUSE_CLASSES, AI_UNKNOWN_DECISIONS, type AiSchoolUsage, type AiSchoolUsageReport, type AiSpendPause, type AiSpendPauseList,
   type AiUnknownDecision, type AiUnknownOpenItem, type AiUnknownQueue, type AiUnknownResolvedItem, type AiUsageAgent, type AiUsageAmount,
 } from '@hon/contracts';
 import { aiControlText, type AiControlKey } from './copy';
@@ -92,7 +92,7 @@ export function AiCostsView(p: AiCostsViewProps): React.ReactElement {
           {report.organizations.length === 0 ? <p className={styles.meta}>{t('noOrgs')}</p> : <ul className={styles.list}>{report.organizations.map((o) =>
             <li key={o.organizationId}>
               <strong>{orgName(p.names, o.organizationId, t)}</strong>
-              <span>{t('orgCommitted', { used: n(o.agentCommittedCredits), ceiling: n(o.agentCeilingCredits) })}</span>
+              <span>{o.agentCeilingCredits === AI_ORG_AGENT_NO_CEILING_UNITS ? t('orgCommittedNoCeiling', { used: n(o.agentCommittedCredits) }) : t('orgCommitted', { used: n(o.agentCommittedCredits), ceiling: n(o.agentCeilingCredits) })}</span>
               <span className={styles.meta}>{t('orgWindow', { from: moment(p.language, o.agentWindowStart), to: moment(p.language, o.agentWindowEnd) })}</span>
               {o.openUnknownHolds ? <span className={styles.meta}>{t('orgHolds', { n: n(o.openUnknownHolds) })}</span> : null}
               <span className={styles.chip} data-kind={o.aiPaused ? 'warn' : 'ok'}>{t(o.aiPaused ? 'orgPaused' : 'orgActive')}</span>

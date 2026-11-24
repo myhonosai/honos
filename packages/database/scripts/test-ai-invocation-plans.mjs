@@ -209,8 +209,12 @@ try {
   await asAdmin(() => admin.query('DELETE FROM hon.hq_ai_routing_policies WHERE policy_id=$1',[ids.otherPolicy]));
   // Org-wide credit eligibility includes another school's actual ledger, but no
   // amount or other-school usage detail is exposed to the caller.
+  // 0310: a paying organization has no organization budget; the operator override restores the former 12,000 here.
   await asAdmin(() => admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,correlation_id) VALUES($1,$2,'TEST','test','TEXT',12000,$3)",[ids.org,ids.otherSchool,randomUUID()]));
+  assert.notEqual((await plan()).reason,'CUSTOMER_BUDGET_EXCEEDED','no organization budget without an override'); checked();
+  await asAdmin(() => admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,12000,'Plan proof operator backstop')",[ids.org]));
   assert.equal((await plan()).reason,'CUSTOMER_BUDGET_EXCEEDED'); checked();
+  await asAdmin(() => admin.query('DELETE FROM hon.ai_org_agent_ceiling_overrides WHERE organization_id=$1',[ids.org]));
   await asAdmin(() => admin.query('DELETE FROM hon.ai_usage_ledger WHERE organization_id=$1',[ids.org]));
 
   // An evidence failure must roll back the newly inserted plan, audit and replay

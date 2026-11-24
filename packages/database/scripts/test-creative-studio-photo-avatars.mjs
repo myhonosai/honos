@@ -2,7 +2,7 @@ import pg from 'pg';
 import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-// A3 Creative Studio photo avatars (0305): an adult staff member's OWN photo with signed likeness consent; delete erases it
+// A3 Creative Studio photo avatars (0664): an adult staff member's OWN photo with signed likeness consent; delete erases it
 // and withdraws the photo avatar and its videos. Built on A1 (0276), A2 (0277), CS1 (0216) and the CW1 wallet (0202). Real database, restricted
 // runtime role, the real API services and a SYNTHETIC provider runtime injected by this proof (no network, no provider,
 // no payment). Fixture: the CW1 review-regression fixture (two paid HON OS organizations, a second school in org A).

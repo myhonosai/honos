@@ -1,4 +1,4 @@
-import type { AiTeamReadiness, CurrentSchoolClassSession, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
+import type { AiTeamReadiness, CurrentSchoolClassSession, HonConversationReadiness, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
 import { HON_AI_TEAM } from '@hon/design-system';
 import { aiTeamPortrait, type HonArtStyle } from '../hon-command/roster';
 import type { HomeKey } from './copy';
@@ -14,9 +14,11 @@ export type HomeSources = Readonly<{
   leads: Panel<readonly LeadListItem[]>;
   sessions: Panel<readonly CurrentSchoolClassSession[]>;
   work: Panel<readonly HumanWorkQueueItem[]>;
+  /** Whether a question to HON would be admitted now, from the same read Ask HON uses (hon readiness). */
+  hon: Panel<HonConversationReadiness>;
 }>;
 
-export const HOME_LOADING: HomeSources = { command: LOADING, operations: LOADING, readiness: LOADING, leads: LOADING, sessions: LOADING, work: LOADING };
+export const HOME_LOADING: HomeSources = { command: LOADING, operations: LOADING, readiness: LOADING, leads: LOADING, sessions: LOADING, work: LOADING, hon: LOADING };
 
 // ---------------------------------------------------------------- KPI tiles
 
@@ -97,26 +99,33 @@ export function myTasks(items: readonly HumanWorkQueueItem[]): HumanWorkQueueIte
 // ---------------------------------------------------------------- AI team
 
 export type AgentStatus = 'READY' | 'PROVIDER_OFF' | 'AI_OFF' | 'BUDGET' | 'NO_ROUTE' | 'NO_PERMISSION' | 'HIDDEN' | 'CHECKING' | 'UNKNOWN' | 'NOT_AVAILABLE';
-export type AgentCard = Readonly<{ id: string; name: string; title: HomeKey; portrait: string; color: string; status: AgentStatus; href: string | null }>;
+export type AgentCard = Readonly<{ id: string; name: string; title: HomeKey; purpose: HomeKey; portrait: string; color: string; status: AgentStatus; href: string | null }>;
 
 /**
- * The owner roster (2026-11-06): Kai teaches; seven business specialists; Claire is Business
- * Performance only. Status comes from AI team readiness, never from the portrait: an agent with
- * no backend is "not available yet". The backend's teaching key is still `claire`; it is Kai's.
+ * The owner roster (2026-11-06): Kai teaches; seven business specialists; Claire is Business Performance only.
+ * Status comes from AI team readiness, never from the portrait. Every specialist has a workspace of their own: Alex,
+ * Jordan, Claire and Lena (0260 analysts) show the facts they read and answer questions on that page (owner, 2026-11-17).
  */
-const LIVE: Record<string, { key: 'chad' | 'marcus' | 'claire'; href: string }> = {
-  kai: { key: 'claire', href: '/staff/teaching-assistant' },
+type ReadyKey = AiTeamReadiness['agents'][number]['agentKey'];
+const LIVE: Record<string, { key: ReadyKey; href: string }> = {
+  kai: { key: 'kai', href: '/staff/teaching-assistant' },
   chad: { key: 'chad', href: '/staff/leads/assistant' },
   marcus: { key: 'marcus', href: '/staff/marketing/assistant' },
+  maya: { key: 'maya', href: '/staff/retention/at-risk' },
+  alex: { key: 'alex', href: '/staff/ai-team/alex' },
+  jordan: { key: 'jordan', href: '/staff/ai-team/jordan' },
+  claire: { key: 'claire', href: '/staff/ai-team/claire' },
+  lena: { key: 'lena', href: '/staff/ai-team/lena' },
 };
+/** What each one is for, in a few words, shown under the name on the home cards (owner ask 2026-11-15). */
+const PURPOSE: Record<string, HomeKey> = { kai: 'purposeKai', alex: 'purposeAlex', chad: 'purposeChad', maya: 'purposeMaya', marcus: 'purposeMarcus', jordan: 'purposeJordan', claire: 'purposeClaire', lena: 'purposeLena' };
 const TITLES: Record<string, HomeKey> = { kai: 'agentKai', alex: 'agentAlex', chad: 'agentChad', maya: 'agentMaya', marcus: 'agentMarcus', jordan: 'agentJordan', claire: 'agentClaire', lena: 'agentLena' };
 
-export function agentStatus(readiness: Panel<AiTeamReadiness>, key: 'chad' | 'marcus' | 'claire'): AgentStatus {
+export function agentStatus(readiness: Panel<AiTeamReadiness>, key: ReadyKey): AgentStatus {
   if (readiness.state === 'LOADING') return 'CHECKING';
   if (readiness.state === 'DENIED') return 'HIDDEN';
   if (readiness.state === 'UNAVAILABLE') return 'UNKNOWN';
-  // The teaching key is moving from the legacy 'claire' to 'kai' (backend contract change); accept either for Kai.
-  const agent = readiness.value.agents.find(item => item.agentKey === key || (key === 'claire' && (item.agentKey as string) === 'kai'));
+  const agent = readiness.value.agents.find(item => item.agentKey === key);
   if (!agent) return 'UNKNOWN';
   if (agent.available) return 'READY';
   switch (agent.blockedBy) {
@@ -130,12 +139,25 @@ export function agentStatus(readiness: Panel<AiTeamReadiness>, key: 'chad' | 'ma
 
 /** Kai and the seven specialists in the viewer's art style. Status is readiness only; the style never changes it. */
 export function homeAiTeam(readiness: Panel<AiTeamReadiness>, style: HonArtStyle): AgentCard[] {
-  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'claire'), href: LIVE.kai!.href };
+  const kai: AgentCard = { id: 'kai', name: 'Kai', title: TITLES.kai!, purpose: PURPOSE.kai!, portrait: aiTeamPortrait('kai', style)!, color: '#34d6e8', status: agentStatus(readiness, 'kai'), href: LIVE.kai!.href };
   const order = ['chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena'];
   const team = order.map(id => HON_AI_TEAM.find(member => member.id === id)!).map((member): AgentCard => {
     const live = LIVE[member.id];
-    return { id: member.id, name: member.name, title: TITLES[member.id]!, portrait: aiTeamPortrait(member.id, style) ?? member.portrait, color: member.color,
+    return { id: member.id, name: member.name, title: TITLES[member.id]!, purpose: PURPOSE[member.id]!, portrait: aiTeamPortrait(member.id, style) ?? member.portrait, color: member.color,
       status: live ? agentStatus(readiness, live.key) : 'NOT_AVAILABLE', href: live?.href ?? null };
   });
   return [kai, ...team];
+}
+
+export type HonLine = Readonly<{ status: 'checking' | 'ready' | 'off' | 'unknown'; key: HomeKey }> | null;
+/**
+ * The line under HON on the home card. It reads the same server answer the Ask HON composer uses (honReply), so the card
+ * never says "not connected" when HON can answer, nor "ready" when it cannot. Hidden when this person may not see it.
+ */
+export function honLine(hon: Panel<HonConversationReadiness>): HonLine {
+  if (hon.state === 'LOADING') return { status: 'checking', key: 'honChecking' };
+  if (hon.state === 'DENIED') return null;
+  if (hon.state === 'UNAVAILABLE') return { status: 'unknown', key: 'honUnknown' };
+  if (hon.value.honReply) return { status: 'ready', key: 'honReady' };
+  return { status: 'off', key: hon.value.providerRoute ? 'honOff' : 'honNotOn' };
 }

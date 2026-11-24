@@ -1,11 +1,13 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { COMMUNITY_HELP, type CommunityKind, type CommunityInput, type CommunityRecord, type CommunityPage, type CommunityProfile, type CommunityHistory } from '@hon/contracts';
+import { type CommunityKind, type CommunityInput, type CommunityRecord, type CommunityPage, type CommunityProfile, type CommunityHistory } from '@hon/contracts';
 import { CommunityAccessError, communityFingerprint, loadCommunityProfile, loadCommunity, readCommunity, loadCommunityHistory, saveCommunity, type CommunityMutation } from './community-http';
 import styles from './community-workbench.module.css';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 const blank = (kind: CommunityKind = 'TOPIC', parentId: string | null = null): CommunityInput => ({ expectedVersion: 0, kind, parentId, title: '', body: '', status: 'DRAFT', reason: '' });
 export function CommunityWorkbench(): React.ReactElement {
   const [school, setSchool] = useState(''), [activeSchool, setActiveSchool] = useState(''), [profile, setProfile] = useState<CommunityProfile | null>(null);
+  useShellSchoolInto(school => setSchool(school.schoolId));
   const [displayName, setDisplayName] = useState(''), [profileEnabled, setProfileEnabled] = useState(false), [orgEnabled, setOrgEnabled] = useState(false);
   const [kind, setKind] = useState<CommunityKind>('TOPIC'), [parentId, setParentId] = useState<string | null>(null), [page, setPage] = useState<CommunityPage | null>(null);
   const [selected, setSelected] = useState<CommunityRecord | null>(null), [draft, setDraft] = useState<CommunityInput>(blank), [history, setHistory] = useState<CommunityHistory | null>(null);
@@ -40,9 +42,9 @@ export function CommunityWorkbench(): React.ReactElement {
   const participating = !!profile?.enabled && !!profile.organizationEnabled;
   return <main className={styles.page}>
     <nav><a href="/community/marketplace">Descriptive marketplace · review only</a><a href="/staff/dashboard">School dashboard</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN OWNER NETWORK · ESSENTIAL / CORE / COMPLETE</p><h1>HON Community</h1><p>A private space for verified school owners and operators to exchange general practice, not school records.</p></header>
-    <aside><strong>Member-only published discussions. Never public.</strong><p>{COMMUNITY_HELP}</p><p>Organization consent and your display-name profile are separate opt-ins. Opting out hides your contributions from members; saved private history is retained. Revocation hides your content and denies access. No personal contact directory or arbitrary HQ reader.</p></aside>
-    <section><h2>Current verified membership</h2><form onSubmit={access}><label>Already-known school ID<input required disabled={busy} value={school} onChange={e => { setSchool(e.target.value); clearAll(); }} placeholder="School UUID · no school directory"/></label><button disabled={busy}>Check / refresh current access</button></form><p>A school ID selects existing authority; it never grants access. Manual owner/operator verification must be completed by a trusted administrator.</p></section>
+    <header><p>Community</p><h1>Owner community</h1><p>Talk shop with other school owners. Share general practice, never student records.</p></header>
+    <aside data-plain-note=""><strong>Posts are visible to members only, never public.</strong></aside>
+    <section><h2>Current verified membership</h2><form onSubmit={access}><ManualSchoolFields current={school}><label>Already-known school ID<input required disabled={busy} value={school} onChange={e => { setSchool(e.target.value); clearAll(); }} placeholder="School UUID · no school directory"/></label></ManualSchoolFields><button disabled={busy}>Check / refresh current access</button></form><p>A school ID selects existing authority; it never grants access. Manual owner/operator verification must be completed by a trusted administrator.</p></section>
     {busy && <p role="status">Checking the current human membership boundary…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.notice}>{notice}</p>}
     {uncertain && retry.current && <aside><p>An unchanged uncertain request is retained in memory on this page only. No automatic retry.</p><button disabled={busy || !profile} onClick={() => void run(() => { const r = retry.current!; return submit(r.mutation, r.school); })}>Retry exact retained request</button></aside>}

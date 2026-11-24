@@ -22,6 +22,13 @@ export const AI_MODEL_EVALUATION_TASK_CATEGORIES = Object.freeze([
   'COMMAND_CENTER',
   'WORKFLOW_PLANNING',
   'SIMPLE_CLASSIFICATION',
+  // R1 (0287) routing categories: HON Standard/Detailed, Claire business performance, Kai teaching.
+  'HON_STANDARD',
+  'HON_DETAILED',
+  'BUSINESS_PERFORMANCE',
+  'KAI_TEACHING',
+  // 0594: HON reading paper import photos; the HQ profile must require TEXT and IMAGE.
+  'DOCUMENT_READING',
 ] as const);
 export type AiModelEvaluationTaskCategory = (typeof AI_MODEL_EVALUATION_TASK_CATEGORIES)[number];
 

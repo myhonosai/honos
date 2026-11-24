@@ -2,7 +2,7 @@ import React from 'react';
 import type { ClassSessionRosterEntry, CurrentSchoolClassSession } from '@hon/contracts';
 import { classBookingHandoffHref } from '../class-sessions-read';
 import { rosterText, type RosterKey } from './copy';
-import { rosterCounts, validFromDate, type RosterScope } from './http';
+import { ROSTER_MARKS, rosterCounts, validFromDate, type MarkErrorKind, type RosterMark, type RosterScope } from './http';
 import styles from './class-roster.module.css';
 
 type T = (key: RosterKey, vars?: Record<string, string>) => string;
@@ -11,11 +11,17 @@ export type SessionListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' | '
     more: 'IDLE' | 'LOADING' | 'FAILED'; restarted: boolean };
 export type RosterState = { state: 'NONE' | 'LOADING' | 'DENIED' | 'UNAVAILABLE' }
   | { state: 'READY'; sessionId: string; entries: readonly ClassSessionRosterEntry[]; nextCursor: string | null; more: 'IDLE' | 'LOADING' | 'FAILED'; restarted: boolean };
+/** The last mark on one student's row. */
+export type MarkState = Readonly<{ state: 'SAVING' | 'SAVED' | Exclude<MarkErrorKind, 'CONFLICT'>; status: RosterMark }>;
+const MARK_LABEL: Record<RosterMark, RosterKey> = { PRESENT: 'markPresent', LATE: 'markLate', EXCUSED_ABSENCE: 'markExcused', UNEXCUSED_ABSENCE: 'markAbsent' };
+const MARK_NOTE: Record<MarkState['state'], RosterKey> = { SAVING: 'markSaving', SAVED: 'markSaved', SESSION: 'markSession', DENIED: 'markDenied', REJECTED: 'markRejected', UNKNOWN: 'markUnknown' };
 export type RosterViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; scope: RosterScope | null;
   from: string | null; list: SessionListState; selectedId: string | null; roster: RosterState;
   onFrom?: ((from: string | null) => void) | undefined; onOpen?: ((id: string) => void) | undefined; onRefresh?: (() => void) | undefined;
   onMoreClasses?: (() => void) | undefined; onMore?: (() => void) | undefined; onReloadRoster?: (() => void) | undefined;
+  /** Marking attendance from the roster; without onMark the roster stays read-only. */
+  marks?: Readonly<Record<string, MarkState>> | undefined; onMark?: ((entry: ClassSessionRosterEntry, status: RosterMark) => void) | undefined;
 }>;
 const fmt = (language: string, timeZone: string, value: string, options: Intl.DateTimeFormatOptions) => new Date(value).toLocaleString(language, { ...options, timeZone });
 const day = (language: string, value: string) => new Date(`${value}T00:00:00Z`).toLocaleDateString(language, { dateStyle: 'medium', timeZone: 'UTC' });
@@ -76,13 +82,29 @@ function SessionList({ list, from, selectedId, onOpen, language, t }: RosterView
   </>;
 }
 
-function RosterDetail({ list, selectedId, roster, scope, language, onMore, onReloadRoster, t }: RosterViewProps & { t: T }) {
+function RosterDetail({ list, selectedId, t, ...rest }: RosterViewProps & { t: T }) {
   const s = list.state === 'READY' ? list.items.find((item) => item.sessionId === selectedId) ?? null : null;
   const timeZone = list.state === 'READY' ? list.schoolTimezone : 'UTC';
-  if (!s || !scope) return <p className={styles.notice}>{t('pick')}</p>;
+  if (!s || !rest.scope) return <p className={styles.notice}>{t('pick')}</p>;
+  return <RosterSessionDetail {...rest} scope={rest.scope} session={s} timeZone={timeZone}/>;
+}
+
+export type RosterSessionDetailProps = Readonly<{
+  language: string; scope: RosterScope; session: CurrentSchoolClassSession; timeZone: string; roster: RosterState;
+  onMore?: (() => void) | undefined; onReloadRoster?: (() => void) | undefined;
+  marks?: Readonly<Record<string, MarkState>> | undefined; onMark?: ((entry: ClassSessionRosterEntry, status: RosterMark) => void) | undefined;
+  /** When given, "Book a student" opens booking in place instead of linking to the booking page. */
+  onBook?: (() => void) | undefined;
+}>;
+
+/** One class: its facts, its roster with attendance marks, and next steps. Shared by Class rosters and the School Calendar. */
+export function RosterSessionDetail({ language, scope, session: s, timeZone, roster, onMore, onReloadRoster, marks, onMark, onBook }: RosterSessionDetailProps): React.ReactElement {
+  const t: T = (key, vars) => rosterText(language, key, vars);
   const ready = roster.state === 'READY' && roster.sessionId === s.sessionId ? roster : null;
   const counts = ready ? rosterCounts(ready.entries) : null;
   const book = classBookingHandoffHref(scope, s.sessionId);
+  // Attendance is marked only on a scheduled or completed class; the server re-checks the session and the permission.
+  const canMark = Boolean(onMark) && (s.status === 'SCHEDULED' || s.status === 'COMPLETED');
   const attendance = `/staff/attendance?${new URLSearchParams({ organizationId: scope.organizationId.toLowerCase(), schoolId: scope.schoolId.toLowerCase() })}`;
   return <>
     <article className={styles.card} aria-labelledby="session-detail-title" data-testid="session-detail">
@@ -112,7 +134,14 @@ function RosterDetail({ list, selectedId, roster, scope, language, onMore, onRel
             <tbody>{ready.entries.map((e) => <tr key={e.studentProfileId}>
               <th scope="row">{e.givenName} {e.familyName}</th>
               <td data-label={t('booking')}>{e.booking ? <>{t(e.booking.status)}<small>{t(e.booking.kind)}</small></> : t('walkIn')}</td>
-              <td data-label={t('attendance')}>{e.attendance ? t(e.attendance.status) : t('notRecorded')}</td>
+              <td data-label={t('attendance')}>{e.attendance ? t(e.attendance.status) : t('notRecorded')}
+                {canMark ? <div className={styles.marks} role="group" aria-label={t('markGroup', { name: `${e.givenName} ${e.familyName}` })}>
+                  {ROSTER_MARKS.map((status) => { const mark = marks?.[e.studentProfileId.toLowerCase()];
+                    return <button key={status} type="button" className={styles.mark} aria-pressed={e.attendance?.status === status}
+                      disabled={mark?.state === 'SAVING'} onClick={() => onMark?.(e, status)}>{t(MARK_LABEL[status])}</button>; })}
+                </div> : null}
+                {(() => { const mark = marks?.[e.studentProfileId.toLowerCase()]; return mark ? <small role="status" className={styles.markNote} data-mark={mark.state}>{t(MARK_NOTE[mark.state], { status: t(MARK_LABEL[mark.status]) })}</small> : null; })()}
+              </td>
             </tr>)}</tbody>
           </table></div>}
         {ready.nextCursor ? <button type="button" className={styles.secondary} onClick={onMore} disabled={ready.more === 'LOADING'}>{ready.more === 'LOADING' ? t('moreLoading') : t('more')}</button> : null}
@@ -122,8 +151,9 @@ function RosterDetail({ list, selectedId, roster, scope, language, onMore, onRel
     <article className={styles.card} aria-labelledby="roster-next-title">
       <h2 id="roster-next-title">{t('nextSteps')}</h2>
       <ul className={styles.actions}>
-        <li><a className={styles.primary} href={attendance}>{t('recordAttendance')}</a></li>
-        {book && s.status !== 'CANCELLED' && s.status !== 'COMPLETED' ? <li><a className={styles.secondary} href={book}>{t('book')}</a></li> : null}
+        <li><a className={onMark ? styles.secondary : styles.primary} href={attendance}>{t(onMark ? 'correctAttendance' : 'recordAttendance')}</a></li>
+        {s.status !== 'CANCELLED' && s.status !== 'COMPLETED' ? onBook ? <li><button type="button" className={styles.primary} onClick={onBook}>{t('book')}</button></li>
+          : book ? <li><a className={styles.secondary} href={book}>{t('book')}</a></li> : null : null}
       </ul>
     </article>
   </>;

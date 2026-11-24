@@ -6,7 +6,9 @@
 // SECURITY DEFINER deferred guard that refuses an avatar.* generation without its avatar at commit.
 // A2 (0277) adds creative_avatar_videos (one avatar.video generation each, three runtime entry points) and replaces that
 // guard's body so each avatar.* operation needs its own record and any other avatar.* operation is refused.
-// A3 (0305) adds own-photo avatars: a permanent consent record, the deletable photo bytes, withdrawals and avatar links,
+// C1 (0354) adds a BEFORE INSERT daily cap guard on creative_generations; its job tables have their own proof
+// (test-creative-provider-jobs.mjs).
+// A3 (0664) adds own-photo avatars: a permanent consent record, the deletable photo bytes, withdrawals and avatar links,
 // five runtime entry points, and replaces the school reads and the avatar-video create so a withdrawn likeness is hidden
 // and never used again.
 export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars', 'creative_avatar_videos',
@@ -33,6 +35,8 @@ export const creativeStudioFunctions = [
   ['hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)', true, true],
   ['hon.read_creative_avatar_videos(text,uuid)', true, true],
   ['hon.read_creative_avatar_video(text,uuid,uuid)', true, true],
+  // C1 (0354): the per-school daily cap check before a generation is inserted (under the wallet lock).
+  ['hon.guard_creative_generation_daily_cap()', false, false],
   ['hon.creative_photo_signature_ok(text)', false, false],
   ['hon.creative_photo_bytes_ok(text,bytea)', false, false],
   ['hon.guard_creative_avatar_photo()', false, false],
@@ -60,6 +64,7 @@ const triggers = [
   ['creative_avatars', 'creative_avatar_no_truncate', 34, 'guard_saas_evidence'],
   ['creative_avatar_videos', 'creative_avatar_video_immutable', 27, 'guard_saas_evidence'],
   ['creative_avatar_videos', 'creative_avatar_video_no_truncate', 34, 'guard_saas_evidence'],
+  ['creative_generations', 'creative_generation_daily_cap', 7, 'guard_creative_generation_daily_cap'],
   ['creative_avatar_photo_consents', 'creative_avatar_photo_consent_immutable', 27, 'guard_saas_evidence'],
   ['creative_avatar_photo_consents', 'creative_avatar_photo_consent_no_truncate', 34, 'guard_saas_evidence'],
   ['creative_avatar_photos', 'creative_avatar_photo_no_update', 19, 'guard_creative_avatar_photo'],

@@ -1,6 +1,8 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ControlWriteRefused, ControlWriteUnknown, prepareControlWrite, sendControlWrite, type ControlReceipt, type ControlWrite, type ControlWritePath } from './hq-ai-provider-commands';
+import { HON_SESSION_INVALIDATED_EVENT } from './session-invalidation';
 import styles from './hq-ai-provider-control.module.css';
 
 const PROVIDER_IDS = ['OPENROUTER', 'DIRECT_LLM_API', 'HEYGEN', 'HIGGSFIELD'] as const;
@@ -60,7 +62,7 @@ type RoutingPolicy = {
 
 type Snapshot = { providers: ProviderConnection[]; catalog: CatalogEntry[]; policies: RoutingPolicy[] };
 type AccessState = 'checking' | 'available' | 'signed-out' | 'forbidden' | 'unavailable';
-type OperationState = { kind: 'idle' } | { kind: 'submitting' } | { kind: 'success'; message: string } | { kind: 'error'; message: string };
+type OperationState = { kind: 'idle' } | { kind: 'submitting' } | { kind: 'success'; message: string } | { kind: 'error'; message: string } | { kind: 'uncertain'; message: string };
 
 type ProviderForm = {
   providerId: ProviderId;
@@ -198,15 +200,13 @@ async function readBody(response: Response): Promise<unknown> {
   try { return await response.json() as unknown; } catch { return undefined; }
 }
 
-async function postControl(path: string, body: object, idempotent = true): Promise<unknown> {
+/** Selection-only reads (route preview). Writes go through hq-ai-provider-commands, which keeps one key per save. */
+async function postControl(path: string, body: object): Promise<unknown> {
   const response = await fetch(`/api/v1/hq/ai-providers/${path}`, {
     method: 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(idempotent ? { 'Idempotency-Key': newUuid() } : {}),
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const payload = await readBody(response);
@@ -227,9 +227,19 @@ function CheckboxList<T extends string>({ label, options, selected, onChange, di
 }
 
 function OperationNotice({ state }: { state: OperationState }): React.ReactElement | null {
-  if (state.kind === 'idle' || state.kind === 'submitting') return null;
+  if (state.kind === 'idle' || state.kind === 'submitting' || state.kind === 'uncertain') return null;
   return <output className={state.kind === 'error' ? styles.errorNotice : styles.successNotice} role="status">{state.message}</output>;
 }
+
+/** Outside the locked fieldset: an unconfirmed save offers only its same-request retry, or discarding it. */
+function UncertainNotice({ state, onRetry, onDiscard }: { state: OperationState; onRetry: () => void; onDiscard: () => void }): React.ReactElement | null {
+  if (state.kind !== 'uncertain') return null;
+  return <div className={styles.errorNotice} role="alert"><p>{state.message} The form stays locked until HON confirms this save or you discard it.</p>
+    <div className={styles.formActions}><button type="button" onClick={onRetry}>Retry the same save →</button><button type="button" onClick={onDiscard}>Discard and edit again</button></div></div>;
+}
+
+const EMPTY_SNAPSHOT: Snapshot = Object.freeze({ providers: [], catalog: [], policies: [] }) as unknown as Snapshot;
+const NO_WRITES = (): Record<ControlWritePath, ControlWrite | null> => ({ connections: null, catalog: null, 'routing-policies': null });
 
 export function HqAiProviderControl(): React.ReactElement {
   const [access, setAccess] = useState<AccessState>('checking');
@@ -244,25 +254,47 @@ export function HqAiProviderControl(): React.ReactElement {
   const [policyState, setPolicyState] = useState<OperationState>({ kind: 'idle' });
   const [previewState, setPreviewState] = useState<OperationState>({ kind: 'idle' });
   const [preview, setPreview] = useState<RouteDecision | null>(null);
+  // Review [18]/[19]: each read has a generation and an abort, so only the newest read can land; the session epoch
+  // retires every read and write answer that started before a session ended. Unconfirmed writes are held here.
+  const readGeneration = useRef(0), readAbort = useRef<AbortController | null>(null), epoch = useRef(0), mounted = useRef(true);
+  const retained = useRef<Record<ControlWritePath, ControlWrite | null>>(NO_WRITES());
 
   const loadConfiguration = useCallback(async (quiet = false): Promise<boolean> => {
+    const mine = ++readGeneration.current, shown = epoch.current;
+    readAbort.current?.abort();
+    const abort = new AbortController(); readAbort.current = abort;
+    const current = () => mounted.current && mine === readGeneration.current && shown === epoch.current;
     if (!quiet) setAccess('checking');
     try {
-      const response = await fetch('/api/v1/hq/ai-providers/configuration', { credentials: 'same-origin', cache: 'no-store' });
+      const response = await fetch('/api/v1/hq/ai-providers/configuration', { credentials: 'same-origin', cache: 'no-store', signal: abort.signal });
       const payload = await readBody(response) as { data?: unknown } | undefined;
-      if (response.status === 401) { setAccess('signed-out'); return false; }
-      if (response.status === 403) { setAccess('forbidden'); return false; }
-      if (!response.ok || !isSnapshot(payload?.data)) { setAccess('unavailable'); return false; }
+      if (!current()) return false;
+      // Any refusal or failure retires the shown registry: it never stays on screen as if still verified.
+      if (response.status === 401) { setSnapshot(EMPTY_SNAPSHOT); setAccess('signed-out'); return false; }
+      if (response.status === 403) { setSnapshot(EMPTY_SNAPSHOT); setAccess('forbidden'); return false; }
+      if (!response.ok || !isSnapshot(payload?.data)) { setSnapshot(EMPTY_SNAPSHOT); setAccess('unavailable'); return false; }
       setSnapshot(payload.data);
       setAccess('available');
       return true;
     } catch {
-      setAccess('unavailable');
+      if (current()) { setSnapshot(EMPTY_SNAPSHOT); setAccess('unavailable'); }
       return false;
     }
   }, []);
 
-  useEffect(() => { void loadConfiguration(); }, [loadConfiguration]);
+  useEffect(() => { mounted.current = true; void loadConfiguration(); return () => { mounted.current = false; epoch.current++; readAbort.current?.abort(); }; }, [loadConfiguration]);
+
+  // A session end drops the registry, every form, every held write and the preview at once.
+  useEffect(() => {
+    const retire = () => {
+      epoch.current++; readGeneration.current++; readAbort.current?.abort(); retained.current = NO_WRITES();
+      setSnapshot(EMPTY_SNAPSHOT); setAccess('signed-out'); setManageBlocked(false);
+      setProviderForm(blankProvider()); setCatalogForm(blankCatalog()); setPolicyForm(blankPolicy()); setPreviewForm(blankPreview()); setPreview(null);
+      for (const set of [setProviderState, setCatalogState, setPolicyState, setPreviewState]) set({ kind: 'idle' });
+    };
+    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, retire);
+    return () => window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, retire);
+  }, []);
 
   const providerById = useMemo(() => new Map(snapshot.providers.map((provider) => [provider.providerId, provider])), [snapshot.providers]);
   const activeCatalogCount = snapshot.catalog.filter((entry) => entry.active).length;
@@ -271,7 +303,7 @@ export function HqAiProviderControl(): React.ReactElement {
 
   function handleAccessError(error: unknown, setState: (state: OperationState) => void, fallback: string, mutation = true): void {
     const message = error instanceof Error ? error.message : fallback;
-    if (error instanceof ControlPlaneError && error.status === 401) setAccess('signed-out');
+    if (error instanceof ControlPlaneError && error.status === 401) { setSnapshot(EMPTY_SNAPSHOT); setAccess('signed-out'); }
     if (error instanceof ControlPlaneError && error.status === 403) {
       if (!mutation) {
         setAccess('forbidden');
@@ -284,6 +316,43 @@ export function HqAiProviderControl(): React.ReactElement {
     }
     setState({ kind: 'error', message });
   }
+
+  /**
+   * One save: the held request for this form if its answer was lost, otherwise a new frozen request with a new key.
+   * A receipt moves the editor to the server's version before the registry is re-read; a lost answer keeps the request
+   * and locks the form; a definite refusal drops it.
+   */
+  async function runWrite(path: ControlWritePath, body: object | null, setState: (state: OperationState) => void, onReceipt: (receipt: ControlReceipt) => void, success: string, fallback: string): Promise<void> {
+    let write = retained.current[path];
+    if (!write) {
+      if (!body) return;
+      try { write = prepareControlWrite(path, body, newUuid()); } catch { setState({ kind: 'error', message: fallback }); return; }
+      retained.current[path] = write;
+    }
+    const shown = epoch.current, held = write;
+    const settle = () => { if (retained.current[path] === held) retained.current[path] = null; };
+    setState({ kind: 'submitting' });
+    try {
+      const receipt = await sendControlWrite(held);
+      if (shown !== epoch.current) return;
+      settle(); onReceipt(receipt);
+      setState({ kind: 'success', message: receipt.replayed ? `${success} (HON had already applied this exact save.)` : success });
+      await loadConfiguration(true);
+    } catch (error) {
+      if (shown !== epoch.current) return;
+      if (error instanceof ControlWriteUnknown) { setState({ kind: 'uncertain', message: error.message }); return; }
+      settle();
+      handleAccessError(error instanceof ControlWriteRefused ? new ControlPlaneError(error.message, error.status) : error, setState, fallback);
+    }
+  }
+  const atVersion = <T extends { expectedVersion: number }>(matches: (form: T) => boolean, receipt: ControlReceipt) => (form: T): T =>
+    matches(form) ? { ...form, expectedVersion: receipt.version } : form;
+  const onProviderReceipt = (receipt: ControlReceipt) => setProviderForm(atVersion<ProviderForm>((f) => f.providerId === receipt.recordId, receipt));
+  const onCatalogReceipt = (receipt: ControlReceipt) => setCatalogForm(atVersion<CatalogForm>((f) => f.catalogId.toLowerCase() === receipt.recordId, receipt));
+  const onPolicyReceipt = (receipt: ControlReceipt) => setPolicyForm(atVersion<PolicyForm>((f) => f.policyId.toLowerCase() === receipt.recordId, receipt));
+  const discard = (path: ControlWritePath, setState: (state: OperationState) => void) => { retained.current[path] = null; setState({ kind: 'idle' }); };
+  const PROVIDER_SAVED = 'Provider connection metadata was saved through the governed HQ boundary.', CATALOG_SAVED = 'Approved catalog metadata was saved. This does not verify or invoke a model.',
+    POLICY_SAVED = 'Routing policy metadata was saved. Selection remains permission-neutral and non-executing.';
 
   function chooseProvider(providerId: ProviderId): void {
     const provider = providerById.get(providerId);
@@ -345,14 +414,8 @@ export function HqAiProviderControl(): React.ReactElement {
       setProviderState({ kind: 'error', message: 'Use only the opaque hon-secret UUID reference issued outside HON UI; do not enter a credential value.' });
       return;
     }
-    setProviderState({ kind: 'submitting' });
-    try {
-      await postControl('connections', { ...providerForm, displayName: providerForm.displayName.trim(), credentialSecretRef: ref });
-      await loadConfiguration(true);
-      setProviderState({ kind: 'success', message: 'Provider connection metadata was saved through the governed HQ boundary.' });
-    } catch (error) {
-      handleAccessError(error, setProviderState, 'HON could not save provider connection metadata.');
-    }
+    await runWrite('connections', { ...providerForm, displayName: providerForm.displayName.trim(), credentialSecretRef: ref }, setProviderState, onProviderReceipt,
+      PROVIDER_SAVED, 'HON could not save provider connection metadata.');
   }
 
   async function submitCatalog(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -365,17 +428,8 @@ export function HqAiProviderControl(): React.ReactElement {
       setCatalogState({ kind: 'error', message: 'Provide at least one capability and modality, an effective window, and a whole non-negative micro-unit cost.' });
       return;
     }
-    setCatalogState({ kind: 'submitting' });
-    try {
-      await postControl('catalog', {
-        ...catalogForm, modelId: catalogForm.modelId.trim(), displayName: catalogForm.displayName.trim(), unitCostMicros,
-        effectiveFrom, effectiveUntil,
-      });
-      await loadConfiguration(true);
-      setCatalogState({ kind: 'success', message: 'Approved catalog metadata was saved. This does not verify or invoke a model.' });
-    } catch (error) {
-      handleAccessError(error, setCatalogState, 'HON could not save the catalog record.');
-    }
+    await runWrite('catalog', { ...catalogForm, modelId: catalogForm.modelId.trim(), displayName: catalogForm.displayName.trim(), unitCostMicros, effectiveFrom, effectiveUntil },
+      setCatalogState, onCatalogReceipt, CATALOG_SAVED, 'HON could not save the catalog record.');
   }
 
   async function submitPolicy(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -388,16 +442,8 @@ export function HqAiProviderControl(): React.ReactElement {
       setPolicyState({ kind: 'error', message: 'Choose one to eight approved catalog records, an effective window, and a whole non-negative cost ceiling.' });
       return;
     }
-    setPolicyState({ kind: 'submitting' });
-    try {
-      await postControl('routing-policies', {
-        ...policyForm, organizationId: policyForm.organizationId.trim(), schoolId: policyForm.schoolId.trim(), maxCostMicros, effectiveFrom, effectiveUntil,
-      });
-      await loadConfiguration(true);
-      setPolicyState({ kind: 'success', message: 'Routing policy metadata was saved. Selection remains permission-neutral and non-executing.' });
-    } catch (error) {
-      handleAccessError(error, setPolicyState, 'HON could not save the routing policy.');
-    }
+    await runWrite('routing-policies', { ...policyForm, organizationId: policyForm.organizationId.trim(), schoolId: policyForm.schoolId.trim(), maxCostMicros, effectiveFrom, effectiveUntil },
+      setPolicyState, onPolicyReceipt, POLICY_SAVED, 'HON could not save the routing policy.');
   }
 
   async function submitPreview(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -414,7 +460,7 @@ export function HqAiProviderControl(): React.ReactElement {
     try {
       const payload = await postControl('route-preview', {
         ...previewForm, organizationId: previewForm.organizationId.trim(), schoolId: previewForm.schoolId.trim(), policyId: previewForm.policyId.trim(), estimatedUnits, budgetMicros,
-      }, false) as { data?: RouteDecision };
+      }) as { data?: RouteDecision };
       if (!payload.data || (payload.data.status !== 'SELECTED' && payload.data.status !== 'DENIED')) throw new Error('HON returned an unreadable routing preview.');
       setPreview(payload.data);
       setPreviewState({ kind: 'success', message: 'Selection preview completed. No provider, worker, tool, or model was invoked.' });
@@ -484,7 +530,7 @@ export function HqAiProviderControl(): React.ReactElement {
         <section id="connection-form" className={`${styles.section} ${styles.formSection}`}>
           <div className={styles.sectionHeading}><div><span>02 / HUMAN ATTESTATION</span><h2>Connection metadata</h2></div><p>Use the expected version shown here; concurrent changes are rejected by the backend rather than overwritten.</p></div>
           <form onSubmit={submitProvider} className={styles.formCard}>
-            <fieldset disabled={!canManage || providerState.kind === 'submitting'}>
+            <fieldset disabled={!canManage || providerState.kind === 'submitting' || providerState.kind === 'uncertain'}>
               <div className={styles.formTopline}><div><strong>{providerForm.expectedVersion === 0 ? 'Register approved provider type' : 'Update approved connection record'}</strong><small>Expected version <code>{providerForm.expectedVersion}</code></small></div><span>NO PROVIDER CALLS</span></div>
               <div className={styles.formGrid}>
                 <label>Provider type<select value={providerForm.providerId} onChange={(event) => chooseProvider(event.target.value as ProviderId)}>{PROVIDER_IDS.map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
@@ -496,6 +542,7 @@ export function HqAiProviderControl(): React.ReactElement {
               <div className={styles.formActions}><button type="submit">{providerState.kind === 'submitting' ? 'Saving governed metadata…' : 'Save connection metadata →'}</button><span>Saving records metadata only; status changes never invoke a provider.</span></div>
               <OperationNotice state={providerState} />
             </fieldset>
+            <UncertainNotice state={providerState} onRetry={() => void runWrite('connections', null, setProviderState, onProviderReceipt, PROVIDER_SAVED, 'HON could not save provider connection metadata.')} onDiscard={() => discard('connections', setProviderState)} />
           </form>
         </section>
 
@@ -512,7 +559,7 @@ export function HqAiProviderControl(): React.ReactElement {
         <section id="catalog-form" className={`${styles.section} ${styles.formSection}`}>
           <div className={styles.sectionHeading}><div><span>03A / CATALOG RECORD</span><h2>{catalogForm.expectedVersion === 0 ? 'Add an approved model record' : 'Revise catalog metadata'}</h2></div><button className={styles.textButton} type="button" onClick={newCatalog}>New catalog record +</button></div>
           <form onSubmit={submitCatalog} className={styles.formCard}>
-            <fieldset disabled={!canManage || catalogState.kind === 'submitting'}>
+            <fieldset disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'}>
               <div className={styles.formTopline}><div><strong>Catalog ID <code>{shortId(catalogForm.catalogId)}</code></strong><small>Expected version <code>{catalogForm.expectedVersion}</code></small></div><span>APPROVAL METADATA</span></div>
               <div className={styles.formGrid}>
                 <label>Provider type<select disabled={catalogForm.expectedVersion > 0} value={catalogForm.providerId} onChange={(event) => setCatalogForm({ ...catalogForm, providerId: event.target.value as ProviderId })}>{PROVIDER_IDS.map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
@@ -526,11 +573,12 @@ export function HqAiProviderControl(): React.ReactElement {
               </div>
               <div className={styles.switchRow}><label><input type="checkbox" checked={catalogForm.active} onChange={(event) => setCatalogForm({ ...catalogForm, active: event.target.checked })} /> Active for policy selection</label><span>Provider, model identity, and billable unit are immutable after approval; register a new ID to change them.</span></div>
               <p>Privacy controls are HQ selection attestations only, not proof of external enforcement. Empty means no attestation.</p>
-              <CheckboxList label="Privacy attestations" options={PRIVACY_CONTROLS} selected={catalogForm.privacyControls} onChange={(privacyControls) => setCatalogForm({ ...catalogForm, privacyControls })} disabled={!canManage || catalogState.kind === 'submitting'} />
-              <div className={styles.checkboxGrid}><CheckboxList label="Capabilities" options={CAPABILITIES} selected={catalogForm.capabilities} onChange={(capabilities) => setCatalogForm({ ...catalogForm, capabilities })} disabled={!canManage || catalogState.kind === 'submitting'} /><CheckboxList label="Modalities" options={MODALITIES} selected={catalogForm.modalities} onChange={(modalities) => setCatalogForm({ ...catalogForm, modalities })} disabled={!canManage || catalogState.kind === 'submitting'} /></div>
+              <CheckboxList label="Privacy attestations" options={PRIVACY_CONTROLS} selected={catalogForm.privacyControls} onChange={(privacyControls) => setCatalogForm({ ...catalogForm, privacyControls })} disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'} />
+              <div className={styles.checkboxGrid}><CheckboxList label="Capabilities" options={CAPABILITIES} selected={catalogForm.capabilities} onChange={(capabilities) => setCatalogForm({ ...catalogForm, capabilities })} disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'} /><CheckboxList label="Modalities" options={MODALITIES} selected={catalogForm.modalities} onChange={(modalities) => setCatalogForm({ ...catalogForm, modalities })} disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'} /></div>
               <div className={styles.formActions}><button type="submit">{catalogState.kind === 'submitting' ? 'Saving catalog metadata…' : 'Save catalog record →'}</button><span>No model prompt is collected or sent.</span></div>
               <OperationNotice state={catalogState} />
             </fieldset>
+            <UncertainNotice state={catalogState} onRetry={() => void runWrite('catalog', null, setCatalogState, onCatalogReceipt, CATALOG_SAVED, 'HON could not save the catalog record.')} onDiscard={() => discard('catalog', setCatalogState)} />
           </form>
         </section>
 
@@ -546,7 +594,7 @@ export function HqAiProviderControl(): React.ReactElement {
         <section id="policy-form" className={`${styles.section} ${styles.formSection}`}>
           <div className={styles.sectionHeading}><div><span>04A / POLICY RECORD</span><h2>{policyForm.expectedVersion === 0 ? 'Add a scoped routing policy' : 'Revise routing policy metadata'}</h2></div><button className={styles.textButton} type="button" onClick={newPolicy}>New policy record +</button></div>
           <form onSubmit={submitPolicy} className={styles.formCard}>
-            <fieldset disabled={!canManage || policyState.kind === 'submitting'}>
+            <fieldset disabled={!canManage || policyState.kind === 'submitting' || policyState.kind === 'uncertain'}>
               <div className={styles.formTopline}><div><strong>Policy ID <code>{shortId(policyForm.policyId)}</code></strong><small>Expected version <code>{policyForm.expectedVersion}</code></small></div><span>SELECTION ONLY</span></div>
               <div className={styles.formGrid}>
                 <label>Organization UUID<input required disabled={policyForm.expectedVersion > 0} value={policyForm.organizationId} onChange={(event) => setPolicyForm({ ...policyForm, organizationId: event.target.value.toLowerCase() })} placeholder="organization UUID" autoComplete="off" spellCheck={false} /></label>
@@ -562,6 +610,7 @@ export function HqAiProviderControl(): React.ReactElement {
               <div className={styles.formActions}><button type="submit">{policyState.kind === 'submitting' ? 'Saving routing policy…' : 'Save routing policy →'}</button><span>Tenant scope and capability are immutable after policy approval.</span></div>
               <OperationNotice state={policyState} />
             </fieldset>
+            <UncertainNotice state={policyState} onRetry={() => void runWrite('routing-policies', null, setPolicyState, onPolicyReceipt, POLICY_SAVED, 'HON could not save the routing policy.')} onDiscard={() => discard('routing-policies', setPolicyState)} />
           </form>
         </section>
 

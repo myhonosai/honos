@@ -1,5 +1,5 @@
 /**
- * A3 photo avatars (0305): remove embedded metadata (EXIF location and camera data, XMP, IPTC, text comments) from a
+ * A3 photo avatars (0664): remove embedded metadata (EXIF location and camera data, XMP, IPTC, text comments) from a
  * staff member's own photo before it is stored. The image data itself is copied byte for byte; nothing is decoded or
  * re-encoded. A file that does not parse cleanly as its declared type is refused, never stored as-is.
  */

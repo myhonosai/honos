@@ -29,7 +29,7 @@ export type AvatarPhotosPanelProps = Readonly<{
 }>;
 
 /**
- * Photo avatars (A3, 0305; owner decision 2026-11-12): an adult staff member makes an avatar from a photo of themselves,
+ * Photo avatars (A3, 0664; owner decision 2026-11-12): an adult staff member makes an avatar from a photo of themselves,
  * after signing the likeness consent, and can delete it at any time. Saving and making are offered only when avatars are
  * open to the school (provider connected, eligible, priced); deleting is always offered. A live school owner can delete
  * any staff member's photo but never sees it. The server ties every photo to the signed-in person.

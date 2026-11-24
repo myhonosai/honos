@@ -21,7 +21,7 @@ export type CreativeStudioViewProps = Readonly<{
   /** A2 (0277) talking avatar videos: the read, this tab's video request outcome and lock. */
   videos?: VideosState; videoOutcome?: CreateOutcome; videoLocked?: boolean | undefined; hideVideoText?: ((v: CreativeAvatarVideo) => boolean) | undefined;
   onCreateVideo?: ((input: CreativeAvatarVideoInput) => void) | undefined; onCheckVideoAgain?: (() => void) | undefined;
-  /** A3 (0305) photo avatars: the person's own consented photo, its save/delete outcome and this tab's photo avatar request. */
+  /** A3 (0664) photo avatars: the person's own consented photo, its save/delete outcome and this tab's photo avatar request. */
   photos?: PhotosState; photoImage?: string | null | undefined; photoOutcome?: PhotoOutcome | undefined; photoSaveLocked?: boolean | undefined; photoDeleting?: boolean | undefined;
   photoAvatarOutcome?: CreateOutcome; photoAvatarLocked?: boolean | undefined;
   onSavePhoto?: ((input: CreativePhotoUploadInput) => void) | undefined; onCheckPhotoSave?: (() => void) | undefined; onDeletePhoto?: ((consentId: string) => void) | undefined;

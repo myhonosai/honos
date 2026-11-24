@@ -51,6 +51,14 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     }
   }
 
+  // 0423 automation engine login (infra 014): its own role, never the runtime, migration or communication worker login.
+  const automationUrl = env.HON_AUTOMATION_WORKER_DATABASE_URL;
+  if (automationUrl) {
+    try { verifiedDatabaseConnection(automationUrl, env); } catch { failures.push('AUTOMATION_WORKER_DATABASE_TLS_INVALID'); }
+    const automationUser = databaseUser(automationUrl);
+    if ([runtimeUrl, env.DATABASE_URL, workerUrl].some(url => url && databaseUser(url) === automationUser)) failures.push('AUTOMATION_WORKER_ROLE_REUSED');
+  }
+
   const strict = deployment === 'production' || deployment === 'staging' || (declared === undefined && env.NODE_ENV === 'production');
   if (strict) {
     if (!runtimeUrl) failures.push('RUNTIME_DATABASE_URL_REQUIRED');
@@ -63,6 +71,8 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     }
     // The deterministic fake message provider never runs in production or staging.
     if (env.HON_COMMUNICATION_FAKE_PROVIDER !== undefined) failures.push('COMMUNICATION_FAKE_PROVIDER_FORBIDDEN');
+    // 0347: the deterministic fake Zernio social adapter never runs in production or staging either.
+    if (env.HON_ZERNIO_FAKE_PROVIDER !== undefined) failures.push('ZERNIO_FAKE_PROVIDER_FORBIDDEN');
     if (env.HON_AUTH_MODE !== 'OIDC') failures.push('OIDC_AUTH_REQUIRED');
     else {
       // The API verifies HON session cookies only; OIDC endpoints are web-server configuration.

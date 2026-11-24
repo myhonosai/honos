@@ -10,6 +10,7 @@ import {
 import { exactClassBookingSelectorPrefill, type ClassBookingSelectorPrefill } from './class-booking-selector-prefill';
 import { ClassBookingPickers, type BookingScope } from './class-booking-pickers';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_IDS: ClassBookingKnownIds = { organizationId: '', schoolId: '', sessionId: '', studentProfileId: '' };
 const ID_LABELS: Record<keyof ClassBookingKnownIds, string> = {
@@ -32,6 +33,7 @@ export function shellBookingIds(rawIds: ClassBookingKnownIds, shellScope: Bookin
 /** Conventional canonical booking only; IDs are untrusted selectors, not authority. */
 export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { initialPrefill?: unknown; shellScope?: BookingScope | null } = {}): React.ReactElement {
   const [rawIds, setIds] = useState<ClassBookingKnownIds>(initialIds(initialPrefill));
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   // With a shell-verified school, the school selectors come from the shell and staff pick the class and student by name.
   const ids = shellBookingIds(rawIds, shellScope);
   const [bookingKind, setBookingKind] = useState('');
@@ -101,19 +103,16 @@ export function ClassBookingWorkbench({ initialPrefill, shellScope = null }: { i
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
-    <header><p>HON / CONVENTIONAL STAFF OPERATIONS</p><h1>Manual class booking</h1>
-      <p>Record one exact student/session booking through the existing canonical staff command. This page starts idle: a closed URL handoff may prefill only three untrusted selectors; there is no lookup, search, roster, directory, calendar or automatic request.</p>
+    <header><p>Schedule</p><h1>Book a student into a class</h1>
+      <p>Choose the class and the student to book.</p>
     </header>
-    <aside><strong>Current school authority stays server-owned.</strong>
-      <p>The four IDs are untrusted selectors. The existing server authorization, tenant RLS and current <code>schedule.booking.manage</code> gates remain authoritative. Capacity and waitlist decisions are made only by the canonical booking service.</p>
-      <p>This workbench does not infer identity, enrollment, eligibility or availability; manage sessions; grant ClassPass; or create attendance, progression, testing, membership, payment, messages, provider, AI, Action Engine or automation effects. Canonical booking audit/outbox evidence is unchanged.</p>
-    </aside>
+    <aside data-plain-note=""><strong>The class’s capacity and waitlist decide the result. Booking does not take payment or record attendance.</strong></aside>
     <section aria-labelledby="booking-command"><h2 id="booking-command">Exact-known-ID booking command</h2>
       <p>Use already-known organization, current school, class session and student profile UUIDs. A closed handoff may prefill only exact organization, school and class-session UUID selectors; student profile remains blank, booking kind remains unselected, and confirmation remains required. No other query selector is accepted. A booking kind is intent only, not an eligibility or makeup approval decision.</p>
       <form onSubmit={submit}><fieldset disabled={busy}>
         <div className={styles.scopeGrid}>{shellScope ? <ClassBookingPickers scope={shellScope} sessionId={ids.sessionId} studentProfileId={ids.studentProfileId} disabled={busy}
             onSession={value => edit(() => setIds({ ...ids, sessionId: value }))} onStudent={value => edit(() => setIds({ ...ids, studentProfileId: value }))}/>
-          : (Object.keys(ID_LABELS) as (keyof ClassBookingKnownIds)[]).map(field =>
+          : (Object.keys(ID_LABELS) as (keyof ClassBookingKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map(field =>
           <label key={field}>{ID_LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={event => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}
           <label>Booking kind<select name="bookingKind" required value={bookingKind} onChange={event => edit(() => setBookingKind(event.target.value))}>
             <option value="">Choose a booking kind</option>{MANUAL_CLASS_BOOKING_KINDS.map(kind => <option key={kind} value={kind}>{kind}</option>)}

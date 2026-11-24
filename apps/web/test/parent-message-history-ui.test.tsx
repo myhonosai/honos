@@ -34,7 +34,7 @@ describe('privacy-safe family message history', () => {
 
   it('protects/no-indexes the dynamic no-store route and keeps UI read-only with access-loss concealment', () => {
     const route = readFileSync('src/app/parent/messages/page.tsx', 'utf8'); const component = readFileSync('src/components/parent-message-history.tsx', 'utf8'); const http = readFileSync('src/components/parent-message-history-http.ts', 'utf8');
-    for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'revalidate = 0', "fetchCache = 'force-no-store'", 'index: false', 'follow: false']) expect(route).toContain(token);
+    for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login?for=parent')", 'force-dynamic', 'revalidate = 0', "fetchCache = 'force-no-store'", 'index: false', 'follow: false']) expect(route).toContain(token);
     expect(route).not.toMatch(/searchParams|familyId|studentProfileId|recipientPersonId|messageId/);
     for (const token of ['Receipt evidence unavailable', 'Guardian family access unavailable', 'No verified message history shown', 'setView(null)', 'pending.current?.abort()', "'visibilitychange'"]) expect(component).toContain(token);
     expect(component).not.toMatch(/<input|useSearchParams|localStorage|sessionStorage|method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|sendMessage|reply|queueMessage|invokeLLM|executeAction|payment provider/i);

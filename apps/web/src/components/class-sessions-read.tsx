@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { CurrentSchoolClassSession } from '@hon/contracts';
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from './class-sessions-read-http';
 import styles from './attendance-workbench.module.css';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_SCOPE = { organizationId: '', schoolId: '' };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -18,6 +19,7 @@ export function classBookingHandoffHref(scope: typeof EMPTY_SCOPE, sessionId: un
 /** Deliberately bounded read/selection aid; it never creates a booking or changes a session. */
 export function ClassSessionsRead(): React.ReactElement {
   const [scope, setScope] = useState(EMPTY_SCOPE);
+  useShellSchoolInto(school => setScope(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [sessions, setSessions] = useState<CurrentSchoolClassSession[] | null>(null);
   const [selected, setSelected] = useState<CurrentSchoolClassSession | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,10 +48,10 @@ export function ClassSessionsRead(): React.ReactElement {
   const bookingHref = selectedReturned ? classBookingHandoffHref(scope, selectedReturned.sessionId) : undefined;
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/schedule/sessions/create">Create a class session</a><a href="/staff/schedule/bookings">Manual class booking</a></nav>
-    <header><p>HON / CONVENTIONAL STAFF OPERATIONS</p><h1>Class Sessions</h1><p>Select from one bounded, current-school operational session list. This page begins blank and makes no request until you enter an exact current-school scope and explicitly load it.</p></header>
-    <aside><strong>Not availability, roster, or a seat guarantee.</strong><p>The list covers sessions whose start is from 00:00 UTC 30 calendar days before today through (but excluding) 00:00 UTC 91 days after today: today through 90 days forward. It returns at most 50 sessions, ordered by start then ID. Authorization is independently rechecked on every read.</p><p>It does not show or infer instructors, students, roster, families, enrollment, eligibility, attendance, bookings or waitlist, ClassPass, membership/payment, providers, AI, Action Engine, aggregates, availability, or any write effect.</p></aside>
-    <section aria-labelledby="current-school-sessions"><h2 id="current-school-sessions">Current school scope</h2><p>Organization and school UUIDs are untrusted selectors only. The server and fixed database projection independently establish the signed-in direct human, exact school, <code>schedule.session.read</code> permission, active entitlement, and RLS boundary.</p>
-      <form onSubmit={(event) => void submit(event)}><fieldset disabled={busy}><div className={styles.scopeGrid}><label>Organization UUID<input name="organizationId" required autoComplete="off" spellCheck={false} maxLength={36} value={scope.organizationId} onChange={(event) => edit({ ...scope, organizationId: event.target.value })} /></label><label>Current school UUID<input name="schoolId" required autoComplete="off" spellCheck={false} maxLength={36} value={scope.schoolId} onChange={(event) => edit({ ...scope, schoolId: event.target.value })} /></label></div><div className={styles.actions}><button type="submit" disabled={!validScope(scope)}>{busy ? 'Loading bounded sessions…' : 'Load bounded Class Sessions'}</button><button type="button" onClick={() => edit(EMPTY_SCOPE)}>Clear scope and results</button></div></fieldset></form>
+    <header><p>Schedule</p><h1>Class schedule</h1><p>Classes from 30 days ago to 90 days ahead. Choose one to book a student into it.</p></header>
+    <aside data-plain-note=""><strong>This is the schedule only. It does not show who is booked or how many places are left.</strong></aside>
+    <section aria-labelledby="current-school-sessions"><h2 id="current-school-sessions">Current school scope</h2><ManualSchoolFields><p>Organization and school UUIDs are untrusted selectors only. The server and fixed database projection independently establish the signed-in direct human, exact school, <code>schedule.session.read</code> permission, active entitlement, and RLS boundary.</p></ManualSchoolFields>
+      <form onSubmit={(event) => void submit(event)}><fieldset disabled={busy}><div className={styles.scopeGrid}><ManualSchoolFields current={scope.schoolId}><label>Organization UUID<input name="organizationId" required autoComplete="off" spellCheck={false} maxLength={36} value={scope.organizationId} onChange={(event) => edit({ ...scope, organizationId: event.target.value })} /></label><label>Current school UUID<input name="schoolId" required autoComplete="off" spellCheck={false} maxLength={36} value={scope.schoolId} onChange={(event) => edit({ ...scope, schoolId: event.target.value })} /></label></ManualSchoolFields></div><div className={styles.actions}><button type="submit" disabled={!validScope(scope)}>{busy ? 'Loading bounded sessions…' : 'Load bounded Class Sessions'}</button><button type="button" onClick={() => edit(EMPTY_SCOPE)}>Clear scope and results</button></div></fieldset></form>
       {busy && <p role="status">Verifying current-school authority and loading the bounded session list…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}
       {sessions === null && !busy && !error && <p className={styles.empty}>No session list is shown until a current school is explicitly loaded.</p>}
       {sessions && sessions.length === 0 && <p className={styles.empty}>No sessions are returned in this fixed bounded window. This is not an availability or seat result.</p>}

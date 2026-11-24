@@ -11,7 +11,7 @@ import { studioWallet, type AvatarsState, type CreateOutcome, type PhotoOutcome,
 import { CreativeStudioView } from '../src/components/creative-studio/view';
 import { id, rawWallet, reply, scope } from './account-status-fixtures';
 
-// A3 Creative Studio photo avatars (0305): an adult staff member's OWN photo, signed likeness consent, delete at any time.
+// A3 Creative Studio photo avatars (0664): an adult staff member's OWN photo, signed likeness consent, delete at any time.
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 

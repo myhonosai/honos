@@ -18,6 +18,8 @@ export interface CommunicationSendRequest {
   content: string;
   schoolName: string;
   attempt: number;
+  /** 0424: a school email's subject as its author wrote it; absent, the adapter's standard subject. */
+  subject?: string | undefined;
   /**
    * Who the mail is for. Omitted or SCHOOL: a 0243 school delivery. INTERNAL (staff notices such as the weekly
    * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.
@@ -28,6 +30,15 @@ export interface CommunicationSendRequest {
   senderServiceId?: string | undefined;
   /** 0249: false for a missed-call text-back, which has no delivery row for a status callback to resolve. */
   statusCallback?: boolean | undefined;
+  /**
+   * 0281 HQ send (HqMessageDispatcher): the delivery is an HQ delivery, sent from the HQ sender, never a school's.
+   * EMAIL uses `senderEmail` and `senderName`; SMS uses `senderServiceId` (the HQ Messaging Service). `hqPurpose`
+   * BILLING and ACCOUNT are required notices that still reach owners who opted out of HQ email.
+   */
+  origin?: 'HQ' | undefined;
+  senderEmail?: string | undefined;
+  senderName?: string | undefined;
+  hqPurpose?: 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT' | undefined;
 }
 
 export interface CommunicationSendAccepted {
@@ -57,6 +68,8 @@ export interface CommunicationProviderAdapter {
   readonly channel: DeliverableChannel;
   readiness(): CommunicationProviderReadiness;
   send(request: CommunicationSendRequest): Promise<CommunicationSendAccepted>;
+  /** True when the adapter honors `origin: 'HQ'` (sends from the HQ sender and routes receipts to HQ deliveries). */
+  readonly hqSender?: boolean;
 }
 
 /** The deployment flag value that enables the deterministic fake provider outside production and staging. */

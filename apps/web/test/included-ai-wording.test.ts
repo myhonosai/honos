@@ -19,7 +19,7 @@ describe('included AI team wording (docs/hon/INCLUDED_AI_AND_FAIR_USE.md)', () =
       const text = source(`../src/components/${file}`);
       expect(text, file).not.toMatch(/customer credits|view\.customerCredits|USD microunits|view\.providerCostMicrounits|view\.inputTokens/);
       expect(text, file).toContain('{INCLUDED_AI_NOTE}');
-      expect(text, file).toContain('includedAiReason(view.reason)');
+      expect(text, file).toContain('plainReason(view.reason)');
     }
   });
 

@@ -1,0 +1,13 @@
+/* Marketing > Media. Page chrome comes from membership-changes.module.css. */
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); margin: 0; padding: 0; list-style: none; }
+.picture { display: grid; gap: 6px; align-content: start; padding: 10px; border: 1px solid #24405a; border-radius: 12px; min-width: 0; }
+.thumb { display: grid; place-items: center; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 8px; background: #0d1b2a; text-align: center; padding: 4px; }
+.thumb img { width: 100%; height: 100%; object-fit: contain; }
+.title { overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.small { min-height: 32px; padding: 2px 10px; border: 1px solid #35506d; border-radius: 8px; background: transparent; color: #eaf4fb; font: inherit; font-size: 12px; cursor: pointer; }
+.small:disabled { opacity: .55; cursor: not-allowed; }
+.small:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.usage { display: grid; gap: 4px; }
+.bar { height: 8px; border-radius: 999px; background: #1b3048; overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--hon-accent, #8de3d8); }

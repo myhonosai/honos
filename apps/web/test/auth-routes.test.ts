@@ -206,6 +206,31 @@ describe('sign-out route', () => {
     const response = await post({ origin: 'https://evil.example', 'x-forwarded-host': 'evil.example' });
     expect(response.status).toBe(403);
   });
+  it('also ends the sign-in provider session so the next sign-in can choose another account', async () => {
+    process.env.HON_OIDC_END_SESSION_ENDPOINT = 'https://provider.example/v2/logout';
+    const response = await post({ origin: 'https://hon.example', 'x-forwarded-host': 'evil.example' });
+    expect(response.status).toBe(303);
+    const location = new URL(response.headers.get('location')!);
+    expect(location.origin + location.pathname).toBe('https://provider.example/v2/logout');
+    expect(location.searchParams.get('client_id')).toBe(testEnv.HON_OIDC_CLIENT_ID);
+    expect(location.searchParams.get('returnTo')).toBe('https://hon.example/');
+    expect(location.searchParams.get('post_logout_redirect_uri')).toBe('https://hon.example/');
+    expect(response.cookies.get(HON_SESSION_COOKIE)!.maxAge).toBe(0);
+    expect(response.cookies.get(MANUS_SESSION_COOKIE)!.maxAge).toBe(0);
+  });
+  it('never redirects to the provider for a rejected sign-out', async () => {
+    process.env.HON_OIDC_END_SESSION_ENDPOINT = 'https://provider.example/v2/logout';
+    const response = await post({ origin: 'https://evil.example' });
+    expect(response.status).toBe(403);
+    expect(response.headers.get('location')).toBeNull();
+  });
+  it('still clears HON cookies and goes home when the provider logout setting is invalid', async () => {
+    process.env.HON_OIDC_END_SESSION_ENDPOINT = 'http://provider.example/v2/logout';
+    const response = await post({ origin: 'https://hon.example' });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/');
+    expect(response.cookies.get(HON_SESSION_COOKIE)!.maxAge).toBe(0);
+  });
   it('still signs out when sign-in configuration is broken', async () => {
     delete process.env.HON_OIDC_CLIENT_ID;
     const response = await post({ origin: 'https://hon.example' });

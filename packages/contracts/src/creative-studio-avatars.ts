@@ -141,7 +141,7 @@ export function validateCreativeAvatarVideoReceipt(value: unknown): CreativeAvat
   return r as unknown as CreativeAvatarVideoReceipt;
 }
 
-// ---------- A3 photo avatars (migration 0305) ----------
+// ---------- A3 photo avatars (migration 0664) ----------
 // An adult staff member may make an avatar from THEIR OWN photo (owner decision 2026-11-12), after signing the likeness
 // consent below. The photo never leaves HON while no real provider is connected; the person can delete it at any time
 // (a live school owner can too), which erases the image and withdraws the avatar and its videos. Students, children and
@@ -153,9 +153,9 @@ export const CREATIVE_PHOTO_STATUSES = ['ACTIVE', 'WITHDRAWN', 'INACTIVE'] as co
 export type CreativePhotoStatus = typeof CREATIVE_PHOTO_STATUSES[number];
 export const CREATIVE_PHOTO_WITHDRAWN_REASONS = ['DELETED_BY_SUBJECT', 'DELETED_BY_OWNER', 'REPLACED'] as const;
 export type CreativePhotoWithdrawnReason = typeof CREATIVE_PHOTO_WITHDRAWN_REASONS[number];
-/** The fixed look description of every photo avatar (0305 sets it; the photo itself is never described in words). */
+/** The fixed look description of every photo avatar (0664 sets it; the photo itself is never described in words). */
 export const CREATIVE_PHOTO_AVATAR_DESCRIPTION = 'An avatar of the staff member, made from their own consented photo.';
-/** Limits shared by the database (0305), the API and the web form. */
+/** Limits shared by the database (0664), the API and the web form. */
 export const CREATIVE_PHOTO_LIMITS = { minBytes: 64, maxBytes: 1_048_576, signatureMin: 2, signatureMax: 80, listLimit: 50 } as const;
 
 /** What the person signs: three attestations and their typed name, for one photo of themselves. */

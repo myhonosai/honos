@@ -96,9 +96,10 @@ export function verifyHqOverviewSnapshot(value: unknown): HqPlatformOverview {
 }
 
 /** The HQ route is intentionally fixed: no target, role, tenant, or time selector can enter the request. */
-export async function loadHqOverview(): Promise<HqPlatformOverview> {
+export async function loadHqOverview(signal?: AbortSignal): Promise<HqPlatformOverview> {
   const response = await fetch(PATH, {
     method: 'GET',
+    signal: signal ?? null,
     credentials: 'same-origin',
     cache: 'no-store',
     referrerPolicy: 'no-referrer',

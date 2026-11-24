@@ -91,3 +91,28 @@ it('a preferred school that fails verification selects nothing', async () => {
   vi.mocked(api.verifySchool).mockRejectedValue(new SchoolEntryError('DENIED'));
   await c.loadPreferred(b); expect(c.snapshot()).toMatchObject({ phase: 'DENIED', selection: null });
 });
+
+it('quiet re-check keeps the page and school while identity and the exact school still verify', async () => {
+  await c.load(); const before = c.snapshot();
+  vi.mocked(api.identity).mockClear(); vi.mocked(api.verifySchool).mockClear();
+  await c.recheck();
+  expect(c.snapshot()).toBe(before);
+  expect(api.identity).toHaveBeenCalledTimes(2); expect(api.verifySchool).toHaveBeenCalledWith(a, expect.any(AbortSignal));
+});
+it.each(['SESSION', 'IDENTITY', 'DENIED'] as const)('quiet re-check moves to %s and drops the school', async kind => {
+  await c.load(); vi.mocked(api.verifySchool).mockRejectedValueOnce(new SchoolEntryError(kind));
+  await c.recheck(); expect(c.snapshot()).toMatchObject({ phase: kind, selection: null });
+});
+it('quiet re-check keeps the page through a network failure and is skipped when no school is ready', async () => {
+  vi.mocked(api.current).mockResolvedValue({ state: 'MANUAL_ENTRY_REQUIRED' }); await c.load();
+  vi.mocked(api.identity).mockClear(); await c.recheck(); expect(api.identity).not.toHaveBeenCalled();
+  await c.choose(b.schoolId, c.snapshot().revision); const ready = c.snapshot();
+  vi.mocked(api.identity).mockRejectedValueOnce(new SchoolEntryError('UNAVAILABLE')); await c.recheck(); expect(c.snapshot()).toBe(ready);
+  vi.mocked(api.identity).mockRejectedValueOnce(new TypeError('offline')); await c.recheck(); expect(c.snapshot()).toBe(ready);
+});
+it('a late re-check failure cannot overwrite a newer school or a session end', async () => {
+  await c.load(); let fail!: (error: unknown) => void;
+  vi.mocked(api.verifySchool).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }));
+  const pending = c.recheck(); await tick(); c.conceal('SESSION'); fail(new SchoolEntryError('DENIED')); await pending;
+  expect(c.snapshot().phase).toBe('SESSION');
+});

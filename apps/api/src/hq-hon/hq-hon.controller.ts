@@ -22,6 +22,9 @@ export class HqHonController {
   constructor(private readonly hon: HqHonService) {}
   @Get() @UseGuards(SaasReadGuard)
   async conversation(@Req() req: HonRequest) { return { data: await this.hon.conversation(subject(req)) }; }
+  /** 0338 (HX-1): the executive workspace Performance tab. Aggregates only; gated on that agent's own HQ permission. */
+  @Get('performance/:agent') @UseGuards(SaasReadGuard)
+  async performance(@Req() req: HonRequest, @Param('agent') agent: string) { return { data: await this.hon.performance(subject(req), agent) }; }
   @Post('turns') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.askHqHon)
   async ask(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.hon.ask(subject(req), body, key) };

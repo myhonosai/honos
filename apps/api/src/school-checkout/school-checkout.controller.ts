@@ -4,8 +4,8 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
-import { SaveCheckoutPageDto } from './school-checkout.dto.js';
-import { SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard } from './school-checkout-human-ui.guard.js';
+import { SaveCheckoutPageDto, SaveCheckoutSettingsDto } from './school-checkout.dto.js';
+import { SchoolCheckoutLinksHumanUiGuard, SchoolCheckoutOrdersReadHumanUiGuard, SchoolCheckoutReadHumanUiGuard, SchoolCheckoutSaveHumanUiGuard, SchoolCheckoutSettingsSaveHumanUiGuard } from './school-checkout-human-ui.guard.js';
 import { SchoolCheckoutService } from './school-checkout.service.js';
 
 const MANAGE = 'school_checkout.manage';
@@ -15,7 +15,7 @@ function definedFields(input: object): Record<string, unknown> {
 }
 
 /**
- * B-TUI-2 piece 9a (0269): the school's checkout page settings. Route identifiers are never authority: the guarded
+ * Checkout pages CP1 (0402): the school's named checkout pages, groups and staff order. Route identifiers are never authority: the guarded
  * boundary resolves the route scope from the verified session, and each protected database function re-proves the direct
  * human subject and the live school_checkout.manage permission. Nothing here is public, takes a payment or adds a fee.
  */
@@ -40,6 +40,60 @@ export class SchoolCheckoutController {
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 
+  /** 0598: family checkout orders of this school, newest first (at most 200). */
+  @Get('orders')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolCheckoutOrdersReadHumanUiGuard)
+  async orders(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, '');
+    const data = await this.checkout.orders(context);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
+  /** 0627: orders placed from the pages' share links, newest first (at most 200). */
+  @Get('public-orders')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolCheckoutOrdersReadHumanUiGuard)
+  async publicOrders(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, '');
+    const data = await this.checkout.publicOrders(context);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
+  /** 0620: every page's share link (missing ones are issued). No body and no Idempotency-Key: running it again changes nothing. */
+  @Post('links')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolCheckoutLinksHumanUiGuard)
+  async links(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() body: unknown,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    if (body !== undefined && body !== null && (typeof body !== 'object' || Object.keys(body).length > 0)) throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    this.noQuery(request);
+    const context = await this.context(request, organizationId, schoolId, '');
+    const data = await this.checkout.links(context);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
   @Post()
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'private, no-store')
@@ -56,6 +110,25 @@ export class SchoolCheckoutController {
     if (!key || key.length > 200) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED', detail: 'A unique Idempotency-Key header is required.' });
     const context = await this.context(request, organizationId, schoolId, key);
     const result = await this.checkout.save(context, definedFields(input));
+    return { data: result.receipt, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
+  }
+
+  @Post('settings')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolCheckoutSettingsSaveHumanUiGuard)
+  async saveSettings(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() input: SaveCheckoutSettingsDto,
+    @Req() request: HonRequest,
+  ) {
+    this.noQuery(request);
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 200) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED', detail: 'A unique Idempotency-Key header is required.' });
+    const context = await this.context(request, organizationId, schoolId, key);
+    const result = await this.checkout.saveSettings(context, definedFields(input));
     return { data: result.receipt, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
   }
 

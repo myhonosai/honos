@@ -53,7 +53,7 @@ export type AvatarsState =
 export type VideosState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
   | Readonly<{ state: 'READY'; items: readonly CreativeAvatarVideo[] }>;
-/** A3 (0305): the signed-in person's own consented photos; a live school owner also sees every staff consent (never the image). */
+/** A3 (0664): the signed-in person's own consented photos; a live school owner also sees every staff consent (never the image). */
 export type PhotosState =
   | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
   | Readonly<{ state: 'READY'; items: readonly CreativePhotoConsent[]; canManageAll: boolean }>;

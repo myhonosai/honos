@@ -22,6 +22,7 @@ export type StudentImportViewProps = Readonly<{
   onCancelUpload?: (() => void) | undefined; onStage?: (() => void) | undefined;
   onChoice?: ((index: number, choice: Choice) => void) | undefined; onAll?: ((which: 'VALID' | 'SKIP') => void) | undefined;
   onSave?: (() => void) | undefined; onFinalize?: (() => void) | undefined; onTryAgain?: (() => void) | undefined;
+  consent?: boolean | undefined; onConsent?: ((consent: boolean) => void) | undefined;
 }>;
 
 const day = (language: string, value: string) => new Date(`${value}T00:00:00Z`).toLocaleDateString(language, { dateStyle: 'medium', timeZone: 'UTC' });
@@ -70,6 +71,7 @@ function Upload({ p, t }: { p: StudentImportViewProps; t: T }) {
   return <article className={styles.card} aria-labelledby="student-import-upload-title" data-testid="student-import-upload">
     <h2 id="student-import-upload-title">{t('uploadTitle')}</h2>
     <p className={styles.meta}>{t('uploadHelp')}</p>
+    <p className={styles.meta}><a href="/staff/migration/photos" data-testid="student-import-from-photos">{t('fromPhotos')}</a></p>
     {u.phase !== 'MAPPING' ? <label className={styles.field}>{t('chooseFile')}
       <input type="file" accept=".csv,text/csv" disabled={p.locked} data-testid="student-import-file" onChange={(e) => { p.onFile?.(e.currentTarget.files?.[0] ?? null); e.currentTarget.value = ''; }}/></label> : null}
     {u.phase === 'FILE_ERROR' ? <p className={`${styles.notice} ${styles.warn}`} role="status">{t(u.problem === 'TOO_LARGE' ? 'fileTooLarge' : 'fileUnreadable')}</p> : null}
@@ -145,6 +147,8 @@ function Review({ p, t }: { p: StudentImportViewProps; t: T }) {
           <h3>{t('finalizeTitle')}</h3>
           <p>{t('finalizeHelp', { n: String(b.importCount) })}</p>
           {!canFinalize ? <p className={styles.meta}>{unsaved.length || b.undecidedCount ? t('finalizeNeedsDecisions') : t('finalizeNothing')}</p> : null}
+          <label className={styles.meta}><input type="checkbox" name="record-consent" checked={p.consent ?? true} disabled={p.locked}
+            onChange={(e) => p.onConsent?.(e.target.checked)}/> {t('consentLabel')}</label>
           <div className={styles.row}><button type="button" className={styles.primary} disabled={p.locked || !canFinalize} onClick={p.onFinalize}>{t('finalizeConfirm', { n: String(b.importCount) })}</button></div>
         </div> : null}
       </>}

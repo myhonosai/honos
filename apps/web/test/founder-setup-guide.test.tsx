@@ -168,3 +168,10 @@ it('P3: the dedicated workflow includes the route manifest in its existing PR tr
   const workflow = readFileSync(new URL('../../../.github/workflows/founder-setup-validation.yml', import.meta.url), 'utf8');
   expect(workflow).toContain("      - 'apps/web/public/manus-routes.json'");
 });
+it('staff and CRM steps open the real invitation, family access and both import screens', () => {
+  const step = (n: number) => { nodes(render()).filter(e => e.type === 'button' && e.props['aria-current'] !== undefined || e.type === 'button').find(e => text(e).endsWith(english[`step${n}Title` as keyof typeof english]))!.props.onClick(); return nodes(render()).filter(e => e.type === 'a').map(e => e.props.href); };
+  expect(step(2)).toEqual(expect.arrayContaining(['/staff/team/invitations', '/staff/family-access', '/staff/roles']));
+  expect(text(render())).not.toContain('not implemented');
+  expect(step(4)).toEqual(expect.arrayContaining(['/staff/migration/leads', '/staff/migration/students']));
+  for (const catalog of Object.values(founderCatalogs)) for (const key of ['openInvites', 'openFamilyAccess', 'openStudentImport'] as const) expect((catalog as Record<string, string>)[key]).toBeTruthy();
+});

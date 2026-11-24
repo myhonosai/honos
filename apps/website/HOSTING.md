@@ -46,8 +46,32 @@ Add to `render.yaml` under `services:` only with that OK, then turn Auto Sync ba
         value: public, max-age=31536000, immutable
       - path: /assets/*
         name: Cache-Control
-        value: public, max-age=86400
+        value: public, max-age=31536000, immutable
+      - path: /styles.css
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /site.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /story.css
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /boot.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /loader.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /story.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
 ```
+
+**Why these files can be cached for a year:** the build adds `?v=<content hash>` to every page's links to `styles.css`, `story.css`, `boot.js`, `loader.js`, `story.js`, `site.js` and the fonts, so a changed file gets a new address on the next deploy. Photos and the door film in `/assets/` are never edited in place: a new or changed photo gets a new file name (for example `story-class-v2-1344.webp`). The pages themselves (`/`, `/ko/`, `/es/`) keep the default short caching so a deploy shows up straight away.
+
+### Applying the caching headers to the live site
+
+The live `hon-website` service was created in the Render dashboard, not from `render.yaml`, so these header rules are set in its **Settings → Headers**. Changing them is a production change: it needs David's OK and is done together with the next redeploy. Until then the site still works; browsers just re-check these files more often.
 
 Checked locally: all three language pages render with this Content-Security-Policy and show no CSP errors (2026-11-12).
 
@@ -56,3 +80,5 @@ Checked locally: all three language pages render with this Content-Security-Poli
 - Add the custom domain in Render and the DNS records it shows. Render issues the TLS certificate.
 - Open `/`, `/ko/` and `/es/`, and click "Start a new school" to confirm it reaches the app's `/account/start`.
 - Before setting `HON_WEBSITE_INDEXABLE=1`: native-speaker read of the Korean and Spanish copy, and privacy and terms pages.
+
+**Scroll story (2026-11-19):** the home page needs no CSP change. Every script is a file (`boot.js` runs in `<head>` before first paint), and the door film plays from `/assets/` (no `blob:` URL). The film is scrubbed by scroll, so the host must answer HTTP Range requests for `.mp4` files (Render's CDN does; `python3 -m http.server` does not, so `pnpm preview` shows the painted doors instead of the film).

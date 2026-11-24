@@ -31,7 +31,8 @@ export const CREATIVE_AVATAR_VIDEO_COMMAND = 'saas-creative-avatar-video-create'
  */
 const DEFINITIVE_CONFLICTS = new Set(['IDEMPOTENCY_KEY_REUSED']);
 /** School rules the server checks before it reserves credits or calls a provider. Any other 422 stays unknown. */
-const PRE_ACCEPTANCE_REFUSALS = new Set(['CREATIVE_TOO_MANY_IN_PROGRESS', 'SAAS_CREATIVE_AI_PAUSED_BY_HQ', 'SAAS_CREATIVE_PROGRAM_INACTIVE',
+const PRE_ACCEPTANCE_REFUSALS = new Set(['CREATIVE_TOO_MANY_IN_PROGRESS', 'CREATIVE_DAILY_LIMIT_REACHED', 'CREATIVE_PROVIDER_DAILY_LIMIT',
+  'CREATIVE_PROVIDER_LIMIT_NOT_SET', 'SAAS_CREATIVE_AI_PAUSED_BY_HQ', 'SAAS_CREATIVE_PROGRAM_INACTIVE',
   'SAAS_CREATIVE_PAID_ACCESS_REQUIRED', 'SAAS_CREATIVE_RATES_NOT_PUBLISHED', 'SAAS_CREATIVE_WINDOW_UNAVAILABLE', 'SAAS_CREATIVE_WINDOW_NOT_PAID',
   'SAAS_CREATIVE_ENTITLEMENT_NOT_IN_EFFECT', 'SAAS_CREATIVE_AI_ACCESS_LAPSED', 'SAAS_CREATIVE_DEBIT_EXCEEDS_AVAILABLE']);
 const isRuleRefusal = (code: string | null) => code !== null && PRE_ACCEPTANCE_REFUSALS.has(code);
@@ -192,7 +193,7 @@ export async function createCreativeAvatarVideo(schoolId: string, input: Creativ
   } catch { throw new CreativeGenerationError('UNKNOWN'); }
 }
 
-// ---------- A3 photo avatars (0305): an adult staff member's own photo, signed consent, delete at any time ----------
+// ---------- A3 photo avatars (0664): an adult staff member's own photo, signed consent, delete at any time ----------
 const read = (path: string, signal: AbortSignal) => fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
   referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
 const command = (path: string, name: string, payload: unknown, signal: AbortSignal, key?: string) => fetch(path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin',

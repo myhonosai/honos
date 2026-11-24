@@ -25,7 +25,7 @@ export type CreativeStudioApi = {
   /** A2 (0277) talking avatar videos: optional for the same reason. */
   videos?(scope: Scope, signal: AbortSignal): Promise<CreativeAvatarVideoRecords>;
   createVideo?(scope: Scope, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt>;
-  /** A3 (0305) photo avatars: optional for the same reason. */
+  /** A3 (0664) photo avatars: optional for the same reason. */
   photos?(scope: Scope, signal: AbortSignal): Promise<CreativePhotoRecords>;
   photoImage?(scope: Scope, consentId: string, signal: AbortSignal): Promise<CreativePhotoImage>;
   uploadPhoto?(scope: Scope, input: CreativePhotoUploadInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativePhotoReceipt>;

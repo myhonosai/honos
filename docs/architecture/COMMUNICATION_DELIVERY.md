@@ -117,8 +117,9 @@ receipt timeline. No address, no provider IDs, no cost.
   HON HQ owner (`POST /v1/hq/saas/schools/:schoolId/text-sender`, same human-command guard as other HQ
   commands). Recording a number buys nothing. A text from a school without an ACTIVE sender waits as
   `SENDER_NOT_READY`; the claim returns the sender's service SID for the send.
-- v1 uses one HON Twilio account (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`); per-school subaccounts are a
-  later step because callback signatures are per account. READY also needs an https `HON_PUBLIC_API_ORIGIN`
+- v1 uses one HON Twilio account (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`). Per-school subaccounts (owner decision
+  2026-11-14) are built in [SCHOOL_OWN_SENDERS.md](SCHOOL_OWN_SENDERS.md): 0351 records them, verifies their webhooks with
+  each subaccount's sealed token and sends a subaccount's Messaging Service on that subaccount. READY also needs an https `HON_PUBLIC_API_ORIGIN`
   (status callback URL) and `HON_SMS_SEND_APPROVED=true`.
 - The Messaging Service must have the MMS converter and Smart Encoding on. HON never changes a Twilio service, so
   the HQ owner must send `mmsConverterConfirmed: true` to make a sender ACTIVE (API 400
@@ -126,6 +127,14 @@ receipt timeline. No address, no provider IDs, no cost.
   records predicted sent-as (3+ pieces → MMS) and Twilio's reported piece count, and refuses over 1,600 characters.
 - `POST /v1/communications/webhooks/twilio/status` and `/twilio/inbound`: form posts verified with
   X-Twilio-Signature over `HON_PUBLIC_API_ORIGIN` + fixed path + sorted parameters, and the AccountSid must match.
+  `HON_PUBLIC_API_ORIGIN` is the public https base Twilio calls. hon-api is a private Render service, so providers
+  reach it only through hon-web's rewrite (`/api/v1/:path*` to the API's `/v1/:path*`); set it to
+  `https://app.<domain>/api`. Callback URLs (status, HQ status, voice-result) and signature checks then use that base.
+  Only an exact canonical https base is accepted: no query, fragment, credentials, port, `..` or encoded characters.
+  The rewrite was checked locally (`next start`) to pass webhook bodies byte-for-byte (900 KB random, chunked,
+  content-encoding kept) with the Stripe, SendGrid, Zernio and Twilio signature headers, so the raw-body checks
+  for Stripe, SendGrid and Zernio need no change. `HON_API_BASE_URL` is read when hon-web is built (Next stores
+  rewrites in the build), so it must be set at build time on Render.
   Inbound is routed only by the receiving ACTIVE number to one school; only exact STOP/START/HELP words are
   stored (`hon.inbound_text_keywords`, without the sender's number). START re-opens only an opt-out the person
   made themselves (source RECIPIENT). Replies come from Twilio Advanced Opt-Out; HON answers empty TwiML.
@@ -156,6 +165,21 @@ receipt timeline. No address, no provider IDs, no cost.
   number match and record against the school's people). Blocking further texts to that number relies on Twilio's own
   opt-out handling on the Messaging Service (Advanced Opt-Out or the default STOP list), which must stay on; this is on
   the pre-launch review list.
+
+## 5d. HQ sending, receipts and inbound texts (0281/0282 follow-ups)
+
+- SendGrid and Twilio declare `hqSender`. HQ email goes from the HQ sender address and name (`hon_purpose: HQ`); with no
+  valid HQ sender nothing is sent. HQ BILLING/ACCOUNT email sets `bypass_unsubscribe_management` (required notices).
+  HQ texts go from the HQ Messaging Service with status callbacks to `/twilio/hq-status` (signed over that path).
+- HQ receipts (SendGrid `hon_purpose: HQ`, `/twilio/hq-status`) go to `hon.record_hq_message_provider_event`; school
+  receipts are unchanged. Unrecordable HQ receipts answer 503 so the provider redelivers, so the communication worker
+  database must be configured wherever the SendGrid event webhook is on.
+- `/twilio/inbound` first offers a text that carries a `MessagingServiceSid` to `hon.record_hq_inbound_text`. `NOT_HQ`
+  (not the active HQ service) falls through to the school keyword path unchanged. For HQ texts, HON answers TwiML only
+  for a phone-confirmation code result (CONFIRMED, CODE_WRONG) and never for a replayed event. STOP/START/HELP replies
+  come from the HQ Messaging Service's own opt-out handling, which must stay on, so a person never gets two replies.
+  Operators should set that service's Advanced Opt-Out replies to the HQ texts in `HQ_INBOUND_REPLIES` (contracts).
+  Point the HQ Messaging Service's incoming-message webhook at `/v1/communications/webhooks/twilio/inbound`.
 
 ## 5c. Zernio lead intake as built (0250)
 

@@ -1,0 +1,29 @@
+{%- comment -%}
+  App block for product pages: the school's size guide as a collapsible section. Text is escaped; line breaks are kept.
+{%- endcomment -%}
+{%- liquid
+  assign s = app.metafields.hon_storefront.settings.value
+  assign text = s.sizeGuideText | append: '' | strip
+  assign title = s.sizeGuideTitle | append: '' | strip
+  if title == blank
+    assign title = 'blocks.size_guide.default_title' | t
+  endif
+-%}
+{%- if text != blank -%}
+  {{ 'hon-storefront.css' | asset_url | stylesheet_tag }}
+  <details class="hon-size-guide" {{ block.shopify_attributes }}>
+    <summary>{{ title | escape }}</summary>
+    <div class="hon-size-guide__body">{{ text | escape | newline_to_br }}</div>
+  </details>
+{%- elsif request.design_mode -%}
+  <p class="hon-placeholder" {{ block.shopify_attributes }}>{{ 'blocks.size_guide.empty' | t }}</p>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "t:blocks.size_guide.name",
+  "target": "section",
+  "enabled_on": { "templates": ["product"] },
+  "settings": []
+}
+{% endschema %}
