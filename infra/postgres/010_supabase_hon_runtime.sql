@@ -5346,6 +5346,9 @@ BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
 -- 0667 Conversation AI test chat: the CONVERSATION_TEST kind on the shared AI text proposals; six runtime entry points.
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds WHERE kind='CONVERSATION_TEST') THEN RAISE EXCEPTION 'Apply migration 0667 first'; END IF;
