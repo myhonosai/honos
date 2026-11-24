@@ -1,6 +1,6 @@
 /** HQ texting and email wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
-  title: 'Texts and email', messageTitle: 'HQ message', back: 'All HQ messages', refresh: 'Refresh',
+  title: 'Texts and email', messageTitle: 'HQ message', back: 'All HQ messages', schoolNumbers: 'School texting numbers', refresh: 'Refresh',
   intro: 'Texts and emails from HON HQ to school owners. Each message is checked against your HQ permissions, goes only to the school\'s current owners, and is held back for anyone who opted out. Addresses are never shown here.',
   loading: 'Reading HQ messages…', loadingMessage: 'Reading this message…',
   denied: 'Your HQ access does not include texting or email. Nothing is shown.',
@@ -51,7 +51,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
-  title: '문자 및 이메일', messageTitle: 'HQ 메시지', back: '모든 HQ 메시지', refresh: '새로고침',
+  title: '문자 및 이메일', messageTitle: 'HQ 메시지', back: '모든 HQ 메시지', schoolNumbers: '학교 문자 번호', refresh: '새로고침',
   intro: 'HON HQ가 학교 원장님께 보내는 문자와 이메일입니다. 각 메시지는 HQ 권한을 확인한 뒤 학교의 현재 원장님께만 보내지며, 수신 거부한 분께는 보내지 않습니다. 주소는 여기에 표시되지 않습니다.',
   loading: 'HQ 메시지를 불러오는 중…', loadingMessage: '이 메시지를 불러오는 중…',
   denied: 'HQ 권한에 문자/이메일이 포함되어 있지 않습니다. 아무것도 표시하지 않습니다.',
@@ -101,7 +101,7 @@ const ko: Record<Key, string> = {
   goneCommand: '학교, 조직, 발신자 또는 메시지를 찾을 수 없습니다. 아무것도 저장하지 않았습니다.',
 };
 const es: Record<Key, string> = {
-  title: 'Mensajes y correo', messageTitle: 'Mensaje de HQ', back: 'Todos los mensajes de HQ', refresh: 'Actualizar',
+  title: 'Mensajes y correo', messageTitle: 'Mensaje de HQ', back: 'Todos los mensajes de HQ', schoolNumbers: 'Números de textos de las escuelas', refresh: 'Actualizar',
   intro: 'Mensajes de texto y correos de HON HQ para los dueños de escuelas. Cada mensaje se comprueba con sus permisos de HQ, llega solo a los dueños actuales de la escuela y no se envía a quien se dio de baja. Aquí nunca se muestran direcciones.',
   loading: 'Leyendo mensajes de HQ…', loadingMessage: 'Leyendo este mensaje…',
   denied: 'Su acceso de HQ no incluye mensajes ni correo. No se muestra nada.',

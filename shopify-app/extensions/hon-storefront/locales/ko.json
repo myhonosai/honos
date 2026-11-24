@@ -1,0 +1,6 @@
+{
+  "blocks": {
+    "size_guide": { "default_title": "사이즈 가이드", "empty": "HON 사이즈 가이드: HON(Shopify, 스토어프론트)에서 작성하고 게시를 누르세요." },
+    "pickup_note": { "empty": "HON 픽업 안내: HON(Shopify, 스토어프론트)에서 작성하고 게시를 누르세요." }
+  }
+}

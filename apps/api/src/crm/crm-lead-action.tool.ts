@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import type { CommandContext, CreateLeadInput, LeadSummary } from '@hon/contracts';
@@ -8,7 +8,17 @@ import { LeadService } from './lead.service.js';
 
 export type CrmLeadActionResult =
   | { proposal: ActionProposalSummary; execution: 'AWAITING_APPROVAL' }
-  | { proposal: ActionProposalSummary; execution: 'SUCCEEDED'; lead: LeadSummary };
+  | { proposal: ActionProposalSummary; execution: 'SUCCEEDED'; lead: LeadSummary }
+  /**
+   * The lead command committed, but HON could not record the Action Engine success receipt. The proposal stays
+   * EXECUTING (never FAILED) so reconciliation sees a committed mutation, not a failure (review [21]).
+   */
+  | { proposal: ActionProposalSummary; execution: 'RECEIPT_UNCONFIRMED'; lead: LeadSummary };
+
+/** A domain refusal (4xx) changed nothing; anything else may have committed and is UNKNOWN, never FAILED. */
+function domainOutcome(error: unknown): 'FAILED' | 'UNKNOWN' {
+  return error instanceof HttpException && error.getStatus() < 500 ? 'FAILED' : 'UNKNOWN';
+}
 
 /**
  * Internal only: the AI runtime calls this adapter after it has resolved the
@@ -55,20 +65,27 @@ export class CrmLeadActionTool {
     if (executable.actionCode !== 'crm.lead.create') {
       throw new BadRequestException({ code: 'POLICY_BLOCKED', detail: 'The CRM lead tool received an invalid execution proposal.' });
     }
+    let result: Awaited<ReturnType<LeadService['create']>>;
     try {
-      const result = await this.leads.create({ ...context, actionRequestId: executable.id, idempotencyKey: `action:${executable.id}` }, normalizedInput);
-      await this.actions.recordExecutionOutcome(context, executable.id, 'SUCCEEDED', {
-        leadId: result.lead.id,
-        leadVersion: result.lead.version,
-        leadCommandReplayed: result.replayed,
-      });
-      return { proposal, execution: 'SUCCEEDED', lead: result.lead };
+      result = await this.leads.create({ ...context, actionRequestId: executable.id, idempotencyKey: `action:${executable.id}` }, normalizedInput);
     } catch (error) {
-      await this.actions.recordExecutionOutcome(context, executable.id, 'FAILED', {
-        code: 'DOMAIN_COMMAND_FAILED',
+      const outcome = domainOutcome(error);
+      // Recording the outcome is best effort: its own failure must not hide the domain error.
+      await this.actions.recordExecutionOutcome(context, executable.id, outcome, {
+        code: outcome === 'FAILED' ? 'DOMAIN_COMMAND_FAILED' : 'DOMAIN_COMMAND_OUTCOME_UNKNOWN',
         actionCode: 'crm.lead.create',
-      });
+      }).catch(() => undefined);
       throw error;
     }
+    // The lead is committed from here on. A failed receipt write is retried once and otherwise reported as
+    // RECEIPT_UNCONFIRMED; it is never turned into a FAILED action.
+    const receipt = { leadId: result.lead.id, leadVersion: result.lead.version, leadCommandReplayed: result.replayed };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await this.actions.recordExecutionOutcome(context, executable.id, 'SUCCEEDED', receipt);
+        return { proposal, execution: 'SUCCEEDED', lead: result.lead };
+      } catch { /* retried once, then reported as unconfirmed */ }
+    }
+    return { proposal, execution: 'RECEIPT_UNCONFIRMED', lead: result.lead };
   }
 }

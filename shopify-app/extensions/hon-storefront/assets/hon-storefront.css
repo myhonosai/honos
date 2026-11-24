@@ -1,0 +1,9 @@
+/* HON storefront blocks. Inherit the theme's fonts and colors; only spacing and a light frame are set here. */
+.hon-size-guide { margin: 1rem 0; border-top: 1px solid rgba(var(--color-foreground, 18, 18, 18), 0.12); border-bottom: 1px solid rgba(var(--color-foreground, 18, 18, 18), 0.12); }
+.hon-size-guide > summary { cursor: pointer; padding: 0.9rem 0; font-weight: 600; list-style-position: inside; }
+.hon-size-guide__body { padding: 0 0 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.hon-pickup-note { margin: 1rem 0; padding: 0.9rem 1rem; border-radius: 8px; line-height: 1.5; overflow-wrap: anywhere;
+  border: 1px solid rgba(var(--hon-school-accent, var(--color-foreground, 18, 18, 18)), 0.35);
+  background: rgba(var(--hon-school-accent, var(--color-foreground, 18, 18, 18)), 0.06); }
+.hon-pickup-note--banner { max-width: var(--page-width, 120rem); margin: 1rem auto; }
+.hon-placeholder { margin: 1rem 0; padding: 0.9rem 1rem; border: 1px dashed rgba(var(--color-foreground, 18, 18, 18), 0.35); border-radius: 8px; opacity: 0.8; }

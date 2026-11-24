@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "8096f5686fa6dbd5ee13a361345b1b3190163075d74457a5fba8ebaaf1922544",
+  "chainSha256": "8d198680ee17198f391a5637eeee2fbfbcca80f6fb69f57aed1e1c371589a991",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -439,8 +439,24 @@
       "sha256": "28650fbd310da68a4a9bbbe8a670c74cb07269010b6f512b2c2b8f2f1da379f9"
     },
     {
+      "file": "0330_family_messages.sql",
+      "sha256": "c7b6d13412905cfb0f23128ea509829f5a2deddfa5eab8385f0a0d9124ea2315"
+    },
+    {
       "file": "0331_school_reports.sql",
       "sha256": "a5480e9eef175e40a64f58343ee9f9a550f2470b4bf98c97452e0405df60c130"
+    },
+    {
+      "file": "0332_school_reports_locations.sql",
+      "sha256": "e32748c44c865ee67062ad535fd29d3c39532f2a5f94afeac9f5e2f68894dae2"
+    },
+    {
+      "file": "0333_school_class_attendance_import.sql",
+      "sha256": "f2be82bb3d64d2079ba5df9efa8c911acf9173909e857a7a89d440b2911d8ced"
+    },
+    {
+      "file": "0334_school_membership_balance_import.sql",
+      "sha256": "c3cd842298cea1d168b08e7b21c8c0cded0f48df081c32cc8692087d248cae9c"
     },
     {
       "file": "0335_school_support_requests.sql",
@@ -449,6 +465,10 @@
     {
       "file": "0336_ai_reduced_mode_fallback.sql",
       "sha256": "3e83f6db003e7888dfba22a00d5a0593b4604265314abce73cd80fff612959df"
+    },
+    {
+      "file": "0337_school_pay_autopay_charges.sql",
+      "sha256": "f3c9646fb394c6d8137fb33e941225c83151384fe58dbe7b147c19c90a0fa0bf"
     },
     {
       "file": "0338_hq_executive_performance.sql",
@@ -479,12 +499,424 @@
       "sha256": "51d614822499ff9c8c894f2ff73853c19dfad33c677b6a741329556cb460be67"
     },
     {
-      "file": "0355_creative_media_storage.sql",
-      "sha256": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
-    },
-    {
       "file": "0358_school_number_order_settle.sql",
       "sha256": "04aec55d14c81c53b4012377c9ad610221cfacf53ed3fb8a23a12cb9d98afdc0"
+    },
+    {
+      "file": "0361_school_websites.sql",
+      "sha256": "262d9768dc26fb197cac0ba0da3a77e31442f4dfb006571a74a6f3b016eba221"
+    },
+    {
+      "file": "0364_school_conversations.sql",
+      "sha256": "2a1cd6c62aec0d6781a1aad202b347abc2ac65bf67441ba4be880f5c0b7e4613"
+    },
+    {
+      "file": "0388_school_paper_import.sql",
+      "sha256": "4f556472acba21133dd5f8f644e461608969343d65cfcd21348590586c6c3ab5"
+    },
+    {
+      "file": "0390_school_person_photos.sql",
+      "sha256": "d80b9e611e0a0035809d4174afe0cc35265d2ad67395b8c3127a89819ff683a6"
+    },
+    {
+      "file": "0392_school_location_biometric_notice.sql",
+      "sha256": "1dd2614732160985e3592e46699670682cfbcfc0bcf9a7e3973381f8acfec411"
+    },
+    {
+      "file": "0394_attendance_cards_scan_check_in.sql",
+      "sha256": "16afebd48ff7fe3754de97bdcfb9aeb36ef3f766de9d30c136e950c58af9ed73"
+    },
+    {
+      "file": "0402_school_checkouts.sql",
+      "sha256": "ea76852ef6f2b3aaab427f070106fa09e1d7f874019155ea3f141b155349846c"
+    },
+    {
+      "file": "0404_school_staff_pick_list.sql",
+      "sha256": "7c4116df35139b07b406ee304b162acc45871ac5a8ce225985865979a511181e"
+    },
+    {
+      "file": "0405_school_shopify_connections.sql",
+      "sha256": "aee51924fe2b2b8e9ce57bedd25962d6242b462cf3facbe5183cadf60262871d"
+    },
+    {
+      "file": "0406_staff_qualification_and_role_lists.sql",
+      "sha256": "d131e376033198ca638c2b9aabc2c3ea9b7a93295d116dcd5aaedbc19ee8112f"
+    },
+    {
+      "file": "0407_retention_review_member_list.sql",
+      "sha256": "88ee6b0f21d71289f02036e36d50644a960ff7eeb620d542afda2303c76d1606"
+    },
+    {
+      "file": "0412_staff_assignable_permissions_list.sql",
+      "sha256": "5691c6871ad27b49385868c502922578926637dbc57b55924422bb07fde69db3"
+    },
+    {
+      "file": "0413_attendance_card_photo_us_policy.sql",
+      "sha256": "ec9b09a43167fb95cba503c2d4ff670099cf69c25410e41680f0f1d79489d887"
+    },
+    {
+      "file": "0414_walk_in_kiosk.sql",
+      "sha256": "e393385043538425f8a9c09b50d9aa5f3bb73f71731d017b692175e38f2bda29"
+    },
+    {
+      "file": "0415_custom_tools.sql",
+      "sha256": "57ac8f806710e4c7cd489f5e228400051ffad6c3f76dc7891cb8f039ef3bab9d"
+    },
+    {
+      "file": "0416_automation_workflows.sql",
+      "sha256": "f5461d07dec493477c2c5af02e03f1f0107cbc722b1e505b13631953cc39de8c"
+    },
+    {
+      "file": "0417_lead_pipeline_board.sql",
+      "sha256": "071c1a65518bbf64d034885f6cebca9d9c579d4352b25af0d90dcb9e7176d3cc"
+    },
+    {
+      "file": "0420_conversation_ai_training.sql",
+      "sha256": "6b2108d753b262700a83f90ecdd425969decea84d77b3f1c6ff0d4628775dbf7"
+    },
+    {
+      "file": "0423_automation_engine.sql",
+      "sha256": "18fbac749087e7991fa73f98999d46f1a70c65ce805d7e8e0ceba1afc835d9bd"
+    },
+    {
+      "file": "0424_contact_message_history.sql",
+      "sha256": "dfae0a22b7b64cc79dd396ada7fc6a3f1b763bb84a13ec4632e29375f01d5a39"
+    },
+    {
+      "file": "0435_school_social_inbox.sql",
+      "sha256": "c7c3e3c8304de287e2c5899b1f1fa888e132f32b5a16548974b8fe7b05ef6271"
+    },
+    {
+      "file": "0443_face_checkin_program.sql",
+      "sha256": "e2b4d638fd1e889522364fb10e0960ac6bd39e1b1d2043fe7cd189419019829a"
+    },
+    {
+      "file": "0445_school_social_ads.sql",
+      "sha256": "ae19bd0b2f0f21bec60dac532ff9e2229171518ec2704578427ef022aeea98be"
+    },
+    {
+      "file": "0449_school_shopify_background_sync.sql",
+      "sha256": "966b0eb8f5c4a4e42907eda77858ca2ddea220383f635582f630d1b32215e559"
+    },
+    {
+      "file": "0451_hon_team_chat_answers.sql",
+      "sha256": "8a639924e09baffd6e8252fb1a2fa0c428aaeff09ac7dc22bd8ce9555a5fe98e"
+    },
+    {
+      "file": "0453_school_google_ads.sql",
+      "sha256": "fde9c8a9f893c7b0ad13b29f0942fea66291a0316915a9659211b449d0f68363"
+    },
+    {
+      "file": "0455_school_google_business_profile.sql",
+      "sha256": "ee8c0fb3049755948af71fdf689b4eb70e0925b1f1d8ce20557814fee29a394a"
+    },
+    {
+      "file": "0459_school_demo_data.sql",
+      "sha256": "6708c6114653c3363c1bed171cce360ab591875cc8e1ae3edb9c572c096e1bee"
+    },
+    {
+      "file": "0460_agent_voice_preferences.sql",
+      "sha256": "f79897d2f18da3a2cd7fed4a135e377ede91dffb407db5baa35c7632817cf0d6"
+    },
+    {
+      "file": "0463_membership_agreement.sql",
+      "sha256": "966b67ddb1ebec3a7884b2a824f2af070430e513e66af5683a01f19522484edf"
+    },
+    {
+      "file": "0466_parent_school_bookings.sql",
+      "sha256": "e51fcf1be375d96fbc954bc6533d0f11ad86069972684b51f04cde38fe5a85de"
+    },
+    {
+      "file": "0467_staff_shift_schedule.sql",
+      "sha256": "21b4813e18092224182c3064d15e6fdd0506f9f4165b6e988091ebb60b9841fb"
+    },
+    {
+      "file": "0470_shopify_order_retention.sql",
+      "sha256": "3dfa0e7769ba525afa7ba62007ff569554824edde0eaf282563498e2381e9319"
+    },
+    {
+      "file": "0471_parent_family_picker.sql",
+      "sha256": "27cc328b099da7a596fd17c2f90f5ff7fc20dabdaf11d14f23a3b5896b207caa"
+    },
+    {
+      "file": "0473_parent_school_reads_follow_family_choice.sql",
+      "sha256": "008973eedb67260a41b8598b9c0b37e7dc1013d49d51a967fbaaee8b40541125"
+    },
+    {
+      "file": "0474_eian_family_ai.sql",
+      "sha256": "fb0cd95a3a90bdf52fbccfff0a1f025baecec71047a6361f31fc44619c24498f"
+    },
+    {
+      "file": "0478_staff_time_clock.sql",
+      "sha256": "287658b3c361652b1e24de7682381ba0e295371513e06e2a12547f3b9f0323ea"
+    },
+    {
+      "file": "0496_shopify_product_changes.sql",
+      "sha256": "8419cff247f47336a963385cfd5ab81d44cd01ff608900fb53fb49a451327d11"
+    },
+    {
+      "file": "0499_membership_agreement_signing_link.sql",
+      "sha256": "5fbd399f57b9cd71a761f94dee19401f46f75c2c68567f2670e3872ac7a8cc30"
+    },
+    {
+      "file": "0519_hq_hon_ongoing_budget.sql",
+      "sha256": "7203674b5377e3fe58c9dcd7229ec175f03ab716293bde333ca20ad4dad606ce"
+    },
+    {
+      "file": "0520_school_reports_dashboard.sql",
+      "sha256": "768911f840237cc845136c189b167fe41eb0c0f56a48c30398c4b8f825f25048"
+    },
+    {
+      "file": "0521_school_contact_list.sql",
+      "sha256": "15710fdfee6ad20c80784be688b58c699773742fdfe4be7f9690befd640ad46e"
+    },
+    {
+      "file": "0522_school_contact_card.sql",
+      "sha256": "dc1a744a90a927fb3303e25d79fce87d106ff5b92caefc5db69595b9e1f56516"
+    },
+    {
+      "file": "0523_school_contact_merge_archive.sql",
+      "sha256": "39228fc3d1af999e4bff29da71460a5a6c82ec0ccd7d9bb3339c62ba2ea8868c"
+    },
+    {
+      "file": "0529_school_pay_once.sql",
+      "sha256": "476c62434beaeb0be7f781878ee817e5b0e0641f22f94ed400457bf90da9ea4a"
+    },
+    {
+      "file": "0530_parent_invoice_payment.sql",
+      "sha256": "df276ef58db20b72c15d11911704c8bd3b6773b85102c19aa78e88ef5638ce43"
+    },
+    {
+      "file": "0533_walk_in_kiosk_card_payment.sql",
+      "sha256": "bbdffff9b9eee29f5ff9f8452a4ff5694c758b2abc234967b8bb2ebda8af35ac"
+    },
+    {
+      "file": "0537_walk_in_kiosk_trial_class.sql",
+      "sha256": "24b725cddd83d80ab9597b5531e2178eb355aae5911c6267d13e2dc999fe057f"
+    },
+    {
+      "file": "0538_walk_in_kiosk_trial_seats_and_demo.sql",
+      "sha256": "9e3e4bd1693a9edf87577d30f46d03769880f74c63835a14b015010ba04e292e"
+    },
+    {
+      "file": "0550_ai_text_proposals.sql",
+      "sha256": "166369680863c3e7d300d3ce5db6a48cbe863b0e5761cbabf18cb8bec57857b1"
+    },
+    {
+      "file": "0553_school_a2p_registrations.sql",
+      "sha256": "fd25dc1f0f73734228a886d6b0e47dd8d804aa0083b8947ad931041a7e5bc691"
+    },
+    {
+      "file": "0556_school_calls.sql",
+      "sha256": "aa8a430ed111153ae4613811fd7184a2e1b5ba27ed6f3bbbd719828226b6c536"
+    },
+    {
+      "file": "0558_simple_invoices.sql",
+      "sha256": "3b42347f51e202714398f01d0bf457723bcafc545a5edd9ec4fbeee6b7d02a82"
+    },
+    {
+      "file": "0567_calendar_cards.sql",
+      "sha256": "812ae679a0a8671aca29a4692db0f7751ad78bcb3169eec0b3bcdc3ac301de76"
+    },
+    {
+      "file": "0574_automation_date_triggers.sql",
+      "sha256": "fb2795778f536ea83c5a6c81191b9baaed41575c22b4c0e5a06a0e163e012be9"
+    },
+    {
+      "file": "0576_school_announcements.sql",
+      "sha256": "7d57e1debc975c6058aeea95428cb8cdfc7979beb467282bf2cde0ab49af4ffa"
+    },
+    {
+      "file": "0581_parent_pro_shop.sql",
+      "sha256": "2d3752083574a64ffb76936058118b7ed1b398ef79b7e78dd790c35506381aa6"
+    },
+    {
+      "file": "0583_calendar_settings.sql",
+      "sha256": "5e2984f34a479a4739e984ee2bcc7532d6de49449da07f869e2c5c70b1d40975"
+    },
+    {
+      "file": "0585_school_message_history.sql",
+      "sha256": "5c85915c11e07fc66563a8b617f9809f4340ed92fa8a2df141143834ee22036b"
+    },
+    {
+      "file": "0586_school_message_templates.sql",
+      "sha256": "d85d8ca8d6153a38a0cd0a04b73628f2cbac4cc7094de7678a50db4c24117e9b"
+    },
+    {
+      "file": "0594_paper_import_ai_reader.sql",
+      "sha256": "7a84df3e44906d28635eaf0889a1c133994e0201b805a7bb343a3ba4b2da99a9"
+    },
+    {
+      "file": "0596_shopify_merch_ai_ideas.sql",
+      "sha256": "15e91391b40b51c53684df45238cc33038f00084add99849eb0737ba173b3452"
+    },
+    {
+      "file": "0597_shopify_finance.sql",
+      "sha256": "d1495ba5027d402cc3ff21c0ba7d38061505511453323a3108e3a300e04cce94"
+    },
+    {
+      "file": "0598_family_checkout_orders.sql",
+      "sha256": "a4debf59bcbf49c684c439e1bc427c6800a105b3f72a501a36d3d38fd9c0fb13"
+    },
+    {
+      "file": "0600_shopify_theme_drafts.sql",
+      "sha256": "1687467219e72d2445ddd299f7b534a30e5854600b824037b5abf1686e80c08f"
+    },
+    {
+      "file": "0601_parent_announcement_push.sql",
+      "sha256": "199420cc54a86f7bcc8dc2d80e419053802d9e2acf3951826faa3910dd2cc23b"
+    },
+    {
+      "file": "0602_parent_attendance_streaks.sql",
+      "sha256": "af5aa6f5ba2bc9ffd345d92124c09514bef0e30ad125819d2f4f683a113c98eb"
+    },
+    {
+      "file": "0603_journey_recommendations.sql",
+      "sha256": "495a7bc113ba416ef5a19ab189ba248f0d06c197dac26a78af956fb4ab520ab6"
+    },
+    {
+      "file": "0604_family_referrals.sql",
+      "sha256": "f7896771a56abc86e413398b0851a99c4479aa0d0203013c5555aa9aaaeb2f0b"
+    },
+    {
+      "file": "0605_parent_app_curriculum_cycles.sql",
+      "sha256": "e9577f6b636a77715d9295978cd20ed969be590c8ed92418ab59f130255629f7"
+    },
+    {
+      "file": "0607_calendar_closed_days_families.sql",
+      "sha256": "6446819d8426932c8e8cc63db3f7b81c95173b18797531657a77b2d161183452"
+    },
+    {
+      "file": "0608_journey_recommendation_responses.sql",
+      "sha256": "5496f49cef59302da88dc267340983e766edd18bf236346dcfe3749820eab41e"
+    },
+    {
+      "file": "0609_shopify_storefront_blocks.sql",
+      "sha256": "d1bb88213a776c8c4013dc23d3784f54c5b5670aa1247373206970e96720848d"
+    },
+    {
+      "file": "0610_parent_app_curriculum_read.sql",
+      "sha256": "8e11ad3c74e636e32e3f5b15027896246b66e982f195c028a1fcc33769d67e74"
+    },
+    {
+      "file": "0611_shopify_fulfilment_source.sql",
+      "sha256": "c9e27729de60777ba65deffed3923a3724f31f27dbd698b9f6acb418b94b03ad"
+    },
+    {
+      "file": "0612_school_point_of_sale.sql",
+      "sha256": "fc275c993746230abda49d8c619b10916b52c8e6a25a7ec2c4511f814c59e1f2"
+    },
+    {
+      "file": "0613_pos_sells_shopify.sql",
+      "sha256": "0e455d550adea8b4e60f1ba108b10a2e0ee8dabdbc0a2142a4c669cc31c30b12"
+    },
+    {
+      "file": "0614_pos_shopify_orders.sql",
+      "sha256": "ba0b9b5bceb7d5926af3dfe88b683eb0ed73dd59c91c26a875a9cfd9aa0ee8e7"
+    },
+    {
+      "file": "0615_shopify_commerce_review.sql",
+      "sha256": "59cbacf8a419bb6d82794ba0978c37ca9d36d0400b42288fe654aad6a88fbbdd"
+    },
+    {
+      "file": "0617_school_creative_designs.sql",
+      "sha256": "f22eec0a89f6f93c6848f6d88b544d77e453247e9700396f736a39a73c5fc139"
+    },
+    {
+      "file": "0620_school_checkout_public_links.sql",
+      "sha256": "c1cc459d28572039c8150eb3ea16881d325bebf64efdca528bd3b6e1434a4634"
+    },
+    {
+      "file": "0621_school_blasts.sql",
+      "sha256": "9ff3526327bdbd63aa232e46efc4d0356ab4e835f1333b1ff2927e60b7ad3738"
+    },
+    {
+      "file": "0622_rank_setup.sql",
+      "sha256": "36a16b58b9e9a3b90584973354e53f1a9d7721afb9915b80e1bd8b8a35b6e08c"
+    },
+    {
+      "file": "0623_school_contact_sort_filters.sql",
+      "sha256": "dff615a142e1a2da7f5eda6fa9ca79d0f18663ccf4cdbc2821e827076ccb8c0b"
+    },
+    {
+      "file": "0624_person_membership_from_plan.sql",
+      "sha256": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1"
+    },
+    {
+      "file": "0627_public_checkout_orders.sql",
+      "sha256": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
+    },
+    {
+      "file": "0628_school_media_library.sql",
+      "sha256": "d09b6edeadf89820b1fd6fe9cc75b3ad583be40cce15a66389892d7ccf14f78a"
+    },
+    {
+      "file": "0629_crm_trial_authority_hold.sql",
+      "sha256": "0b0ec656de20f7a8a0884e47076fed742d109c562bc6c7b1b1564280c62d5043"
+    },
+    {
+      "file": "0630_invoice_insert_status_guard.sql",
+      "sha256": "9177d2361c3a4a96916b8fa567e227655054094c5cd04e96a8c50be62f24aaec"
+    },
+    {
+      "file": "0631_class_booking_lock_identity_plane.sql",
+      "sha256": "400c232d2bb237049f31ecf359179f388d007f6f184545438017a6d644f4bbbe"
+    },
+    {
+      "file": "0632_class_sessions_function_only_reads.sql",
+      "sha256": "0479e70a542750964d31d4d21246dcfa0a7ac0fa1b6f4216cf7c984c22efae7e"
+    },
+    {
+      "file": "0633_attendance_report.sql",
+      "sha256": "1aaee04ced78a32ad5f878834f00f55b2da151f816424bd905a3e1d1d0c9793c"
+    },
+    {
+      "file": "0634_intake_contact_consent.sql",
+      "sha256": "e87600b3df653f4f8fe13d3b71d720f8d296a13132fc632e7120b9588726b681"
+    },
+    {
+      "file": "0635_staff_ai_agent_switches.sql",
+      "sha256": "01835c17065d5e9a7a1d85b3e1d3dd3341b7d055e78e0a7c8a10577400d290fa"
+    },
+    {
+      "file": "0636_rank_chart_ai_draft.sql",
+      "sha256": "e0f524f44788b4650deda15e65e5954c66b23caef534de170b7a277883736627"
+    },
+    {
+      "file": "0637_creative_cost_basis.sql",
+      "sha256": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e"
+    },
+    {
+      "file": "0638_eian_natural_voice.sql",
+      "sha256": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d"
+    },
+    {
+      "file": "0639_alex_delegation_plans.sql",
+      "sha256": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d"
+    },
+    {
+      "file": "0640_jordan_follow_through.sql",
+      "sha256": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d"
+    },
+    {
+      "file": "0641_marcus_marketing_review.sql",
+      "sha256": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47"
+    },
+    {
+      "file": "0642_membership_plan_payment_options.sql",
+      "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
+    },
+    {
+      "file": "0644_booking_invoice_security_hygiene.sql",
+      "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
+    },
+    {
+      "file": "0655_mobile_handoff_single_use.sql",
+      "sha256": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
+    },
+    {
+      "file": "0671_creative_media_storage.sql",
+      "sha256": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
     }
   ]
 }

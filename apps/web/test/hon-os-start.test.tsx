@@ -28,6 +28,7 @@ const me = (s = subject) => ok({ externalSubject: s });
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const terms = { termsVersionId: uuid(9), version: 1, status: 'TEST_ONLY_DRAFT', title: 'HON OS test sign-up terms', documentDigest: 'a'.repeat(64) };
 const registration = { registrationId: uuid(1), organizationId: uuid(2), schoolId: uuid(3), schoolName: 'Synthetic Dojo', timezone: 'America/New_York', registeredAt: '2026-11-12T10:00:00.000Z', lifecycle: 'REGISTERED', accessGranted: false, billingActivated: false, aiCreditsGranted: false };
+const notice = { profile: 'US_IL_BIPA', status: 'AVAILABLE_WITH_CONSENT', laws: ['Illinois Biometric Information Privacy Act (740 ILCS 14)'], addOns: ['WRITTEN_RELEASE'], reviewStatus: 'TEST_ONLY_DRAFT', rulesVersion: 1 };
 const signupOpen = { signupStatus: 'TEST_MODE', terms, eligibility: 'ELIGIBLE', registration: null };
 const signupDone = { signupStatus: 'TEST_MODE', terms, eligibility: 'ALREADY_REGISTERED', registration };
 const offer = { campaignId: uuid(4), name: 'Founding schools trial', durationDays: 14, automaticCharge: false, paymentMethodRequired: false, aiIncluded: true, aiCredits: { credits: 100, dailyCap: 20, perRequestCap: 10, expiryDays: 7 } };
@@ -36,9 +37,18 @@ const trialRow = { enrollmentId: uuid(5), organizationId: uuid(2), schoolId: uui
 function fill() {
   const inputs = nodes(render()).filter(e => e.type === 'input');
   const values = ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'];
-  inputs.filter(e => e.props.type !== 'checkbox').forEach((e, i) => e.props.onChange({ target: { value: values[i] } }));
+  inputs.filter(e => e.props.type !== 'checkbox' && !e.props['data-location-field']).forEach((e, i) => e.props.onChange({ target: { value: values[i] } }));
   inputs.filter(e => e.props.type === 'checkbox').forEach(e => e.props.onChange({ target: { checked: true } }));
-  nodes(render()).filter(e => e.type === 'select').forEach(e => e.props.onChange({ target: { value: 'America/New_York' } }));
+  nodes(render()).filter(e => e.type === 'select' && e.props['data-start-zone']).forEach(e => e.props.onChange({ target: { value: 'America/New_York' } }));
+  // 0392: the school address (a US state is required; the street is optional).
+  if (nodes(render()).some(e => e.props['data-location-field'])) fillAddress('US', 'IL', 'Chicago');
+}
+function fillAddress(country: string, region: string | null, city: string) {
+  const field = (name: string) => nodes(render()).find(e => e.props['data-location-field'] === name);
+  field('country')!.props.onChange({ currentTarget: { value: country } });
+  if (region) field('region')!.props.onChange({ currentTarget: { value: region } });
+  else expect(field('region')).toBeUndefined();
+  field('city')!.props.onChange({ currentTarget: { value: city } });
 }
 beforeEach(() => { hooks.language = 'en'; hooks.locale = 'en-US'; hooks.values = []; hooks.cursor = 0; hooks.effects = []; vi.stubGlobal('window', new EventTarget()); vi.stubGlobal('document', new EventTarget()); });
 afterEach(() => { for (const v of hooks.values) v?.cleanup?.(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -74,10 +84,15 @@ it('sign-up sends only the owner\'s words, the server terms version and the conf
   const [path, init] = f.mock.calls[2]!; const headers = init!.headers as Record<string, string>;
   expect(path).toBe('/api/v1/account/sign-up'); expect(init!.method).toBe('POST'); expect(headers['X-HON-Human-Command']).toBe(SIGNUP_HUMAN_COMMAND); expect(headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/);
   const body = JSON.parse(init!.body as string); expect(validateSignupInput(body)).toEqual(body); expect(body.termsVersionId).toBe(terms.termsVersionId); expect(body.confirmation).toBe(SIGNUP_CONFIRMATION);
-  expect(Object.keys(body).sort()).toEqual(['confirmation', 'legalName', 'ownerName', 'schoolName', 'termsVersionId', 'timezone']);
+  expect(Object.keys(body).sort()).toEqual(['confirmation', 'legalName', 'location', 'ownerName', 'schoolName', 'termsVersionId', 'timezone']);
+  expect(body.location).toEqual({ country: 'US', region: 'IL', city: 'Chicago', postalCode: null, addressLine1: null, addressLine2: null });
   f.mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'TEST_MODE', schoolId: uuid(3), available: offer, trial: null }));
-  finish(ok(registration)); await settle();
+  finish(ok({ registration, location: { ...body.location, version: 1, updatedAt: '2026-11-12T10:00:00.000Z' }, faceCheckInNotice: notice })); await settle();
   expect(text(render())).toContain('Your school account is created'); expect(nodes(render()).some(e => e.props['data-start-offer'])).toBe(true);
+  // 0392: the answer's face check-in notice is shown with the account, information only, marked as a lawyer-review draft.
+  const shown = nodes(render()).find(e => e.props['data-face-notice']);
+  expect(shown?.props['data-face-profile']).toBe('US_IL_BIPA'); expect(text(render())).toContain('a lawyer has not reviewed');
+  expect(nodes(render()).some(e => e.type === 'a' && e.props.href === '/staff/settings/location')).toBe(true);
 });
 
 it('trial start sends only school, campaign and confirmation from the server read; the receipt leads to Founder Setup', async () => {
@@ -122,7 +137,7 @@ it('session invalidation hides the loaded account; server text never reaches the
   vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'CLOSED', schoolId: uuid(3), available: null, trial: null }));
   click('Check my account'); await settle(); expect(text(render())).toContain('Synthetic Dojo');
   window.dispatchEvent(new Event('hon:session-invalidated')); expect(text(render())).not.toContain('Synthetic Dojo'); expect(text(render())).toContain('Sign in to continue');
-  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ code: 'select * from hon.secrets' }), { status: 500 }));
+  const f = vi.spyOn(globalThis, 'fetch').mockClear().mockResolvedValueOnce(new Response(JSON.stringify({ code: 'select * from hon.secrets' }), { status: 500 }));
   await expect(startRequest('account/sign-up', new AbortController().signal)).rejects.toMatchObject({ status: 500, code: 'ACCOUNT_UNAVAILABLE' }); expect(f).toHaveBeenCalledTimes(1);
 });
 
@@ -199,11 +214,30 @@ it('the school time zone is a picker that defaults to the browser zone, never to
   click('Check my account'); await settle();
   expect(picker().props.value).toBe('');
   const inputs = nodes(render()).filter(e => e.type === 'input');
-  inputs.filter(e => e.props.type !== 'checkbox').forEach((e, i) => e.props.onChange({ target: { value: ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'][i] } }));
+  inputs.filter(e => e.props.type !== 'checkbox' && !e.props['data-location-field']).forEach((e, i) => e.props.onChange({ target: { value: ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'][i] } }));
   inputs.filter(e => e.props.type === 'checkbox').forEach(e => e.props.onChange({ target: { checked: true } }));
+  fillAddress('KR', null, 'Seoul');
   expect(find('Create my school account')!.props.disabled).toBe(true);
   picker().props.onChange({ target: { value: 'America/Denver' } }); expect(find('Create my school account')!.props.disabled).toBe(false);
-  f.mockResolvedValueOnce(ok(registration)).mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'CLOSED', schoolId: uuid(3), available: null, trial: null }));
+  f.mockResolvedValueOnce(ok({ registration, location: { country: 'KR', region: null, city: 'Seoul', postalCode: null, addressLine1: null, addressLine2: null, version: 1, updatedAt: '2026-11-12T10:00:00.000Z' }, faceCheckInNotice: { ...notice, profile: 'KR_PIPA', laws: ['Korea PIPA'], addOns: ['SEPARATE_CONSENT'] } })).mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupDone)).mockResolvedValueOnce(ok({ trialStatus: 'CLOSED', schoolId: uuid(3), available: null, trial: null }));
   click('Create my school account'); await settle();
   expect(JSON.parse(f.mock.calls[2]![1]!.body as string).timezone).toBe('America/Denver');
+  expect(JSON.parse(f.mock.calls[2]![1]!.body as string).location).toEqual({ country: 'KR', region: null, city: 'Seoul', postalCode: null, addressLine1: null, addressLine2: null });
+});
+
+it('0392: no account can be created without a valid address; a US school must pick its state', async () => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok(signupOpen));
+  click('Check my account'); await settle();
+  const inputs = nodes(render()).filter(e => e.type === 'input');
+  inputs.filter(e => e.props.type !== 'checkbox' && !e.props['data-location-field']).forEach((e, i) => e.props.onChange({ target: { value: ['Synthetic Owner', 'Synthetic Dojo', 'Synthetic Dojo LLC'][i] } }));
+  inputs.filter(e => e.props.type === 'checkbox').forEach(e => e.props.onChange({ target: { checked: true } }));
+  nodes(render()).filter(e => e.type === 'select' && e.props['data-start-zone']).forEach(e => e.props.onChange({ target: { value: 'America/New_York' } }));
+  expect(find('Create my school account')!.props.disabled).toBe(true);
+  const field = (name: string) => nodes(render()).find(e => e.props['data-location-field'] === name);
+  field('country')!.props.onChange({ currentTarget: { value: 'US' } }); field('city')!.props.onChange({ currentTarget: { value: 'Austin' } });
+  expect(find('Create my school account')!.props.disabled).toBe(true);
+  field('region')!.props.onChange({ currentTarget: { value: 'TX' } });
+  expect(find('Create my school account')!.props.disabled).toBe(false);
+  field('city')!.props.onChange({ currentTarget: { value: '<script>' } });
+  expect(find('Create my school account')!.props.disabled).toBe(true);
 });

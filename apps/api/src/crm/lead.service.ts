@@ -5,6 +5,7 @@ import { resolveCrmReadAccess, type CrmReadAccess } from './crm-entitlement.js';
 import { assertCurrentCrmAuthority } from './crm-authority-recheck.js';
 import type { CommandContext, CreateLeadInput, HonTier, LeadListItem, LeadSummary } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
+import { recordStaffIntakeConsent } from '../communication/intake-consent.js';
 import { cursorInstantSql, decodeListCursor, encodeListCursor } from '../foundation/list-cursor.js';
 
 export interface CreateLeadCommandResult {
@@ -148,7 +149,8 @@ export class LeadService {
            AND stage.pipeline_id = $2
            AND stage.organization_id = $3
            AND stage.school_id = $4
-           AND stage.terminal_status IS NULL`,
+           AND stage.terminal_status IS NULL
+           AND stage.hidden_at IS NULL`,
         [input.pipelineStageId, input.pipelineId, context.organizationId, context.schoolId],
       );
       if (!stage.rowCount) {
@@ -243,6 +245,9 @@ export class LeadService {
           JSON.stringify(eventPayload),
         ],
       );
+
+      // IC1 (0634): a lead staff add by hand records the consent channels they left ticked (both by default).
+      await recordStaffIntakeConsent(client, context, { method: 'STAFF_ADD', personId: primaryPerson.id }, input.consentChannels);
 
       await client.query(
         `UPDATE hon.idempotency_records

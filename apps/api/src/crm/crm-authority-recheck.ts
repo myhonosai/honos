@@ -36,4 +36,28 @@ export async function assertCurrentCrmAuthority(
   throw new ForbiddenException(refusal);
 }
 
+/**
+ * Holds the rows a CRM trial command's authority rests on (0629 `hon.hold_crm_trial_authority`): FOR SHARE locks on the
+ * organization, school, user, human principals, this school's grants, their roles and role permissions, and the
+ * organization's entitlements, in the platform IAM lock order, until the transaction ends. Call it after the command's
+ * own serialization lock and before `assertCurrentCrmAuthority`: a revocation or suspension that committed first is seen
+ * by that re-check, and one that arrives later waits for this transaction, so a later wait inside the command (an
+ * idempotency reservation, a row lock) can no longer let the command commit on authority that was withdrawn meanwhile.
+ */
+export async function holdCrmTrialAuthority(client: Queryable, externalSubject: string, context: CommandContext, refusal: string): Promise<void> {
+  try {
+    // The hold refuses anything but a direct human UI command; it reads the command's source from these GUCs.
+    await client.query(
+      "SELECT set_config('app.hon_source',$1,true),set_config('app.hon_external_subject',$2,true),set_config('app.hon_action_request_id',$3,true),set_config('app.hon_delegated_by_principal_id',$4,true)",
+      [context.source, externalSubject, context.actionRequestId ?? '', context.delegatedByPrincipalId ?? ''],
+    );
+    await client.query('SELECT hon.hold_crm_trial_authority($1)', [externalSubject]);
+  } catch (error) {
+    const refused = error as { code?: string; message?: string } | null;
+    // Only the hold's own refusal is a 403; a missing EXECUTE grant (also 42501) must surface as a server error.
+    if (refused?.code === '42501' && refused.message === 'CRM_TRIAL_FORBIDDEN') throw new ForbiddenException(refusal);
+    throw error;
+  }
+}
+
 export type CrmPermission = 'crm.trial.schedule' | 'crm.trial.manage' | 'crm.lead.read' | 'crm.lead.create' | 'crm.pipeline.manage';

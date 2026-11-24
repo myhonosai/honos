@@ -83,3 +83,36 @@
 .notesList { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .notesList li { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; color: #d4e2ef; font-size: 14px; line-height: 1.5; }
 .notesList li span { overflow-wrap: anywhere; }
+
+/* Talk to HON by voice (browser speech only). */
+.voice { display: grid; gap: 8px; padding: 10px 12px; border: 1px dashed var(--hon-line, #24405a); border-radius: 12px; }
+.voiceOrb { justify-self: center; width: 132px; height: 132px; margin: 12px 0 4px; }
+@media (max-width: 480px) { .voiceOrb { width: 112px; height: 112px; } }
+.voiceSwitch { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.voiceSwitch input { width: 20px; height: 20px; }
+.voiceStatus { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* Docked corner chat (owner 2026-11-22): the dock scrolls; messages read as a chat; the composer stays pinned at the bottom. */
+.conversation[data-presentation="dock"] { gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.conversation[data-presentation="dock"] .head { gap: 6px; }
+.conversation[data-presentation="dock"] .head h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.conversation[data-presentation="dock"] .head .status { margin-right: auto; }
+.conversation[data-presentation="dock"] .head button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+.conversation[data-presentation="dock"] .body { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.conversation[data-presentation="dock"] details.history { padding: 0; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0b1a2a; }
+.conversation[data-presentation="dock"] details.history summary { min-height: 40px; display: flex; align-items: center; padding: 0 12px; cursor: pointer; font-size: 13px; font-weight: 700; color: #cfe0f2; }
+.conversation[data-presentation="dock"] details.history nav { padding: 0 8px 8px; }
+.conversation[data-presentation="dock"] .turns { max-height: none; overflow: visible; }
+.conversation[data-presentation="dock"] .turn { border-radius: 16px; }
+.conversation[data-presentation="dock"] .turn[data-role="human"] { margin-left: 18%; border: 0; background: linear-gradient(135deg, #2f7bff, #2160d8); }
+.conversation[data-presentation="dock"] .turn:not([data-role="human"]) { margin-right: 6%; }
+.conversation[data-presentation="dock"] .composer { position: sticky; bottom: 0; z-index: 1; margin: 0 -14px; padding: 10px 14px 12px; border-top: 1px solid var(--hon-line, #24405a); background: #0a1625; }
+.conversation[data-presentation="dock"] .composer > label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.conversation[data-presentation="dock"] .composer textarea { resize: none; border-radius: 14px; }
+.conversation[data-presentation="dock"] .modes label { min-height: 32px; }
+.conversation[data-presentation="dock"] .meta { font-size: 12px; }
+/* Short chats still keep the composer at the bottom edge of the dock. */
+.conversation[data-presentation="dock"] { display: flex; flex-direction: column; min-height: 100%; box-sizing: border-box; }
+.conversation[data-presentation="dock"] .body, .conversation[data-presentation="dock"] .thread { display: flex; flex: 1; flex-direction: column; }
+.conversation[data-presentation="dock"] .composer { margin-top: auto; }
+.conversation[data-presentation="dock"] details.history { display: block; }

@@ -52,3 +52,34 @@ export function validateSchoolNumberSearch(query: Record<string, unknown>): Scho
     && typeof query.region === 'string' && /^[A-Z]{2}$/.test(query.region)) return { city: query.city.trim(), region: query.region };
   throw new Error('INVALID_NUMBER_SEARCH');
 }
+
+/** HQ list rows (0352 read_hq_school_number_orders): one order plus the school's display name. */
+export interface HqSchoolNumberOrder extends SchoolNumberOrder { schoolName: string }
+export function verifyHqSchoolNumberOrder(value: unknown): HqSchoolNumberOrder {
+  const o = value as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o) || typeof o.schoolName !== 'string' || o.schoolName.length < 1 || o.schoolName.length > 200) {
+    throw new Error('Unverified HQ school number order.');
+  }
+  const { schoolName, ...order } = o;
+  return { ...verifySchoolNumberOrder(order), schoolName };
+}
+export function verifyHqSchoolNumberOrderList(value: unknown): HqSchoolNumberOrder[] {
+  if (!Array.isArray(value) || value.length > 200) throw new Error('Unverified HQ school number order list.');
+  return value.map(verifyHqSchoolNumberOrder);
+}
+
+/** Search answer: what Twilio offers now (empty when the school already has a number or an open order). */
+export interface SchoolNumberSearchResult { numbers: AvailableSchoolNumber[]; openOrder: SchoolNumberOrder | null; hasOwnNumber: boolean }
+export function verifySchoolNumberSearchResult(value: unknown): SchoolNumberSearchResult {
+  const o = value as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o) || Object.keys(o).sort().join(',') !== 'hasOwnNumber,numbers,openOrder'
+    || typeof o.hasOwnNumber !== 'boolean' || !Array.isArray(o.numbers) || o.numbers.length > 50) throw new Error('Unverified school number search.');
+  const numbers = o.numbers.map((n: unknown) => {
+    const x = n as Record<string, unknown> | null;
+    if (!x || typeof x !== 'object' || Array.isArray(x) || Object.keys(x).sort().join(',') !== 'locality,monthlyPriceMicrounits,phoneE164,region'
+      || typeof x.phoneE164 !== 'string' || !NANP.test(x.phoneE164) || !nullableString(x.locality) || !nullableString(x.region)
+      || !Number.isSafeInteger(x.monthlyPriceMicrounits) || (x.monthlyPriceMicrounits as number) < 0) throw new Error('Unverified available number.');
+    return x as unknown as AvailableSchoolNumber;
+  });
+  return { numbers, openOrder: o.openOrder === null ? null : verifySchoolNumberOrder(o.openOrder), hasOwnNumber: o.hasOwnNumber };
+}

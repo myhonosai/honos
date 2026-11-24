@@ -97,9 +97,15 @@ test('builds use the CI Node pin, the locked pnpm and keep dev dependencies unde
   assert.equal(resolvedEnv(web).PORT, '3000', 'next start listens on 3000');
 });
 
-test('the web health check is the side-effect-free sign-in readiness route', () => {
-  assert.equal(web.healthCheckPath, '/api/identity/readiness');
-  assert.ok(existsSync(join(ROOT, 'apps', 'web', 'src', 'app', 'api', 'identity', 'readiness', 'route.ts')));
+test('the web health check covers sign-in configuration and the private API database path (review [24])', () => {
+  assert.equal(web.healthCheckPath, '/api/readiness');
+  const route = readFileSync(join(ROOT, 'apps', 'web', 'src', 'app', 'api', 'readiness', 'route.ts'), 'utf8');
+  assert.match(route, /authReadiness\(\)/);
+  assert.match(route, /probeApiReadiness\(\)/);
+  const probe = readFileSync(join(ROOT, 'apps', 'web', 'src', 'server', 'api-readiness.ts'), 'utf8');
+  assert.match(probe, /\/v1\/health\/ready/);
+  assert.match(probe, /redirect: 'error'/);
+  assert.ok(existsSync(join(ROOT, 'apps', 'web', 'src', 'app', 'api', 'identity', 'readiness', 'route.ts')), 'the identity-only readiness route stays for diagnostics');
 });
 
 test('no money, paid AI, messaging, development auth or migration credential is configured', () => {
@@ -121,6 +127,19 @@ test('secrets and account-specific values never have a literal value in Git', ()
   // Render ignores sync:false inside env groups, so groups may only hold generated or fixed values.
   for (const candidate of blueprint.envVarGroups ?? []) {
     for (const entry of candidate.envVars) assert.notEqual(entry.sync, false, `${candidate.name}.${entry.key}`);
+  }
+});
+
+test('the only Stripe value is the web test publishable key, and it is never live', () => {
+  const key = 'NEXT_PUBLIC_HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY';
+  const entry = envVars(web).find((candidate) => candidate.key === key);
+  assert.match(entry?.value ?? '', /^pk_test_[A-Za-z0-9]{10,250}$/, 'test publishable key only');
+  for (const svc of [api, web]) {
+    for (const candidate of envVars(svc)) {
+      if (candidate.key === key && svc === web) continue;
+      assert.doesNotMatch(candidate.key, /STRIPE|PUBLISHABLE/, `${svc.name} must not declare ${candidate.key}`);
+      assert.doesNotMatch(String(candidate.value ?? ''), /\b(pk|sk|rk)_(live|test)_|whsec_/, `${svc.name} ${candidate.key} holds no Stripe value`);
+    }
   }
 });
 

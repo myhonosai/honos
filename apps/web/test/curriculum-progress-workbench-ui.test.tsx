@@ -32,7 +32,7 @@ function submit(): void { elements(render()).find(e => e.type === 'form')?.props
 function confirm(): void { field('confirmObservation')!.props.onChange({ target: { checked: true } }); }
 function fill(): void { for (const [name, value] of Object.entries(ids)) edit(name, value); }
 const settle = async () => { for (let i = 0; i < 35; i++) await Promise.resolve(); };
-async function load(): Promise<void> { button('Load current enrollment')!.props.onClick(); await settle(); }
+async function load(): Promise<void> { button('Show what their belt needs')!.props.onClick(); await settle(); }
 function draft(): void { edit('requirementId', requirement.id); edit('observationStatus', 'MET'); edit('instructorNote', 'PRIVATE_NOTE'); }
 beforeEach(() => { hooks.cells = []; hooks.cursor = 0; hooks.effects = []; });
 afterEach(() => { unmount(); vi.restoreAllMocks(); });
@@ -42,26 +42,25 @@ describe('bounded direct-human curriculum progress UI', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(data)).mockResolvedValueOnce(response(observation));
     const allocate = vi.spyOn(crypto, 'randomUUID');
     expect(elements(render()).filter(e => e.type === 'input').map(e => e.props.value)).toEqual(['', '', '', '']);
-    expect(field('requirementId')).toBeUndefined(); expect(text(render())).toContain('No verified current enrollment snapshot');
+    expect(field('requirementId')).toBeUndefined(); expect(text(render())).toContain('Pick a student to see what their belt needs');
     await load(); expect(fetcher).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
     fill(); await settle(); expect(fetcher).not.toHaveBeenCalled();
     await load(); expect(fetcher).toHaveBeenCalledTimes(1); expect(allocate).not.toHaveBeenCalled();
     draft(); submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(1); expect(allocate).not.toHaveBeenCalled();
     confirm(); submit(); submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(2); expect(allocate).toHaveBeenCalledTimes(1);
-    expect(text(render())).toContain('Returned human observation:  MET'); expect(field('requirementId')).toBeUndefined();
-    expect(text(render())).toContain('No verified current enrollment snapshot'); expect(button('Retry exact unchanged observation')).toBeUndefined();
+    expect(text(render())).toContain('Saved:  Met'); expect(field('requirementId')).toBeUndefined();
+    expect(text(render())).toContain('Pick a student to see what their belt needs'); expect(button('Try the same save again')).toBeUndefined();
     expect(JSON.parse((fetcher.mock.calls[1]![1] as RequestInit).body as string)).toEqual({ requirementId: requirement.id, expectedRequirementVersion: 2, expectedEnrollmentVersion: 3, expectedProgressVersion: 7, status: 'MET', instructorNote: 'PRIVATE_NOTE' });
   });
   it('renders only verified returned enrollment/current-rank facts and closed status choices, not description, actor, note, history or inferred status/readiness', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(data)); fill(); await load();
     const copy = text(render());
-    for (const fact of [ids.enrollmentId, ids.curriculumId, data.enrollment.studentProfileId, requirement.rankId, requirement.id, 'Returned practice', 'ATTENDANCE', 'Unrecorded for the current revision', 'Latest observation sequence']) expect(copy).toContain(fact);
+    for (const fact of ['Returned practice', 'Attendance', 'Not marked yet', 'Needed for the next belt']) expect(copy).toContain(fact);
+    for (const hidden of [ids.enrollmentId, ids.curriculumId, data.enrollment.studentProfileId, requirement.rankId, 'BASICS']) expect(copy).not.toContain(hidden);
     expect(copy).not.toContain('PRIVATE_DESCRIPTION'); expect(copy).not.toContain('PRIVATE_NOTE');
     expect(elements(render()).filter(e => e.type === 'select' && e.props.name === 'requirementId').flatMap(e => elements(e).filter(x => x.type === 'option').map(x => x.props.value))).toEqual(['', requirement.id]);
     expect(elements(render()).filter(e => e.type === 'select' && e.props.name === 'observationStatus').flatMap(e => elements(e).filter(x => x.type === 'option').map(x => x.props.value))).toEqual(['', ...CURRICULUM_PROGRESS_STATUSES]);
     expect(elements(render()).filter(e => e.type === 'input').map(e => e.props.name)).toEqual([...Object.keys(ids), 'confirmObservation']);
-    expect(copy).toContain('MET is a human observation');
-    for (const phrase of ['promotion, rank, belt, certificate, testing readiness or eligibility, grade, attendance, booking, membership, payment', 'family or parent access, communication, provider, AI, Action Engine or automation outcome', 'not attendance credit', 'inert curriculum outbox event gains no consumer']) expect(copy).toContain(phrase);
     expect(copy).not.toMatch(/\d+%|ready to test|<progress|grade awarded/);
   });
   it('never permits an arbitrary requirement, unclosed status or oversized note, and edits clear confirmation before any key is made', async () => {
@@ -70,27 +69,27 @@ describe('bounded direct-human curriculum progress UI', () => {
       draft(); edit(name!, value!); confirm(); submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(1); expect(allocate).not.toHaveBeenCalled();
     }
     for (const [name, value] of [['requirementId', requirement.id], ['observationStatus', 'PRACTICING'], ['instructorNote', 'Changed']]) {
-      draft(); confirm(); edit(name!, value!); expect(field('confirmObservation')!.props.checked).toBe(false); expect(button('Record human observation')!.props.disabled).toBe(true);
+      draft(); confirm(); edit(name!, value!); expect(field('confirmObservation')!.props.checked).toBe(false); expect(button('Save')!.props.disabled).toBe(true);
     }
   });
   it('requires explicit reload after success or definite rejection/conflict and does not update the old snapshot optimistically', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(data)).mockResolvedValueOnce(Response.json({ code: 'VERSION_CONFLICT', detail: 'SQL_SECRET' }, { status: 409 }));
     fill(); await load(); draft(); confirm(); submit(); await settle();
-    expect(text(render())).toContain('versions conflicted'); expect(text(render())).not.toContain('SQL_SECRET');
-    expect(field('requirementId')).toBeUndefined(); expect(button('Retry exact unchanged observation')).toBeUndefined();
-    expect(text(render())).not.toContain('Returned current enrollment'); submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(text(render())).toContain('Someone else may have changed it'); expect(text(render())).not.toContain('SQL_SECRET');
+    expect(field('requirementId')).toBeUndefined(); expect(button('Try the same save again')).toBeUndefined();
+    expect(text(render())).not.toContain('What this belt needs'); submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(2);
     fetcher.mockResolvedValueOnce(response(data)); await load(); draft(); confirm(); fetcher.mockResolvedValueOnce(response(observation)); submit(); await settle();
-    expect(text(render())).toContain('command-response snapshot, not a refreshed enrollment'); expect(text(render())).not.toContain('Returned current enrollment');
-    fetcher.mockResolvedValueOnce(response(data)); await load(); expect(text(render())).not.toContain('Returned human observation:'); expect(text(render())).toContain('Returned current enrollment');
+    expect(text(render())).toContain('progress is updated'); expect(text(render())).not.toContain('What this belt needs');
+    fetcher.mockResolvedValueOnce(response(data)); await load(); expect(text(render())).not.toContain('Saved: '); expect(text(render())).toContain('What this belt needs');
   });
   it('retains exact uncertain path/body/UUID only for a separate human retry and blocks repeated/stale retries and new commands', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(data)).mockRejectedValueOnce(new Error('NETWORK_SECRET')).mockResolvedValueOnce(response(observation, true));
     const allocate = vi.spyOn(crypto, 'randomUUID'); fill(); await load(); draft(); confirm(); submit(); await settle();
-    const retry = button('Retry exact unchanged observation')!; expect(retry).toBeDefined(); expect(text(render())).not.toContain('NETWORK_SECRET');
+    const retry = button('Try the same save again')!; expect(retry).toBeDefined(); expect(text(render())).not.toContain('NETWORK_SECRET');
     expect(text(render())).not.toContain('PRIVATE_NOTE'); expect(field('requirementId')).toBeUndefined();
     submit(); await settle(); expect(fetcher).toHaveBeenCalledTimes(2); expect(allocate).toHaveBeenCalledTimes(1);
     retry.props.onClick(); retry.props.onClick(); await settle(); expect(fetcher.mock.calls[1]).toEqual(fetcher.mock.calls[2]); expect(allocate).toHaveBeenCalledTimes(1);
-    expect(text(render())).toContain('Replayed or previously recorded observation receipt'); expect(button('Retry exact unchanged observation')).toBeUndefined();
+    expect(text(render())).toContain('This was already saved'); expect(button('Try the same save again')).toBeUndefined();
     retry.props.onClick(); await settle(); expect(fetcher).toHaveBeenCalledTimes(3);
   });
   it('clears snapshots on every scope edit and clears uncertain retry on scope edit, reload or discard; old handlers cannot send', async () => {
@@ -98,19 +97,19 @@ describe('bounded direct-human curriculum progress UI', () => {
     fill();
     for (const name of Object.keys(ids)) {
       fetcher.mockResolvedValueOnce(response(data)); await load(); draft(); confirm(); const oldSubmit = elements(render()).find(e => e.type === 'form')!.props.onSubmit;
-      const oldLoad = button('Load current enrollment')!;
+      const oldLoad = button('Show what their belt needs')!;
       edit(name, ids[name as keyof typeof ids]); oldSubmit({ preventDefault() {} }); oldLoad.props.onClick(); await settle();
-      expect(text(render())).not.toContain('Returned current enrollment'); expect(allocate).not.toHaveBeenCalled();
+      expect(text(render())).not.toContain('What this belt needs'); expect(allocate).not.toHaveBeenCalled();
       fetcher.mockResolvedValueOnce(response(data)); await load(); draft(); confirm(); fetcher.mockRejectedValueOnce(new Error('network')); submit(); await settle();
-      const oldRetry = button('Retry exact unchanged observation')!; const calls = fetcher.mock.calls.length;
-      edit(name, ids[name as keyof typeof ids]); oldRetry.props.onClick(); await settle(); expect(fetcher).toHaveBeenCalledTimes(calls); expect(button('Retry exact unchanged observation')).toBeUndefined();
+      const oldRetry = button('Try the same save again')!; const calls = fetcher.mock.calls.length;
+      edit(name, ids[name as keyof typeof ids]); oldRetry.props.onClick(); await settle(); expect(fetcher).toHaveBeenCalledTimes(calls); expect(button('Try the same save again')).toBeUndefined();
       allocate.mockClear();
     }
     fetcher.mockResolvedValueOnce(response(data)); await load(); draft(); confirm(); fetcher.mockRejectedValueOnce(new Error('network')); submit(); await settle();
-    expect(text(render())).toContain('earlier uncertain command may still have recorded an observation');
-    const retry = button('Retry exact unchanged observation')!; fetcher.mockResolvedValueOnce(response(data)); await load(); const calls = fetcher.mock.calls.length; retry.props.onClick(); await settle(); expect(fetcher).toHaveBeenCalledTimes(calls);
-    draft(); confirm(); fetcher.mockRejectedValueOnce(new Error('network')); submit(); await settle(); button('Discard inputs / start over')!.props.onClick();
-    expect(button('Retry exact unchanged observation')).toBeUndefined(); expect(field('enrollmentId')!.props.value).toBe('');
+    expect(text(render())).toContain('It may already be saved');
+    const retry = button('Try the same save again')!; fetcher.mockResolvedValueOnce(response(data)); await load(); const calls = fetcher.mock.calls.length; retry.props.onClick(); await settle(); expect(fetcher).toHaveBeenCalledTimes(calls);
+    draft(); confirm(); fetcher.mockRejectedValueOnce(new Error('network')); submit(); await settle(); button('Start over')!.props.onClick();
+    expect(button('Try the same save again')).toBeUndefined(); expect(field('enrollmentId')!.props.value).toBe('');
   });
   it('blocks a stale confirmed submit after draft edits and a stale confirm handler after scope edits', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response(data)); const allocate = vi.spyOn(crypto, 'randomUUID'); fill(); await load(); draft(); confirm();
@@ -125,7 +124,7 @@ describe('bounded direct-human curriculum progress UI', () => {
       fetcher.mockResolvedValueOnce(response(bad)); await load(); expect(text(render())).not.toContain('Returned practice'); expect(field('requirementId')).toBeUndefined();
       expect(text(render())).not.toMatch(/PRIVATE_ACTOR|PRIVATE_NOTE/);
     }
-    fetcher.mockResolvedValueOnce(response(data)); await load(); fetcher.mockRejectedValueOnce(new Error('secret')); await load(); expect(text(render())).not.toContain('Returned current enrollment');
+    fetcher.mockResolvedValueOnce(response(data)); await load(); fetcher.mockRejectedValueOnce(new Error('secret')); await load(); expect(text(render())).not.toContain('What this belt needs');
   });
   it('clears all IDs, drafts, snapshot, receipt and retry on GET, POST and retained-replay access loss', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
@@ -133,23 +132,23 @@ describe('bounded direct-human curriculum progress UI', () => {
       fill(); fetcher.mockResolvedValueOnce(Response.json({ detail: 'SECRET' }, { status })); await load();
       expect(Object.keys(ids).map(name => field(name)!.props.value)).toEqual(['', '', '', '']);
       fill(); fetcher.mockResolvedValueOnce(response(data)); await load(); draft(); confirm(); fetcher.mockResolvedValueOnce(Response.json({ detail: 'SECRET' }, { status })); submit(); await settle();
-      expect(Object.keys(ids).map(name => field(name)!.props.value)).toEqual(['', '', '', '']); expect(button('Retry exact unchanged observation')).toBeUndefined(); expect(text(render())).not.toContain('SECRET');
+      expect(Object.keys(ids).map(name => field(name)!.props.value)).toEqual(['', '', '', '']); expect(button('Try the same save again')).toBeUndefined(); expect(text(render())).not.toContain('SECRET');
       fill(); fetcher.mockResolvedValueOnce(response(data)); await load(); draft(); confirm(); fetcher.mockRejectedValueOnce(new Error('network')); submit(); await settle();
-      fetcher.mockResolvedValueOnce(Response.json({ detail: 'SECRET' }, { status })); button('Retry exact unchanged observation')!.props.onClick(); await settle();
-      expect(Object.keys(ids).map(name => field(name)!.props.value)).toEqual(['', '', '', '']); expect(button('Retry exact unchanged observation')).toBeUndefined(); expect(text(render())).toContain('Inputs, snapshot, receipt and retry were cleared');
+      fetcher.mockResolvedValueOnce(Response.json({ detail: 'SECRET' }, { status })); button('Try the same save again')!.props.onClick(); await settle();
+      expect(Object.keys(ids).map(name => field(name)!.props.value)).toEqual(['', '', '', '']); expect(button('Try the same save again')).toBeUndefined(); expect(text(render())).toContain('Sign in again');
     }
   });
   it('shows empty/unranked and inactive enrollment facts honestly without placement, inferred status or command controls', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch'); fill();
     for (const returned of [{ ...data, enrollment: { ...data.enrollment, currentRankId: null }, requirements: [] }, { ...data, requirements: [] }, ...['SUSPENDED', 'ARCHIVED'].map(status => ({ ...data, enrollment: { ...data.enrollment, status } }))]) {
-      fetcher.mockResolvedValueOnce(response(returned)); await load(); expect(text(render())).toContain('Returned current enrollment'); expect(field('requirementId')).toBeUndefined(); expect(button('Record human observation')).toBeUndefined();
+      fetcher.mockResolvedValueOnce(response(returned)); await load(); expect(text(render())).toContain('What this belt needs'); expect(field('requirementId')).toBeUndefined(); expect(button('Save')).toBeUndefined();
     }
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
   it('locks pending reads/submits, deduplicates rapid actions and ignores delayed results after unmount/remount', async () => {
     let finish!: (value: Response) => void;
     const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })); fill();
-    button('Load current enrollment')!.props.onClick(); button('Load current enrollment')!.props.onClick();
+    button('Show what their belt needs')!.props.onClick(); button('Show what their belt needs')!.props.onClick();
     expect(elements(render()).filter(e => e.type === 'fieldset').every(e => e.props.disabled)).toBe(true);
     edit('enrollmentId', id('b')); expect(field('enrollmentId')!.props.value).toBe(ids.enrollmentId);
     unmount(); const before = hooks.cells.slice(); finish(response(data)); await settle(); expect(hooks.cells).toEqual(before); expect(fetcher).toHaveBeenCalledTimes(1);
@@ -157,7 +156,7 @@ describe('bounded direct-human curriculum progress UI', () => {
     fetcher.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })); submit(); submit();
     expect(elements(render()).filter(e => e.type === 'fieldset').every(e => e.props.disabled)).toBe(true);
     unmount(); const pending = hooks.cells.slice(); finish(response(observation)); await settle(); expect(hooks.cells).toEqual(pending); expect(fetcher).toHaveBeenCalledTimes(3);
-    hooks.cells = []; hooks.effects = []; expect(field('organizationId')!.props.value).toBe(''); expect(button('Retry exact unchanged observation')).toBeUndefined();
+    hooks.cells = []; hooks.effects = []; expect(field('organizationId')!.props.value).toBe(''); expect(button('Try the same save again')).toBeUndefined();
   });
   it('adds no persistence, discovery, history editing, placement authoring, automatic work or downstream route/client', () => {
     const ui = readFileSync('src/components/curriculum-progress-workbench.tsx', 'utf8'); const http = readFileSync('src/components/curriculum-progress-workbench-http.ts', 'utf8');

@@ -21,3 +21,10 @@ describe('kiosk handoff UI boundary',()=>{
   expect(source).not.toMatch(/localStorage|sessionStorage|studentProfileId|classSessionId|family|payment.*fetch|redeem.*fetch/i);
  });
 });
+describe('kiosk handoff staff page opens on the signed-in school', () => {
+ it('the route goes through the shell entry and the workbench hides the school ID fields when given the shell school', () => {
+  const route=readFileSync(new URL('../src/app/staff/kiosk/page.tsx',import.meta.url),'utf8'),entry=readFileSync(new URL('../src/components/kiosk-tools-entry.tsx',import.meta.url),'utf8'),staff=readFileSync(new URL('../src/components/kiosk-workbench.tsx',import.meta.url),'utf8');
+  expect(route).toContain('KioskWorkbenchEntry');expect(entry).toContain('useSchoolShell');
+  expect(staff).toContain("shellScope===undefined?typedScope");expect(staff).toContain('This uses the school you are signed in to.');
+ });
+});

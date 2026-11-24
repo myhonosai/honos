@@ -124,6 +124,9 @@ export class TwilioTextProvider implements CommunicationProviderAdapter {
   }
 }
 
+/** 0364: one signed inbound text for the school conversations inbox. */
+export interface InboundConversationText { to: string; from: string; body: string; mediaCount: number; providerMessageId: string; receivedAt: string }
+
 export class TwilioWebhookError extends Error {
   constructor(readonly reason: 'NOT_CONFIGURED' | 'SIGNATURE_INVALID' | 'MALFORMED') { super(reason); }
 }
@@ -220,7 +223,9 @@ export class TwilioWebhookVerifier {
     const from = params.get('From') ?? '';
     const to = params.get('To') ?? '';
     if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
-    const word = (params.get('Body') ?? '').trim().replace(/[.!]+$/, '').toUpperCase();
+    // Control characters are dropped first, exactly as the 0364 conversation intake does, so "ST\u0001OP" is still an opt-out.
+    // eslint-disable-next-line no-control-regex
+    const word = (params.get('Body') ?? '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim().replace(/[.!]+$/, '').toUpperCase();
     const keyword = KEYWORDS[word];
     return keyword ? { to, from, keyword, providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() } : null;
   }
@@ -238,6 +243,21 @@ export class TwilioWebhookVerifier {
     const service = params.get('MessagingServiceSid') ?? '';
     if (!SERVICE_SID.test(service)) return null;
     return { eventId: sid, from, toService: service, body: (params.get('Body') ?? '').slice(0, 1600), receivedAt: new Date(this.now()).toISOString() };
+  }
+
+  /**
+   * 0364: the same signed inbound text as a school conversation message: sender, school number, text (at most 1,600
+   * characters, as Twilio limits a message) and how many media items came with it. Media is not fetched or stored.
+   */
+  inboundMessage(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): InboundConversationText {
+    const params = this.params(rawBody, TWILIO_INBOUND_PATH, signature, subaccount);
+    const sid = params.get('MessageSid') ?? '';
+    const from = params.get('From') ?? '';
+    const to = params.get('To') ?? '';
+    if (!MESSAGE_SID.test(sid) || !E164.test(from) || !E164.test(to)) throw new TwilioWebhookError('MALFORMED');
+    const media = Number.parseInt(params.get('NumMedia') ?? '0', 10);
+    return { to, from, body: (params.get('Body') ?? '').replace(/\u0000/g, '').slice(0, 1600), mediaCount: Number.isInteger(media) && media > 0 ? Math.min(media, 10) : 0,
+      providerMessageId: sid, receivedAt: new Date(this.now()).toISOString() };
   }
 
   /** 0249: an incoming call to a school number. A withheld caller ID is null (it is forwarded, never texted). */

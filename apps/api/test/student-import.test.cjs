@@ -31,6 +31,7 @@ function fixture(options = {}) {
         if (/hon\.finalize_student_import\(/.test(sql)) return { rows: [{ data: options.finalize ?? { record: batch({ version: 3, status: 'FINALIZED', importCount: 2, undecidedCount: 0, importedCount: 2, finalizedAt: '2026-11-09T02:05:00.000Z' }), replayed: false } }] };
         if (/hon\.read_student_imports\(\$1\)/.test(sql)) return { rows: [{ data: options.list ?? { batches: [], fields: ['studentGivenName', 'studentFamilyName', 'birthDate', 'studentEmail', 'studentMobile', 'guardianGivenName', 'guardianFamilyName', 'guardianEmail', 'guardianMobile', 'familyKey'], maxBytes: 262144, maxRows: 1000, maxColumns: 24 } }] };
         if (/hon\.read_student_import\(\$1,\$2::uuid\)/.test(sql)) return { rows: [{ data: options.detail }] };
+        if (/hon\.record_staff_intake_consent\(\$1,\$2::jsonb\)/.test(sql)) return { rows: [{ result: { people: 2, recorded: 3 } }] };
         throw new Error('Unexpected SQL: ' + sql);
       } });
     },
@@ -84,6 +85,24 @@ test('decide and finalize are closed-validated and bound to the batch', async ()
   // A receipt for another batch is never accepted as this one.
   const g = fixture({ decide: { record: batch({ id: randomUUID(), version: 2, importCount: 2, undecidedCount: 0 }), replayed: false } });
   await assert.rejects(new StudentImportService(g.db).decide(c, batchId, { expectedVersion: 1, decisions: [{ index: 1, choice: 'IMPORT' }] }), status(503, 'STUDENT_IMPORT_UNAVAILABLE'));
+});
+
+test('IC1: finalize records intake consent for the batch, both channels by default, staff can untick, never on a replay', async () => {
+  const c = context();
+  let f = fixture(); await new StudentImportService(f.db).finalize(c, batchId, { expectedVersion: 2, selectedIndices: [1] });
+  assert.deepEqual(f.calls('record_staff_intake_consent').map((q) => [q.args[0], JSON.parse(q.args[1])]), [[c.externalSubject, { method: 'STUDENT_IMPORT', batchId, channels: ['EMAIL', 'SMS'] }]]);
+  assert.deepEqual(JSON.parse(f.calls('finalize_student_import')[0].args[1]), { batchId, expectedVersion: 2, selectedIndices: [1] }, 'consentChannels never reaches the import command');
+  f = fixture(); await new StudentImportService(f.db).finalize(c, batchId, { expectedVersion: 2, selectedIndices: [1], consentChannels: ['EMAIL'] });
+  assert.deepEqual(JSON.parse(f.calls('record_staff_intake_consent')[0].args[1]).channels, ['EMAIL']);
+  f = fixture(); await new StudentImportService(f.db).finalize(c, batchId, { expectedVersion: 2, selectedIndices: [1], consentChannels: [] });
+  assert.equal(f.calls('record_staff_intake_consent').length, 0, 'both unticked: nothing recorded');
+  for (const consentChannels of [['PUSH'], ['EMAIL', 'EMAIL'], 'EMAIL', null]) {
+    f = fixture(); await assert.rejects(new StudentImportService(f.db).finalize(c, batchId, { expectedVersion: 2, selectedIndices: [1], consentChannels }), status(400, 'STUDENT_IMPORT_INVALID'));
+    assert.equal(f.queries.length, 0);
+  }
+  f = fixture({ finalize: { record: batch({ version: 3, status: 'FINALIZED', importCount: 2, undecidedCount: 0, importedCount: 2, finalizedAt: '2026-11-09T02:05:00.000Z' }), replayed: true } });
+  await new StudentImportService(f.db).finalize(c, batchId, { expectedVersion: 2, selectedIndices: [1] });
+  assert.equal(f.calls('record_staff_intake_consent').length, 0, 'a replay records nothing again');
 });
 
 test('only direct human commands with a clean key reach the database; reads refuse a key', async () => {

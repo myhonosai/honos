@@ -4,7 +4,7 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { AddLead } from './add-lead';
+import { AddLead, createLeadCreateCustody, type LeadCreateCustody } from './add-lead';
 import type { AddLeadApi } from './add-lead-http';
 import { LeadsError, leadsApi, type LeadsApi } from './http';
 import { LeadsView, tabStatus, type LeadTab, type ListState, type TrialState } from './view';
@@ -26,19 +26,21 @@ export function Leads({ api = leadsApi, addLeadApi }: { api?: LeadsApi; addLeadA
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [trials, setTrials] = useState<TrialState>({ state: 'NONE' });
   const [trialsRefresh, setTrialsRefresh] = useState(0);
+  // The add-lead form's unanswered press lives here, above the shell-phase remount of the page body.
+  const addCustody = useRef<LeadCreateCustody>(createLeadCreateCustody()).current;
   const listGeneration = useRef(0), trialGeneration = useRef(0), privacy = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; listGeneration.current++; trialGeneration.current++; }; }, []);
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); listGeneration.current++; trialGeneration.current++; privacy.current++;
-    setList({ state: 'LOADING' }); setTrials({ state: 'NONE' }); setFilter('');
-  }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
+    setList({ state: 'LOADING' }); setTrials({ state: 'NONE' }); setFilter(''); addCustody.current = null;
+  }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), [addCustody]);
 
   const school = selection ? selection.schoolId.toLowerCase() : null;
   useEffect(() => {
-    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setSelectedId(null); setFilter(''); setTab('OPEN'); }
+    if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setSelectedId(null); setFilter(''); setTab('OPEN'); addCustody.current = null; }
     if (school !== null) lastSchool.current = school;
-  }, [school]);
+  }, [school, addCustody]);
 
   useEffect(() => {
     const current = ++listGeneration.current, shown = privacy.current;
@@ -76,6 +78,6 @@ export function Leads({ api = leadsApi, addLeadApi }: { api?: LeadsApi; addLeadA
     <LeadsView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       scope={selection ? { organizationId: selection.organizationId, schoolId: selection.schoolId } : null} tab={tab} list={list} filter={filter}
       selectedId={selectedId} trials={trials} onTab={onTab} onFilter={setFilter} onOpen={onOpen} onRefresh={onRefresh} onReloadTrials={onReloadTrials}
-      addLead={selection ? <AddLead key={selection.schoolId.toLowerCase()} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} language={preferences.language} onAdded={onAdded} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}/>
+      addLead={selection ? <AddLead key={selection.schoolId.toLowerCase()} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} language={preferences.language} onAdded={onAdded} custody={addCustody} {...(addLeadApi ? { api: addLeadApi } : {})}/> : null}/>
   </div>;
 }

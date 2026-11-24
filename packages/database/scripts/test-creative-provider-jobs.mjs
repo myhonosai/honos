@@ -175,7 +175,7 @@ try{
  const rec=(who,gid,body)=>rt('SELECT hon.record_creative_generation_result($1,$2,$3::jsonb) r',[H(who),gid,JSON.stringify(body)]);
  const claim=(n=25,lease=60)=>admin.query('SELECT * FROM hon.claim_creative_provider_jobs($1,$2)',[n,lease]).then(r=>r.rows);
  const poll=(job,lease)=>admin.query('SELECT hon.record_creative_provider_job_poll($1,$2) r',[job,lease]).then(r=>r.rows[0].r);
- // 0355: a provider success is recorded together with its stored files (one object per asset).
+ // 0671: a provider success is recorded together with its stored files (one object per asset).
  const result=(job,lease,body)=>body?.outcome==='SUCCEEDED'
   ?admin.query('SELECT hon.record_creative_provider_job_stored_result($1,$2,$3::jsonb,$4::jsonb) r',[job,lease,JSON.stringify(body),
     JSON.stringify((body.assets??[]).map(()=>({byteSize:1000,sha256:'b'.repeat(64)})))]).then(r=>r.rows[0].r)
@@ -445,7 +445,7 @@ try{
   const objs=(await admin.query('SELECT asset_id,storage_key,byte_size FROM hon.creative_stored_objects WHERE job_id=$1 ORDER BY ordinal',[j.id])).rows;
   assert.deepEqual(objs.map(o=>[o.asset_id,o.storage_key]),g.assets.map((a,i)=>[a.assetId,`creative/${j.id}/${i+1}`]));
  });
- // ---------- C3 (0355) media storage ----------
+ // ---------- C3 (0671) media storage ----------
  const {SyntheticAsyncCreativeProviderRuntime:Async}=await import('../../../apps/api/dist/creative-studio/creative-provider-runtime.js');
  const {CreativeMediaService}=await import('../../../apps/api/dist/creative-studio/media/creative-media.controller.js');
  const memory=()=>{const objects=new Map();return{objects,readiness:()=>'READY',put:async(k,b)=>{objects.set(k,b);},

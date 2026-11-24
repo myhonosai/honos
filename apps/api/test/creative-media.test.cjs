@@ -201,7 +201,7 @@ test('worker + storage: a success is recorded only with stored, measured files; 
   assert.deepEqual([tooLong.calls[0][0], tooLong.calls[0][3].outcome], ['result', 'UNKNOWN'], 'longer than reserved is held for HQ');
 });
 
-/** Fake billing answering the three 0355 runtime calls. */
+/** Fake billing answering the three 0671 runtime calls. */
 function fakeBilling({ grant, deletion, confirm, refuse } = {}) {
   const calls = [];
   return { calls, call: async (operation, params, validate) => { calls.push([operation, params]);

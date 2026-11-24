@@ -21,17 +21,30 @@ power and a staff role never acts as a parent. Every write has exact-request ide
   never exceeded and the same child is never booked twice. The booking is `REGULAR`, `source = PARENT_APP`.
 - **A3 Cancel.** The guardian may cancel a `PARENT_APP` booking of their own child until the session starts. A staff-made
   booking is cancelled only by staff.
-- **A4 Event slots and families-only booking types (later PR, needs its own number).** The guardian can book a 0261 event slot or a 0286
+- **A4 Event slots and families-only booking types (0466).** The guardian can book a 0261 event slot or a 0286
   `FAMILIES_ONLY` booking type with the family's details filled in from the account, with the same capacity and
   one-booking rules as the public path. (This is booking types part 3's family path.)
+  - The details are the family's display name and the signed-in parent's sign-in email; nothing about the family is
+    taken from the request. Without a usable email the page is view only and a booking is refused.
+  - The rows go into the 0261 and 0286 booking tables, so staff see them like any other booking. A private insert-only
+    table `parent_school_bookings` records which family made each one from the account.
+  - On top of the public rules (live event or type, offered time, a free spot, one live booking per email), a family has
+    at most one live booking per event and one future booking per type. The family row is locked after the organization
+    and school, so two guardians of one family cannot both get through.
+  - The guardian cancels only bookings the family made from the account, before they start. Link and staff bookings are
+    not touched. VIEWER grants read only.
+  - Parent page: `/parent/bookings` (Events & bookings), linked from the family home.
 
 ## PR B: messages between a family and the school, inside HON (0330)
 
 - **B1 Threads.** One conversation per family and school. A guardian writes a message (1-2,000 characters, plain text).
-  Staff with the new permission `family_messages.manage` (granted to system OWNER and MANAGER roles) read every family
-  thread of their school and reply. VIEWER parents read only.
-- **B2 Inbox.** Staff see threads newest first with an unread count; opening a thread marks it read for staff. The parent
-  sees the school's replies in the existing Messages page.
+  Staff with the new staff-assignable permission `family_messages.manage` read every family thread of their school and
+  reply to it. It is granted to the system OWNER role (the only system role), and the owner can add it to any staff role.
+  Staff reply to existing threads; starting a thread from the school side is a later PR. VIEWER parents read only.
+- **B2 Inbox.** Staff see threads newest first with an unread count. Opening a thread does not mark it read; "Mark read"
+  and a reply move the staff read mark up to the newest message the staff member loaded, never past it, so a family
+  message that arrives after the load stays unread. The parent
+  sees the school's replies in the Messages page, as "the school", never with a staff name.
 - **B3 No outside delivery.** Nothing is texted or emailed. A later PR may send a "you have a new message" notice through
   the existing 0243 worker once messaging providers are approved and live.
 - **B4 Limits.** Per family at most 30 messages an hour; per school at most 600. Message text is stored only on the

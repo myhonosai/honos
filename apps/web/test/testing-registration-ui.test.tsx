@@ -42,7 +42,7 @@ describe('human testing registration UI', () => {
   });
   it('auth-protects the status, interest and staff pages while keeping the parent status display redacted from staff review detail', () => {
     const parentRoute = readFileSync('src/app/parent/testing/page.tsx', 'utf8'), interestRoute = readFileSync('src/app/parent/testing/interest/page.tsx', 'utf8'), staffRoute = readFileSync('src/app/staff/testing/registrations/page.tsx', 'utf8');
-    for (const route of [parentRoute, interestRoute, staffRoute]) for (const token of ['verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false']) expect(route).toContain(token);
+    for (const route of [parentRoute, interestRoute, staffRoute]) for (const token of ['verifySession', "redirect('/auth/login", 'force-dynamic', 'index: false']) expect(route).toContain(token);
     expect(interestRoute).toContain('ParentTestingRegistration');
     const component = readFileSync('src/components/parent-testing-registration.tsx', 'utf8'), http = readFileSync('src/components/testing-registration-http.ts', 'utf8');
     expect(component).not.toMatch(/\.parentNote|\.reviewer|candidateId|familyId|principalId/); expect(http).not.toMatch(/fetch\(['"]https?:\/\/|invokeLLM|executeAction|sendMessage|checkout|payment/i);
