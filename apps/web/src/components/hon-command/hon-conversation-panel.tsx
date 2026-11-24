@@ -13,6 +13,7 @@ import {
   type HonSchool, type Owned, type PreparedHonCommand,
 } from './hon-conversation-http';
 import { honTurnStatusPresentation } from './hon-conversation';
+import { forgetHonConversations, rememberConversation, rememberedConversation } from './hon-conversation-memory';
 import {
   ORCHESTRATION_PRESENTATION, PURPOSE_LABEL, SUGGESTION_AGENT, SUGGESTION_PURPOSES, orchestrationsBySource, suggestionDelegation, textLimit,
   type HonDelegateTarget,
@@ -115,7 +116,7 @@ export type SuggestionConfirm = ConfirmChoice & { seq: number; targets: 'LOADING
 export type GroupPhase = 'NONE' | 'LOADING' | 'READY' | HonConversationFailure;
 
 export type HonConversationViewProps = {
-  presentation: 'panel' | 'full'; phase: ConversationPhase; readiness: HonConversationReadiness | null; conversations: HonConversationSummary[];
+  presentation: HonConversationPresentation; phase: ConversationPhase; readiness: HonConversationReadiness | null; conversations: HonConversationSummary[];
   thread: HonConversationThread | null; threadPhase: 'NONE' | 'LOADING' | 'READY' | HonConversationFailure; pending: Pending | null;
   draft: string; mode: HonReplyMode;
   /** Who answers; shown as a choice only for analysis specialists readiness offers, otherwise always HON. */
@@ -283,8 +284,16 @@ function Turn({ turn, onContinue, locked, children }: { turn: HonConversationTur
   </li>;
 }
 
+/** `dock`: the corner chat (owner 2026-11-22, like a docked chat): messages first, history folded away, composer pinned at the bottom. */
+export type HonConversationPresentation = 'panel' | 'full' | 'dock';
+
 export function HonConversationView(props: HonConversationViewProps): React.ReactElement {
   const { phase, readiness, thread, pending } = props;
+  const dock = props.presentation === 'dock';
+  // The docked chat keeps the newest message in view, like any chat window.
+  const lastTurn = useRef<HTMLDivElement>(null);
+  const turnCount = thread?.turns.length ?? 0;
+  useEffect(() => { if (dock && turnCount > 0) lastTurn.current?.scrollIntoView?.({ block: 'nearest' }); }, [dock, thread?.id, turnCount, props.threadPhase]);
   const hidden = phase === 'CONCEALED' || phase === 'SESSION';
   const locked = pending !== null && pending.state === 'SENDING';
   // A specialist request whose outcome is unknown keeps its one exact retry; no second request is offered meanwhile.
@@ -301,9 +310,10 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
     <div className={styles.head}>
       <h3 id={`${id}-title`}>Ask HON</h3>
       <span className={styles.status} data-tone={readiness?.honReply ? 'ready' : 'blocked'}>{phase !== 'READY' ? 'Not shown' : readiness?.honReply ? 'Connected' : 'Not available'}</span>
+      {dock && phase === 'READY' ? <button type="button" className={styles.secondary} disabled={locked} onClick={props.onNew} aria-pressed={thread === null} data-dock-new="">New chat</button> : null}
       {phase !== 'LOADING' ? <button type="button" className={styles.secondary} onClick={props.onRefresh}>Refresh</button> : null}
     </div>
-    <p className={styles.note}>HON answers from this school’s records and recommends next steps. It never acts on its own: anything consequential goes to Action Center for a human decision. HON is included in HON OS; nothing here is charged.</p>
+    {dock ? <p className={styles.meta} data-dock-intro="">HON suggests; you decide. Anything consequential goes to Action Center. Nothing here is charged.</p> : <p className={styles.note}>HON answers from this school’s records and recommends next steps. It never acts on its own: anything consequential goes to Action Center for a human decision. HON is included in HON OS; nothing here is charged.</p>}
     {phase === 'LOADING' ? <p role="status" className={styles.note}>Checking HON for this school…</p> : null}
     {phase === 'CONCEALED' ? <p role="status" className={styles.note}>Conversations are hidden while you were away. Refresh to show them again.</p> : null}
     {phase !== 'READY' && phase !== 'LOADING' && phase !== 'CONCEALED' ? <p role="alert" className={styles.note}>{FAILURE[phase]}</p> : null}
@@ -316,12 +326,19 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
     {phase === 'READY' && readiness && !readiness.honReply
       ? <p className={styles.note} data-readiness="">HON can’t answer questions at this school right now: {!readiness.authorization ? 'your role does not include HON.' : !readiness.entitlement ? 'the included AI team is not active or the monthly included limit is reached.' : !readiness.providerRoute ? 'the AI provider is not activated yet.' : 'HON is not ready yet.'} Nothing is charged.</p> : null}
     {phase === 'READY' ? <div key="records" className={styles.body} data-hon-private="">
-      <nav className={styles.history} aria-label="Your HON conversations">
-        <button type="button" className={styles.secondary} disabled={locked} onClick={props.onNew} aria-pressed={thread === null}>New conversation</button>
-        {props.conversations.length === 0 ? <p className={styles.note}>No conversations yet.</p>
+      {(() => {
+        const list = props.conversations.length === 0 ? <p className={styles.note}>No conversations yet.</p>
           : <ul>{props.conversations.map((item) => <li key={item.id}><button type="button" disabled={locked} aria-current={thread?.id === item.id ? 'true' : undefined} onClick={() => props.onOpen(item.id)}>
-            <span>{item.title}</span><small>{when(item.updatedAt)} · {item.turnCount} {item.turnCount === 1 ? 'question' : 'questions'}</small></button></li>)}</ul>}
-      </nav>
+            <span>{item.title}</span><small>{when(item.updatedAt)} · {item.turnCount} {item.turnCount === 1 ? 'question' : 'questions'}</small></button></li>)}</ul>;
+        // Docked: past conversations fold away so the chat itself fills the window; one tap opens the list.
+        return dock ? <details className={styles.history} data-dock-history="">
+          <summary>Past conversations ({props.conversations.length})</summary>
+          <nav aria-label="Your HON conversations">{list}</nav>
+        </details> : <nav className={styles.history} aria-label="Your HON conversations">
+          <button type="button" className={styles.secondary} disabled={locked} onClick={props.onNew} aria-pressed={thread === null}>New conversation</button>
+          {list}
+        </nav>;
+      })()}
       <div className={styles.thread}>
         {props.threadPhase === 'LOADING' ? <p role="status" className={styles.note}>Loading conversation…</p> : null}
         {props.threadPhase !== 'NONE' && props.threadPhase !== 'LOADING' && props.threadPhase !== 'READY' ? <p role="alert" className={styles.note}>{FAILURE[props.threadPhase]}</p> : null}
@@ -336,6 +353,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
             }} /> : null}
           </Turn>)}
         </ol> : null}
+        {dock ? <div ref={lastTurn} aria-hidden="true" /> : null}
         {thread === null && props.threadPhase === 'NONE' ? <p className={styles.note}>Ask about leads, trials, memberships, attendance or what to do next. Your first message starts a new conversation.</p> : null}
         <form className={styles.composer} onSubmit={(event) => { event.preventDefault(); if (canAsk && props.draft.trim()) props.onSend(); }}>
           {offered.length > 0 ? <fieldset className={styles.modes} disabled={!canAsk}><legend>Who answers</legend>
@@ -343,7 +361,10 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
           </fieldset> : null}
           <label htmlFor={`${id}-text`}>Message {askName(ask)}</label>
           <textarea id={`${id}-text`} rows={props.presentation === 'full' ? 3 : 2} maxLength={HON_REPLY_LIMITS.questionCharacters} value={props.draft} disabled={!canAsk}
-            onChange={(event) => props.onDraft(event.target.value)} aria-describedby={`${id}-help`} placeholder={canAsk ? 'How can I help you today?' : 'HON is not available right now'} />
+            onChange={(event) => props.onDraft(event.target.value)}
+            // Docked chat: Enter sends, Shift+Enter starts a new line.
+            onKeyDown={dock ? (event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (canAsk && props.draft.trim()) props.onSend(); } } : undefined}
+            aria-describedby={`${id}-help`} placeholder={canAsk ? 'How can I help you today?' : 'HON is not available right now'} />
           <div className={styles.composerRow}>
             <fieldset className={styles.modes} disabled={!canAsk || analyst}><legend>Answer</legend>
               {(['STANDARD', 'DETAILED'] as const).map((mode) => <label key={mode}><input type="radio" name={`${id}-mode`} checked={(analyst ? 'DETAILED' : props.mode) === mode} onChange={() => props.onMode(mode)} />{mode === 'STANDARD' ? 'Quick' : 'Detailed'}</label>)}
@@ -353,7 +374,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
           {ask === 'claire' ? <p className={styles.note} data-claire-note="">{ANALYST_CHOICE.claire.note}</p> : null}
           {analyst && ask !== 'claire' ? <p className={styles.note} data-analyst-note={ask}>{ANALYST_CHOICE[ask].note}</p> : null}
           {props.voice ?? null}
-          <p id={`${id}-help`} className={styles.meta}>{left.toLocaleString()} characters left. Don’t include passwords, card numbers or medical details.</p>
+          <p id={`${id}-help`} className={styles.meta}>{dock ? 'Enter to send · Shift+Enter for a new line. ' : ''}{left.toLocaleString()} characters left. Don’t include passwords, card numbers or medical details.</p>
         </form>
       </div>
     </div> : null}
@@ -365,7 +386,7 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
  * Private conversation content is concealed synchronously on session end (away only shows the school screensaver), and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
-export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon', voiceApi = AGENT_VOICE_API }: { school: HonSchool; presentation: 'panel' | 'full'; api?: HonConversationApi; initialAsk?: HonComposerAsk; voiceApi?: AgentVoiceApi }): React.ReactElement {
+export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon', voiceApi = AGENT_VOICE_API }: { school: HonSchool; presentation: HonConversationPresentation; api?: HonConversationApi; initialAsk?: HonComposerAsk; voiceApi?: AgentVoiceApi }): React.ReactElement {
   const [phase, setPhase] = useState<ConversationPhase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
   const [conversations, setConversations] = useState<HonConversationSummary[]>([]);
@@ -379,7 +400,11 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const [groupPhase, setGroupPhase] = useState<GroupPhase>('NONE');
   const [confirm, setConfirm] = useState<SuggestionConfirm | null>(null);
   const generation = useRef(0), reads = useRef<AbortController | null>(null), concealed = useRef(false), ended = useRef(false), mounted = useRef(true);
+  // The corner pop-up and the full workspace reopen the same conversation (kept only if the server still lists it).
   const openId = useRef<string | null>(null);
+  const restored = useRef(false);
+  if (!restored.current) { restored.current = true; openId.current = rememberedConversation(school); }
+  const keepOpen = (conversationId: string | null) => { openId.current = conversationId; rememberConversation(school, conversationId); };
   // Ownership for 401s: the privacy epoch advances on conceal and unmount; the pending key names the one command in flight;
   // the confirm sequence names the one open target list. A retired request never ends this session.
   const privacy = useRef(0), pendingKey = useRef<string | null>(null), confirmSeq = useRef(0), targetRead = useRef<AbortController | null>(null);
@@ -420,7 +445,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
         if (current !== generation.current || concealed.current || ended.current) return;
         setReadiness(nextReadiness); setConversations(page.items); setPhase('READY');
         const keep = openId.current && page.items.some((item) => item.id === openId.current) ? openId.current : null;
-        openId.current = keep; if (keep) readThread(keep, current, abort.signal);
+        keepOpen(keep); if (keep) readThread(keep, current, abort.signal);
       },
       (error) => { if (current !== generation.current || abort.signal.aborted) return; const kind = error instanceof HonConversationError ? error.kind : 'UNAVAILABLE';
         if (kind === 'SESSION') ended.current = true; setReadiness(null); setPhase(kind); });
@@ -432,7 +457,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       concealed.current = true; generation.current++; privacy.current++; reads.current?.abort(); closeConfirm(); voiceAnswer.current = null; voiceShutdown();
       for (const node of document.querySelectorAll<HTMLElement>('[data-hon-private]')) { node.hidden = true; node.inert = true; }
       setConversations([]); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE');
-      if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
+      if (event.type === HON_SESSION_INVALIDATED_EVENT) { ended.current = true; forgetHonConversations(); setPhase('SESSION'); } else setPhase((now) => now === 'SESSION' ? now : 'CONCEALED');
     };
     // Away (blur, hidden tab, page hide) only shows the school screensaver; the session end still clears everything.
     const windowEvents = [HON_SESSION_INVALIDATED_EVENT];
@@ -477,7 +502,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (!mounted.current) return;
       if (next.kind === 'create') {
         // The conversation exists; send the waiting first message as its own frozen turn.
-        const created = result as HonConversationSummary; openId.current = created.id;
+        const created = result as HonConversationSummary; keepOpen(created.id);
         const first = next.first;
         if (first) {
           try { run({ prepared: prepareTurn(school, created.id, composerTurnRequest(first.text, first.ask, first.replyMode)), kind: 'turn', label: `Your message to ${askName(first.ask)}`, state: 'SENDING', conversationId: created.id, text: first.text, ...(next.voice ? { voice: true } : {}) }); return; }
@@ -510,7 +535,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     try { prepared = prepareTurn(school, thread.id, { text, delegation: suggestionDelegation(current.agent, target, current.purpose), fromSuggestionTurnId: current.sourceTurnId }); }
     catch { return; }
     closeConfirm();
-    openId.current = thread.id;
+    keepOpen(thread.id);
     run({ prepared, kind: 'turn', label: `Your request to ${SUGGESTION_AGENT[current.agent].name}`, state: 'SENDING', conversationId: thread.id, confirm: choice });
   };
 
@@ -525,7 +550,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     const who: HonComposerAsk = ask !== 'hon' && offeredAnalysts(readiness).includes(ask) ? ask : 'hon';
     try {
       if (thread) {
-        openId.current = thread.id;
+        keepOpen(thread.id);
         run({ prepared: prepareTurn(school, thread.id, composerTurnRequest(text, who, mode)), kind: 'turn', label: `Your message to ${askName(who)}`, state: 'SENDING', conversationId: thread.id, text, ...voiceFlag });
       } else {
         const title = text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text;
@@ -550,8 +575,8 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
     }}
     onConfirmChange={(patch) => setConfirm((now) => now ? { ...now, ...patch } : now)}
     onConfirmSend={sendConfirm} onConfirmCancel={closeConfirm}
-    onOpen={(conversationId) => { if (concealed.current) return; closeConfirm(); openId.current = conversationId; const abort = new AbortController(); reads.current?.abort(); reads.current = abort; readThread(conversationId, generation.current, abort.signal); }}
-    onNew={() => { closeConfirm(); openId.current = null; setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE'); }}
+    onOpen={(conversationId) => { if (concealed.current) return; closeConfirm(); keepOpen(conversationId); const abort = new AbortController(); reads.current?.abort(); reads.current = abort; readThread(conversationId, generation.current, abort.signal); }}
+    onNew={() => { closeConfirm(); keepOpen(null); setThread(null); setThreadPhase('NONE'); setGroups(new Map()); setGroupPhase('NONE'); }}
     onContinue={(turn) => {
       if (!thread || concealed.current || !turn.replyDetail?.canContinue) return;
       try { run({ prepared: prepareTurn(school, thread.id, { text: 'Please continue.', delegation: null, continueTurnId: turn.turnId }), kind: 'turn', label: 'Continue HON’s answer', state: 'SENDING', conversationId: thread.id }); }
@@ -561,7 +586,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
       if (!thread || concealed.current || groupPhase !== 'READY' || (pending && (pending.state === 'SENDING' || pending.state === 'UNKNOWN'))) return;
       const group = groups.get(sourceTurnId.toLowerCase());
       if (!group || !SUMMARIZABLE_GROUP.has(group.status)) return;
-      closeConfirm(); openId.current = thread.id;
+      closeConfirm(); keepOpen(thread.id);
       try { run({ prepared: prepareTurn(school, thread.id, { text: SUMMARY_QUESTION, delegation: null, summarizeTurnId: group.sourceTurnId }), kind: 'turn', label: 'Summarize with HON', state: 'SENDING', conversationId: thread.id }); }
       catch { /* an invalid summary request is never sent */ }
     }}

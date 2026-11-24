@@ -1,0 +1,10 @@
+{
+  "blocks": {
+    "size_guide": { "name": "HON size guide" },
+    "pickup_note": { "name": "HON pickup note" }
+  },
+  "embeds": {
+    "school_colors": { "name": "HON school colors" },
+    "pickup_banner": { "name": "HON cart pickup banner" }
+  }
+}

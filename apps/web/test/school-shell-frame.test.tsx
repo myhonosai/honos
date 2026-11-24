@@ -87,6 +87,21 @@ describe('school shell frame', () => {
     expect(html).not.toContain('>CRM &amp; Sales<');
   });
 
+  it('opens HON from the corner as a pop-up over the page instead of leaving it (owner 2026-11-19)', () => {
+    const html = render({ path: '/staff/crm/leads' });
+    const corner = html.match(/<button[^>]*data-hon-corner=""[^>]*>/)?.[0] ?? '';
+    expect(corner).toContain('aria-haspopup="dialog"');
+    expect(corner).toContain('aria-expanded="false"');
+    expect(corner).toContain(`aria-label="${shellText('en', 'askHon')}"`);
+    // No link away from the page: the full workspace is offered inside the pop-up instead.
+    expect(html).not.toMatch(/<a[^>]*honLauncher/);
+    expect(html).not.toContain('role="dialog"');
+    expect(html).toContain('data-testid="page"');
+    // Where HON is already the page, there is no corner button; behind a modal it is inert.
+    for (const path of ['/staff/dashboard', '/staff/hon']) expect(render({ path })).not.toContain('data-hon-corner');
+    expect(render({ path: '/staff/crm/leads', menuOpen: true }).match(/<button[^>]*data-hon-corner=""[^>]*>/)?.[0]).toContain('inert');
+  });
+
   it('performs no network read while rendering', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     render(); expect(fetcher).not.toHaveBeenCalled(); fetcher.mockRestore();
@@ -130,7 +145,7 @@ describe('school shell frame', () => {
 
   it('marks only the everyday pages for the Modern top bar; the rest stay in the Menu', () => {
     const html = render({ mode: 'modern' });
-    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'conversationAi']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
+    for (const key of ['home', 'classes', 'attendance', 'students', 'crm', 'messages']) expect(html).toMatch(new RegExp(`data-nav="${key}" data-everyday="true"`));
     expect(html).toMatch(/data-nav="billing" data-everyday="false"/);
   });
 
@@ -162,7 +177,7 @@ describe('school shell frame', () => {
     expect(render({ phase: 'CONCEALED', schoolName: null })).not.toContain('data-shell-private');
   });
   it('keeps HON in the corner on other pages, but not on the dashboard or in HON itself', () => {
-    const launcher = /class="[^"]*honLauncher[^"]*" href="\/staff\/hon"/;
+    const launcher = /<button[^>]*class="[^"]*honLauncher[^"]*"[^>]*aria-haspopup="dialog"/;
     expect(render({ path: '/staff/crm/leads' })).toMatch(launcher);
     expect(render({ path: '/staff/work', phase: 'SESSION', selection: null })).toMatch(launcher);
     expect(render({ path: '/staff/dashboard' })).not.toMatch(launcher);
@@ -178,10 +193,11 @@ describe('school shell frame', () => {
     const tabs = (html: string) => [...(html.match(/data-shell-tabs="">(.*?)<\/nav>/s)?.[1] ?? '').matchAll(/>([^<]+)<\/a>/g)].map(m => m[1]);
     const progress = render({ path: '/staff/curriculum/progress' });
     expect(progress).not.toContain('data-shell-groups');
-    expect(tabs(progress)).toEqual(['Curriculum library', 'Curriculum progress', 'Teaching studio', 'Achievements']);
+    expect(tabs(progress)).toEqual(['Rank setup', 'Curriculum progress', 'Videos and links', 'Teaching studio', 'Achievements']);
     expect(tabs(render({ path: '/staff/billing/invoices' }))).toEqual(['Invoices', 'Tuition balances']);
+    expect(tabs(render({ path: '/staff/billing/checkout-pages' }))).toEqual(['Checkout pages', 'Checkout orders']);
     // A one-page item shows no tab row at all.
-    expect(render({ path: '/staff/billing/checkout-pages' })).not.toContain('data-shell-tabs');
+    expect(render({ path: '/staff/billing/shopify' })).not.toContain('data-shell-tabs');
   });
 
   it('shows Tests as numbered steps in order, not tabs, with the current step marked (L3)', () => {
@@ -217,5 +233,14 @@ describe('school shell frame', () => {
     const classes = mobile(render({ path: '/staff/schedule' }));
     expect(classes).not.toContain('data-mobile-current'); expect(classes).toContain('<span>More</span>');
     expect(classes).toMatch(/aria-current="page"[^>]*>.*?<span>Calendar<\/span>/s);
+  });
+
+  it('gives every phone bar slot one short single-line label, keeping the full name for screen readers (owner 2026-11-22)', () => {
+    const bar = render({ path: '/staff/schedule' }).match(/aria-label="Quick navigation"[^>]*>(.*?)<\/nav>/s)?.[1] ?? '';
+    const labels = [...bar.matchAll(/<span>([^<]*)<\/span>/g)].map(match => match[1]);
+    expect(labels).toEqual(['Dashboard', 'Contacts', 'Pipeline', 'Calendar', 'More']);
+    expect(bar).toContain('aria-label="Contact list"'); expect(bar).toContain('aria-label="Lead pipeline"');
+    for (const language of ['ko', 'es'] as const) for (const key of ['barHome', 'barStudents', 'barCrm', 'barClasses'] as const)
+      expect(shellText(language, key).length).toBeLessThanOrEqual(10);
   });
 });

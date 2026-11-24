@@ -311,7 +311,7 @@ try {
   await refused(() => punch(CLK, 'CLOCK_IN', 0), 409, 'TIMESHEET_APPROVED', 'clock in to an approved week');
   ok((await success(() => myClock(CLK), 'clock in an approved week')).data.approval.status === 'APPROVED', 'my clock shows the approval');
   await success(() => decide(MGR, dec(CLK, { weekStart: THIS, action: 'REOPEN', expectedVersion: 1 })), 'reopen this week');
-  // 0501: nobody approves their own week, except the school's system OWNER.
+  // 0661: nobody approves their own week, except the school's system OWNER.
   const weekRows = async (who) => (await sql('SELECT count(*)::int n FROM hon.staff_timesheet_weeks WHERE principal_id=$1', [who.principal])).rows[0].n;
   await refused(() => decide(MGR, dec(MGR, { staffPrincipalId: MGR.principal, weekStart: LAST })), 403, 'TIMESHEET_SELF_APPROVAL', 'a manager cannot approve their own week');
   ok(await weekRows(MGR) === 0, 'a refused self-approval writes nothing');
@@ -382,7 +382,7 @@ try {
   await assert.rejects(runtime.query("SELECT hon.read_my_time_clock('x')"), /STAFF_TIME_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
     for (const [begin, end] of [['-- Staff time clock exact verification (0478)', '-- End staff time clock exact verification.'],
-      ['-- Staff timesheet no-self-approval exact verification (0501)', '-- End staff timesheet no-self-approval exact verification.']]) {
+      ['-- Staff timesheet no-self-approval exact verification (0661)', '-- End staff timesheet no-self-approval exact verification.']]) {
       const section = verify.split(begin)[1]?.split(end)[0];
       ok(section, begin);
       await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;
@@ -392,7 +392,7 @@ try {
   ok((await sql("SELECT (SELECT count(*) FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.invoices WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.communication_messages WHERE organization_id=ANY($1::uuid[])) n",
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no message, payment attempt or invoice was created');
 
-  console.log(`PASS: staff time clock (0478, 0501): ${checks} checks.`);
+  console.log(`PASS: staff time clock (0478, 0661): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

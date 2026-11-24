@@ -4,9 +4,11 @@ import {
 } from '@nestjs/common';
 import { configuredPublicOrigin } from '@hon/auth';
 import {
-  SHOPIFY_EDIT_SCOPES, SHOPIFY_RETURN_PATH, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
+  SHOPIFY_EDIT_SCOPES, SHOPIFY_FINANCE_SCOPES, SHOPIFY_ORDER_SCOPES, SHOPIFY_STOREFRONT_BLOCKS, validateShopifyStorefrontPublish, validateShopifyStorefrontSave,
+  verifyShopifyStorefront, verifyShopifyStorefrontPublishResult, type ShopifyStorefront, type ShopifyStorefrontLinks, type ShopifyStorefrontPublishResult,
+  type ShopifyStorefrontSettings, SHOPIFY_RETURN_PATH, verifyShopifyFinanceSnapshot, verifyShopifyFinanceView, type ShopifyFinanceView, validateShopifyChangeCommandInput, validateShopifyProposeInput, verifyShopifyChangeResult,
   verifyShopifyProductChange, verifyShopifyProductChanges, type ShopifyChangeResult, type ShopifyProductChanges, validateShopifyCompleteInput, validateShopifyConnectInput, validateShopifyDisconnectInput, validateShopifySyncInput,
-  verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
+  verifyShopifyCatalog, verifyShopifyConnectResult, verifyShopifyConnectStart, shopifyNewStoreUrl, verifyShopifyDisconnectResult, verifyShopifyOrders, verifyShopifyOverview,
   verifyShopifySyncResult,
   type ShopifyCatalog, type ShopifyConnectResult, type ShopifyConnectStart, type ShopifyDisconnectResult, type ShopifyOrders, type ShopifyOverview,
   type ShopifySyncResult,
@@ -16,6 +18,7 @@ import { RuntimeDatabaseService, type ShopifyOperation } from '../../foundation/
 import { SHOPIFY_APP, ShopifyProviderError, type ShopifyApp } from './shopify-adapter.js';
 import { begunSync, runShopifySync } from './shopify-sync-engine.js';
 import { leasedChange, runShopifyChange } from './shopify-change-engine.js';
+import { begunStorefrontPublish, runStorefrontPublish } from './shopify-storefront-engine.js';
 import { shopifyBackgroundEnabled } from './shopify-worker.js';
 import { scopesGranted, shopifyAuthorizeUrl, verifyShopifyCallback } from './shopify-oauth.js';
 
@@ -38,6 +41,9 @@ const DETAIL: Record<string, string> = {
   SHOPIFY_CHANGE_NOT_LEASED: 'This edit is no longer being sent. Reload to see where it stands.',
   SHOPIFY_CHANGE_ATTEMPTS: 'HON has tried this edit five times. Check the product in Shopify, close the edit as unresolved, then prepare it again if needed.',
   SHOPIFY_TOO_MANY_DRAFTS: 'There are already 20 new products waiting. Approve or cancel some first.',
+  SHOPIFY_STOREFRONT_BUSY: 'HON is already publishing this store\'s storefront settings. Wait a moment and try again.',
+  SHOPIFY_STOREFRONT_NOT_LEASED: 'This publish is no longer running. Reload to see where it stands.',
+  SHOPIFY_STOREFRONT_LIMIT: 'HON has published storefront settings 100 times for this store today. Try again tomorrow.',
 };
 const STATUS: Record<string, number> = {
   SHOPIFY_INVALID: 400, SHOPIFY_CONNECT_STATE_INVALID: 400, SHOPIFY_CONNECT_STATE_EXPIRED: 400,
@@ -46,8 +52,9 @@ const STATUS: Record<string, number> = {
   SHOPIFY_SYNC_NOT_RUNNING: 409, SHOPIFY_RATE_LIMITED: 429,
   SHOPIFY_EDIT_NOT_ALLOWED: 409, SHOPIFY_CHANGE_STALE: 409, SHOPIFY_CHANGE_OPEN: 409, SHOPIFY_CHANGE_NOT_PENDING: 409, SHOPIFY_CHANGE_NOT_LEASED: 409,
   SHOPIFY_CHANGE_ATTEMPTS: 409, SHOPIFY_TOO_MANY_DRAFTS: 409,
+  SHOPIFY_STOREFRONT_BUSY: 409, SHOPIFY_STOREFRONT_NOT_LEASED: 409, SHOPIFY_STOREFRONT_LIMIT: 429,
 };
-const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000', '55000'];
+const STATES = ['22023', '42501', 'P0002', '40001', '23505', '55P03', '54000', '55000', '55006'];
 
 function refuse(code: string, status: number): never {
   const body: Record<string, string> = { code };
@@ -110,7 +117,16 @@ export class ShopifyService {
   async overview(req: HonRequest, schoolId: unknown): Promise<ShopifyOverview> {
     const school = this.school(schoolId);
     const raw = await this.call('read', [this.subject(req), school]);
-    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env) } : raw);
+    const out = this.checked(verifyShopifyOverview, raw && typeof raw === 'object' ? { ...(raw as object), connectEnabled: this.app !== null, autoSync: this.app !== null && shopifyBackgroundEnabled(process.env),
+      newStoreUrl: shopifyNewStoreUrl(process.env.HON_SHOPIFY_NEW_STORE_URL?.trim()) } : raw);
+    if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+
+  /** SH-F1 (commerce.shopify.manage): the latest Shopify Payments snapshot and whether the store allowed finance. */
+  async finance(req: HonRequest, schoolId: unknown): Promise<ShopifyFinanceView> {
+    const school = this.school(schoolId);
+    const out = this.checked(verifyShopifyFinanceView, await this.call('finance', [this.subject(req), school]));
     if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     return out;
   }
@@ -138,8 +154,10 @@ export class ShopifyService {
     const r = raw as { shopDomain?: unknown; expiresAt?: unknown } | null;
     if (!r || r.shopDomain !== input.shopDomain) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
     const redirectUri = origin + SHOPIFY_RETURN_PATH;
-    // Allow editing (SH4a) asks for the edit scopes too; connecting alone stays read-only.
-    const scopes = input.allowEditing ? [...app.scopes, ...SHOPIFY_EDIT_SCOPES] : app.scopes;
+    // Allow editing (SH4a), Allow finance (SH-F1) and Allow orders (SH2b) ask for their scopes too; connecting alone stays read-only.
+    // The storefront blocks (TB2) need no scope: HON writes only its own app-data metafield.
+    const scopes = [...app.scopes, ...(input.allowEditing ? SHOPIFY_EDIT_SCOPES : []), ...(input.allowFinance ? SHOPIFY_FINANCE_SCOPES : []),
+      ...(input.allowOrders ? SHOPIFY_ORDER_SCOPES : [])];
     const authorizeUrl = app.fake
       ? `${redirectUri}?${app.fake.approve(input.shopDomain, state, undefined, scopes)}`
       : shopifyAuthorizeUrl({ shop: input.shopDomain, clientId: app.clientId, scopes, redirectUri, state });
@@ -229,6 +247,54 @@ export class ShopifyService {
     });
   }
 
+  /**
+   * TB2 (commerce.shopify.manage): the school's saved storefront settings, whether they are live, and the theme editor links
+   * that add HON's blocks. The owner adds and saves blocks in Shopify's theme editor; HON never edits a theme.
+   */
+  async storefront(req: HonRequest, schoolId: unknown): Promise<ShopifyStorefront> {
+    const school = this.school(schoolId);
+    return this.storefrontView(await this.call('storefront', [this.subject(req), school]), school);
+  }
+
+  /** Saves the settings in HON only (a new version); nothing reaches Shopify until Publish. */
+  async saveStorefront(req: HonRequest, body: unknown): Promise<ShopifyStorefront> {
+    const input = this.input(validateShopifyStorefrontSave, body);
+    const raw = await this.call('saveStorefront', [this.subject(req), JSON.stringify(input)]) as { settingsVersion?: unknown } | null;
+    if (!raw || !Number.isInteger(raw.settingsVersion)) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    const out = await this.storefront(req, input.schoolId);
+    if (out.settingsVersion === null || out.settingsVersion < (raw.settingsVersion as number)) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+
+  /**
+   * Publishes this exact saved version: the database leases the publish to this person, then HON writes its one settings
+   * metafield on its own app installation and records the outcome under that lease. A lost answer is UNKNOWN; publishing
+   * again settles it because the write is idempotent.
+   */
+  async publishStorefront(req: HonRequest, body: unknown): Promise<ShopifyStorefrontPublishResult> {
+    const input = this.input(validateShopifyStorefrontPublish, body), subject = this.subject(req), app = this.requireApp();
+    const w = begunStorefrontPublish(await this.call('beginStorefront', [subject, JSON.stringify(input)]), v => storefrontSettingsFrom(input.schoolId, v));
+    if (!w || w.settingsVersion !== input.settingsVersion) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    const bound = { schoolId: input.schoolId, leaseToken: w.leaseToken };
+    const done = await runStorefrontPublish(app, this.now, w, {
+      rotate: b => this.call('rotateStorefront', [subject, JSON.stringify({ ...bound, ...b })]),
+      finish: async (outcome, failureCode) => {
+        const raw = await this.call('finishStorefront', [subject, JSON.stringify({ ...bound, outcome, failureCode })]) as { outcome?: unknown } | null;
+        if (raw?.outcome !== outcome) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+        return { outcome, failureCode };
+      },
+    });
+    return this.checked(verifyShopifyStorefrontPublishResult, { ...done, storefront: await this.storefront(req, input.schoolId) });
+  }
+
+  private storefrontView(raw: unknown, school: string): ShopifyStorefront {
+    const r = raw && typeof raw === 'object' ? raw as Record<string, unknown> : null;
+    const shop = typeof r?.shopDomain === 'string' ? r.shopDomain : null;
+    const out = this.checked(verifyShopifyStorefront, r ? { ...r, links: shop && this.app ? storefrontLinks(shop, this.app.clientId) : null } : raw);
+    if (out.schoolId !== school) throw new ServiceUnavailableException({ code: 'SHOPIFY_UNAVAILABLE' });
+    return out;
+  }
+
   /** A person's sync (Sync now, and the first sync after connecting), bound to their session at this school. */
   private async runSync(subject: string, schoolId: string): Promise<ShopifySyncResult> {
     const app = this.requireApp();
@@ -237,6 +303,7 @@ export class ShopifyService {
     return runShopifySync(app, this.now, b, {
       rotate: body => this.call('rotate', [subject, JSON.stringify({ schoolId, syncId: b.syncId, ...body })]),
       page: body => this.call('page', [subject, JSON.stringify({ schoolId, syncId: b.syncId, ...body })]),
+      finance: body => this.call('recordFinance', [subject, JSON.stringify({ schoolId, syncId: b.syncId, finance: verifyShopifyFinanceSnapshot(body.finance) })]),
       finish: async (outcome, failureCode) => {
         const raw = await this.call('finishSync', [subject, JSON.stringify({ schoolId, syncId: b.syncId, outcome, failureCode })]);
         const { syncId, ...rest } = (raw ?? {}) as Record<string, unknown>;
@@ -245,4 +312,24 @@ export class ShopifyService {
       },
     });
   }
+}
+
+/** The settings as the database handed them to the publish (checked with the same rules as a save). */
+function storefrontSettingsFrom(schoolId: string, v: unknown): ShopifyStorefrontSettings {
+  return validateShopifyStorefrontSave({ schoolId, expectedVersion: null, settings: v }).settings;
+}
+
+/**
+ * Shopify theme editor deep links for HON's theme app extension (api_key = the app's client id, handle = the block file).
+ * Each opens the store's live theme in the editor with the block added or the embed switched on, unsaved, for the owner to
+ * preview and save. Shopify docs: theme-app-extensions/configuration, "Deep linking".
+ */
+export function storefrontLinks(shop: string, clientId: string): ShopifyStorefrontLinks {
+  const base = `https://${shop}/admin/themes/current/editor?`, id = (h: string) => encodeURIComponent(clientId) + '/' + h;
+  return {
+    colors: `${base}context=apps&template=index&activateAppId=${id(SHOPIFY_STOREFRONT_BLOCKS.colors)}`,
+    sizeGuide: `${base}template=product&addAppBlockId=${id(SHOPIFY_STOREFRONT_BLOCKS.sizeGuide)}&target=mainSection`,
+    pickupNote: `${base}template=cart&addAppBlockId=${id(SHOPIFY_STOREFRONT_BLOCKS.pickupNote)}&target=newAppsSection`,
+    pickupBanner: `${base}context=apps&template=cart&activateAppId=${id(SHOPIFY_STOREFRONT_BLOCKS.pickupBanner)}`,
+  };
 }

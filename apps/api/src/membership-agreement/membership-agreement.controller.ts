@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Injectable, Param, Post, Query, Req, UseGuards, type CanActivate, type ExecutionContext } from '@nestjs/common';
-import { FAMILY_MEMBERSHIP_AGREEMENT_SIGN_COMMAND, FAMILY_PERSON_PHOTO_COMMAND, MEMBERSHIP_AGREEMENT_HUMAN_COMMAND } from '@hon/contracts';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, Injectable, NotFoundException, Param, Post, Query, Req, Res, UseGuards, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import type { Response } from 'express';
+import { FAMILY_MEMBERSHIP_AGREEMENT_SIGN_COMMAND, FAMILY_PERSON_PHOTO_COMMAND, MEMBERSHIP_AGREEMENT_HUMAN_COMMAND, MEMBERSHIP_AGREEMENT_LINK_COMMAND } from '@hon/contracts';
 import { assertSchoolAccountHumanRequest } from '../accounts/school-staff-invitation.controller.js';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
@@ -10,6 +11,11 @@ import { MembershipAgreementService } from './membership-agreement.service.js';
 @Injectable()
 export class MembershipAgreementHumanGuard implements CanActivate {
   canActivate(c: ExecutionContext) { return assertSchoolAccountHumanRequest(c, MEMBERSHIP_AGREEMENT_HUMAN_COMMAND); }
+}
+/** 0499: staff sending a signing link use their own command header. */
+@Injectable()
+export class MembershipAgreementLinkHumanGuard implements CanActivate {
+  canActivate(c: ExecutionContext) { return assertSchoolAccountHumanRequest(c, MEMBERSHIP_AGREEMENT_LINK_COMMAND); }
 }
 /** Parent-portal guards: never cached (refusals included), then the same-origin human browser checks. */
 function noStore(c: ExecutionContext) {
@@ -74,5 +80,39 @@ export class FamilyMembershipAgreementController {
   @Header('Cache-Control', 'private, no-store')
   async removePhoto(@Query() q: Record<string, unknown>, @Body() b: unknown, @Headers('idempotency-key') k: string | undefined, @Req() r: HonRequest) {
     return { data: await this.agreement.familyPhotoRemove(noSelectors(r, q), b, k) };
+  }
+}
+
+/** 0499: staff read who can receive a link for one student's family, and send a new link by email and/or text. */
+@Controller() @UseGuards(MembershipAgreementLinkHumanGuard, HonIdentityGuard)
+export class MembershipAgreementLinkController {
+  constructor(private readonly agreement: MembershipAgreementService) {}
+  @Get('school/schools/:schoolId/people/:personId/membership-agreement-link')
+  @Header('Cache-Control', 'private, no-store')
+  read(@Req() r: HonRequest, @Param('schoolId') s: string, @Param('personId') p: string) { return this.agreement.sendRead(r, s, p).then(data => ({ data })); }
+  @Post('school/membership-agreement-link/send') @HttpCode(200)
+  @Header('Cache-Control', 'private, no-store')
+  send(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.agreement.sendLink(r, b, k).then(data => ({ data })); }
+}
+
+/** 0499: the family's signing link. No account, cookie or tenant id is read: the random token in the link is the only key. */
+@Controller('public/membership-agreement-links')
+export class PublicMembershipAgreementLinkController {
+  constructor(private readonly agreement: MembershipAgreementService) {}
+
+  @Get(':token')
+  @Header('Cache-Control', 'no-store') @Header('Referrer-Policy', 'no-referrer') @Header('X-Robots-Tag', 'noindex')
+  async read(@Param('token') token: string) {
+    const data = await this.agreement.linkRead(token);
+    if (!data) throw new NotFoundException({ result: 'GONE' });
+    return { data };
+  }
+
+  @Post(':token/sign')
+  @Header('Cache-Control', 'no-store') @Header('Referrer-Policy', 'no-referrer')
+  async sign(@Param('token') token: string, @Body() body: unknown, @Res() res: Response) {
+    const result = await this.agreement.linkSign(token, body);
+    const status = { SIGNED: 201, ALREADY_SIGNED: 200, CHANGED: 409, INVALID: 400, GONE: 410, UNAVAILABLE: 503 }[result];
+    return res.status(status).json({ result });
   }
 }

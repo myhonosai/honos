@@ -63,6 +63,14 @@ try {
  for(const patch of [{payloadHash:'0'.repeat(64)},{policyVersion:2},{actionRequestId:randomUUID()},{requestedByPrincipalId:actors.reviewer2.id},{actionCode:'marketing.social.publish'},{approvalExpiresAt:new Date(Date.now()+10000).toISOString()}])await deny(()=>actions.decide(c(),decide(detail,'APPROVED',{binding:{...binding(detail),...patch}})));
  await deny(()=>actions.decide(c(),decide(detail,'APPROVED',{normalizedPayload:{changed:true}})),400);
  const expiredDetail=await actions.getForReview(c(),await proposal({expiry:new Date(Date.now()-1000).toISOString()}));assert.equal(expiredDetail.reviewBlock,'APPROVAL_EXPIRED');await deny(()=>actions.decide(c(),decide(expiredDetail)));
+ // Review [21]: an expired approval refused at execution keeps its EXPIRED status, audit row and outbox event (no rollback).
+ const lapsed=await proposal({status:'APPROVED',expiry:new Date(Date.now()-1000).toISOString()});
+ await deny(()=>actions.beginExecution(c('requester'),lapsed));
+ assert.equal((await admin.query('SELECT status FROM hon.action_requests WHERE id=$1',[lapsed])).rows[0].status,'EXPIRED');
+ assert.equal(Number((await admin.query("SELECT count(*) n FROM hon.audit_events WHERE action_request_id=$1 AND action_code='action.request.expire' AND result='FAILED'",[lapsed])).rows[0].n),1);
+ assert.equal(Number((await admin.query("SELECT count(*) n FROM hon.outbox_events WHERE aggregate_id=$1 AND event_type='action.request.expired'",[lapsed])).rows[0].n),1);
+ await deny(()=>actions.beginExecution(c('requester'),lapsed));
+ assert.equal(Number((await admin.query("SELECT count(*) n FROM hon.outbox_events WHERE aggregate_id=$1",[lapsed])).rows[0].n),1,'a second attempt finds EXPIRED and writes nothing');
  for(const v of [{...payload,providerToken:'PRIVATE_PROVIDER_TOKEN'},{...payload,providerAccount:{secret:'PRIVATE_SECRET'}},{...payload,primaryContact:{...payload.primaryContact,access_token:'PRIVATE_TOKEN'}}]){const d=await actions.getForReview(c(),await proposal({payload:v}));assert.equal(d.normalizedPayload,null);assert.equal(d.payloadVisibility,'WITHHELD_UNSAFE');assert(!JSON.stringify(d).includes('PRIVATE_PROVIDER'));await deny(()=>actions.decide(c(),decide(d)));}
  const mismatched=await actions.getForReview(c(),await proposal({hash:'0'.repeat(64)}));assert.equal(mismatched.normalizedPayload,null);await deny(()=>actions.decide(c(),decide(mismatched)));
  const unsupported=await actions.getForReview(c(),await proposal({action:'billing.invoice.issue',permission:'billing.invoice.issue'}));assert(unsupported.reviewBlock);await deny(()=>actions.decide(c(),decide(unsupported)));

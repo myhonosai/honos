@@ -30,3 +30,7 @@ export class PaperImportSendHumanUiGuard extends MembershipActivationHumanUiGuar
 export class PaperImportDeleteHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'students.paper_import.delete';
 }
+@Injectable()
+export class PaperImportTypedHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'students.paper_import.typed';
+}

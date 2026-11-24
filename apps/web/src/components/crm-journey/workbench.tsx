@@ -20,10 +20,10 @@ type Notice = 'denied' | 'readError' | 'rejected' | 'unknown' | 'invalid' | 'res
 type CommandResult = Exclude<Kind, 'REGISTER'> | 'REGISTERED' | 'REVIEW' | '';
 const timeout = () => AbortSignal.timeout(20_000);
 const trialScopeKey = (s: Scope, lead: string) => [s.organizationId, s.schoolId, lead].map(v => v.toLowerCase()).join(':');
-export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '', clockReader = readSchoolClock }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string; clockReader?: typeof readSchoolClock }): React.ReactElement {
+export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '', initialStep, clockReader = readSchoolClock }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string; initialStep?: 'trial'; clockReader?: typeof readSchoolClock }): React.ReactElement {
   const locale = useLocale(), t = (k: JourneyKey) => journeyText(locale.preferences.language, k);
   const shellSchool = useShellSchool();
-  const [mode, setMode] = useState('modern'), [step, setStep] = useState<Step>('lead');
+  const [mode, setMode] = useState('modern'), [step, setStep] = useState<Step>(initialStep === 'trial' ? 'trial' : 'lead');
   const [scope, setScope] = useState<Scope>({ organizationId: initialScope.organizationId ?? '', schoolId: initialScope.schoolId ?? '' });
   const [rows, setRows] = useState<LeadListItem[] | null>(null), [leadId, setLeadId] = useState(initialLeadId), [query, setQuery] = useState('');
   const [queue, setQueue] = useState<FollowUpQueue | null>(null), [registration, setRegistration] = useState<'NOT_REGISTERED' | 'EXISTING_RECORD' | 'UNAVAILABLE' | 'UNVERIFIED_PREPARED' | null>(null);

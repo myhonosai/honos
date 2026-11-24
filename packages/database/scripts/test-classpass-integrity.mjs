@@ -46,7 +46,7 @@ async function waitForGrantExpiry(){
  while(Date.now()<deadline){if((await admin.query('SELECT effective_until<=clock_timestamp() expired FROM hon.principal_role_grants WHERE id=$1',[ids.grant])).rows[0].expired)return;await new Promise(r=>setTimeout(r,20));}
  throw new Error('Database grant-expiry barrier not observed');
 }
-async function snapshot(){const result={};for(const table of tables){assert(/^[a-z_]+$/.test(table));result[table]=(await admin.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${table} t`)).rows[0].hash;}return result;}
+async function snapshot(){const result={};for(const table of tables){assert(/^[a-z][a-z0-9_]*$/.test(table));result[table]=(await admin.query(`SELECT md5(coalesce(string_agg(to_jsonb(t)::text,E'\n' ORDER BY to_jsonb(t)::text),'')) hash FROM hon.${table} t`)).rows[0].hash;}return result;}
 const allowed=new Set(['classpass_products','classpass_passes','classpass_ledger','class_bookings','audit_events','outbox_events','idempotency_records']);
 async function command(action,target,input,c=ctx()){const before=await snapshot();try{const result=await service.command(c,action,target,input);commands++;const after=await snapshot();for(const t of tables)if(!allowed.has(t))assert.equal(after[t],before[t],`Unrelated effect on ${t}`);assert.equal(result.externalEffects,'NONE');assert.equal(result.paymentProviderOutcome,'UNAVAILABLE');return result;}catch(e){assert.deepEqual(await snapshot(),before);throw e;}}
 async function deny(action,target,input,c=ctx(),n=400){await assert.rejects(()=>command(action,target,input,c),status(n));}

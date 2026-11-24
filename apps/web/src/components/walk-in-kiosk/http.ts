@@ -1,9 +1,9 @@
 import {
   validateEndWalkInDeviceInput, validateStartWalkInDeviceInput, validateWalkInDeskPaidInput, validateWalkInSettingsInput, verifyWalkInDeviceReceipt,
   verifyWalkInOverview, verifyWalkInSettingsRead, verifyWalkInSettingsReceipt, verifyWalkInTerminal, verifyWalkInVisitDetail, verifyWalkInVisitOutcome,
-  verifyWalkInVisitReceipt, WALKIN_TOKEN,
+  verifyWalkInVisitReceipt, verifyWalkInCardOutcome, WALKIN_CARD_SURFACES, WALKIN_TOKEN,
   type StartWalkInDeviceInput, type WalkInDeskPaidInput, type WalkInDevice, type WalkInOverview, type WalkInSettings, type WalkInSettingsInput,
-  type WalkInSettingsRead, type WalkInTerminal, type WalkInVisit, type WalkInVisitDetail, type WalkInVisitInput, type WalkInVisitOutcome,
+  type WalkInSettingsRead, type WalkInTerminal, type WalkInCardOutcome, type WalkInCardSurface, type WalkInVisit, type WalkInVisitDetail, type WalkInVisitInput, type WalkInVisitOutcome,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -12,7 +12,7 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
  * Idempotency-Key. The tablet sends no cookie and no tenant id: the device token in the body is its only selector. The server
  * decides every permission, offer, price and rule again.
  */
-export type WalkInErrorKind = 'SESSION' | 'DENIED' | 'GONE' | 'CHANGED' | 'REFUSED' | 'INVALID' | 'UNKNOWN';
+export type WalkInErrorKind = 'SESSION' | 'DENIED' | 'GONE' | 'CHANGED' | 'REFUSED' | 'CARD_PENDING' | 'INVALID' | 'UNKNOWN';
 export class WalkInError extends Error { constructor(readonly kind: WalkInErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
 export type WalkInScope = Readonly<{ organizationId: string; schoolId: string }>;
@@ -57,6 +57,7 @@ export function walkInErrorFor(status: number, code: string | null): WalkInError
     if (code === 'VERSION_CONFLICT') return new WalkInError('CHANGED', code);
     if (code === 'IDEMPOTENCY_KEY_REUSED') return new WalkInError('INVALID', code);
     if (code && /^WALKIN_(KIOSK_OFF|KIOSK_DEVICE_LIMIT|KIOSK_DEVICE_ENDED|VISIT_NOT_DUE)$/.test(code)) return new WalkInError('REFUSED', code);
+    if (code === 'WALKIN_CARD_PAYMENT_OPEN' || code === 'WALKIN_CARD_PAYMENT_IN_PROGRESS') return new WalkInError('CARD_PENDING', code);
   }
   return new WalkInError('UNKNOWN', code);
 }
@@ -135,6 +136,19 @@ export const walkInTabletApi = {
     try {
       const answer = await exchange('/api/v1/walk-in-kiosk/visits', signal, null, { body: JSON.stringify({ device: token, visit }), key });
       return verifyWalkInVisitOutcome(answer.value);
+    } catch { return { result: 'UNAVAILABLE' }; }
+  },
+  /**
+   * 0533 card payment for the visit this tablet just recorded, named only by the key it was submitted with (never a payment
+   * id). start shows it on `surface`; status asks where it stands; cancel ends it because the visitor pays at the desk.
+   */
+  async card(action: 'start' | 'status' | 'cancel', token: string, visitKey: string, signal: AbortSignal, surface?: WalkInCardSurface): Promise<WalkInCardOutcome> {
+    if (!WALKIN_TOKEN.test(token) || !PUBLIC_KEY.test(visitKey) || (action === 'start') !== (surface !== undefined)
+      || (surface !== undefined && !WALKIN_CARD_SURFACES.includes(surface))) return { result: 'INVALID' };
+    try {
+      const answer = await exchange(`/api/v1/walk-in-kiosk/card-payment/${action}`, signal, null,
+        { body: JSON.stringify(surface ? { device: token, visit: visitKey, surface } : { device: token, visit: visitKey }) });
+      return verifyWalkInCardOutcome(answer.value);
     } catch { return { result: 'UNAVAILABLE' }; }
   },
 };
