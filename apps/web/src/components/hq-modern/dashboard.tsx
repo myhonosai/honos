@@ -75,7 +75,7 @@ function CommandStage(): React.ReactElement {
         <div className={styles.honDock} data-hq-conversation-dock>
           <div className={styles.coreCaption}><h2>{t("HON")}</h2><p>{t("Executive AI Coordinator")}</p></div>
           <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label={t("Expand HON conversation")}><HqIcon name="mic" size={22}/><span>{t("Ask HON anything")}</span><HqIcon name="expand" size={15}/></button>
-          
+
         </div>
       </div>
       <div className={styles.stageTeam}>{HQ_EXECUTIVES.map((executive, index) => <Link className={styles.stageExecutive} style={{ '--stage-column': index < 3 ? index + 1 : index + 2 } as CSSProperties} href={`/hq/executives/${executive.executiveKey}`} key={executive.executiveKey} aria-label={t("View {name}'s {role} workspace",{name:executive.displayName,role:text(executive.domain.replaceAll('_',' ').toLowerCase().replace(/\b\w/g,l=>l.toUpperCase()))})}>

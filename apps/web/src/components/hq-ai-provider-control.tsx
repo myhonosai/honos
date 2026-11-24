@@ -501,7 +501,7 @@ export function HqAiProviderControl(): React.ReactElement {
       {access !== 'available' ? <section className={styles.accessPanel} aria-live="polite">
         <span>AI PROVIDERS</span><h2>{accessMessage}</h2>
         {access === 'signed-out' ? <a href="/auth/login">Sign in <b>→</b></a> : <button type="button" onClick={() => void loadConfiguration()}>{access === 'checking' ? 'Checking access…' : 'Try again'}</button>}
-        
+
       </section> : <>
         {manageBlocked ? <section className={styles.manageNotice}><strong>You can look but not change.</strong><span>The last change was refused, so the forms are locked. You can still view everything and run tests.</span></section> : null}
 
