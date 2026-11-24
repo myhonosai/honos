@@ -5346,6 +5346,8 @@ BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
 -- 0669 HQ school AI cost alerts: acknowledgements are migration-owner only; the runtime may only call the HQ read and command.
 DO $$ DECLARE r text; f text; BEGIN
   IF to_regclass('hon.ai_school_cost_alert_acknowledgements') IS NULL THEN RAISE EXCEPTION 'Apply migration 0669 first'; END IF;
