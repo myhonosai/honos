@@ -104,11 +104,17 @@ export class SchoolCreationController {
 /** Conceal mounted form/receipt DOM before React batching, without retiring the command lease. */
 export function bindSchoolCreationPrivacy(controller: SchoolCreationController, concealDom: () => void, browser: EventTarget, documentTarget: EventTarget & { readonly visibilityState: string }): () => void {
   const conceal = (event: Event) => { concealDom(); controller.conceal(event.type === HON_SESSION_INVALIDATED_EVENT); };
-  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); };
+  // No "Verify" button (owner, 2026-11-24): coming back re-runs the same HQ-owner read automatically.
+  // The server still re-checks the owner on every create; signed-out and refused states wait for the person.
+  const restore = () => { const view = controller.snapshot(); if (view.concealed && !view.busy && view.access === 'idle') void controller.authorize(); };
+  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); else restore(); };
   const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
   for (const event of events) browser.addEventListener(event, conceal);
-  documentTarget.addEventListener('visibilitychange', visibility); visibility();
+  browser.addEventListener('focus', restore);
+  documentTarget.addEventListener('visibilitychange', visibility);
+  if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange'));
   return () => {
+    browser.removeEventListener('focus', restore);
     conceal(new Event('unmount'));
     for (const event of events) browser.removeEventListener(event, conceal);
     documentTarget.removeEventListener('visibilitychange', visibility);

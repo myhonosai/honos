@@ -33,7 +33,7 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
     expect(s.controller.snapshot()).toEqual({ kind: 'ready', directory, busy: false });
     expect(s.api.load.mock.calls[0]![0]).toBe(s.api.principal.mock.calls[0]![0]);
   });
-  it('immediately hides/inerts facts and clears them on every privacy signal, restoring only by an explicit fresh read', async () => {
+  it('immediately hides/inerts facts and clears them on every privacy signal, restoring by a fresh verified read when the person comes back', async () => {
     for (const event of ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, 'visibilitychange']) {
       const s = setup(); await s.controller.start(); const p = privacy(s.controller);
       const oldSignal = s.api.load.mock.calls[0]![0];
@@ -41,9 +41,12 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
       else p.browser.dispatchEvent(new Event(event));
       expect(p.facts).toEqual({ hidden: true, inert: true }); expect(oldSignal.aborted).toBe(true);
       expect(s.controller.snapshot()).toEqual({ kind: event === HON_SESSION_INVALIDATED_EVENT ? 'unauthorized' : 'concealed', directory: null, busy: false });
+      // Coming back reads a fresh directory by itself (both principal checks), except after a session ended.
       p.browser.dispatchEvent(new Event('focus')); p.documentTarget.visibilityState = 'visible'; p.documentTarget.dispatchEvent(new Event('visibilitychange'));
-      await Promise.resolve(); expect(s.api.load).toHaveBeenCalledTimes(1);
-      await s.controller.load(); expect(s.api.load).toHaveBeenCalledTimes(2); expect(s.controller.snapshot().directory).toEqual(directory); p.unbind();
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      if (event === HON_SESSION_INVALIDATED_EVENT) { expect(s.api.load).toHaveBeenCalledTimes(1); await s.controller.load(); }
+      await vi.waitFor(() => expect(s.controller.snapshot().kind).toBe('ready'));
+      expect(s.api.load).toHaveBeenCalledTimes(2); expect(s.controller.snapshot().directory).toEqual(directory); p.unbind();
     }
   });
   it('rejects late pending directory responses after concealment and permits an independent fresh read', async () => {
