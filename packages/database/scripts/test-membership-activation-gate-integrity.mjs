@@ -732,10 +732,12 @@ try {
   // reads memberships.
   // 0423 automation_event_subject and automation_condition_holds only read a class booking event's own booking row (to
   // find its contact) and membership state (for entry/IF conditions); they book, check in and grant nothing.
+  // 0643 claire_kpi_count counts memberships and attendance for Claire's read-only KPI report; it books, checks in and
+  // grants nothing.
   // 0574 automation_date_candidates reads attendance marks only to find each active student's last attendance (MIA); it
   // books, checks in and grants nothing.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
-    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_date_candidates', 'automation_event_subject', 'begin_hon_turn_0284', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
+    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_date_candidates', 'automation_event_subject', 'begin_hon_turn_0284', 'claire_kpi_count', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
       'school_report_periods']);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(INSERT\\s+INTO|UPDATE)\\s+(hon\\.)?(class_bookings|attendance_records|class_pass\\w*|kiosk\\w*|check_in\\w*)'"))[0].n, 0);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_views WHERE definition ~* '\\mmemberships\\M'"))[0].n, 0);
