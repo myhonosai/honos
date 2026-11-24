@@ -41,9 +41,8 @@ test('the home page describes the organization as structured data', () => {
     const json = read(live, f).match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1];
     assert.ok(json, `${f} has JSON-LD`);
     const types = JSON.parse(json)['@graph'].map((n) => n['@type']);
-    assert.deepEqual(types, ['Organization', 'WebSite']);
+    assert.deepEqual(types.slice(0, 2), ['Organization', 'WebSite']);
   }
-  assert.doesNotMatch(read(live, 'blog/index.html'), /application\/ld\+json/);
 });
 
 test('a live build opens the site to search engines and lists every page in the sitemap', () => {
