@@ -124,7 +124,7 @@ export class HiggsfieldCreativeRuntime implements AsyncCreativeProviderRuntime {
     const cost = (HIGGSFIELD_API.costMicrosPerUnit[job.operationCode] ?? 0) * finalUnits;
     const mediaType = video ? 'video/mp4' as const : 'image/png' as const;
     const downloads: CreativeDownload[] = urls.map(url => ({ url: url!, mediaType }));
-    return { state: 'DONE', downloads, result: { finalUnits, providerCostMicrounits: cost,
+    return { state: 'DONE', downloads, result: { finalUnits, providerCostMicrounits: cost, providerCostBasis: 'HON_ESTIMATE',
       assets: downloads.map((_, i) => ({ mediaType, width, height, durationSeconds: video ? job.units : null, providerAssetReference: `hf:${job.providerJobId}:${i + 1}` })) } };
   }
 

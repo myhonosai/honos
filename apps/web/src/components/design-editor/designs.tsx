@@ -11,6 +11,7 @@ import {
   DesignsAccessError, DesignsRefusal, DesignsUnknown, addDesignPhoto, loadDesign, loadDesignPhoto, loadDesigns, saveDesign, setDesignStatus, type DesignsScope,
 } from './http';
 import { DesignEditor, type EditorApi } from './editor';
+import { DesignCommands } from './commands';
 import { NO_BRAND, TEMPLATE_IDS, TEMPLATE_NAMES, templateDocument, type Brand, type TemplateId } from './templates';
 import { brandingApi } from '../school-branding/http';
 import { designText, sizeMeasure, sizeName, type DesignKey } from './copy';
@@ -81,14 +82,19 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
   const [notice, setNotice] = useState<DesignKey | null>(null);
   const generation = useRef(0);
   const brandGeneration = useRef(0);
-  const pending = useRef<{ fingerprint: string; key: string } | null>(null);
+  // Create and status commands live in one privacy generation: a security event, a school change or unmount retires
+  // it, and a late answer from before is dropped whole (no reopened design, no restored or cleared retry key).
+  const commands = useMemo(() => new DesignCommands(api), [api]);
 
   useEffect(() => {
     const off = typeof window === 'undefined' ? () => {} : onShellPrivacyEvent(() => {
-      ++generation.current; pending.current = null; setItems([]); setOpen({ state: 'NONE' }); setNotice(null); ++brandGeneration.current; setBrand(NO_BRAND); setLoad('LOADING');
+      ++generation.current; commands.retire(); setBusy(false); setItems([]); setOpen({ state: 'NONE' }); setNotice(null); ++brandGeneration.current; setBrand(NO_BRAND); setLoad('LOADING');
     });
-    return () => { off(); ++generation.current; };
-  }, []);
+    return () => { off(); ++generation.current; commands.retire(); };
+  }, [commands]);
+
+  // A different school is a new generation even if no shell event reached this page first.
+  useEffect(() => () => { commands.retire(); setBusy(false); }, [commands, selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!scope) return;
@@ -122,34 +128,23 @@ export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.Reac
     const template = newTemplate || null;
     const input = createInput(newName || (template ? t(TEMPLATE_NAMES[template]) : t('newNameDefault')), newSize, template, language, brand);
     if (!scope || !input || busy) return;
-    const fingerprint = JSON.stringify([scope.schoolId, input.name, input.sizeCode, input.document]);
-    if (pending.current?.fingerprint !== fingerprint) pending.current = { fingerprint, key: crypto.randomUUID() };
     setBusy(true); setNotice(null);
-    try {
-      const receipt = await api.save(scope, input, pending.current.key);
-      pending.current = null; setNewName(''); setNewTemplate('');
-      setOpen({ state: 'READY', design: receipt.design });
-    } catch (error) {
-      if (!(error instanceof DesignsUnknown)) pending.current = null;
-      setNotice(refusalKey(error));
-    } finally { setBusy(false); }
+    const outcome = await commands.create(scope, input);
+    if (outcome.kind === 'stale') return;
+    setBusy(false);
+    if (outcome.kind === 'saved') { setNewName(''); setNewTemplate(''); setOpen({ state: 'READY', design: outcome.design }); }
+    else setNotice(refusalKey(outcome.error));
   };
 
-  const statusKeys = useRef(new Map<string, string>());
   const changeStatus = async (row: CreativeDesignSummary, next: CreativeDesignStatus) => {
     if (!scope || busy) return;
-    const id = `${row.designId}:${row.version}:${next}`;
-    const key = statusKeys.current.get(id) ?? crypto.randomUUID();
-    statusKeys.current.set(id, key);
     setBusy(true); setNotice(null);
-    try {
-      await api.setStatus(scope, { designId: row.designId, expectedVersion: row.version, status: next }, key);
-      statusKeys.current.delete(id); setRefresh(n => n + 1);
-    } catch (error) {
-      if (!(error instanceof DesignsUnknown)) statusKeys.current.delete(id);
-      setNotice(refusalKey(error));
-      if (error instanceof DesignsRefusal) setRefresh(n => n + 1);
-    } finally { setBusy(false); }
+    const outcome = await commands.setStatus(scope, row, next);
+    if (outcome.kind === 'stale') return;
+    setBusy(false);
+    if (outcome.kind === 'saved') { setRefresh(n => n + 1); return; }
+    setNotice(refusalKey(outcome.error));
+    if (outcome.error instanceof DesignsRefusal) setRefresh(n => n + 1);
   };
 
   if (!scope) return <div className={s.page}><p className={s.notice}>{t('noSchool')}</p></div>;

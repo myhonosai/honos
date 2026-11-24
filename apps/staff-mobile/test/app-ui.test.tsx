@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { StaffApp } from '../src/StaffApp';
 import type { StaffApi, WhereIWork } from '../src/api/client';
 import { ORG, SCHOOL_A, SCHOOL_B } from './fixtures';
@@ -17,7 +17,9 @@ function fakeSession(initial: string | null) {
 let n = 0;
 const key = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
 const closedToday = { todayClasses: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), roster: jest.fn(), mark: jest.fn(), findStudents: jest.fn(),
-  clock: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), punch: jest.fn() };
+  clock: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), punch: jest.fn(),
+  myAgents: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })), startConversation: jest.fn(), ask: jest.fn(),
+  findContacts: jest.fn(), contactCard: jest.fn(), inbox: jest.fn(), conversation: jest.fn(), markRead: jest.fn(), reply: jest.fn(), };
 const api = (result: WhereIWork): StaffApi => ({ whereIWork: jest.fn(async () => result), ...closedToday });
 const one: WhereIWork = { ok: true, data: { kind: 'one', school: { organizationId: ORG, schoolId: SCHOOL_A, schoolName: null } } };
 const choose: WhereIWork = { ok: true, data: { kind: 'choose', schools: [
@@ -58,9 +60,11 @@ describe('HON Staff app shell', () => {
     expect(await screen.findByText('Your school')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Switch school' })).toBeNull();
   });
-  it('honest about what is not built yet', async () => {
+  it('home has a Today tab and a HON tab', async () => {
     await render(<StaffApp api={api(one)} session={fakeSession('t')} version="0.1.0" newKey={key} />);
-    expect(await screen.findByText(/HON, Kai and the AI team come in the next update/)).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Today', selected: true })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'HON' }));
+    expect(await screen.findByText('HON is not available for your role at this school.')).toBeTruthy();
   });
   it('no staff access and HON unavailable each have their own screen', async () => {
     await render(<StaffApp api={api({ ok: false, state: 'no-staff-access' })} session={fakeSession('t')} version="0.1.0" newKey={key} />);
@@ -79,5 +83,38 @@ describe('HON Staff app shell', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
     expect(s.clear).toHaveBeenCalled();
     expect(await screen.findByText('Sign in with your HON staff account.')).toBeTruthy();
+  });
+
+  it("a late 401 from session A cannot sign out session B (security review 2026-11-22)", async () => {
+    const session = fakeSession('token-a');
+    let answerA: ((v: { ok: false; state: 'signed-out' }) => void) | null = null;
+    const todayClasses = jest.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { answerA = resolve; }))
+      .mockImplementation(async () => ({ ok: false as const, state: 'no-staff-access' as const }));
+    const staffApi: StaffApi = { ...api(one), todayClasses };
+    const onSignIn = jest.fn(async () => { await session.save('token-b'); return 'signed-in' as const; });
+    await render(<StaffApp api={staffApi} session={session} onSignIn={onSignIn} version="0.1.0" newKey={key} />);
+    expect(await screen.findByText('Your school')).toBeTruthy();
+    // A signs out while A's request is still in flight, then B signs in.
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign out' }));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Your school')).toBeTruthy();
+    expect(await session.token()).toBe('token-b');
+    session.clear.mockClear();
+    // A's request now answers 401: B's session must survive and B stays in.
+    await act(async () => { answerA!({ ok: false, state: 'signed-out' }); await Promise.resolve(); });
+    expect(session.clear).not.toHaveBeenCalled();
+    expect(await session.token()).toBe('token-b');
+    expect(screen.queryByText('Your session ended. Please sign in again.')).toBeNull();
+    expect(screen.getByText('Your school')).toBeTruthy();
+  });
+
+  it("a 401 for the current session still ends it", async () => {
+    const session = fakeSession('token-b');
+    const staffApi: StaffApi = { ...api(one), todayClasses: jest.fn(async () => ({ ok: false as const, state: 'signed-out' as const })) };
+    await render(<StaffApp api={staffApi} session={session} version="0.1.0" newKey={key} />);
+    expect(await screen.findByText('Your session ended. Please sign in again.')).toBeTruthy();
+    expect(session.clear).toHaveBeenCalled();
+    expect(await session.token()).toBeNull();
   });
 });

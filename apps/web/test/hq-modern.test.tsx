@@ -84,7 +84,7 @@ describe('HQ Modern foundation', () => {
     const layout = readFileSync('src/app/hq/layout.tsx', 'utf8');
     expect(layout.indexOf('await requireVerifiedWebSession()')).toBeLessThan(layout.indexOf('return <HqModernShell>'));
     const shell = readFileSync('src/components/hq-modern/shell.tsx', 'utf8');
-    expect(shell).toContain('loadHqOverview()');
+    expect(shell).toContain('loadHqOverview(controller.signal)');
     expect(shell).toContain("access.kind === 'ready'");
     expect(shell).not.toMatch(/localStorage|sessionStorage|organizationId|schoolId|familyId|method:\s*'POST'/);
     const route = readFileSync('src/app/hq/executives/[executive]/page.tsx', 'utf8');
