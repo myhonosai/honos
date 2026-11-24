@@ -1167,6 +1167,7 @@ export * from './school-a2p-registrations.js';
 export * from './school-social-inbox.js';
 export * from './school-website.js';
 export * from './school-website-templates.js';
+export * from './school-site-policies.js';
 export * from './pos.js';
 export * from './school-website-ai.js';
 export * from './school-contacts.js';

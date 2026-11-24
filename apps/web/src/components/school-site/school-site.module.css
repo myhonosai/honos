@@ -67,3 +67,5 @@
 .check { display: flex !important; gap: 8px; align-items: flex-start; font-weight: 400 !important; }
 .trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .footer { padding: 24px clamp(16px, 6vw, 72px); background: var(--site-surface); font-size: 0.9rem; }
+.footerLinks { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.footerLinks a { color: inherit; }
