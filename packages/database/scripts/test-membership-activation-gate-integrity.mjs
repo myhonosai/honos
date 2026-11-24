@@ -683,6 +683,9 @@ try {
   // The 0646 Maya renewal prep readers (maya_renewal_facts, maya_renewal_view, maya_renewal_fix_refs, record_maya_renewal_prep,
   // apply_maya_renewal_preps) only read memberships to draft and show staff-reviewed renewal notes; they never change a
   // membership and grant no booking, attendance or check-in benefit.
+  // The 0680 membership_agreement_signed_starts and membership_start_on_signing readers start a signed child's DRAFT through
+  // the unchanged 0177 evaluation with the same decision and period evidence (owner decision 2026-11-22: active when signed);
+  // a future start stays SCHEDULED, so they grant no booking, attendance or check-in benefit today.
   // The 0623 read_school_contact_list reader only shows the current membership's state on the staff contacts list and filters
   // by it; it is read-only and grants no booking, attendance or check-in benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
@@ -691,7 +694,7 @@ try {
     'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan',
     'draft_crm_guardian_child_membership_from_plan', 'draft_owner_launch_membership', 'eian_facts_ok', 'evaluate_membership_activation', 'evaluate_membership_date_revision',
     'guard_membership_date_revision_insert', 'guard_membership_pause', 'guard_person_membership_overlap', 'list_retention_review_members', 'maya_renewal_facts', 'maya_renewal_fix_refs', 'maya_renewal_view',
-    'membership_agreement_covered',
+    'membership_agreement_covered', 'membership_agreement_signed_starts', 'membership_start_on_signing',
     'parent_invoice_pay_invoices', 'pause_school_membership', 'person_membership_start_item', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation',
     'read_crm_adult_membership_preparation', 'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students',
     'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds', 'read_owner_launch_membership_draft', 'read_parent_billing_view',

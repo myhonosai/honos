@@ -222,6 +222,7 @@ const expectedRlsTables = [
   'school_creative_designs',
   'membership_plan_version_setups',
   'membership_plan_payment_options',
+  'membership_signing_activations',
   'school_creative_design_photos',
   'school_checkout_links',
   'public_checkout_orders',
