@@ -29,7 +29,7 @@ export class AiSchoolCostLimitService {
     const [input, idempotencyKey] = parse(() => [validateAiSchoolCostLimitInput(body), saasUuid(key)] as const);
     return this.billing.call('commandAiSchoolCostLimit', [subjectId, JSON.stringify(input), idempotencyKey], validateAiSchoolCostLimitReceipt);
   }
-  /** 0343: alerts at 75%, 90% and 100% of a school's ceiling. HQ billing readers read; only the HQ owner acknowledges. */
+  /** 0669: alerts at 75%, 90% and 100% of a school's ceiling. HQ billing readers read; only the HQ owner acknowledges. */
   async alerts(subjectId: string) {
     return this.billing.call('readAiSchoolCostAlerts', [subjectId], validateAiSchoolCostAlertList);
   }

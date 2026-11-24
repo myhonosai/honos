@@ -38,8 +38,12 @@ test('class-session browser command guard fails closed for missing/wrong marker,
     process.env.HON_PUBLIC_ORIGIN = 'https://hon.test'; assert.equal(run(), true);
     // Next's rewrite proxy sets X-Forwarded-Host to the public host; POST still requires an exact Origin.
     assert.equal(run({ 'x-forwarded-host': 'hon.test' }), true);
+    // The hosting edge's X-Forwarded-For/-Proto/-Port pass through Next: accepted as transport metadata, never authority.
+    const edge = { 'x-forwarded-host': 'hon.test', 'x-forwarded-for': '203.0.113.9, 10.0.0.1', 'x-forwarded-proto': 'https', 'x-forwarded-port': '443', 'x-real-ip': '203.0.113.9' };
+    assert.equal(run(edge), true);
+    for (const patch of [{ origin: undefined }, { 'x-forwarded-host': 'evil.test' }, { authorization: 'Bearer external' }, { forwarded: 'host=evil.test' }]) assert.throws(() => run({ ...edge, ...patch }), status(403));
     for (const patch of [
-      { origin: undefined }, { origin: undefined, 'x-forwarded-host': 'hon.test' }, { 'x-forwarded-host': 'hon.test, evil.test' }, { 'x-forwarded-for': '203.0.113.9' }, { 'x-forwarded-proto': 'http' }, { origin: 'https://evil.test' }, { 'x-hon-human-command': undefined }, { 'x-hon-human-command': 'class-booking' },
+      { origin: undefined }, { origin: undefined, 'x-forwarded-host': 'hon.test' }, { 'x-forwarded-host': 'hon.test, evil.test' }, { origin: 'https://evil.test' }, { 'x-hon-human-command': undefined }, { 'x-hon-human-command': 'class-booking' },
       { 'content-type': 'text/plain' }, { 'idempotency-key': 'legacy-key' }, { 'sec-fetch-site': undefined }, { 'sec-fetch-site': 'same-site' },
       { 'sec-fetch-mode': undefined }, { 'sec-fetch-mode': 'cors' }, { 'sec-fetch-dest': undefined }, { 'sec-fetch-dest': 'document' },
       { 'x-hon-source': 'AUTOMATION' }, { authorization: 'Bearer external' }, { 'x-principal-id': principalId }, { forwarded: 'host=evil.test' }, { 'x-forwarded-host': 'evil.test' },

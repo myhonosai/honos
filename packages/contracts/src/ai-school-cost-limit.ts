@@ -73,7 +73,7 @@ export function validateAiSchoolCostStatusList(value: unknown): AiSchoolCostStat
   return { schools, trialDefaultCeilingMicros: AI_SCHOOL_TRIAL_DEFAULT_CEILING_MICROS, asOf: r.asOf };
 }
 
-// ---------- 0343: HQ alerts at 75%, 90% and 100% of a school's ceiling, and HQ-owner acknowledgement ----------
+// ---------- 0669: HQ alerts at 75%, 90% and 100% of a school's ceiling, and HQ-owner acknowledgement ----------
 export const AI_SCHOOL_COST_ALERT_LEVELS = ['WARNING_75', 'WARNING_90', 'CEILING_REACHED'] as const;
 export type AiSchoolCostAlertLevel = typeof AI_SCHOOL_COST_ALERT_LEVELS[number];
 const alertRank = (level: AiSchoolCostLevel): number => ({ NO_CEILING: 0, NORMAL: 0, WARNING_75: 1, WARNING_90: 2, CEILING_REACHED: 3 })[level];

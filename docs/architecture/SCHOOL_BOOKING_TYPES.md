@@ -37,13 +37,16 @@ weekly hours and stays open until the school pauses it.
   gets a booking code (`XXXX-XXXX-XXXX`, shown once) and the thank-you message. A retry with the same request key returns the
   same code.
 - **T5 Families only.** A `FAMILIES_ONLY` link shows the type and "for current families: sign in to book" and refuses public
-  booking. Booking from a family sign-in comes in PR 3 (below).
+  booking. Families book it from the parent account at `/parent/bookings` (0466, see
+  PARENT_ACCOUNT_BOOKING_AND_MESSAGES.md A4).
 - **T6 Cancel.** The code cancels the family's own booking and frees the spot. To change the time, the family cancels and books
   again.
 - **T7 Staff view.** Staff see the upcoming bookings per type with each family's name, contact, answers and waiver time. Staff
   can cancel a booking or mark the family as arrived.
 - **T8 Limits.** Public reads show only open spots, never names. Per type, at most 600 booking attempts and 300 cancel
-  attempts an hour. Per contact, at most 5 booking attempts an hour. No message, no charge, no AI. In v1 a booking also
+  attempts an hour. Per contact, at most 5 booking attempts an hour. Per client (network address, behind the API's
+  trusted proxies), at most 120 reads a minute, 20 booking attempts and 30 cancel attempts an hour, shared with event
+  links (see `docs/operations/RENDER_DEPLOYMENT.md`, `HON_PUBLIC_CLIENT_IP_HOPS`). No message, no charge, no AI. In v1 a booking also
   creates no CRM lead, appointment or student record.
 
 ## Security boundary

@@ -16,8 +16,8 @@ describe('Marketing Assistant local-only surface', () => {
     try {
       const html = renderToStaticMarkup(<MarketingAssistantWorkbench />);
       expect(fetcher).not.toHaveBeenCalled();
-      for (const text of ['AI Marketing Assistant', 'No external publishing or delivery', 'No sample draft or production fake', 'Never submit secrets', 'Load authorized campaign plans']) expect(html).toContain(text);
-      for (const text of ['Recorded usage:', 'Verified saved', 'School UUID', 'Organization UUID', 'type="password"']) expect(html).not.toContain(text);
+      for (const text of ['Marcus', 'Ask for a marketing draft', 'Nothing is published or sent', 'Do not include passwords, payment details or private student information.', 'Choose a campaign']) expect(html).toContain(text);
+      for (const text of ['Recorded usage:', 'Verified saved', 'School UUID', 'Organization UUID', 'Campaign UUID', 'type="password"', 'NOT_CREATED_OR_SENT', 'quarantined']) expect(html).not.toContain(text);
     } finally { fetcher.mockRestore(); }
   });
 
@@ -59,8 +59,9 @@ describe('Marketing Assistant local-only surface', () => {
   it('declares a no-index route and explicit quarantined outcomes without production fake or provider calls', () => {
     const source = readFileSync('src/components/marketing-assistant-workbench.tsx','utf8');
     expect(source).toContain('retry.current');
-    expect(source).toContain('No automatic or manual resend is permitted');
-    expect(source).toContain('The requester cannot self-approve');
+    // Try again only before anything was sent (shared rule); the requester cannot approve their own draft.
+    expect(source).toContain('canTryAgain(view.status)');
+    expect(source).toContain('you cannot approve your own draft');
     expect(source).not.toMatch(/localStorage|sessionStorage|invokeLLM|openrouter\.ai/);
     const page = readFileSync('src/app/staff/marketing/assistant/page.tsx','utf8');
     expect(page).toContain("force-dynamic");

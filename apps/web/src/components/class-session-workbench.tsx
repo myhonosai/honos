@@ -7,6 +7,7 @@ import {
   type ClassSessionDraft, type ClassSessionKnownIds, type ClassSessionWorkbenchResult, type PreparedClassSession,
 } from './class-session-workbench-http';
 import styles from './attendance-workbench.module.css';
+import { useShellSchoolInto } from './school-shell/page-school';
 
 const EMPTY_IDS: ClassSessionKnownIds = { organizationId: '', schoolId: '', programId: '' };
 const EMPTY_DRAFT: ClassSessionDraft = { name: '', roomName: '', startsAt: '', endsAt: '', capacity: '', bookingPolicy: '' };
@@ -15,6 +16,7 @@ const ID_LABELS: Record<keyof ClassSessionKnownIds, string> = { organizationId: 
 /** A deliberately idle, direct-human wrapper around the existing canonical session command. */
 export function ClassSessionWorkbench(): React.ReactElement {
   const [ids, setIds] = useState<ClassSessionKnownIds>(EMPTY_IDS);
+  const shellSchool = useShellSchoolInto(school => setIds(current => ({ ...current, organizationId: school.organizationId, schoolId: school.schoolId })));
   const [draft, setDraft] = useState<ClassSessionDraft>(EMPTY_DRAFT);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,17 +73,14 @@ export function ClassSessionWorkbench(): React.ReactElement {
 
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/dashboard">Staff dashboard</a><a href="/staff/command-center">Command Center</a></nav>
-    <header><p>HON / CONVENTIONAL STAFF OPERATIONS</p><h1>Create one class session</h1>
-      <p>Record one current-school operational class session through the existing canonical command. This workbench starts blank and idle: it performs no lookup, list, search, directory, calendar request or automatic I/O.</p>
+    <header><p>Schedule</p><h1>Add a class session</h1>
+      <p>Add one class to the schedule.</p>
     </header>
-    <aside><strong>Current school authority remains server-owned.</strong>
-      <p>The organization, school and program UUIDs are untrusted exact selectors. The canonical API scope check, service/RLS boundaries and <code>schedule.session.manage</code> authorization remain authoritative; this page does not establish program validity or permission.</p>
-      <p>This is not recurring scheduling, calendar integration, instructor availability or assignment, booking, attendance, roster, capacity guarantee, ClassPass, payment, membership, provider, AI, Action Engine, automation or communication. No external delivery is activated.</p>
-    </aside>
+    <aside data-plain-note=""><strong>This adds a single class. It does not set up a repeating schedule or book students.</strong></aside>
     <section aria-labelledby="session-command"><h2 id="session-command">Exact-known-ID class-session command</h2>
       <p>Enter already-known organization, current school and program UUIDs; a bounded session name, optional room name, canonical UTC start/end timestamps, positive bounded capacity and one existing booking policy. These entries never query or discover a record.</p>
       <form onSubmit={submit}><fieldset disabled={busy}>
-        <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof ClassSessionKnownIds)[]).map((field) => <label key={field}>{ID_LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={(event) => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}</div>
+        <div className={styles.scopeGrid}>{(Object.keys(ID_LABELS) as (keyof ClassSessionKnownIds)[]).filter(field => !shellSchool || (field !== 'organizationId' && field !== 'schoolId')).map((field) => <label key={field}>{ID_LABELS[field]}<input name={field} required autoComplete="off" spellCheck={false} maxLength={36} value={ids[field]} onChange={(event) => edit(() => setIds({ ...ids, [field]: event.target.value }))} /></label>)}</div>
         <div className={styles.scopeGrid}>
           <label>Session name (maximum 160 characters)<input name="name" required autoComplete="off" maxLength={160} value={draft.name} onChange={(event) => edit(() => setDraft({ ...draft, name: event.target.value }))} /></label>
           <label>Optional room name (maximum 160 characters)<input name="roomName" autoComplete="off" maxLength={160} value={draft.roomName} onChange={(event) => edit(() => setDraft({ ...draft, roomName: event.target.value }))} /></label>

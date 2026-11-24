@@ -35,7 +35,7 @@ describe('family-safe parent billing observations', () => {
   });
   it('protects/no-indexes the route and has no client mutation, provider, storage or selector behavior', () => {
     const route = readFileSync('src/app/parent/billing/page.tsx', 'utf8'); const component = readFileSync('src/components/parent-billing.tsx', 'utf8'); const http = readFileSync('src/components/parent-billing-http.ts', 'utf8');
-    for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login')", 'force-dynamic', 'index: false', 'follow: false']) expect(route).toContain(token);
+    for (const token of ['cookieValue', 'verifySession', "redirect('/auth/login?for=parent')", 'force-dynamic', 'index: false', 'follow: false']) expect(route).toContain(token);
     expect(route).not.toMatch(/searchParams|familyId|studentId|schoolId/); expect(component).toContain('setView(null)'); expect(component).toContain('pending.current?.abort()'); expect(component).toContain("'visibilitychange'"); expect(component).not.toMatch(/<input|useSearchParams|localStorage|sessionStorage/);
     expect(http + component).not.toMatch(/method:\s*'POST'|Idempotency-Key|X-HON-Human-Command|invokeLLM|executeAction|sendMessage|paymentMethod|providerToken|cardNumber/i);
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); expect(manifest.routes.filter((route: { path: string }) => route.path === '/parent/billing')).toHaveLength(1);

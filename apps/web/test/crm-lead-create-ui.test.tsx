@@ -13,6 +13,9 @@ vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ 
 // including delayed promises and cleanup, without a new DOM dependency.
 const hooks = vi.hoisted(() => ({ values: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 const session = vi.hoisted(() => ({ token: 'first-test-session' }));
+// The stage list read is its own request (tested in add-lead tests); keep these exact-request counts about the create command.
+vi.mock('../src/components/leads/add-lead-http', async () => { const actual = await vi.importActual<typeof import('../src/components/leads/add-lead-http')>('../src/components/leads/add-lead-http'); return { ...actual, addLeadApi: { ...actual.addLeadApi, pipelines: (...args: unknown[]) => stageRead.impl(...args) } }; });
+const stageRead = vi.hoisted(() => ({ impl: (..._: unknown[]): Promise<unknown> => new Promise(() => {}) }));
 vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => ({ value: session.token }) }) }));
 vi.mock('react', async () => { const actual = await vi.importActual<typeof import('react')>('react'); return { ...actual,
  useState: (initial: unknown) => { const i = hooks.cursor++; if (!(i in hooks.values)) hooks.values[i] = initial; return [hooks.values[i], (value: unknown) => { hooks.values[i] = typeof value === 'function' ? (value as (v: unknown) => unknown)(hooks.values[i]) : value; }]; },
@@ -33,7 +36,7 @@ const submit = (tree: Element) => elements(tree).find(e => e.type === 'form')!.p
 const settle = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 function fill(view: () => ReactElement): Element {
  let tree = render(view);
- for (const [label, value] of [['Known pipeline UUID', org], ['Known non-terminal stage UUID', stage], ['Primary contact given name', 'Ari'], ['Primary contact family name', 'Stone']]) { input(tree, label!).props.onChange({ target: { value } }); tree = render(view); }
+ for (const [label, value] of [['Pipeline record ID', org], ['Stage record ID', stage], ['First name', 'Ari'], ['Last name', 'Stone']]) { input(tree, label!).props.onChange({ target: { value } }); tree = render(view); }
  return tree;
 }
 function confirm(tree: Element, view: () => ReactElement): Element { elements(tree).find(e => e.type === 'input' && e.props.type === 'checkbox')!.props.onChange({ target: { checked: true } }); return render(view); }
@@ -50,31 +53,31 @@ describe('idle direct-human CRM intake', () => {
   tree = confirm(tree, view); submit(tree); await settle(); expect(f).not.toHaveBeenCalled(); expect(key).not.toHaveBeenCalled();
   tree = fill(view); submit(tree); await settle(); expect(f).not.toHaveBeenCalled(); tree = confirm(tree, view);
   expect(key).not.toHaveBeenCalled(); submit(tree); submit(tree); await settle(); tree = render(view);
-  expect(f).toHaveBeenCalledTimes(1); expect(key).toHaveBeenCalledTimes(1); expect(text(tree)).toContain('Returned CRM creation receipt');
+  expect(f).toHaveBeenCalledTimes(1); expect(key).toHaveBeenCalledTimes(1); expect(text(tree)).toContain('Lead added.');
   expect(text(tree)).not.toContain('ari@example.test'); expect(button(tree, 'Prepare CRM-only close')).toBeUndefined(); expect(elements(tree).filter(e => e.type === 'a')).toHaveLength(0);
-  submit(tree); await settle(); expect(f).toHaveBeenCalledTimes(1); expect(button(tree, 'Retry exact retained lead-create request')).toBeUndefined();
+  submit(tree); await settle(); expect(f).toHaveBeenCalledTimes(1); expect(button(tree, 'Try again')).toBeUndefined();
  });
  it('retains only an uncertain exact body/key, performs no automatic retry, and clears it/confirmation/receipt on editing', async () => {
   const f = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(response(200, true)), key = vi.spyOn(crypto, 'randomUUID'), started = vi.fn();
   const view = () => CrmLeadCreatePanel({ organizationId: org, schoolId: school, onStarted: started, onBusy() {}, onAccessLost() {} });
   let tree = confirm(fill(view), view); submit(tree); await settle(); tree = render(view);
-  expect(button(tree, 'Retry exact retained lead-create request')).toBeDefined(); expect(f).toHaveBeenCalledTimes(1);
+  expect(button(tree, 'Try again')).toBeDefined(); expect(f).toHaveBeenCalledTimes(1);
   submit(tree); await settle(); expect(f).toHaveBeenCalledTimes(1);
-  button(tree, 'Retry exact retained lead-create request')!.props.onClick(); await settle(); tree = render(view);
-  expect(f.mock.calls[0]).toEqual(f.mock.calls[1]); expect(key).toHaveBeenCalledTimes(1); expect(started).toHaveBeenCalledTimes(2); expect(text(tree)).toContain('replayed creation receipt');
-  input(tree, 'Primary contact given name').props.onChange({ target: { value: 'Edited' } }); tree = render(view);
-  expect(text(tree)).not.toContain('Returned CRM creation receipt'); expect(button(tree, 'Confirm create CRM lead')!.props.disabled).toBe(true); expect(button(tree, 'Retry exact retained lead-create request')).toBeUndefined();
-  f.mockRejectedValueOnce(new Error('again')); tree = confirm(tree, view); submit(tree); await settle(); tree = render(view); expect(button(tree, 'Retry exact retained lead-create request')).toBeDefined();
-  input(tree, 'Known non-terminal stage UUID').props.onChange({ target: { value: org } }); tree = render(view); expect(button(tree, 'Retry exact retained lead-create request')).toBeUndefined(); expect(key).toHaveBeenCalledTimes(2);
-  button(tree, 'Discard draft / start new lead')!.props.onClick(); tree = render(view); expect(input(tree, 'Primary contact given name').props.value).toBe(''); expect(input(tree, 'Known pipeline UUID').props.value).toBe('');
+  button(tree, 'Try again')!.props.onClick(); await settle(); tree = render(view);
+  expect(f.mock.calls[0]).toEqual(f.mock.calls[1]); expect(key).toHaveBeenCalledTimes(1); expect(started).toHaveBeenCalledTimes(2); expect(text(tree)).toContain('This lead was already added.');
+  input(tree, 'First name').props.onChange({ target: { value: 'Edited' } }); tree = render(view);
+  expect(text(tree)).not.toContain('Lead added.'); expect(button(tree, 'Add lead')!.props.disabled).toBe(true); expect(button(tree, 'Try again')).toBeUndefined();
+  f.mockRejectedValueOnce(new Error('again')); tree = confirm(tree, view); submit(tree); await settle(); tree = render(view); expect(button(tree, 'Try again')).toBeDefined();
+  input(tree, 'Stage record ID').props.onChange({ target: { value: org } }); tree = render(view); expect(button(tree, 'Try again')).toBeUndefined(); expect(key).toHaveBeenCalledTimes(2);
+  button(tree, 'Clear')!.props.onClick(); tree = render(view); expect(input(tree, 'First name').props.value).toBe(''); expect(input(tree, 'Pipeline record ID').props.value).toBe('');
  });
  it('discards definite-rejection retry, clears all contact drafts on access loss, and ignores delayed completion after unmount', async () => {
   const lost = vi.fn(), f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response(409)).mockResolvedValueOnce(response(403));
   const view = () => CrmLeadCreatePanel({ organizationId: org, schoolId: school, onStarted() {}, onBusy() {}, onAccessLost: lost });
   let tree = confirm(fill(view), view); submit(tree); await settle(); tree = render(view);
-  expect(button(tree, 'Retry exact retained lead-create request')).toBeUndefined(); expect(text(tree)).toContain('command rejected');
-  input(tree, 'Primary contact given name').props.onChange({ target: { value: 'New draft' } }); tree = confirm(render(view), view); submit(tree); await settle(); tree = render(view);
-  expect(lost).toHaveBeenCalledTimes(1); expect(input(tree, 'Primary contact given name').props.value).toBe(''); expect(button(tree, 'Retry exact retained lead-create request')).toBeUndefined();
+  expect(button(tree, 'Try again')).toBeUndefined(); expect(text(tree)).toContain('command rejected');
+  input(tree, 'First name').props.onChange({ target: { value: 'New draft' } }); tree = confirm(render(view), view); submit(tree); await settle(); tree = render(view);
+  expect(lost).toHaveBeenCalledTimes(1); expect(input(tree, 'First name').props.value).toBe(''); expect(button(tree, 'Try again')).toBeUndefined();
   let release!: (r: Response) => void; f.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
   tree = confirm(fill(view), view); submit(tree); unmount(); const snapshot = hooks.values.slice(); release(response()); await settle(); expect(hooks.values).toEqual(snapshot);
  });
@@ -84,10 +87,10 @@ describe('idle direct-human CRM intake', () => {
   let tree = render(view); const panel = () => elements(tree).find(e => e.type === CrmLeadCreatePanel)!;
   expect(f).not.toHaveBeenCalled(); const initialKey = panel().key; submit(tree); await settle(); tree = render(view);
   const loaded = hooks.values[3]; panel().props.onStarted(); tree = render(view);
-  expect(hooks.values[3]).toBe(loaded); expect(text(tree)).toContain('1 verified CRM lead'); expect(button(tree, 'Prepare CRM-only close')!.props.disabled).toBe(true); expect(elements(tree).some(e => e.type === CrmLeadClosePanel)).toBe(false); expect(f).toHaveBeenCalledTimes(1);
+  expect(hooks.values[3]).toBe(loaded); expect(text(tree)).toContain('1 lead'); expect(button(tree, 'Prepare CRM-only close')!.props.disabled).toBe(true); expect(elements(tree).some(e => e.type === CrmLeadClosePanel)).toBe(false); expect(f).toHaveBeenCalledTimes(1);
   const beforeReload = panel().key; submit(tree); await settle(); tree = render(view); expect(panel().key).not.toBe(beforeReload); expect(panel().key).not.toBe(initialKey); expect(button(tree, 'Prepare CRM-only close')!.props.disabled).toBe(false);
   button(tree, 'Prepare CRM-only close')!.props.onClick(); tree = render(view); const oldClose = elements(tree).find(e => e.type === CrmLeadClosePanel)!;
-  elements(tree).find(e => e.type === 'input')!.props.onChange({ target: { value: school } }); tree = render(view); expect(text(tree)).toContain('No verified school list is loaded.'); expect(button(tree, 'Prepare CRM-only close')).toBeUndefined();
+  elements(tree).find(e => e.type === 'input')!.props.onChange({ target: { value: school } }); tree = render(view); expect(text(tree)).toContain('No list loaded yet.'); expect(button(tree, 'Prepare CRM-only close')).toBeUndefined();
   oldClose.props.onBusy(true); tree = render(view); expect(elements(tree).find(e => e.type === 'fieldset')!.props.disabled).toBe(false);
  });
  it('invalidates all local state on pagehide/hidden session view, suppresses stale list results, and keys server renders by session only', async () => {
@@ -97,7 +100,7 @@ describe('idle direct-human CRM intake', () => {
   let tree = render(view); submit(tree); tree = render(view); const key = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key;
   documentEvents.visibilityState = 'hidden'; documentEvents.dispatchEvent(new Event('visibilitychange')); tree = render(view);
   expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(key);
-  release(new Response(JSON.stringify({ data: [row], meta: {} }), { status: 200 })); await settle(); tree = render(view); expect(text(tree)).toContain('No verified school list is loaded.'); expect(text(tree)).not.toContain('Ari Stone'); expect(f).toHaveBeenCalledTimes(1);
+  release(new Response(JSON.stringify({ data: [row], meta: {} }), { status: 200 })); await settle(); tree = render(view); expect(text(tree)).toContain('No list loaded yet.'); expect(text(tree)).not.toContain('Ari Stone'); expect(f).toHaveBeenCalledTimes(1);
   const afterHidden = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key; windowEvents.dispatchEvent(new Event('pagehide')); tree = render(view); expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(afterHidden);
   const beforeBlur = elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key; windowEvents.dispatchEvent(new Event('blur')); tree = render(view); expect(elements(tree).find(e => e.type === CrmLeadCreatePanel)!.key).not.toBe(beforeBlur);
   const first = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school, pipelineId: stage } as any) }); session.token=issueSession({externalSubject:'second-fixture-staff'},signedConfig); const second = await LeadPage({ searchParams: Promise.resolve({ organizationId: org, schoolId: school }) });
@@ -108,5 +111,17 @@ describe('idle direct-human CRM intake', () => {
   expect(panel + http).not.toMatch(/localStorage|sessionStorage|setInterval|setTimeout|loadCrmLeads|setLeads|executeAction|invokeLLM|sendMessage|\/crm\/pipelines|\/people|\/appointments|\/trials|\/follow-ups|\/enroll|\/billing/);
   expect(panel).toContain('useEffect(() => () => { epoch.current++; }, [])'); expect(panel).not.toContain('CrmLeadClosePanel');
   expect(http).toContain("'X-HON-Human-Command': 'crm-lead-create'");
+ });
+ it('offers the school’s open stages by name and fills the record IDs from the choice', async () => {
+  const pipelineId = '55555555-5555-4555-8555-555555555555', open = '66666666-6666-4666-8666-666666666666', won = '77777777-7777-4777-8777-777777777777';
+  stageRead.impl = () => Promise.resolve([{ id: pipelineId, name: 'Main', version: 1, createdAt: row.createdAt, stages: [{ id: won, name: 'Won', position: 2, terminalStatus: 'WON' }, { id: open, name: 'New inquiry', position: 1 }] }]);
+  try {
+    const view = () => CrmLeadCreatePanel({ organizationId: org, schoolId: school, onStarted() {}, onBusy() {}, onAccessLost() {} });
+    render(view); await settle(); const tree = render(view);
+    expect(text(tree)).not.toContain('Won');
+    expect(input(tree, 'Pipeline record ID').props.value).toBe(pipelineId); expect(input(tree, 'Stage record ID').props.value).toBe(open);
+    const select = elements(tree).find(e => e.type === 'select')!; expect(select.props.value).toBe(`${pipelineId}:${open}`);
+    expect(text(tree)).toContain('New inquiry'); expect(text(tree)).not.toMatch(/UUID|canonical|non-terminal/);
+  } finally { stageRead.impl = () => new Promise(() => {}); }
  });
 });

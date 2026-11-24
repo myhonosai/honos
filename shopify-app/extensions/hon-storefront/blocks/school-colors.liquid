@@ -1,0 +1,58 @@
+{%- comment -%}
+  App embed: the school's colors on buttons and accents. Off until the owner switches it on in the theme editor
+  (App embeds). Sets the color variables Online Store 2.0 themes such as Dawn use, plus common button classes.
+{%- endcomment -%}
+{%- liquid
+  assign s = app.metafields.hon_storefront.settings.value
+  capture primary
+    render 'hon-settings-color', value: s.primaryColor
+  endcapture
+  capture accent
+    render 'hon-settings-color', value: s.accentColor
+  endcapture
+  assign primary = primary | strip
+  assign accent = accent | strip
+-%}
+{%- if primary != blank -%}
+  {%- liquid
+    assign p_r = primary | color_extract: 'red'
+    assign p_g = primary | color_extract: 'green'
+    assign p_b = primary | color_extract: 'blue'
+    assign p_text = '255,255,255'
+    assign p_bright = primary | color_brightness
+    if p_bright > 150
+      assign p_text = '18,18,18'
+    endif
+    assign a_r = p_r
+    assign a_g = p_g
+    assign a_b = p_b
+    if accent != blank
+      assign a_r = accent | color_extract: 'red'
+      assign a_g = accent | color_extract: 'green'
+      assign a_b = accent | color_extract: 'blue'
+    endif
+  -%}
+  <style data-hon-storefront="school-colors">
+    :root, [class*="color-scheme-"], .gradient {
+      --hon-school-primary: {{ p_r }}, {{ p_g }}, {{ p_b }};
+      --hon-school-primary-text: {{ p_text }};
+      --hon-school-accent: {{ a_r }}, {{ a_g }}, {{ a_b }};
+      --color-button: var(--hon-school-primary);
+      --color-button-text: var(--hon-school-primary-text);
+      --color-secondary-button-text: var(--hon-school-accent);
+      --color-link: var(--hon-school-accent);
+    }
+    .shopify-payment-button__button--unbranded, .btn--primary, .button--primary {
+      background-color: rgb(var(--hon-school-primary));
+      color: rgb(var(--hon-school-primary-text));
+    }
+  </style>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "t:embeds.school_colors.name",
+  "target": "head",
+  "settings": []
+}
+{% endschema %}

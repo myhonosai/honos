@@ -7,7 +7,7 @@ describe('human Migration Center lead workbench',()=>{
   it('renders deliberate local file/text staging and no actor/tenant selector or false completion',()=>{
     const fetcher=vi.spyOn(globalThis,'fetch');
     try { const html=renderToStaticMarkup(<LeadImportWorkbench/>);expect(fetcher).not.toHaveBeenCalled();
-      for(const text of ['Stage first. Review every row.','CSV file (read locally','CSV text','Match each column to a lead field','Don&#x27;t import','6 of 6 columns will be staged','up to 16 matched columns','Stage only','Metadata only','No AI matching','256 KiB','1,000 rows'])expect(html).toContain(text);
+      for(const text of ['Import leads','CSV file (read locally','CSV text','Match each column to a lead field','Don&#x27;t import','6 of 6 columns will be staged','up to 16 matched columns','Stage only','Metadata only','256 KiB','1,000 rows'])expect(html).toContain(text);
       for(const text of ['Organization UUID','School UUID','Actor UUID','Finalized successfully','type="canvas"'])expect(html).not.toContain(text);
       expect(html).toContain('type="file"');expect(html).not.toContain('Finalize this reviewed lead batch');
     } finally { fetcher.mockRestore(); }

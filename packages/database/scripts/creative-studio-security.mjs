@@ -6,6 +6,8 @@
 // SECURITY DEFINER deferred guard that refuses an avatar.* generation without its avatar at commit.
 // A2 (0277) adds creative_avatar_videos (one avatar.video generation each, three runtime entry points) and replaces that
 // guard's body so each avatar.* operation needs its own record and any other avatar.* operation is refused.
+// C1 (0354) adds a BEFORE INSERT daily cap guard on creative_generations; its job tables have their own proof
+// (test-creative-provider-jobs.mjs).
 export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars', 'creative_avatar_videos'];
 // [signature, runtime may execute, SECURITY DEFINER]
 export const creativeStudioFunctions = [
@@ -29,6 +31,8 @@ export const creativeStudioFunctions = [
   ['hon.create_creative_avatar_video(text,uuid,jsonb,jsonb,uuid,uuid,uuid)', true, true],
   ['hon.read_creative_avatar_videos(text,uuid)', true, true],
   ['hon.read_creative_avatar_video(text,uuid,uuid)', true, true],
+  // C1 (0354): the per-school daily cap check before a generation is inserted (under the wallet lock).
+  ['hon.guard_creative_generation_daily_cap()', false, false],
 ];
 const triggers = [
   ['creative_generations', 'creative_generation_guarded', 27, 'guard_creative_generation'],
@@ -40,6 +44,7 @@ const triggers = [
   ['creative_avatars', 'creative_avatar_no_truncate', 34, 'guard_saas_evidence'],
   ['creative_avatar_videos', 'creative_avatar_video_immutable', 27, 'guard_saas_evidence'],
   ['creative_avatar_videos', 'creative_avatar_video_no_truncate', 34, 'guard_saas_evidence'],
+  ['creative_generations', 'creative_generation_daily_cap', 7, 'guard_creative_generation_daily_cap'],
 ];
 export async function verifyCreativeStudioSecurity(client, runtime) {
   if (!/^hon_[a-z_]+$/.test(runtime)) throw new Error('Unsafe Creative Studio runtime role.');

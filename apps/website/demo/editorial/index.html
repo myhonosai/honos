@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HON OS Demo B</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preload" href="../shared/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Geist";src:url("../shared/fonts/geist-latin-400-normal.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Geist";src:url("../shared/fonts/geist-latin-500-normal.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("../shared/fonts/geist-mono-latin-400-normal.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Instrument Serif";src:url("../shared/fonts/instrument-serif-latin-400-normal.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Instrument Serif";src:url("../shared/fonts/instrument-serif-latin-400-italic.woff2") format("woff2");font-weight:400;font-style:italic;font-display:swap}
+/* Demo B: an editorial report you travel through. Inspired by the "Creative Intelligence Report 2026" site.
+   Each chapter is a pinned scene driven by scroll (story.js): you fly through the stars, the dojo doors open,
+   words surface as you read, the AI team passes by sideways, and the app changes screen with each chapter.
+   Without JS or with reduced motion, every scene shows its finished state as a normal page. */
+:root{
+  --night:#060d1f; --night-2:#0b1630; --sage:#5f7fc4; --sage-2:#a9bde6; --gold:#f3cf7a;
+  --paper:#f2f5fb; --ink:#0d1530; --muted:#5a6480; --line:#d6ddec;
+  --mint:#b7d0ff; --mint-2:#7aa7ff;
+  --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--night);color:#eef1f8;font-family:var(--sans);font-size:17px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p{margin:0}
+h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.02em;line-height:1.02;text-wrap:balance}
+.wrap{max-width:1200px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left))}
+.label{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border-radius:999px;padding:11px 20px;font-size:14px;font-weight:500;border:1px solid transparent;transition:transform .2s;font-family:inherit;cursor:pointer}
+.btn:hover{transform:translateY(-1px)}
+.btn.light{background:#fff;color:var(--ink)}
+.btn.dark{background:#1a2850;color:#fff}
+a:focus-visible,button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* Scenes: tall sections with a pinned stage. Only html.story (motion allowed) makes them tall. */
+.scene{position:relative}
+.stage{position:relative;min-height:100svh;overflow:hidden}
+html.story .scene{height:var(--len,300vh)}
+html.story .stage{position:sticky;top:0;height:100svh}
+
+/* Fixed chrome: journey line, header, dot rail */
+.journey{position:fixed;inset:0 0 auto;height:2px;z-index:70;pointer-events:none}
+.journey i{display:block;height:100%;background:linear-gradient(90deg,var(--sage),var(--gold));transform-origin:0 50%;transform:scaleX(0)}
+.top{position:fixed;inset:0 0 auto;z-index:60;pointer-events:none}
+.top .wrap{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;max-width:none;padding:0 28px}
+.top a{pointer-events:auto}
+.brand{display:flex;align-items:flex-start;gap:14px}
+.ribbon{width:44px;height:62px;background:var(--sage);clip-path:polygon(0 0,100% 0,100% 100%,50% 82%,0 100%);display:grid;place-items:start center;padding-top:14px}
+.ribbon svg{width:22px;height:22px}
+.brand-name{padding-top:17px;font-family:var(--serif);font-size:24px;color:#fff;mix-blend-mode:difference}
+.top-right{display:flex;gap:10px;padding-top:14px}
+.rail{position:fixed;left:16px;top:50%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:12px;mix-blend-mode:difference}
+.rail a{width:14px;height:14px;display:grid;place-items:center}
+.rail a::before{content:"";width:4px;height:4px;border-radius:50%;background:#fff}
+.rail a.on::before{width:12px;height:12px;border-radius:0;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+
+/* 1. Sky: fly through the stars */
+.sky{--len:230vh}
+.sky .stage{background:radial-gradient(120% 80% at 50% 110%,#13285a 0%,var(--night) 58%);display:flex;flex-direction:column}
+.warp{position:absolute;inset:0;pointer-events:none}
+.warp b{position:absolute;width:2px;height:2px;border-radius:50%;background:#e4eaf7;opacity:.6;will-change:transform}
+.warp i{position:absolute;width:var(--s,12px);height:var(--s,12px);margin:calc(var(--s,12px) / -2);background:var(--gold);clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%);filter:drop-shadow(0 0 6px rgba(243,207,122,.9));will-change:transform}
+html.still .warp{display:none}
+.static-stars i{position:absolute;width:var(--s,14px);height:var(--s,14px);background:var(--gold);clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%);filter:drop-shadow(0 0 6px rgba(243,207,122,.9));animation:twinkle var(--d,4s) ease-in-out infinite}
+html.story .static-stars{opacity:var(--fade,1)}
+@keyframes twinkle{50%{opacity:.25;transform:scale(.6) rotate(20deg)}}
+.portal{position:absolute;left:50%;top:50%;width:60vmax;height:60vmax;margin:-30vmax;border-radius:50%;background:radial-gradient(closest-side,rgba(255,226,160,.9),rgba(214,150,60,.45) 30%,rgba(60,38,12,.35) 60%,transparent);transform:scale(calc(var(--portal,0) * 2.6));opacity:calc(var(--portal,0) * .85);pointer-events:none}
+.hero-copy{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 16px 40px;opacity:var(--fade,1);transform:scale(var(--zoom,1));filter:blur(calc((1 - var(--fade,1)) * 10px))}
+.hero-copy .label{color:var(--sage-2);margin-bottom:24px}
+.hero-copy h1{font-size:clamp(50px,8vw,124px);max-width:15ch}
+.hero-copy h1 em{font-style:italic;color:var(--gold)}
+.hero-copy p{max-width:50ch;margin-top:24px;color:#c9d3ea;font-family:var(--serif);font-size:clamp(20px,1.9vw,24px);line-height:1.35}
+.hero-copy .row{display:flex;gap:10px;margin-top:32px;flex-wrap:wrap;justify-content:center}
+.feature-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;background:var(--sage);color:#fff;border-radius:10px;padding:14px 18px;min-width:290px}
+.feature-btn span{font-size:12px;opacity:.85}
+.hint{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;color:var(--sage-2);opacity:var(--fade,1)}
+.hint::after{content:"";width:1px;height:40px;background:linear-gradient(var(--sage-2),transparent);animation:drip 1.8s ease-in-out infinite}
+@keyframes drip{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+html.still .hint{display:none}
+.ticker{position:relative;border-top:1px solid rgba(255,255,255,.12);background:rgba(6,13,31,.75);overflow:hidden;white-space:nowrap;font-size:13px;color:#c9d3ea;opacity:var(--fade,1)}
+.ticker .lead{position:absolute;left:0;top:0;bottom:0;display:flex;align-items:center;padding:0 16px;background:var(--night);z-index:2;color:var(--sage-2)}
+.ticker .track{display:inline-flex;gap:40px;padding:12px 0 12px 110px;animation:marquee 40s linear infinite}
+.ticker .item{display:inline-flex;align-items:center;gap:10px}
+.ticker .tag{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:4px;padding:2px 7px;color:#e4eaf7}
+@keyframes marquee{to{transform:translateX(-50%)}}
+
+/* 2. Door: the dojo doors open onto your school */
+.door{--len:320vh}
+.door .stage{background:#070b18}
+.door .room{position:absolute;inset:0;transform:scale(var(--zoom,1));filter:brightness(calc(.55 + var(--open,1) * .45))}
+.door .room img{width:100%;height:100%;object-fit:cover}
+.door .intro h2,.door .intro .label{text-shadow:0 4px 30px rgba(0,0,0,.85)}
+.door .room::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(5,9,22,.85),rgba(5,9,22,.1) 55%)}
+.leaf{position:absolute;top:0;bottom:0;width:50%;overflow:hidden;display:none}
+.leaf::before{content:"";position:absolute;top:0;bottom:0;width:200%;background:url("../shared/assets/story-door.webp") center/cover no-repeat}
+.leaf.l::before{left:0}.leaf.r::before{right:0}
+html.story .leaf{display:block}
+.leaf.l{left:0;transform:scale(var(--near,1)) translateX(calc(var(--open,1) * -101%))}
+.leaf.r{right:0;transform:scale(var(--near,1)) translateX(calc(var(--open,1) * 101%))}
+.leaf.l{transform-origin:100% 50%}.leaf.r{transform-origin:0 50%}
+.film{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;pointer-events:none}
+html.story .door.has-film .film{opacity:1}
+html.story .door.has-film .leaf{display:none}
+.door .intro{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;opacity:var(--intro,0);z-index:3;padding:0 16px}
+html.story .door .intro{display:flex}
+.door .intro .label{color:var(--gold);margin-bottom:14px}
+.door .intro h2{font-size:clamp(44px,6vw,88px);max-width:13ch;text-shadow:0 6px 40px rgba(0,0,0,.6)}
+.door .cap{position:absolute;left:0;right:0;bottom:0;padding:24vh 0 9vh;background:linear-gradient(0deg,rgba(5,9,22,.92),rgba(5,9,22,.62) 55%,transparent);opacity:var(--cap,1);transform:translateY(calc((1 - var(--cap,1)) * 40px))}
+.door .cap .label{color:var(--gold)}
+.door .cap h2{font-size:clamp(40px,5.6vw,84px);max-width:16ch;margin-top:14px}
+.door .cap p{max-width:46ch;margin-top:16px;color:#d5ddf0;font-size:18px}
+
+/* 3. Paper chapters: words surface as you read; numbers grow */
+.paper{background:var(--paper);color:var(--ink)}
+.why{padding:150px 0 0}
+.why .label{color:var(--muted);display:block;padding-top:12px;border-top:1px solid var(--ink);max-width:300px;margin-bottom:28px}
+.why h2{font-family:var(--sans);font-weight:500;letter-spacing:-.035em;font-size:clamp(34px,4.6vw,64px);line-height:1.08;max-width:22ch}
+.why h2 .w{transition:opacity .2s linear}
+.why p{margin-top:28px;color:var(--muted);max-width:52ch;font-size:18px;opacity:calc(var(--p,1) * 1.6 - .4)}
+.why-grid{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,4fr);gap:56px;align-items:center}
+.master{margin:0;overflow:hidden;border-radius:999px 999px 4px 4px;transform:translateY(calc((1 - var(--p,1)) * 80px));box-shadow:0 30px 60px rgba(13,21,48,.25)}
+.master img{transform:scale(calc(1.25 - var(--p,1) * .25))}
+.drift{position:relative;margin-top:100px;height:clamp(320px,52vw,640px);overflow:hidden;border-radius:2px}
+.drift img{width:100%;height:100%;object-fit:cover;transform:scale(calc(1.2 - var(--p,1) * .2)) translateY(calc((1 - var(--p,1)) * -30px))}
+.drift-cap{position:absolute;left:24px;bottom:20px;color:var(--gold)}
+.chart-sec{padding:140px 0 110px}
+.chart-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;flex-wrap:wrap;margin-bottom:40px}
+.chart-head h2{font-size:clamp(40px,4.8vw,68px);max-width:18ch}
+.chart-head h2 em{font-style:italic}
+.chart-head p{max-width:40ch;color:var(--muted);font-size:15px}
+.chart{display:grid;grid-template-columns:52px repeat(4,1fr);gap:16px;height:440px;align-items:end;position:relative;border-bottom:1px solid var(--ink)}
+.axis{position:absolute;inset:0 0 0 52px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.axis span{border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--muted);transform:translateX(-52px);width:calc(100% + 52px);padding-top:2px}
+.bar{position:relative;height:var(--h);background:var(--mint);display:flex;flex-direction:column;align-items:center;padding-top:14px;transform-origin:bottom;transform:scaleY(min(1,calc(var(--p,1) * 1.5 - var(--i,0) * .08)))}
+.bar.hot{background:var(--mint-2)}
+.bar b{font-family:var(--serif);font-weight:400;font-size:clamp(22px,2.6vw,36px)}
+.bar small{font-size:12px;color:#24365f;margin-top:2px}
+.chart-x{display:grid;grid-template-columns:52px repeat(4,1fr);gap:16px;margin-top:10px;font-size:13px;color:var(--muted);text-align:center}
+.source{margin-top:22px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+
+/* 4. Team: the AI team passes by sideways */
+.team{--len:340vh}
+.team .stage{background:var(--paper);color:var(--ink);display:flex;flex-direction:column;justify-content:center;gap:40px;padding:90px 0 40px}
+.team .chart-head{margin:0}
+.track-team{display:flex;gap:18px;padding:0 max(16px,calc((100vw - 1200px)/2 + 16px));will-change:transform;align-items:flex-end}
+html.still .track-team{flex-wrap:wrap}
+.col{flex:none;width:clamp(170px,19vw,250px);display:flex;flex-direction:column;transform:translateY(calc((1 - var(--near,1)) * 46px))}
+.col img{aspect-ratio:4/5;object-fit:cover;width:100%;filter:sepia(calc(.35 - var(--near,1) * .25)) saturate(.9)}
+.col .stem{background:var(--mint);padding:14px 12px;height:calc(110px + var(--near,1) * 90px);display:flex;flex-direction:column;gap:4px;overflow:hidden}
+.col b{font-family:var(--serif);font-weight:400;font-size:30px;line-height:1}
+.col span{font-size:14px;color:#24365f;line-height:1.3}
+.col .n{font-family:var(--mono);font-size:11px;color:#3a5288;margin-top:auto}
+.team .col-note{font-size:13px;color:var(--muted)}
+
+/* 5. Inside: the app changes with each chapter */
+.inside{--len:420vh}
+.inside .stage{background:var(--night);display:flex;align-items:center}
+.inside .grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:56px;align-items:center;width:100%}
+.steps{position:relative;min-height:340px}
+.toc{display:flex;gap:8px;margin-bottom:26px}
+.toc a{flex:1;height:3px;background:rgba(255,255,255,.16);border-radius:2px}
+.toc a.on{background:var(--gold)}
+.step{position:absolute;inset:auto 0 auto 0;top:30px;opacity:0;transform:translateY(30px);transition:opacity .6s,transform .6s}
+.step.on{opacity:1;transform:none}
+html.still .step{position:static;opacity:1;transform:none;margin-bottom:48px}
+.step .label{color:var(--sage-2)}
+.step h2{font-size:clamp(36px,4vw,58px);margin-top:16px}
+.step p{margin-top:16px;color:#c2cde6;max-width:46ch}
+.screens{position:relative;aspect-ratio:16/10}
+.shot{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(60px) scale(.94);transition:opacity .7s,transform .7s}
+.shot.on{opacity:1;transform:none}
+.shot.past{transform:translateY(-60px) scale(.94)}
+html.still .shot{position:static;opacity:1;transform:none;margin-bottom:24px}
+html.still .screens{aspect-ratio:auto}
+.frame{border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 60px rgba(0,0,0,.45);background:#0e1730;width:100%}
+.frame .bar2{height:28px;background:#101d3d;display:flex;gap:6px;align-items:center;padding:0 12px}
+.frame .bar2 i{width:9px;height:9px;border-radius:50%;background:#2a3d6b}
+.frame.phone{width:auto;height:100%;aspect-ratio:390/844;border-radius:30px;padding:7px;background:#0b1020}
+.frame.phone img{height:100%;width:100%;object-fit:cover;object-position:top;border-radius:24px}
+
+/* 6. Pricing (content from PR #510) */
+.pricing{padding:140px 0 120px}
+.pricing .head{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:end;margin-bottom:40px}
+.pricing h2{font-size:clamp(44px,5.6vw,80px)}
+.pricing h2 em{font-style:italic}
+.pricing .lede{color:var(--muted);font-size:18px}
+.billing-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:20px}
+.seg{display:inline-flex;border:1px solid var(--ink);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;font:inherit;font-size:14px;padding:8px 20px;border-radius:999px;color:var(--ink);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.save{font-size:14px;color:var(--muted)}
+.save b{color:var(--ink)}
+.offer{display:flex;gap:14px;align-items:center;margin-top:22px;border-top:1px solid var(--ink);border-bottom:1px solid var(--line);padding:16px 0;font-size:15px}
+.offer svg{flex:none}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:22px}
+.plan{background:#fff;border:1px solid var(--line);border-radius:4px;padding:28px;opacity:calc(var(--p,1) * 2.2 - .2);transform:translateY(calc((1 - min(1, var(--p,1) * 1.8)) * 50px))}
+.plan.hot{background:var(--night);color:#eef1f8;border-color:var(--night)}
+.plan-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.plan h3{font-family:var(--serif);font-weight:400;font-size:34px;line-height:1;margin-right:6px}
+.pill{font-family:var(--mono);font-size:11px;letter-spacing:.04em;border-radius:4px;padding:3px 8px;background:var(--mint);color:var(--ink)}
+.pill.best{background:var(--gold)}
+.for{margin-top:10px;font-size:14px;color:var(--muted);min-height:42px}
+.plan.hot .for{color:#a3b4d6}
+.price{margin-top:16px}
+.was{color:var(--muted);font-size:15px}
+.was.none{display:block;height:22px}
+.plan.hot .was{color:#8a9bc0}
+.now{display:flex;align-items:flex-end;gap:10px}
+.amt{font-family:var(--serif);font-size:64px;line-height:1;letter-spacing:-.02em}
+.per{display:flex;flex-direction:column;font-size:13px;color:var(--muted);line-height:1.25;padding-bottom:8px}
+.plan.hot .per,.plan.hot .price p{color:#a3b4d6}
+.price p{font-size:13px;color:var(--muted);margin-top:8px;font-family:var(--mono)}
+.plans[data-period="y"] [data-show="m"],.plans[data-period="m"] [data-show="y"]{display:none}
+.plan .cta{width:100%;margin-top:22px;padding:14px 20px;font-size:15px}
+.checks{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:9px;font-size:15px}
+.checks li{display:flex;gap:10px}
+.checks li::before{content:"";flex:none;width:10px;height:10px;margin-top:7px;background:var(--mint-2);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+.plan.hot .checks li::before{background:var(--gold)}
+.topups{margin-top:18px;font-size:13px;color:var(--muted);font-family:var(--mono)}
+.guarantee{margin-top:20px;border-top:1px solid var(--ink);padding-top:16px;font-size:15px;color:var(--muted);display:grid;grid-template-columns:1fr 2fr;gap:24px}
+.guarantee b{color:var(--ink);font-family:var(--serif);font-weight:400;font-size:26px;line-height:1.1}
+
+/* 7. Close: the journey ends on the mat */
+.close{--len:200vh}
+.close .stage{display:flex;align-items:center;background:#0e1730}
+.close .bg{position:absolute;inset:0;transform:scale(var(--zoom,1))}
+.close .bg img{width:100%;height:100%;object-fit:cover;object-position:75% 50%}
+.close .stage::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,13,30,.95) 0%,rgba(8,13,30,.7) 42%,rgba(8,13,30,.05) 75%)}
+.close .wrap{position:relative;z-index:2;width:100%;opacity:calc(var(--rise,1) * 1.3);transform:translateY(calc((1 - var(--rise,1)) * 60px))}
+.close h2{font-size:clamp(50px,6.8vw,104px);max-width:11ch}
+.close p{margin-top:22px;max-width:38ch;color:#c9d3ea;font-size:18px}
+.close .row{display:flex;gap:10px;margin-top:30px;flex-wrap:wrap}
+
+footer{background:#000;color:#f2f2f2;padding:40px 0 28px;overflow:hidden}
+footer .big{font-weight:500;letter-spacing:-.06em;font-size:clamp(90px,21vw,300px);line-height:.85;display:flex;justify-content:space-between}
+footer .cols2{display:flex;gap:56px;flex-wrap:wrap;margin-top:56px;font-size:14px}
+footer .cols2 div{display:flex;flex-direction:column;gap:6px}
+footer .cols2 .label{color:#8a8a8a;margin-bottom:8px}
+footer .base{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid #333;margin-top:40px;padding-top:16px;font-size:12px;color:#9a9a9a}
+
+@media (max-width:860px){
+  .top .wrap{padding:0 16px}
+  .top-right .btn.light,.rail{display:none}
+  .pricing .head,.guarantee{grid-template-columns:1fr;gap:22px}
+  .chart{height:320px;gap:8px;grid-template-columns:40px repeat(4,1fr)}
+  .chart-x{gap:8px;grid-template-columns:40px repeat(4,1fr);font-size:11px}
+  .axis{left:40px}.axis span{transform:translateX(-40px);width:calc(100% + 40px)}
+  .bar small{display:none}
+  .plans{grid-template-columns:1fr}
+  .for{min-height:0}
+  .feature-btn{min-width:0;width:100%}
+  .why-grid{grid-template-columns:1fr;gap:32px}
+  .master{max-width:260px}
+  .team .stage{gap:24px;padding-top:80px}
+  .col{width:160px}
+  .col b{font-size:24px}
+  .col .stem{height:calc(90px + var(--near,1) * 60px)}
+  .inside .grid{grid-template-columns:1fr;gap:18px}
+  .inside .stage{align-items:flex-start;padding-top:84px}
+  .steps{min-height:250px}
+  .step h2{font-size:32px}
+  .step p{font-size:15px;margin-top:10px}
+  .screens{aspect-ratio:auto;height:calc(100svh - 84px - 250px - 50px)}
+  .shot .frame:not(.phone){width:100%}
+  .close .stage::after{background:linear-gradient(0deg,rgba(8,13,30,.96) 30%,rgba(8,13,30,.5) 70%,rgba(8,13,30,.2))}
+  .close .stage{align-items:flex-end;padding-bottom:70px}
+}
+/* Loading screen: covers the page until the story is ready, then lifts like a curtain. */
+#loader{position:fixed;inset:0;z-index:100;background:radial-gradient(120% 80% at 50% 110%,#13285a 0%,var(--night) 58%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;color:#eef1f8;transition:transform 1.1s cubic-bezier(.7,0,.2,1),opacity 1.1s ease}
+#loader.gone{transform:translateY(-100%);opacity:.6;pointer-events:none}
+html.loading body{overflow:hidden}
+.hero-copy>*,.hint{transition:opacity 1s ease,transform 1s cubic-bezier(.2,.7,.2,1)}
+.hero-copy>*:nth-child(2){transition-delay:.12s}.hero-copy>*:nth-child(3){transition-delay:.24s}.hero-copy>*:nth-child(4){transition-delay:.36s}
+html.loading .hero-copy>*{opacity:0;transform:translateY(24px)}
+.ld-mark{position:relative;width:96px;height:96px;display:grid;place-items:center}
+.ld-mark .ribbon{position:relative;width:52px;height:74px;padding-top:18px}
+.ld-mark .ribbon svg{width:26px;height:26px}
+.ld-star{position:absolute;width:22px;height:22px;right:-6px;top:-4px;background:var(--gold);clip-path:polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%);filter:drop-shadow(0 0 8px rgba(243,207,122,.9));animation:ldspin 2.4s ease-in-out infinite}
+.ld-star.b{width:12px;height:12px;left:-14px;right:auto;top:auto;bottom:6px;animation-delay:-1.2s}
+@keyframes ldspin{0%{transform:rotate(0) scale(.7);opacity:.6}50%{transform:rotate(90deg) scale(1.1);opacity:1}100%{transform:rotate(180deg) scale(.7);opacity:.6}}
+.ld-name{font-family:var(--serif);font-size:clamp(34px,5vw,52px);letter-spacing:-.01em;line-height:1}
+.ld-sub{font-family:var(--serif);font-style:italic;color:var(--sage-2);font-size:18px;margin-top:-10px}
+.ld-bar{width:min(280px,70vw);height:1px;background:rgba(255,255,255,.14);overflow:hidden}
+.ld-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--sage),var(--gold));transform-origin:0 50%;transform:scaleX(0)}
+.ld-meta{display:flex;justify-content:space-between;width:min(280px,70vw);margin-top:-12px;color:var(--sage-2)}
+.ld-pct{color:var(--gold)}
+@media (prefers-reduced-motion:reduce){#loader{transition:opacity .3s}#loader.gone{transform:none;opacity:0}.ld-star{animation:none}}
+</style>
+<script>
+  // Decide before first paint whether scenes animate, so there is no flash of the finished state.
+  document.documentElement.classList.add(matchMedia('(prefers-reduced-motion: reduce)').matches ? 'still' : 'story', 'loading');
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+</script>
+</head>
+<body>
+<div id="loader" role="status" aria-live="polite">
+  <div class="ld-mark" aria-hidden="true"><span class="ribbon"><svg viewBox="0 0 32 32"><path d="M5 13.2h22v4.4H5z" fill="#fff"/><rect x="12.6" y="10.6" width="6.8" height="9.6" rx="1.6" fill="#fff" stroke="#5f7fc4" stroke-width="1.4"/><path d="M14 20.2l-3.2 6.2M18 20.2l3.2 6.2" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></span><i class="ld-star"></i><i class="ld-star b"></i></div>
+  <div class="ld-name">HON OS</div>
+  <div class="ld-sub">A story in seven chapters</div>
+  <div class="ld-bar" aria-hidden="true"><i></i></div>
+  <div class="ld-meta label"><span class="ld-line">Lighting the lanterns</span><span class="ld-pct">0%</span></div>
+</div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 32 32">
+    <path d="M5 13.2h22v4.4H5z" fill="#ffffff"/>
+    <rect x="12.6" y="10.6" width="6.8" height="9.6" rx="1.6" fill="#ffffff" stroke="#5f7fc4" stroke-width="1.4"/>
+    <path d="M14 20.2l-3.2 6.2M18 20.2l3.2 6.2" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div class="journey" aria-hidden="true"><i></i></div>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <a class="ribbon" href="#top" aria-label="HON OS home"><svg><use href="#mark"/></svg></a>
+      <span class="brand-name">HON OS</span>
+    </div>
+    <div class="top-right">
+      <a class="btn light" href="#pricing">Sign in</a>
+      <a class="btn dark" href="#pricing">Start a new school</a>
+    </div>
+  </div>
+</header>
+
+<nav class="rail" aria-label="Chapters" data-nav>
+  <a href="#top" aria-label="Start"></a><a href="#door" aria-label="Step inside"></a><a href="#why" aria-label="Why HON OS"></a><a href="#cost" aria-label="What a year costs"></a><a href="#team" aria-label="AI team"></a><a href="#inside" aria-label="Inside HON OS"></a><a href="#pricing" aria-label="Pricing"></a><a href="#start" aria-label="Start a new school"></a>
+</nav>
+
+<main>
+<section class="scene sky" id="top" data-scene="sky">
+  <div class="stage">
+    <div class="warp" aria-hidden="true"></div>
+    <div class="static-stars" aria-hidden="true">
+      <i style="left:8%;top:30%;--s:10px;--d:5s"></i><i style="left:74%;top:72%;--s:22px;--d:4s"></i><i style="left:88%;top:80%;--s:14px;--d:6s"></i><i style="left:93%;top:62%;--s:24px;--d:4.6s"></i><i style="left:20%;top:70%;--s:12px;--d:5.4s"></i>
+    </div>
+    <div class="portal" aria-hidden="true"></div>
+    <div class="hero-copy">
+      <span class="label">The operating system for martial arts schools</span>
+      <h1>Run the school. <em>Grow</em> the school.</h1>
+      <p>Leads, students, classes, belts, tuition and marketing in one app, with an AI team included in your subscription.</p>
+      <div class="row"><a class="feature-btn" href="#pricing">Start a new school <span>14-day free trial, no automatic charge. Sign-up opens at launch.</span></a></div>
+    </div>
+    <span class="hint label">Scroll to step inside</span>
+    <div class="ticker" aria-label="What HON OS does">
+      <span class="lead label">Inside</span>
+      <div class="track">
+        <span class="item"><span class="tag">Leads</span>Every inquiry on one board, from new lead to trial done.</span>
+        <span class="item"><span class="tag">Classes</span>Recurring classes, rosters and attendance.</span>
+        <span class="item"><span class="tag">Belts</span>A ready list for every belt test.</span>
+        <span class="item"><span class="tag">AI team</span>Eight AI teammates, no per-message charges.</span>
+        <span class="item"><span class="tag">Studio</span>12,000 Creative Studio credits every month.</span>
+        <span class="item"><span class="tag">Tuition</span>No HON fee on tuition.</span>
+        <span class="item" aria-hidden="true"><span class="tag">Leads</span>Every inquiry on one board, from new lead to trial done.</span>
+        <span class="item" aria-hidden="true"><span class="tag">Classes</span>Recurring classes, rosters and attendance.</span>
+        <span class="item" aria-hidden="true"><span class="tag">Belts</span>A ready list for every belt test.</span>
+        <span class="item" aria-hidden="true"><span class="tag">AI team</span>Eight AI teammates, no per-message charges.</span>
+        <span class="item" aria-hidden="true"><span class="tag">Studio</span>12,000 Creative Studio credits every month.</span>
+        <span class="item" aria-hidden="true"><span class="tag">Tuition</span>No HON fee on tuition.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="scene door" id="door" data-scene="door">
+  <div class="stage">
+    <div class="room"><img src="../shared/assets/story-class.webp" width="1344" height="752" alt="A painting of an instructor kneeling to correct a child's stance while the class watches"></div>
+    <div class="leaf l" aria-hidden="true"></div>
+    <div class="leaf r" aria-hidden="true"></div>
+    <video class="film" muted playsinline preload="auto" aria-hidden="true" data-src="../shared/assets/story-door.mp4" data-src-phone="../shared/assets/story-door-phone.mp4"></video>
+    <div class="intro" aria-hidden="true"><span class="label">Chapter one</span><h2>Step inside your school.</h2></div>
+    <div class="cap"><div class="wrap">
+      <span class="label">Chapter one · Your school</span>
+      <h2>Every student, class and belt, in one place.</h2>
+      <p>From the first message to the black belt test, HON OS keeps one record for each student and family.</p>
+    </div></div>
+  </div>
+</section>
+
+<div class="paper">
+<section class="why" id="why">
+  <div class="wrap why-grid">
+    <div>
+    <span class="label">Chapter two · Why HON OS</span>
+    <h2 data-flow data-words>Most schools run on five apps, a spreadsheet and a whiteboard. HON OS puts the whole school in one place.</h2>
+    <p data-flow>Leads, memberships, classes, belt testing, tuition and marketing share one record for each student and family, in English, Korean or Spanish.</p>
+    </div>
+    <figure class="master" data-flow><img src="../shared/assets/story-master.webp" width="880" height="1168" alt="A painting of a martial arts master holding a folded black belt" loading="lazy"></figure>
+  </div>
+  <div class="wrap"><div class="drift" data-flow><img src="../shared/assets/story-belt.webp" width="1344" height="752" alt="A painting of hands tying a black belt" loading="lazy"><span class="drift-cap label">Every belt earned, on record</span></div></div>
+</section>
+
+<section class="chart-sec" id="cost">
+  <div class="wrap">
+    <div class="chart-head">
+      <h2>What a year of HON OS <em>costs</em></h2>
+      <p>One plan with everything in it. Paying yearly saves up to 37%, and Founder 50 schools keep 20% off while they stay subscribed.</p>
+    </div>
+    <div data-flow>
+      <div class="chart">
+        <div class="axis" aria-hidden="true"><span>$3,000</span><span>$2,250</span><span>$1,500</span><span>$750</span><span></span></div>
+        <span></span>
+        <div class="bar" style="--h:99.6%;--i:0"><b data-count="2988">$2,988</b><small>12 × $249</small></div>
+        <div class="bar" style="--h:69.9%;--i:1"><b data-count="2097">$2,097</b><small>billed yearly</small></div>
+        <div class="bar hot" style="--h:79.7%;--i:2"><b data-count="2390">$2,390</b><small>12 × $199.20</small></div>
+        <div class="bar hot" style="--h:49.8%;--i:3"><b data-count="1494">$1,494</b><small>billed yearly</small></div>
+      </div>
+    </div>
+    <div class="chart-x"><span></span><span>HON OS, monthly</span><span>HON OS, yearly</span><span>Founder 50, monthly</span><span>Founder 50, yearly</span></div>
+    <p class="source">Source: HON OS prices below. Founder 50 is for the first 50 schools. 12 × $199.20 = $2,390.40.</p>
+  </div>
+</section>
+</div>
+
+<section class="scene team" id="team" data-scene="team">
+  <div class="stage">
+    <div class="wrap chart-head">
+      <h2>Chapter three: eight AI teammates, <em>one</em> subscription.</h2>
+      <p>HON is your assistant, with seven specialists beside it. They draft, plan and explain. Nothing is sent without your OK. The AI team launches with HON OS.</p>
+    </div>
+    <div class="track-team">
+      <div class="col"><img src="../shared/assets/ai-kai-illustrated.webp" width="360" height="450" alt="Kai"><div class="stem"><b>Kai</b><span>Curriculum and lessons</span><span class="n">01 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-chad-illustrated.webp" width="360" height="450" alt="Chad"><div class="stem"><b>Chad</b><span>Follow-ups for every lead</span><span class="n">02 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-marcus-illustrated.webp" width="360" height="450" alt="Marcus"><div class="stem"><b>Marcus</b><span>Campaigns and social posts</span><span class="n">03 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-alex-illustrated.webp" width="360" height="450" alt="Alex"><div class="stem"><b>Alex</b><span>Whole-school priorities</span><span class="n">04 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-maya-illustrated.webp" width="360" height="450" alt="Maya"><div class="stem"><b>Maya</b><span>Spots students who may leave</span><span class="n">05 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-jordan-illustrated.webp" width="360" height="450" alt="Jordan"><div class="stem"><b>Jordan</b><span>Schedule and attendance</span><span class="n">06 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-claire-illustrated.webp" width="360" height="450" alt="Claire"><div class="stem"><b>Claire</b><span>Explains your numbers</span><span class="n">07 / 08</span></div></div>
+      <div class="col"><img src="../shared/assets/ai-lena-illustrated.webp" width="360" height="450" alt="Lena"><div class="stem"><b>Lena</b><span>Creative ideas and plans</span><span class="n">08 / 08</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="scene inside" id="inside" data-scene="chapters">
+  <div class="stage">
+    <div class="wrap grid">
+      <div>
+        <nav class="toc" aria-label="Inside HON OS"><a href="#inside" aria-label="Leads and trials"></a><a href="#inside" aria-label="Your home screen"></a><a href="#inside" aria-label="On your phone"></a></nav>
+        <div class="steps">
+          <article class="step on"><span class="label">Chapter four · Leads and trials</span><h2>Every lead on one board, from first message to first class.</h2><p>Leads from your website, social pages and walk-ins land in one place. Move a lead from new to trial booked, and HON shows who needs a call today.</p></article>
+          <article class="step"><span class="label">Chapter five · Your home screen</span><h2>HON and your AI team meet you every morning.</h2><p>Ask HON a question, or talk to the whole team at once. Pick the art style your team appears in: realistic, illustrated or chibi.</p></article>
+          <article class="step"><span class="label">Chapter six · On your phone</span><h2>Big Button mode, made for the mat.</h2><p>Choose Modern, Classic or Big Button. Big Button keeps the same school in large, easy taps for instructors between classes.</p></article>
+        </div>
+      </div>
+      <div class="screens">
+        <div class="shot on"><div class="frame"><div class="bar2"><i></i><i></i><i></i></div><img src="../shared/assets/app-pipeline.webp" width="1440" height="900" alt="HON OS lead board"></div></div>
+        <div class="shot"><div class="frame"><div class="bar2"><i></i><i></i><i></i></div><img src="../shared/assets/app-dashboard.webp" width="1440" height="930" alt="HON OS home screen with HON and the AI team"></div></div>
+        <div class="shot"><div class="frame phone"><img src="../shared/assets/app-phone.webp" width="390" height="844" alt="HON OS lead board on a phone in Big Button mode"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing paper" id="pricing" data-billing>
+  <div class="wrap">
+    <div class="head">
+      <div><span class="label" style="color:var(--muted)">Chapter seven · Pricing</span><h2>One plan. <em>Everything</em> in it.</h2></div>
+      <div>
+        <p class="lede">Try the full AI team and Creative Studio free for 14 days. No automatic charge when the trial ends.</p>
+        <div class="billing-row">
+          <div class="seg" role="group" aria-label="Billing period"><button type="button" data-period="y" aria-pressed="true">Yearly</button><button type="button" data-period="m" aria-pressed="false">Monthly</button></div>
+          <p class="save"><b>Save up to 37%</b> on a yearly subscription</p>
+        </div>
+      </div>
+    </div>
+    <div class="offer" role="note">
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.3 1.7 2.8-.2 1 2.6 2.4 1.5-.6 2.8 1 2.6-2 2 .1 2.9-2.7.7-1.6 2.3-2.7-.9L12 21.5l-2.3-1.7-2.7.9-1.6-2.3-2.7-.7.1-2.9-2-2 1-2.6-.6-2.8 2.4-1.5 1-2.6 2.8.2z"/><path d="M9 15l6-6"/><circle cx="9.3" cy="9.3" r=".9" fill="currentColor"/><circle cx="14.7" cy="14.7" r=".9" fill="currentColor"/></svg>
+      <p><b>Founder 50 pricing:</b> the first 50 schools get 20% off HON OS for as long as they stay subscribed. If you cancel, you come back at the standard price.</p>
+    </div>
+    <div class="plans" data-period="y" data-flow>
+      <article class="plan hot">
+        <div class="plan-head"><h3>Founder 50</h3><span class="pill" data-show="y">-50%</span><span class="pill" data-show="m">-20%</span><span class="pill best">Best value</span></div>
+        <p class="for">For the first 50 schools, kept while you stay subscribed</p>
+        <div class="price" data-show="y"><s class="was"><span class="sr">Standard monthly price</span> $249</s><div class="now"><span class="amt">$124.50</span><span class="per"><span>per month</span><span>billed yearly</span></span></div><p>$1,494 billed once a year</p></div>
+        <div class="price" data-show="m"><s class="was"><span class="sr">Standard monthly price</span> $249</s><div class="now"><span class="amt">$199.20</span><span class="per"><span>per month</span><span>billed monthly</span></span></div><p>or $1,494 a year, about 37% less than paying monthly</p></div>
+        <a class="btn light cta" href="#start">Start a new school</a>
+        <ul class="checks"><li>Leads, memberships and classes</li><li>Belt testing and attendance</li><li>Payments and marketing tools</li><li>HON and the AI team, with no per-message charges</li><li>12,000 Creative Studio credits every month</li><li>No HON fee on tuition</li><li>14-day free trial, no automatic charge</li><li>30-day money-back guarantee</li></ul>
+      </article>
+      <article class="plan">
+        <div class="plan-head"><h3>HON OS</h3><span class="pill" data-show="y">-29%</span></div>
+        <p class="for">The standard price once the 50 founder spots are taken.</p>
+        <div class="price" data-show="y"><s class="was"><span class="sr">Standard monthly price</span> $249</s><div class="now"><span class="amt">$174.75</span><span class="per"><span>per month</span><span>billed yearly</span></span></div><p>$2,097 billed once a year</p></div>
+        <div class="price" data-show="m"><span class="was none" aria-hidden="true"></span><div class="now"><span class="amt">$249</span><span class="per"><span>per month</span><span>billed monthly</span></span></div><p>or $2,097 a year, about 30% less than paying monthly</p></div>
+        <a class="btn dark cta" href="#start">Start a new school</a>
+        <ul class="checks"><li>Leads, memberships and classes</li><li>Belt testing and attendance</li><li>Payments and marketing tools</li><li>HON and the AI team, with no per-message charges</li><li>12,000 Creative Studio credits every month</li><li>No HON fee on tuition</li><li>14-day free trial, no automatic charge</li><li>30-day money-back guarantee</li></ul>
+      </article>
+    </div>
+    <p class="topups">Need more studio credits? Top-ups are $30, $60 or $120.</p>
+    <div class="guarantee"><b>30-day money-back guarantee</b><p>If HON OS isn't right for you, ask within 30 days of your first payment, monthly or yearly, and we'll refund that payment in full. Your access ends when the refund is made, and a founder spot isn't returned.</p></div>
+  </div>
+</section>
+
+<section class="scene close" id="start" data-scene="close">
+  <div class="stage">
+    <div class="bg"><img src="../shared/assets/story-bow.webp" width="1344" height="752" alt="" loading="lazy"></div>
+    <div class="wrap">
+      <span class="label" style="color:var(--gold)">Final chapter</span>
+      <h2>Start your school on HON OS</h2>
+      <p>14-day free trial with the full AI team and Creative Studio. No automatic charge when it ends.</p>
+      <div class="row"><a class="btn light" href="#pricing">Start a new school</a><a class="btn dark" href="#pricing">See pricing</a></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="big" aria-hidden="true"><span>HON</span><span>OS</span></div>
+    <div class="cols2">
+      <div><span class="label">Product</span><a href="#why">Why HON OS</a><a href="#team">AI team</a><a href="#inside">Inside HON OS</a><a href="#pricing">Pricing</a></div>
+      <div><span class="label">Company</span><a href="#top">Blog</a><a href="#top">Privacy</a><a href="#top">Terms</a></div>
+      <div><span class="label">Language</span><a href="#top">English</a><a href="#top">한국어</a><a href="#top">Español</a></div>
+    </div>
+    <div class="base"><span>© 2026 HON OS</span><span>Design preview B, scroll story (inspired by the Creative Intelligence Report layout). Not the live site. Photos are placeholders.</span></div>
+  </div>
+</footer>
+<script src="loader.js"></script>
+<script src="../shared/demo.js"></script>
+<script src="story.js"></script>
+</body>
+</html>

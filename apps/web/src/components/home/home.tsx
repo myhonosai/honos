@@ -10,9 +10,13 @@ import { AiTeamReadinessAccessError, loadAiTeamReadiness } from '../ai-team-read
 import { CrmLeadAccessError, loadCrmLeads } from '../crm-leads-http';
 import { ClassSessionsReadAccessError, loadCurrentSchoolClassSessions } from '../class-sessions-read-http';
 import { WorkAccessError, loadHumanWork } from '../work-items-http';
+import { HON_CONVERSATION_API, HonConversationError } from '../hon-command/hon-conversation-http';
 import { HOME_LOADING, type HomeSources, type Panel } from './model';
 import { SchoolHomeView } from './view';
 import { PlanPromotionBanner } from '../school-plan-promotions/banner';
+import { SetupCard } from '../school-onboarding/setup-card';
+import { TourInvite } from '../school-shell/tour';
+import { HonTeamChat } from '../hon-command/hon-team-chat';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
 type Loader<K extends keyof HomeSources> = (scope: Scope, signal: AbortSignal) => Promise<HomeSources[K] extends Panel<infer T> ? T : never>;
@@ -25,6 +29,7 @@ export const HOME_API: HomeApi = {
   command: scope => loadCommandCenter(scope.organizationId, scope.schoolId),
   operations: scope => loadStaffDashboard(scope.organizationId, scope.schoolId),
   readiness: (scope, signal) => loadAiTeamReadiness(scope.organizationId, scope.schoolId, signal),
+  hon: (scope, signal) => HON_CONVERSATION_API.readiness(scope, signal),
   leads: (scope, signal) => loadCrmLeads(scope.organizationId, scope.schoolId, 'OPEN', signal),
   sessions: (scope, signal) => loadCurrentSchoolClassSessions(scope.organizationId, scope.schoolId, signal),
   // The work queue is the caller's current school; it is shown only when it is this school.
@@ -36,7 +41,7 @@ export const HOME_API: HomeApi = {
 };
 
 export function panelFromError(error: unknown): Panel<never> {
-  return DENIED.some(type => error instanceof type) ? { state: 'DENIED' } : { state: 'UNAVAILABLE' };
+  return DENIED.some(type => error instanceof type) || (error instanceof HonConversationError && (error.kind === 'FORBIDDEN' || error.kind === 'SESSION')) ? { state: 'DENIED' } : { state: 'UNAVAILABLE' };
 }
 
 /**
@@ -73,8 +78,12 @@ export function SchoolHome({ api = HOME_API }: { api?: HomeApi }): React.ReactEl
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="" data-hon-native="">
+    {shell.phase === 'READY' && <SetupCard scope={selection} language={preferences.language}/>}
+    {shell.phase === 'READY' && <TourInvite language={preferences.language}/>}
     {shell.phase === 'READY' && <PlanPromotionBanner schoolId={selection?.schoolId ?? null} language={preferences.language} formattingLocale={formattingLocale}/>}
     <SchoolHomeView language={preferences.language} mode={shell.mode} artStyle={shell.artStyle} onArtStyle={shell.onArtStyle} schoolName={shell.schoolName} selection={selection} sources={sources} now={now}
-      waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} />
+      waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
+      teamChat={shell.phase === 'READY' && selection ? <HonTeamChat key={`${selection.organizationId}:${selection.schoolId}`} school={{ organizationId: selection.organizationId, schoolId: selection.schoolId }}
+        mode={shell.mode} language={preferences.language} artStyle={shell.artStyle} /> : undefined} />
   </div>;
 }

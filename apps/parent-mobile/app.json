@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "HON Family",
+    "slug": "hon-family",
+    "scheme": "honparent",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050A18"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.myhonos.family",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.myhonos.family",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "allowBackup": false,
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "color": "#050A18"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "HON Family uses the microphone only while you tap it to ask Eian a question by voice.",
+          "speechRecognitionPermission": "HON Family turns your spoken question for Eian into text.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox", "com.google.android.as"]
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "HON Family uses the microphone only while you tap it to ask Eian a question by voice.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f9df2343-aea1-45d3-b455-ae9577566cac"
+      }
+    }
+  }
+}

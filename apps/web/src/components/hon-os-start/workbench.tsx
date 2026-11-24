@@ -1,18 +1,23 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  SIGNUP_CONFIRMATION, TRIAL_CONFIRMATION, validateHonOsTrial, validateSignupInput, validateSignupRegistration, validateSignupStatus, validateTrialStatus,
-  type HonOsTrial, type SignupStatus, type TrialStatus,
+  SIGNUP_CONFIRMATION, TRIAL_CONFIRMATION, validateHonOsTrial, validateSignupInput, validateSignupResult, validateSignupStatus, validateTrialStatus,
+  type FaceCheckInNotice, type HonOsTrial, type SignupStatus, type TrialStatus,
 } from '@hon/contracts';
 import { HON_SESSION_INVALIDATED_EVENT, reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { StartError, startRequest, type StartCommand } from './http';
 import { COMMON_ZONES, START_COPY, defaultZone, instant, supportedZones, type StartCopy } from './copy';
 import { useLocale } from '../localization/provider';
 import styles from './workbench.module.css';
+import { AddressFields } from '../school-location/address-fields';
+import { FaceCheckInNoticeView } from '../school-location/notice';
+import { locationCopy } from '../school-location/copy';
+import { EMPTY_LOCATION_DRAFT, draftLocation, type LocationDraft } from '../school-location/draft';
 
 /**
  * Public self-serve start (0241 sign-up + 0246 free trial): a signed-in owner creates their own school, then starts the
- * free trial HQ published. Both programs are CLOSED until David opens them; this page then only says so. Every decision
+ * free trial HQ published. 0392: the owner also gives the school address, and the answer shows the face check-in notice for it.
+ * Both programs are CLOSED until David opens them; this page then only says so. Every decision
  * (eligibility, campaign, length, AI credit) is the server's; the page sends only the owner's own words and confirmations.
  */
 type Message = Readonly<{ say: (c: StartCopy) => string }>;
@@ -35,6 +40,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
   const [ownerName, setOwnerName] = useState(''), [schoolName, setSchoolName] = useState(''), [legalName, setLegalName] = useState(''), [timezone, setTimezone] = useState('');
   // Zones come from the browser after mount (never the server render, whose zone is not the owner's).
   const [zones, setZones] = useState<string[]>([]);
+  const [location, setLocation] = useState<LocationDraft>(EMPTY_LOCATION_DRAFT), [notice, setNotice] = useState<FaceCheckInNotice | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(false), [trialConfirmed, setTrialConfirmed] = useState(false), [retry, setRetry] = useState(false);
   const life = useRef({ mounted: false, busy: false, epoch: 0, identity: '' }), pending = useRef<Pending | null>(null), read = useRef<AbortController | null>(null);
 
@@ -43,7 +49,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
     const zone = defaultZone(), all = supportedZones();
     setZones(zone && !all.includes(zone) ? [zone, ...all] : all); setTimezone(zone);
     // A signed-out or replaced session hides everything this page loaded; nothing on it is secret beyond the owner's own school.
-    const invalidated = () => { life.current.epoch++; read.current?.abort(); pending.current = null; setRetry(false); setPhase('idle'); setSignup(null); setTrial(null); setMessage(line(x => x.codes.SIGN_IN_REQUIRED!)); };
+    const invalidated = () => { life.current.epoch++; read.current?.abort(); pending.current = null; setRetry(false); setPhase('idle'); setSignup(null); setTrial(null); setNotice(null); setMessage(line(x => x.codes.SIGN_IN_REQUIRED!)); };
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated);
     return () => { life.current.mounted = false; life.current.epoch++; read.current?.abort(); pending.current = null; window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, invalidated); };
   }, []);
@@ -76,7 +82,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
     try {
       const result = await startRequest(command.path, new AbortController().signal, command);
       if (!s.mounted) return;
-      if (command.kind === 'signup') { validateSignupRegistration(result); done = line(x => x.created); }
+      if (command.kind === 'signup') { setNotice(validateSignupResult(result).faceCheckInNotice); done = line(x => x.created); }
       else { validateHonOsTrial(result); done = line(x => x.trialStarted); }
       pending.current = null; setRetry(false); setTermsAccepted(false); setTrialConfirmed(false);
     } catch (e) {
@@ -95,7 +101,9 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
   };
 
   const terms = signup?.terms ?? null, registration = signup?.registration ?? null;
-  const form = { ownerName: ownerName.trim(), schoolName: schoolName.trim(), legalName: legalName.trim(), timezone: timezone.trim(), termsVersionId: terms?.termsVersionId ?? '', confirmation: SIGNUP_CONFIRMATION };
+  const lc = locationCopy(preferences.language);
+  const form = { ownerName: ownerName.trim(), schoolName: schoolName.trim(), legalName: legalName.trim(), timezone: timezone.trim(),
+    location: draftLocation(location, lc), termsVersionId: terms?.termsVersionId ?? '', confirmation: SIGNUP_CONFIRMATION };
   let formValid = false; try { validateSignupInput(form); formValid = true; } catch { formValid = false; }
 
   // School-facing instants are shown in the school's own time zone, with the zone named.
@@ -112,7 +120,9 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
       <button type="button" disabled={busy} onClick={() => pending.current && void execute(pending.current)}>{c.retryButton}</button></aside>}
     {phase === 'ready' && signup && <fieldset disabled={busy || retry}>
       <h2>{c.step1}</h2>
-      {registration ? <p className={styles.notice} data-start-registered>{c.registered(registration.schoolName, at(registration.registeredAt))}</p>
+      {registration ? <><p className={styles.notice} data-start-registered>{c.registered(registration.schoolName, at(registration.registeredAt))}</p>
+        {notice ? <FaceCheckInNoticeView notice={notice} language={preferences.language} className={styles.notice} /> : null}
+        <p><a href="/staff/settings/location">{lc.pageTitle}</a></p></>
         : signup.signupStatus === 'CLOSED' ? <p className={styles.notice} data-start-closed>{c.signupClosed}</p>
         : signup.eligibility === 'VERIFIED_SIGN_IN_REQUIRED' ? <p className={styles.notice}>{c.verifiedRequired}</p>
         : signup.eligibility === 'HAS_OTHER_ACCESS' ? <p className={styles.notice}>{c.hasOtherAccess} <a href="/auth/continue">{c.openWorkspace}</a></p>
@@ -126,6 +136,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
             <optgroup label={c.commonZones}>{COMMON_ZONES.filter(z => zones.includes(z)).map(z => <option key={'c' + z} value={z}>{z.replace(/_/g, ' ')}</option>)}</optgroup>
             <optgroup label={c.allZones}>{zones.map(z => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}</optgroup>
           </select></label>
+          <AddressFields draft={location} language={preferences.language} onEdit={(f, v) => setLocation({ ...location, [f]: v })} />
           {/* Placeholder: the legal sign-up terms wording is David's decision and is not written yet. */}
           {draft && <p className={styles.notice} data-start-legal-pending>{c.legalTermsPending}</p>}
           <label><input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />{c.agree(terms.title, terms.version, draft)}</label>
@@ -133,7 +144,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
         </>}
       {registration && trial && <>
         <h2>{c.step2}</h2>
-        {trial.trial ? <><TrialSummary trial={trial.trial} c={c} at={at} />{trial.trial.status === 'TRIAL_ACTIVE' && <a href="/staff/founder-setup">{c.founderSetup}</a>}</>
+        {trial.trial ? <><TrialSummary trial={trial.trial} c={c} at={at} />{trial.trial.status === 'TRIAL_ACTIVE' && <><a href="/staff/welcome">{c.welcome}</a> <a href="/staff/founder-setup">{c.founderSetup}</a></>}</>
           : trial.trialStatus === 'CLOSED' ? <p className={styles.notice} data-start-trial-closed>{c.trialClosed}</p>
           : !trial.available ? <p className={styles.notice}>{c.noOffer}</p>
           : <div data-start-offer>

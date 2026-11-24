@@ -187,7 +187,7 @@ export function HqAiSafety({ api = aiControlApi, directoryLoader = loadDirectory
 type AlertPending = Readonly<{ key: string; body: AiSchoolCostAlertAckInput }>;
 
 /**
- * HQ AI cost limit alerts (0343): schools at 75%, 90% or 100% of their internal AI cost limit this window. Any HQ billing
+ * HQ AI cost limit alerts (0669): schools at 75%, 90% or 100% of their internal AI cost limit this window. Any HQ billing
  * reader sees them; only the human HQ owner acknowledges, once per school, level and window. An unknown outcome keeps the
  * exact request so Try again replays the same key. Acknowledging changes no limit, pause or spend decision.
  */

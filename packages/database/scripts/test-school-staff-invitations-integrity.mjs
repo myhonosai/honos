@@ -60,10 +60,11 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%school_staff%')");
- assert.equal(fns.length,11);
- for(const f of fns){const entry=['manage_school_staff_invitation','accept_school_staff_invitation','read_school_staff_invitations','read_school_staff_invitation_roles'].includes(f.proname);
+ // 0404 adds list_school_staff_for_picker, the staff pick-list read: a fifth SECURITY DEFINER entry point.
+ assert.equal(fns.length,12);
+ for(const f of fns){const entry=['manage_school_staff_invitation','accept_school_staff_invitation','read_school_staff_invitations','read_school_staff_invitation_roles','list_school_staff_for_picker'].includes(f.proname);
   assert.equal(f.prosecdef,entry,f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
- pass('forced deny-all RLS on new custody tables; runtime executes exactly the four fixed entry points (three from 0204, role discovery from 0207)');
+ pass('forced deny-all RLS on new custody tables; runtime executes exactly the five fixed entry points (three from 0204, role discovery from 0207, staff pick list from 0404)');
 
  // Fixture: two HQ-provisioned schools (each bootstraps an OWNER), a dedicated staff manager, roles.
  const hq={subject:'s2-hq-'+K()};const hqPrincipal=await human({externalSubject:hq.subject,email:K()+'@example.invalid'},'S2 synthetic HQ');

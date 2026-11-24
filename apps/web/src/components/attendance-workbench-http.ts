@@ -137,7 +137,7 @@ function responseMeta(value: unknown, mutation: boolean): ResponseMeta {
   return meta as unknown as ResponseMeta;
 }
 
-function policy(value: unknown, scope: AttendanceKnownScope): AttendanceProgressionPolicy {
+function policy(value: unknown, scope: Pick<AttendanceKnownScope, 'programId'>): AttendanceProgressionPolicy {
   closed(value, ['programId', 'version', 'categories']);
   const data = value as Record<string, unknown>;
   if (data.programId !== scope.programId) invalid();
@@ -231,4 +231,44 @@ export async function saveAttendanceRecord(scope: AttendanceKnownScope, input: R
   validateAttendanceRecordInput(input);
   const response = await request(attendancePaths.record(scope), 'RECORD_SAVE', input, idempotencyKey);
   return { attendance: attendance(response.data, scope), replayed: response.meta.replayed === true };
+}
+
+/**
+ * Marking from a class roster: the same fixed record path, command marker, key and response checks as
+ * saveAttendanceRecord, without the program selector (recording never needs it; only the policy does).
+ */
+export type RosterAttendanceTarget = Pick<AttendanceKnownScope, 'organizationId' | 'schoolId' | 'sessionId' | 'studentProfileId'>;
+/** The exact current record for one roster student (same lookup as the exact page), so a roster change keeps its note. */
+export async function loadRosterAttendance(target: RosterAttendanceTarget): Promise<AttendanceRecordSummary | null> {
+  for (const value of [target.organizationId, target.schoolId, target.sessionId, target.studentProfileId]) if (!UUID.test(value)) invalid();
+  const response = await request(`${recordPath({ ...target, programId: '' })}?studentProfileId=${target.studentProfileId}`, 'RECORD_LOAD');
+  if (response.data === null) return null;
+  return attendance(response.data, target);
+}
+export async function saveRosterAttendance(target: RosterAttendanceTarget, input: RecordAttendanceInput, idempotencyKey: string): Promise<{ attendance: AttendanceRecordSummary; replayed: boolean }> {
+  for (const value of [target.organizationId, target.schoolId, target.sessionId, target.studentProfileId]) if (!UUID.test(value)) invalid();
+  if (input.studentProfileId !== target.studentProfileId) invalid();
+  validateAttendanceRecordInput(input);
+  const response = await request(recordPath({ ...target, programId: '' }), 'RECORD_SAVE', input, idempotencyKey);
+  return { attendance: attendance(response.data, target), replayed: response.meta.replayed === true };
+}
+
+/**
+ * A program's attendance rules without a class or student: the same fixed policy path, command marker, key and response
+ * checks as loadAttendancePolicy/saveAttendancePolicy (the policy never needs the class or student).
+ */
+export type ProgramPolicyTarget = Pick<AttendanceKnownScope, 'organizationId' | 'schoolId' | 'programId'>;
+const programPolicyPath = (target: ProgramPolicyTarget): string => {
+  for (const value of [target.organizationId, target.schoolId, target.programId]) if (!UUID.test(value)) invalid();
+  return policyPath({ ...target, sessionId: '', studentProfileId: '' });
+};
+export async function loadProgramAttendancePolicy(target: ProgramPolicyTarget): Promise<AttendanceProgressionPolicy> {
+  const response = await request(programPolicyPath(target), 'POLICY_LOAD');
+  return policy(response.data, target);
+}
+export async function saveProgramAttendancePolicy(target: ProgramPolicyTarget, input: ConfigureAttendancePolicyInput, idempotencyKey: string): Promise<{ policy: AttendanceProgressionPolicy; replayed: boolean }> {
+  const path = programPolicyPath(target);
+  validateAttendancePolicyInput(input);
+  const response = await request(path, 'POLICY_SAVE', input, idempotencyKey);
+  return { policy: policy(response.data, target), replayed: response.meta.replayed === true };
 }

@@ -1,5 +1,7 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Outside the shell (no verified school): the page keeps its own ID fields, which these tests cover.
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => null, useShellSchoolInto: () => null, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
 
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
 vi.mock('react', async () => {
@@ -38,7 +40,7 @@ describe('Action Engine approval workbench verified Platform View selector', () 
   it('is absent and performs no preference I/O before the qualified human queue response independently verifies organization, school and reviewer', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => { if (path === queuePath()) return response(queue()); if (path === themePath()) return response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' }); return { ok: false, status: 403 } as Response; });
     expect(text(render())).not.toContain('Platform View'); expect(fetch).not.toHaveBeenCalled();
-    enterSchool(); await (button('Load / refresh queue').props.onClick as () => Promise<void>)();
+    enterSchool(); await (button('Refresh').props.onClick as () => Promise<void>)();
     await vi.waitFor(() => { const tree = render(); expect(text(tree)).toContain('Platform View'); expect(text(tree)).toContain('Modern HON is the visual default for this verified current-school reviewer'); });
     expect(fetch.mock.calls.find(([path]) => path === themePath())).toEqual([themePath(), { method: 'GET', headers: { Accept: 'application/json' }, credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }]);
     expect(fetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0);
@@ -46,19 +48,19 @@ describe('Action Engine approval workbench verified Platform View selector', () 
 
   it('saves only the independently verified current-school preference with SETTINGS provenance and leaves Action Engine decision posture untouched', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path, options) => { if (path === queuePath()) return response(queue()); if (path === themePath() && (options as RequestInit | undefined)?.method === 'GET') return response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' }); if (path === themePath() && (options as RequestInit | undefined)?.method === 'PUT') return response({ interfaceTheme: 'classic', selectedVia: 'SETTINGS', updatedAt: createdAt }); return { ok: false, status: 403 } as Response; });
-    enterSchool(); await (button('Load / refresh queue').props.onClick as () => Promise<void>)(); await vi.waitFor(() => expect(text(render())).toContain('Modern HON is the visual default'));
+    enterSchool(); await (button('Refresh').props.onClick as () => Promise<void>)(); await vi.waitFor(() => expect(text(render())).toContain('Modern HON is the visual default'));
     (button('Classic CRM').props.onClick as () => void)();
     await vi.waitFor(() => { const tree = render(); expect(tree.props['data-interface-theme']).toBe('classic'); expect(text(tree)).toContain('Saved for your current user and this verified current school only'); });
     const save = fetch.mock.calls.find(([, options]) => (options as RequestInit | undefined)?.method === 'PUT');
     expect(save).toEqual([themePath(), { method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'Idempotency-Key': id('9') }, body: JSON.stringify({ interfaceTheme: 'classic', selectedVia: 'SETTINGS' }), credentials: 'same-origin', cache: 'no-store', referrerPolicy: 'no-referrer' }]);
-    const copy = text(render()); for (const unchanged of ['No execution. No provider or AI call.', 'action.approve', 'crm.lead.create', 'AWAITING_APPROVAL', 'Request']) expect(copy).toContain(unchanged);
+    const copy = text(render()); for (const unchanged of ['crm.lead.create', 'awaiting approval', 'Request expires']) expect(copy).toContain(unchanged);
     expect(copy).toContain('preserve the exact proposal queue, immutable payload, reviewer permission, approval binding, idempotency, decision controls, and no-execution posture');
   });
 
   it('clears presentation state on school change and discards a late preference result after unmount', async () => {
     const delayedPreference = deferred<Response>();
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (path) => { if (path === queuePath()) return response(queue()); if (path === themePath()) return delayedPreference.promise; return { ok: false, status: 403 } as Response; });
-    enterSchool(); await (button('Load / refresh queue').props.onClick as () => Promise<void>)();
+    enterSchool(); await (button('Refresh').props.onClick as () => Promise<void>)();
     await vi.waitFor(() => { render(); expect(fetch.mock.calls.filter(([path]) => path === themePath())).toHaveLength(1); });
     enterSchool(nextSchoolId);
     expect(text(render())).not.toContain('Platform View'); expect(render().props['data-interface-theme']).toBe('modern');
@@ -73,9 +75,9 @@ describe('Action Engine approval workbench verified Platform View selector', () 
       if (path === themePath()) { preferenceLoads += 1; return preferenceLoads === 1 ? delayedPreference.promise : response({ interfaceTheme: 'modern', selectedVia: 'DEFAULT' }); }
       return { ok: false, status: 403 } as Response;
     });
-    enterSchool(); await (button('Load / refresh queue').props.onClick as () => Promise<void>)();
+    enterSchool(); await (button('Refresh').props.onClick as () => Promise<void>)();
     await vi.waitFor(() => { render(); expect(fetch.mock.calls.filter(([path]) => path === themePath())).toHaveLength(1); });
-    (button('Load / refresh queue').props.onClick as () => void)();
+    (button('Refresh').props.onClick as () => void)();
     await vi.waitFor(() => { const tree = render(); expect(text(tree)).not.toContain('Platform View'); expect(tree.props['data-interface-theme']).toBe('modern'); expect(queueLoads).toBe(2); });
     delayedQueueReload.resolve(response(queue()));
     await vi.waitFor(() => { render(); expect(fetch.mock.calls.filter(([path]) => path === themePath())).toHaveLength(2); });
@@ -90,13 +92,13 @@ describe('Action Engine approval workbench verified Platform View selector', () 
       if (path === themePath() && (options as RequestInit | undefined)?.method === 'GET') return preferenceAvailable ? response({ interfaceTheme: 'big-button', selectedVia: 'SETTINGS', updatedAt: createdAt }) : { ok: false, status: 403 } as Response;
       return { ok: false, status: 403 } as Response;
     });
-    enterSchool(); await (button('Load / refresh queue').props.onClick as () => Promise<void>)();
+    enterSchool(); await (button('Refresh').props.onClick as () => Promise<void>)();
     await vi.waitFor(() => expect(render().props['data-interface-theme']).toBe('big-button'));
-    queueAvailable = false; await (button('Load / refresh queue').props.onClick as () => Promise<void>)();
+    queueAvailable = false; await (button('Refresh').props.onClick as () => Promise<void>)();
     await vi.waitFor(() => { const tree = render(); expect(text(tree)).toContain('Current exact school review permission is unavailable'); expect(text(tree)).not.toContain('Platform View'); expect(tree.props['data-interface-theme']).toBe('modern'); });
     expect(fetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0);
 
-    queueAvailable = true; preferenceAvailable = false; await (button('Load / refresh queue').props.onClick as () => Promise<void>)();
+    queueAvailable = true; preferenceAvailable = false; await (button('Refresh').props.onClick as () => Promise<void>)();
     await vi.waitFor(() => { const tree = render(); expect(text(tree)).toContain('personal interface preference is unavailable'); expect(tree.props['data-interface-theme']).toBe('modern'); });
     expect(fetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0);
   });

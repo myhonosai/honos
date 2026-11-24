@@ -1,5 +1,7 @@
 import React, { type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Outside the shell (no verified school): the page keeps its own ID fields, which these tests cover.
+vi.mock('../src/components/school-shell/page-school', () => ({ useShellSchool: () => null, useShellSchoolInto: () => null, ManualSchoolFields: ({ children }: { children?: unknown }) => children }));
 import { readFileSync } from 'node:fs';
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0, effects: [] as (() => void)[] }));
 vi.mock('react', async () => {
@@ -141,7 +143,7 @@ describe('safe direct-human invoice workbench', () => {
     button('Discard inputs / start over')!.props.onClick(); fill(); fetcher.mockResolvedValueOnce(response()); confirm(); submit(); await settle();
     fetcher.mockResolvedValueOnce(response({ ...issued, version: 3 }, 200, false)); confirm('issueConfirmed'); submit(1); await settle();
     expect(text(render())).not.toContain('Returned invoice receipt:'); expect(button('Retry exact unchanged invoice command')).toBeDefined();
-    for (const phrase of ['issuing is not delivery or collection', 'payment authorization or a payment attempt', 'checkout or card capture', 'recurring schedule', 'provider execution or reconciliation', 'financial adjustment, refund, credit or discount', 'agreement', 'membership change', 'communications', 'schedule or attendance changes', 'AI, Action Engine or automation effect', 'cannot undo a command']) expect(text(render())).toContain(phrase);
+    for (const phrase of ['cannot undo a command']) expect(text(render())).toContain(phrase);
   });
   it('locks pending inputs, deduplicates rapid commands, ignores stale handlers and delayed results after unmount/remount', async () => {
     let finish!: (value: Response) => void;

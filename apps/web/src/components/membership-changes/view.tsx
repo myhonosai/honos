@@ -19,6 +19,8 @@ export type MembershipChangesViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   policy: PolicyState; list: ChangeListState; filter: ChangeFilter; selected: string | null; selectedLabel: string | null; history: HistoryState;
   form: ChangeAction | null; outcome: ChangeOutcome; locked: boolean; canRetry: boolean;
+  /** On a contact card: only the one membership the card names, without the page heading, the pause-rules editor or the picker. */
+  embedded?: boolean | undefined;
   onRefresh?: (() => void) | undefined; onFilter?: ((filter: ChangeFilter) => void) | undefined; onSelect?: ((membershipId: string | null, label: string | null) => void) | undefined;
   onMore?: (() => void) | undefined; onOpen?: ((form: ChangeAction) => void) | undefined; onClose?: (() => void) | undefined;
   onSubmit?: ((action: ChangeAction, fields: ChangeFields) => void) | undefined; onTryAgain?: (() => void) | undefined;
@@ -139,18 +141,19 @@ export function MembershipChangesView(p: MembershipChangesViewProps): React.Reac
   const ready = p.list.state === 'READY' && p.list.filter === p.filter ? p.list : null;
   const view = p.history.state === 'READY' && p.history.view.membershipId.toLowerCase() === p.selected?.toLowerCase() ? p.history.view : null;
   const chosen = ready?.items.find((m) => m.membershipId.toLowerCase() === p.selected?.toLowerCase()) ?? null;
-  return <section className={styles.page} aria-labelledby="membership-changes-title" data-hon-native="" data-testid="membership-changes">
-    <header className={styles.head}>
+  const embedded = p.embedded === true;
+  return <section className={styles.page} aria-labelledby={embedded ? 'membership-selected-title' : 'membership-changes-title'} data-hon-native="" data-testid="membership-changes">
+    {embedded ? null : <header className={styles.head}>
       <div><h1 id="membership-changes-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
       {notice === null && p.onRefresh ? <button type="button" className={styles.secondary} onClick={p.onRefresh} disabled={p.locked}>{t('refresh')}</button> : null}
-    </header>
-    <p className={styles.meta}>{t('scope')}</p>
+    </header>}
+    {embedded ? null : <p className={styles.meta}>{t('scope')}</p>}
     {notice ? <p className={styles.notice} role="status">{notice}</p> : <>
       {p.outcome ? <div className={styles.notice} role="status" data-testid="change-outcome" data-kind={p.outcome.kind}>
         <p>{p.outcome.kind === 'SENDING' ? t('sending') : p.outcome.kind === 'DONE' ? t(`done_${p.outcome.action}`) : t(`e_${p.outcome.kind}`)}</p>
         {p.canRetry && p.onTryAgain ? <button type="button" className={styles.primary} onClick={p.onTryAgain}>{t('tryAgain')}</button> : null}</div> : null}
-      <Rules p={p} t={t}/>
-      <article className={styles.card} aria-labelledby="membership-pick-title">
+      {embedded ? null : <Rules p={p} t={t}/>}
+      {embedded ? null : <article className={styles.card} aria-labelledby="membership-pick-title">
         <h2 id="membership-pick-title">{t('pickTitle')}</h2>
         <nav className={styles.tabs} aria-label={t('filterLabel')}>{CHANGE_FILTERS.map((f) =>
           <button key={f} type="button" className={styles.tab} aria-pressed={p.filter === f} disabled={p.locked} onClick={() => p.onFilter?.(f)}>{t(`f_${f}`)}</button>)}</nav>
@@ -168,7 +171,7 @@ export function MembershipChangesView(p: MembershipChangesViewProps): React.Reac
             {ready.nextCursor ? <button type="button" className={styles.secondary} onClick={p.onMore} disabled={p.locked || ready.more === 'LOADING'}>{t('more')}</button> : null}
             {ready.more === 'FAILED' ? <p className={styles.meta} role="status">{t('listUnavailable')}</p> : null}
           </> : null}
-      </article>
+      </article>}
       {p.selected && p.selectedLabel ? <article className={styles.card} aria-labelledby="membership-selected-title" data-testid="membership-selected">
         <h2 id="membership-selected-title">{t('selectedTitle')}: {p.selectedLabel}</h2>
         {p.history.state === 'DENIED' ? <p className={styles.meta} role="status">{t('historyDenied')}</p>

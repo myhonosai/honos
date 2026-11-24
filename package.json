@@ -137,5 +137,15 @@
     "db:test-curriculum-library": "pnpm --filter @hon/database db:test-curriculum-library",
     "db:setup-owner-launch": "pnpm --filter @hon/database db:setup-owner-launch",
     "db:test-owner-launch": "pnpm --filter @hon/database db:test-owner-launch"
+  },
+  "pnpm": {
+    "overrides": {
+      "body-parser@2": "^2.4.0",
+      "qs@6": "^6.16.1",
+      "fast-uri@3": "^3.1.9",
+      "glob@>=9 <14.0.2": "^14.0.2",
+      "minimatch@>=7 <11.0.1": "^11.0.1",
+      "next>postcss": "^8.5.23"
+    }
   }
 }

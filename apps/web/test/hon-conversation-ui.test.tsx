@@ -5,7 +5,7 @@ import type { HonAnalystAgentKey, HonConversationThread, HonConversationTurn, Ho
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
-import { FollowUps, HonConversationView, composerTurnRequest, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
+import { FollowUps, HonConversationView, composerAskFromQuery, composerTurnRequest, honAskHref, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
@@ -437,5 +437,36 @@ describe('Ask next and Based on (0254)', () => {
     expect([picked, sent]).toEqual([['How many trials are booked?'], []]);
     const lockedEl = FollowUps({ turn, locked: true, onPick: () => {} });
     expect(renderToStaticMarkup(<>{lockedEl}</>)).toMatch(/disabled=""/);
+  });
+});
+
+describe('Ask HON preselected specialist (?ask=)', () => {
+  it('accepts only the four Ask HON specialists; anything else asks HON', () => {
+    for (const key of ['claire', 'alex', 'jordan', 'lena'] as const) expect(composerAskFromQuery(key)).toBe(key);
+    for (const bad of [undefined, '', 'hon', 'maya', 'marcus', 'ALEX', 'alex ', 'x'.repeat(200)]) expect(composerAskFromQuery(bad)).toBe('hon');
+  });
+  it('builds the link the AI Team menu uses', () => {
+    expect(honAskHref('jordan')).toBe('/staff/hon?ask=jordan');
+  });
+});
+
+describe('HON corner chat presentation (owner 2026-11-22, docked like a chat window)', () => {
+  it('shows the chat first: past conversations folded away, a New chat button, and the Enter-to-send hint', () => {
+    const html = render({ presentation: 'dock', thread: thread([human(11, 'How many trials?'), reply(12)]), threadPhase: 'READY' });
+    expect(html).toContain('data-presentation="dock"');
+    expect(html).toMatch(/<details[^>]*data-dock-history=""[^>]*><summary>Past conversations \(1\)<\/summary>/);
+    expect(html).toContain('data-dock-new=""');
+    expect(html).toContain('Enter to send · Shift+Enter for a new line.');
+    expect(html).toContain('data-dock-intro=""');
+    expect(html).toContain('You have 3 trial leads waiting for follow-up.');
+    // The same composer, privacy warning and character limit as everywhere else.
+    expect(html).toContain('Don’t include passwords, card numbers or medical details.');
+  });
+  it('keeps the side panel and full workspace unchanged', () => {
+    for (const presentation of ['panel', 'full'] as const) {
+      const html = render({ presentation });
+      expect(html).not.toContain('data-dock-history'); expect(html).not.toContain('data-dock-new'); expect(html).not.toContain('Enter to send');
+      expect(html).toContain('>New conversation<');
+    }
   });
 });

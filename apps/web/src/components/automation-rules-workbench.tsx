@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, type FormEvent } from 'react';
-import { AUTOMATION_RULE_HELP, type AutomationRule, type AutomationRuleInput, type AutomationRuleList, type AutomationEvaluationPlan, type AutomationTrigger } from '@hon/contracts';
+import { type AutomationRule, type AutomationRuleInput, type AutomationRuleList, type AutomationEvaluationPlan, type AutomationTrigger } from '@hon/contracts';
 import { automationFingerprint, automationRuleInput, loadAutomationRules, saveAutomationRule, dryRunAutomationRule, readAutomationRuleVersion } from './automation-rules-http';
 import styles from './staff-availability-workbench.module.css';
 import { AUTOMATION_RULE_DEFAULT_TRIGGER as DEFAULT_TRIGGER } from './automation-rules-prefill';
@@ -28,8 +28,8 @@ export function AutomationRulesWorkbench({ initialTrigger = DEFAULT_TRIGGER }: {
   }); }
   return <main className={styles.page}>
     <nav><a href="/staff/dashboard">School dashboard</a><a href="/staff/team/availability">Staff availability</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>HUMAN CONFIGURATION · ESSENTIAL / CORE / COMPLETE</p><h1>Automation rule configuration</h1><p>Configuration only; no execution</p></header>
-    <aside><strong>No scheduler, subscription or worker</strong><p>{AUTOMATION_RULE_HELP}</p><p>Exact permissions: automation.rule.read, automation.rule.manage and automation.rule.dry_run. Parent, HQ, public and AI authority cannot access this surface.</p></aside>
+    <header><p>Settings</p><h1>Automation rules</h1><p>Write rules for follow-ups and try them on a test run. Rules do not run on their own yet.</p></header>
+    <aside data-plain-note=""><strong>Rules here are settings only. Nothing runs or sends on its own.</strong></aside>
     <button disabled={busy} onClick={load}>Load authorized school rules</button>
     {error && <p role="alert" className={styles.error}>{error} No save is assumed after an uncertain response.</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
