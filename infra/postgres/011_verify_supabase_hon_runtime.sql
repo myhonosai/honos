@@ -4853,9 +4853,10 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 END $$;
 -- End parent school reads follow the family choice exact verification.
 
--- Eian family AI exact verification (0474; ai_select_text_route re-pinned by 0668): the private turn table and its four S4 triggers, the pure route helper and the
+-- Eian family AI exact verification (0474): the private turn table and its four S4 triggers, the pure route helper and the
 -- re-pinned planner that calls it, private Eian helpers and seven runtime entry points. The S4 shared functions that gained
 -- EIAN were redefined again by 0507 (adding TEXT_PROPOSAL) and are pinned in the 0507 section below.
+-- ai_select_text_route body hash re-pinned by 0668 (legacy policy order skips definitely unavailable models).
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','61538faddc9445999131171c67394ab2e7bcf876192676b6a47a9f2cf66543cd'),
