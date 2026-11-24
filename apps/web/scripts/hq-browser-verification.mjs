@@ -433,16 +433,16 @@ try {
         assert(total && total.y + total.height < height - 64, 'Mobile referral total must be visible above the fixed bottom navigation on initial load');
       }
       await page.getByRole('heading', { name: 'Program configuration', exact: true }).waitFor();
-      await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Rewards owed', exact: true }).waitFor();
       if (width > 600) {
         const launcher = await page.getByRole('button', { name: 'Ask HON anywhere', exact: true }).boundingBox();
-        const header = await page.getByRole('heading', { name: 'Outstanding reward liabilities', exact: true }).locator('..').boundingBox();
+        const header = await page.getByRole('heading', { name: 'Rewards owed', exact: true }).locator('..').boundingBox();
         assert(launcher && header && header.x + header.width < launcher.x, 'The persistent assistant must not cover the financial status or management controls');
       }
       await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).waitFor();
       assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|reconcile/i }).count(), 0);
       assert(!(await page.getByText('Active leaderboard holds', { exact: true }).isVisible()));
-      const review = page.getByText('Confidential HQ review and contest liabilities', { exact: true });
+      const review = page.getByText('Private HQ reviews and contest prizes', { exact: true });
       await review.focus(); await page.keyboard.press('Enter');
       await page.getByText('Active leaderboard holds', { exact: true }).waitFor();
       await page.getByText('USD 250.00', { exact: true }).waitFor();
@@ -476,8 +476,8 @@ try {
       assert.equal(report.apiRequests.filter((r) => r.path.endsWith('/statistics')).length, prior, 'URL selectors must not fetch a school');
       await selection.selectOption(fixtureId(1)); await page.locator(`[data-school-records="${fixtureId(1)}"]`).waitFor();
       await page.getByText('2 remaining · backend reported', { exact: true }).waitFor();
-      await page.getByText('Later threshold · remaining not provided', { exact: true }).first().waitFor();
-      await page.getByRole('heading', { name: 'Complete school reward history unavailable', exact: true }).waitFor();
+      await page.getByText('Later goal', { exact: true }).first().waitFor();
+      await page.getByRole('heading', { name: 'Full reward history coming later', exact: true }).waitFor();
       assert.equal(await page.locator('[data-referral-state="qualified"]').textContent(), '8');
       await noOverflow(page, `${label} school details`);
       for (const name of ['Big Button', 'Classic', 'Modern']) {
@@ -488,7 +488,7 @@ try {
       await accessibility(page, `${label}-school-referrals`);
       await selection.selectOption(fixtureId(2)); await page.locator(`[data-school-records="${fixtureId(2)}"]`).waitFor();
       assert(!(await page.getByText('Reason: owner review', { exact: false }).isVisible()));
-      const hold = page.getByText('Confidential HQ leaderboard review', { exact: true });
+      const hold = page.getByText('Private HQ review', { exact: true });
       await hold.focus(); await page.keyboard.press('Enter'); await page.getByText('Reason: owner review', { exact: false }).waitFor();
       await page.getByLabel('Search school or organization').fill('no matching school');
       assert.equal(await page.locator('[data-school-records]').count(), 0);
@@ -497,7 +497,7 @@ try {
     await check(`${label}: global reward records, liability scope, filters and responsive accessibility`, async () => {
       schoolMode = 'ready'; rewardMode = 'ready';
       await page.goto(`${origin}/hq/growth/rewards`, { waitUntil: 'domcontentloaded' });
-      await page.getByRole('heading', { name: 'Authoritative outstanding liabilities', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Total rewards owed', exact: true }).waitFor();
       await page.getByText('USD 45,000.00', { exact: true }).waitFor();
       await page.locator('ol').getByText('Voided reward record', { exact: true }).waitFor();
       assert.equal(await page.getByRole('button', { name: /issue|approve|pay|publish|fulfill|reconcile/i }).count(), 0);
@@ -598,7 +598,7 @@ try {
       for (const mode of ['empty', '401', '403', '503', 'invalid-json', 'malformed', 'program-denied']) {
         rewardMode = 'ready'; await page.goto(`${origin}/hq/growth/rewards`, { waitUntil: 'domcontentloaded' }); await page.getByText('USD 45,000.00', { exact: true }).waitFor(); rewardMode = mode;
         await page.getByRole('button', { name: 'Refresh reward records', exact: true }).click();
-        if (mode === 'empty') await page.getByText('No non-voided liability groups were returned.', { exact: true }).waitFor();
+        if (mode === 'empty') await page.getByText('No rewards owed.', { exact: true }).waitFor();
         else await page.getByRole('heading', { name: mode === '401' ? 'Sign in to view these records' : ['403', 'program-denied'].includes(mode) ? 'HQ access denied' : mode === '503' ? 'Authorized records unavailable' : 'Records could not be verified', exact: true }).waitFor();
         assert.equal(await page.getByText('USD 45,000.00', { exact: true }).count(), 0); assert(!(await page.locator('body').innerText()).includes('private-reward-note'));
       }
@@ -629,7 +629,7 @@ try {
       managementDelay = 500; managementUpdated = true;
       const refresh = page.getByRole('button', { name: 'Refresh Champions Club', exact: true });
       await refresh.focus(); await page.keyboard.press('Enter');
-      await page.getByRole('heading', { name: 'Loading authorized Champions Club…', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Loading Champions Club…', exact: true }).waitFor();
       assert.equal(await page.locator('[data-champions-total]').count(), 0);
       assert.equal(await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).count(), 0);
       await page.waitForFunction(() => document.querySelector('[data-champions-total]')?.textContent === '23');
@@ -653,7 +653,7 @@ try {
       managementDelay = 600;
       const start = report.apiRequests.length;
       await page.getByRole('button', { name: 'Refresh Champions Club', exact: true }).click();
-      await page.getByRole('heading', { name: 'Loading authorized Champions Club…', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Loading Champions Club…', exact: true }).waitFor();
       for (let attempt = 0; attempt < 30 && report.apiRequests.slice(start).filter((r) => ['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(r.path)).length < 2; attempt++) await delay(20);
       assert.equal(report.apiRequests.slice(start).filter((r) => ['/v1/hq/champions/overview', '/v1/hq/champions/program'].includes(r.path)).length, 2);
       managementDelay = 0; managementUpdated = true;
@@ -700,7 +700,7 @@ try {
       leaderboardDelay = 400; leaderboardUpdated = true;
       await page.getByText('Confidential HQ reviews', { exact: true }).click();
       await page.getByRole('button', { name: 'Refresh standings', exact: true }).click();
-      await page.getByRole('heading', { name: 'Loading authorized standings…', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Loading the leaderboard…', exact: true }).waitFor();
       assert.equal(await page.getByText('Hold Review School · fixture', { exact: true }).count(), 0);
       await page.getByRole('heading', { name: 'All-time standings', exact: true }).waitFor();
       assert((await page.locator('tbody tr').nth(0).innerText()).includes('9'));
@@ -711,7 +711,7 @@ try {
       leaderboardDelay = 600;
       const startRequests = report.apiRequests.length;
       await page.getByRole('button', { name: 'Refresh standings', exact: true }).click();
-      await page.getByRole('heading', { name: 'Loading authorized standings…', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Loading the leaderboard…', exact: true }).waitFor();
       for (let attempt = 0; attempt < 30 && !report.apiRequests.slice(startRequests).some((item) => item.path === '/v1/hq/champions/leaderboard?period=ALL_TIME'); attempt++) await delay(20);
       assert(report.apiRequests.slice(startRequests).some((item) => item.path === '/v1/hq/champions/leaderboard?period=ALL_TIME'), 'Delayed request did not reach the fixture');
       leaderboardDelay = 0;
@@ -723,7 +723,7 @@ try {
       assert.equal(await page.getByRole('heading', { name: 'All-time standings', exact: true }).count(), 0);
     });
     await check('Leaderboard empty, denied, unavailable and invalid responses reveal no stale rankings or holds', async () => {
-      for (const [mode, heading] of [['empty', 'All-time standings'], ['401', 'Sign in to view referral standings'], ['403', 'Champions Club access denied'], ['503', 'Referral standings unavailable'], ['malformed', 'Referral standings could not be verified'], ['invalid-json', 'Referral standings could not be verified'], ['mismatch', 'Referral standings could not be verified']]) {
+      for (const [mode, heading] of [['empty', 'All-time standings'], ['401', 'Sign in to view referral standings'], ['403', 'Champions Club access denied'], ['503', 'Referral standings unavailable'], ['malformed', 'The leaderboard couldn’t load'], ['invalid-json', 'The leaderboard couldn’t load'], ['mismatch', 'The leaderboard couldn’t load']]) {
         leaderboardMode = 'ready'; await open();
         await page.getByText('Confidential HQ reviews', { exact: true }).click();
         await page.getByText('Hold Review School · fixture', { exact: true }).waitFor();
