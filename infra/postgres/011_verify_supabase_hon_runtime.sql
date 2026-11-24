@@ -4977,11 +4977,6 @@ DO $$ DECLARE f text;
   fns text[]:=ARRAY['hon.guard_membership_agreement_link()','hon.membership_agreement_link_actor(text)',
     'hon.membership_agreement_link_children(uuid,uuid,uuid,uuid)','hon.membership_agreement_link_json(hon.membership_agreement_links)',
     'hon.membership_agreement_link_live(hon.membership_agreement_links)'];
--- Kai teaching journal exact verification (0665)
-DO $$ DECLARE f text;
-  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
-  helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
-    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
 BEGIN
   FOREACH f IN ARRAY entry LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
@@ -5460,7 +5455,6 @@ BEGIN
         AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
           AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
       RAISE EXCEPTION 'Unsafe paper import AI reader entry point: %',f; END IF;
-      RAISE EXCEPTION 'Unsafe Kai journal entry point: %',f; END IF;
   END LOOP;
   FOREACH f IN ARRAY helpers LOOP
     IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
@@ -6760,6 +6754,22 @@ BEGIN
   END LOOP;
 END $$;
 -- End membership plan payment options exact verification.
+-- Kai teaching journal exact verification (0665)
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
+    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Kai journal entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
       RAISE EXCEPTION 'Unsafe Kai journal helper: %',f; END IF;
   END LOOP;
   IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.kai_journal_entries'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
