@@ -110,12 +110,12 @@ export function hqGroupContains(group: HqNavGroup, path: string): boolean {
 }
 
 export const HQ_PLANNED: Readonly<Record<string, { title: string; description: string; areas: readonly string[] }>> = {
-  '/hq/revenue': { title: 'Revenue', description: 'Company revenue reporting requires an authoritative HQ financial projection.', areas: ['MRR & ARR', 'Cash & refunds', 'Gross margin'] },
-  '/hq/approvals': { title: 'Approvals', description: 'An HQ approval queue is not available. School approval authority is separate and is not reused here.', areas: ['Pending decisions', 'Approval history', 'Policy evidence'] },
-  '/hq/growth': { title: 'Growth & Referrals', description: 'HON company growth operations, governed by the owner. No campaign, contest or reward is active from this interface.', areas: ['Champions Club', 'Referral competitions', 'Founder campaigns'] },
-  '/hq/growth/champions-club': { title: 'Champions Club', description: 'The permanent school referral program. Qualification, attribution and reward accounting require approved services before activation.', areas: ['Referral invitations', 'Qualified milestones', 'Member progress'] },
-  '/hq/growth/rewards': { title: 'Reward Management', description: 'Review qualified rewards and liabilities before approved fulfillment. No credit, refund, gift or financial grant is issued here.', areas: ['Eligibility review', 'Reward liabilities', 'Approved fulfillment'] },
-  '/hq/growth/founder-campaigns': { title: 'Founder Campaigns', description: 'Plan HON founder offers using owner-approved commercial policy. No checkout, published inventory or campaign delivery is active here.', areas: ['Founding 50', 'Campaign planning', 'Offer readiness'] },
+  '/hq/revenue': { title: 'Revenue', description: 'Revenue totals will show here once billing is live.', areas: ['MRR & ARR', 'Cash & refunds', 'Gross margin'] },
+  '/hq/approvals': { title: 'Approvals', description: 'A list of things waiting for your OK will show here. It isn’t built yet.', areas: ['Pending decisions', 'Approval history', 'Policy evidence'] },
+  '/hq/growth': { title: 'Growth & Referrals', description: 'Everything that helps HON get more schools: referrals, contests, rewards, founder offers and prospects.', areas: ['Champions Club', 'Referral competitions', 'Founder campaigns'] },
+  '/hq/growth/champions-club': { title: 'Champions Club', description: 'HON’s referral program for schools: who referred whom and what they earned.', areas: ['Referral invitations', 'Qualified milestones', 'Member progress'] },
+  '/hq/growth/rewards': { title: 'Reward Management', description: 'Rewards schools have earned and whether they’ve been given out. Nothing is paid from here.', areas: ['Eligibility review', 'Reward liabilities', 'Approved fulfillment'] },
+  '/hq/growth/founder-campaigns': { title: 'Founder Campaigns', description: 'Plan founder offers. Checkout and sending aren’t switched on yet.', areas: ['Founding 50', 'Campaign planning', 'Offer readiness'] },
 };
 
 /** Unknown paths never become assistant context. Query values are intentionally excluded. */

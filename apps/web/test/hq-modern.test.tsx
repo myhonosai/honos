@@ -66,7 +66,7 @@ describe('HQ Modern foundation', () => {
       const html = renderToStaticMarkup(<HqPlannedPage pagePath={path}/>);
       expect(html).toContain('Planned');
       expect(html).toContain('Unavailable');
-      expect(html).toContain('No service is called');
+      expect(html).toContain('Nothing here does anything yet');
     }
     expect(Object.keys(HQ_PLANNED)).not.toContain('/hq/growth/contests');
   });

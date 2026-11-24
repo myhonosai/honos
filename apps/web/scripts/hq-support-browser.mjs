@@ -165,7 +165,7 @@ try {
       const s = await open(name, viewport); await ready(s);
       const text = await s.page.locator('[data-hq-support]').innerText();
       for (const expected of ['Owner cannot sign in', 'Invoice question for the organization', 'Synthetic Dojo', 'Synthetic Academy', t('wholeOrganization'), t('summaryUrgent')]) assert(text.includes(expected), expected);
-      assert(!(await s.page.locator('body').innerText()).includes('No service is called'));
+      assert(!(await s.page.locator('body').innerText()).includes('Nothing here does anything yet'));
       assert.equal(s.f.reads[0], '/v1/hq/support/cases?status=ACTIVE&limit=25');
       await capture(s, name, '[data-hq-support]'); await s.context.close();
     }
