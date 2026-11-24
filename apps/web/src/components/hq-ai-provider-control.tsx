@@ -210,7 +210,7 @@ async function postControl(path: string, body: object): Promise<unknown> {
     body: JSON.stringify(body),
   });
   const payload = await readBody(response);
-  if (!response.ok) throw new ControlPlaneError(detailFrom(payload, 'HON could not complete the governed control-plane request.'), response.status);
+  if (!response.ok) throw new ControlPlaneError(detailFrom(payload, 'That didn\'t save. Nothing changed. Try again.'), response.status);
   return payload;
 }
 
@@ -307,11 +307,11 @@ export function HqAiProviderControl(): React.ReactElement {
     if (error instanceof ControlPlaneError && error.status === 403) {
       if (!mutation) {
         setAccess('forbidden');
-        setState({ kind: 'error', message: 'The HQ provider read permission is no longer available for this session.' });
+        setState({ kind: 'error', message: 'Your HQ role can no longer see AI providers. Sign in again or ask the HQ owner.' });
         return;
       }
       setManageBlocked(true);
-      setState({ kind: 'error', message: 'This verified HQ account can view the registry but does not have provider-management authority.' });
+      setState({ kind: 'error', message: 'You can look at AI providers, but only the HQ owner can change them.' });
       return;
     }
     setState({ kind: 'error', message });
@@ -351,8 +351,8 @@ export function HqAiProviderControl(): React.ReactElement {
   const onCatalogReceipt = (receipt: ControlReceipt) => setCatalogForm(atVersion<CatalogForm>((f) => f.catalogId.toLowerCase() === receipt.recordId, receipt));
   const onPolicyReceipt = (receipt: ControlReceipt) => setPolicyForm(atVersion<PolicyForm>((f) => f.policyId.toLowerCase() === receipt.recordId, receipt));
   const discard = (path: ControlWritePath, setState: (state: OperationState) => void) => { retained.current[path] = null; setState({ kind: 'idle' }); };
-  const PROVIDER_SAVED = 'Provider connection metadata was saved through the governed HQ boundary.', CATALOG_SAVED = 'Approved catalog metadata was saved. This does not verify or invoke a model.',
-    POLICY_SAVED = 'Routing policy metadata was saved. Selection remains permission-neutral and non-executing.';
+  const PROVIDER_SAVED = 'Saved. The connection details are updated.', CATALOG_SAVED = 'Saved. The model is on the list. Nothing was sent to it.',
+    POLICY_SAVED = 'Saved. The routing rule is updated.';
 
   function chooseProvider(providerId: ProviderId): void {
     const provider = providerById.get(providerId);
@@ -411,11 +411,11 @@ export function HqAiProviderControl(): React.ReactElement {
     if (!canManage) return;
     const ref = providerForm.state === 'DISABLED' ? null : providerForm.credentialSecretRef.trim();
     if (ref !== null && !/^hon-secret:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(ref)) {
-      setProviderState({ kind: 'error', message: 'Use only the opaque hon-secret UUID reference issued outside HON UI; do not enter a credential value.' });
+      setProviderState({ kind: 'error', message: 'Enter the secret\'s reference ID (a hon-secret UUID), never the key itself.' });
       return;
     }
     await runWrite('connections', { ...providerForm, displayName: providerForm.displayName.trim(), credentialSecretRef: ref }, setProviderState, onProviderReceipt,
-      PROVIDER_SAVED, 'HON could not save provider connection metadata.');
+      PROVIDER_SAVED, 'The connection didn\'t save. Nothing changed.');
   }
 
   async function submitCatalog(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -425,11 +425,11 @@ export function HqAiProviderControl(): React.ReactElement {
     const effectiveUntil = catalogForm.effectiveUntil ? toIso(catalogForm.effectiveUntil) : null;
     const unitCostMicros = Number(catalogForm.unitCostMicros);
     if (!effectiveFrom || (catalogForm.effectiveUntil && !effectiveUntil) || catalogForm.capabilities.length === 0 || catalogForm.modalities.length === 0 || !Number.isSafeInteger(unitCostMicros) || unitCostMicros < 0) {
-      setCatalogState({ kind: 'error', message: 'Provide at least one capability and modality, an effective window, and a whole non-negative micro-unit cost.' });
+      setCatalogState({ kind: 'error', message: 'Fill in at least one capability, one input type, the dates, and a cost (a whole number, 0 or more).' });
       return;
     }
     await runWrite('catalog', { ...catalogForm, modelId: catalogForm.modelId.trim(), displayName: catalogForm.displayName.trim(), unitCostMicros, effectiveFrom, effectiveUntil },
-      setCatalogState, onCatalogReceipt, CATALOG_SAVED, 'HON could not save the catalog record.');
+      setCatalogState, onCatalogReceipt, CATALOG_SAVED, 'The model didn\'t save. Nothing changed.');
   }
 
   async function submitPolicy(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -439,11 +439,11 @@ export function HqAiProviderControl(): React.ReactElement {
     const effectiveUntil = policyForm.effectiveUntil ? toIso(policyForm.effectiveUntil) : null;
     const maxCostMicros = Number(policyForm.maxCostMicros);
     if (!effectiveFrom || (policyForm.effectiveUntil && !effectiveUntil) || policyForm.catalogIds.length === 0 || policyForm.catalogIds.length > 8 || !Number.isSafeInteger(maxCostMicros) || maxCostMicros < 0) {
-      setPolicyState({ kind: 'error', message: 'Choose one to eight approved catalog records, an effective window, and a whole non-negative cost ceiling.' });
+      setPolicyState({ kind: 'error', message: 'Pick 1 to 8 models, the dates, and a cost limit (a whole number, 0 or more).' });
       return;
     }
     await runWrite('routing-policies', { ...policyForm, organizationId: policyForm.organizationId.trim(), schoolId: policyForm.schoolId.trim(), maxCostMicros, effectiveFrom, effectiveUntil },
-      setPolicyState, onPolicyReceipt, POLICY_SAVED, 'HON could not save the routing policy.');
+      setPolicyState, onPolicyReceipt, POLICY_SAVED, 'The routing rule didn\'t save. Nothing changed.');
   }
 
   async function submitPreview(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -452,7 +452,7 @@ export function HqAiProviderControl(): React.ReactElement {
     const estimatedUnits = Number(previewForm.estimatedUnits);
     const budgetMicros = Number(previewForm.budgetMicros);
     if (previewForm.requiredModalities.length === 0 || !Number.isSafeInteger(estimatedUnits) || estimatedUnits < 1 || !Number.isSafeInteger(budgetMicros) || budgetMicros < 0) {
-      setPreviewState({ kind: 'error', message: 'Provide at least one required modality, whole estimated units, and a whole non-negative budget ceiling.' });
+      setPreviewState({ kind: 'error', message: 'Fill in at least one input type, an estimated size, and a budget limit (whole numbers).' });
       return;
     }
     setPreviewState({ kind: 'submitting' });
@@ -461,161 +461,161 @@ export function HqAiProviderControl(): React.ReactElement {
       const payload = await postControl('route-preview', {
         ...previewForm, organizationId: previewForm.organizationId.trim(), schoolId: previewForm.schoolId.trim(), policyId: previewForm.policyId.trim(), estimatedUnits, budgetMicros,
       }) as { data?: RouteDecision };
-      if (!payload.data || (payload.data.status !== 'SELECTED' && payload.data.status !== 'DENIED')) throw new Error('HON returned an unreadable routing preview.');
+      if (!payload.data || (payload.data.status !== 'SELECTED' && payload.data.status !== 'DENIED')) throw new Error('The test result couldn\'t be read. Try again.');
       setPreview(payload.data);
-      setPreviewState({ kind: 'success', message: 'Selection preview completed. No provider, worker, tool, or model was invoked.' });
+      setPreviewState({ kind: 'success', message: 'Test done. This only shows which model would be picked; no AI was called.' });
     } catch (error) {
-      handleAccessError(error, setPreviewState, 'HON could not create the selection-only routing preview.', false);
+      handleAccessError(error, setPreviewState, 'The test didn\'t run. Try again.', false);
     }
   }
 
-  const accessMessage = access === 'checking' ? 'Verifying the separate HQ provider-control gate…'
-    : access === 'signed-out' ? 'Sign in to verify a human HQ session before this registry can be read.'
-      : access === 'forbidden' ? 'This account does not have the separate HQ AI-provider read permission.'
-        : 'The HQ provider-control gate is temporarily unavailable. HON remains fail-closed.';
+  const accessMessage = access === 'checking' ? 'Checking your access…'
+    : access === 'signed-out' ? 'Sign in to see AI providers.'
+      : access === 'forbidden' ? 'Your HQ role can\'t see AI providers. Ask the HQ owner.'
+        : 'AI providers couldn\'t load right now. Nothing changed. Try again.';
 
   return <div className={styles.page}>
     <aside className={styles.rail} aria-label="Provider control gate and sections">
-      <div className={styles.gateCard}><span>AUTHORIZATION GATE</span><strong>Separate from school access</strong><p>Only the existing verified human HQ scope can read or change this control plane.</p></div>
+      <div className={styles.gateCard}><span>WHO CAN USE THIS</span><strong>HQ owner only</strong><p>Choose which AI services and models HON uses. Schools never see this page.</p></div>
       <nav aria-label="AI provider control sections">
-        <a href="#registry"><i>01</i>Registry</a>
-        <a href="#connection-form"><i>02</i>Connections</a>
-        <a href="#catalog-form"><i>03</i>Catalog</a>
-        <a href="#policy-form"><i>04</i>Routing policy</a>
-        <a href="#routing-preview"><i>05</i>Selection preview</a>
+        <a href="#registry"><i>·</i>Overview</a>
+        <a href="#connection-form"><i>1</i>Connect a service</a>
+        <a href="#catalog-form"><i>2</i>Allowed models</a>
+        <a href="#policy-form"><i>3</i>Routing rules</a>
+        <a href="#routing-preview"><i>4</i>Test a request</a>
       </nav>
-      <div className={styles.railFoot}><span className={access === 'available' ? styles.liveDot : styles.dimDot} />{access === 'available' ? 'HQ provider read scope verified' : 'Provider control remains gated'}</div>
+      <div className={styles.railFoot}><span className={access === 'available' ? styles.liveDot : styles.dimDot} />{access === 'available' ? 'You can view this page' : 'Waiting for access'}</div>
     </aside>
 
     <section className={styles.workspace}>
       <header className={styles.header}>
-        <div><p>HON HQ / GOVERNED AI REGISTRY</p><h2>Control the route.<br /><em>Never run the provider.</em></h2></div>
-        <div className={styles.sessionCard}><span>HQ SESSION</span><strong>{access === 'available' ? 'Provider registry available' : access === 'checking' ? 'Verifying session…' : 'Access not granted'}</strong><small>API origin: <code>/api/v1</code></small></div>
+        <div><p>SETTINGS / AI PROVIDERS</p><h2>Pick the AI services HON uses.<br /><em>Set the order and the cost limits.</em></h2></div>
+        <div className={styles.sessionCard}><span>HQ SESSION</span><strong>{access === 'available' ? 'Ready' : access === 'checking' ? 'Checking access…' : 'No access'}</strong></div>
       </header>
 
       <section className={styles.safetyBand} aria-label="Control-plane limits">
-        <div><span className={styles.signal} />HUMAN-ONLY CONFIGURATION</div>
-        <p><b>Secret reference only — managed outside HON UI.</b> This screen accepts approved metadata and an opaque reference identifier only; it never asks for, stores, resolves, or displays a credential value.</p>
+        <div><span className={styles.signal} />HOW IT WORKS</div>
+        <p><b>1.</b> Connect a provider (paste its secret reference ID, never the key). <b>2.</b> Add the models you allow. <b>3.</b> Make a routing rule that picks models in order. <b>4.</b> Test which model a request would use. Nothing on this page calls an AI or spends money.</p>
       </section>
 
       {access !== 'available' ? <section className={styles.accessPanel} aria-live="polite">
-        <span>HQ PROVIDER CONTROL</span><h2>{accessMessage}</h2>
-        {access === 'signed-out' ? <a href="/auth/login">Sign in with Manus <b>→</b></a> : <button type="button" onClick={() => void loadConfiguration()}>{access === 'checking' ? 'Checking access…' : 'Retry governed access check'}</button>}
-        <small>School roles, AI employees, and caller-supplied authority cannot unlock this surface.</small>
+        <span>AI PROVIDERS</span><h2>{accessMessage}</h2>
+        {access === 'signed-out' ? <a href="/auth/login">Sign in <b>→</b></a> : <button type="button" onClick={() => void loadConfiguration()}>{access === 'checking' ? 'Checking access…' : 'Try again'}</button>}
+
       </section> : <>
-        {manageBlocked ? <section className={styles.manageNotice}><strong>Read scope verified; manage scope unavailable.</strong><span>Forms have been locked after the backend rejected a management request. Your session may still inspect the redacted registry and selection previews.</span></section> : null}
+        {manageBlocked ? <section className={styles.manageNotice}><strong>You can look but not change.</strong><span>The last change was refused, so the forms are locked. You can still view everything and run tests.</span></section> : null}
 
         <section id="registry" className={styles.heroGrid}>
-          <article className={styles.heroCopy}><p>APPROVED CONTROL PLANE</p><h2>Connection health, catalog economics, and policy order—kept intentionally separate from execution.</h2><span>Provider state is HQ-attested metadata. A configured connection is not automatically healthy, and no action on this page probes it.</span></article>
+          <article className={styles.heroCopy}><p>AT A GLANCE</p><h2>Your AI services, allowed models and routing rules.</h2><span>A status here is what HQ saved, not a live check of the service.</span></article>
           <div className={styles.metrics}>
-            <article><span>REGISTERED</span><strong>{snapshot.providers.length}</strong><small>provider connections</small></article>
-            <article><span>ACTIVE CATALOG</span><strong>{activeCatalogCount}</strong><small>approved model records</small></article>
-            <article><span>ACTIVE POLICIES</span><strong>{activePolicyCount}</strong><small>ordered route rules</small></article>
+            <article><span>REGISTERED</span><strong>{snapshot.providers.length}</strong><small>connected services</small></article>
+            <article><span>ACTIVE CATALOG</span><strong>{activeCatalogCount}</strong><small>allowed models</small></article>
+            <article><span>ACTIVE POLICIES</span><strong>{activePolicyCount}</strong><small>routing rules</small></article>
           </div>
         </section>
 
         <section className={styles.section}>
-          <div className={styles.sectionHeading}><div><span>01 / CONNECTION REGISTRY</span><h2>Approved provider types</h2></div><p>Read projection is redacted: it reports only whether an opaque managed reference exists.</p></div>
+          <div className={styles.sectionHeading}><div><span>OVERVIEW</span><h2>AI services</h2></div><p>Shows only whether a secret is linked, never the secret itself.</p></div>
           <div className={styles.providerGrid}>{PROVIDER_IDS.map((providerId) => {
             const provider = providerById.get(providerId);
             return <article key={providerId} className={styles.providerCard}>
               <header><code>{providerId}</code><StatePill state={provider?.state ?? 'NOT REGISTERED'} /></header>
               <strong>{provider?.displayName || 'No connection record'}</strong>
-              <p>{provider?.credentialConfigured ? 'Opaque credential reference recorded' : 'No opaque credential reference recorded'}</p>
-              <footer><span>v{provider?.version ?? 0}</span><button type="button" onClick={() => { chooseProvider(providerId); document.getElementById('connection-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>Configure metadata <b>→</b></button></footer>
+              <p>{provider?.credentialConfigured ? 'Secret linked' : 'No secret linked'}</p>
+              <footer><span>v{provider?.version ?? 0}</span><button type="button" onClick={() => { chooseProvider(providerId); document.getElementById('connection-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>Edit <b>→</b></button></footer>
             </article>;
           })}</div>
         </section>
 
         <section id="connection-form" className={`${styles.section} ${styles.formSection}`}>
-          <div className={styles.sectionHeading}><div><span>02 / HUMAN ATTESTATION</span><h2>Connection metadata</h2></div><p>Use the expected version shown here; concurrent changes are rejected by the backend rather than overwritten.</p></div>
+          <div className={styles.sectionHeading}><div><span>STEP 1</span><h2>Connect or edit a service</h2></div><p>If someone else changed it first, your save is refused instead of overwriting theirs.</p></div>
           <form onSubmit={submitProvider} className={styles.formCard}>
             <fieldset disabled={!canManage || providerState.kind === 'submitting' || providerState.kind === 'uncertain'}>
-              <div className={styles.formTopline}><div><strong>{providerForm.expectedVersion === 0 ? 'Register approved provider type' : 'Update approved connection record'}</strong><small>Expected version <code>{providerForm.expectedVersion}</code></small></div><span>NO PROVIDER CALLS</span></div>
+              <div className={styles.formTopline}><div><strong>{providerForm.expectedVersion === 0 ? 'Connect a service' : 'Edit service'}</strong><small>Expected version <code>{providerForm.expectedVersion}</code></small></div><span>NO PROVIDER CALLS</span></div>
               <div className={styles.formGrid}>
                 <label>Provider type<select value={providerForm.providerId} onChange={(event) => chooseProvider(event.target.value as ProviderId)}>{PROVIDER_IDS.map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
                 <label>Connection status<select value={providerForm.state} onChange={(event) => setProviderForm({ ...providerForm, state: event.target.value as ConnectionState, credentialSecretRef: event.target.value === 'DISABLED' ? '' : providerForm.credentialSecretRef })}>{CONNECTION_STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
                 <label>Display name<input required maxLength={80} value={providerForm.displayName} onChange={(event) => setProviderForm({ ...providerForm, displayName: event.target.value })} placeholder="Approved provider label" autoComplete="off" /></label>
-                <label>Opaque credential reference ID <input required={providerForm.state !== 'DISABLED'} disabled={providerForm.state === 'DISABLED'} value={providerForm.credentialSecretRef} onChange={(event) => setProviderForm({ ...providerForm, credentialSecretRef: event.target.value.toLowerCase() })} placeholder="hon-secret:UUID-v4" autoComplete="off" spellCheck={false} /></label>
+                <label>Secret reference ID <input required={providerForm.state !== 'DISABLED'} disabled={providerForm.state === 'DISABLED'} value={providerForm.credentialSecretRef} onChange={(event) => setProviderForm({ ...providerForm, credentialSecretRef: event.target.value.toLowerCase() })} placeholder="hon-secret:UUID-v4" autoComplete="off" spellCheck={false} /></label>
               </div>
-              <p className={styles.referenceRule}><b>Secret reference only — managed outside HON UI.</b> Entering a non-disabled state requires an opaque <code>hon-secret:</code> UUID reference, never a raw key, token, password, URL, or credential payload.</p>
-              <div className={styles.formActions}><button type="submit">{providerState.kind === 'submitting' ? 'Saving governed metadata…' : 'Save connection metadata →'}</button><span>Saving records metadata only; status changes never invoke a provider.</span></div>
+              <p className={styles.referenceRule}><b>Paste the reference ID, never the key.</b> Turning a service on needs a <code>hon-secret:</code> reference ID. Never paste a key, token, password or URL.</p>
+              <div className={styles.formActions}><button type="submit">{providerState.kind === 'submitting' ? 'Saving…' : 'Save →'}</button><span>Saving doesn't contact the service.</span></div>
               <OperationNotice state={providerState} />
             </fieldset>
-            <UncertainNotice state={providerState} onRetry={() => void runWrite('connections', null, setProviderState, onProviderReceipt, PROVIDER_SAVED, 'HON could not save provider connection metadata.')} onDiscard={() => discard('connections', setProviderState)} />
+            <UncertainNotice state={providerState} onRetry={() => void runWrite('connections', null, setProviderState, onProviderReceipt, PROVIDER_SAVED, 'The connection didn\'t save. Nothing changed.')} onDiscard={() => discard('connections', setProviderState)} />
           </form>
         </section>
 
         <section className={styles.section}>
-          <div className={styles.sectionHeading}><div><span>03 / APPROVED CATALOG</span><h2>Registered model capabilities</h2></div><p>Catalog records describe approved routing metadata—not availability, a prompt, or a reachable provider model.</p></div>
-          {snapshot.catalog.length === 0 ? <div className={styles.emptyState}><strong>No model catalog entries are registered.</strong><span>Create only an approved non-secret catalog record below.</span></div> : <div className={styles.catalogGrid}>{snapshot.catalog.map((entry) => <article key={entry.catalogId} className={styles.catalogCard}>
+          <div className={styles.sectionHeading}><div><span>STEP 2</span><h2>Allowed models</h2></div><p>The models HON may use, what each can do, and its cost.</p></div>
+          {snapshot.catalog.length === 0 ? <div className={styles.emptyState}><strong>No models added yet.</strong><span>Add one below.</span></div> : <div className={styles.catalogGrid}>{snapshot.catalog.map((entry) => <article key={entry.catalogId} className={styles.catalogCard}>
             <header><div><code>{entry.providerId}</code><strong>{entry.displayName}</strong></div><StatePill state={entry.active ? 'ACTIVE' : 'INACTIVE'} /></header>
             <p className={styles.modelId}>{entry.modelId}</p>
             <dl><div><dt>Capabilities</dt><dd>{entry.capabilities.join(' · ')}</dd></div><div><dt>Modalities</dt><dd>{entry.modalities.join(' · ')}</dd></div><div><dt>Economics</dt><dd>{entry.unitCostMicros.toLocaleString()} µUSD / {entry.costUnit}</dd></div><div><dt>Window</dt><dd>{new Date(entry.effectiveFrom).toLocaleString()} {entry.effectiveUntil ? `→ ${new Date(entry.effectiveUntil).toLocaleString()}` : '→ open'}</dd></div></dl>
-            <footer><span>v{entry.version} · {shortId(entry.catalogId)}</span><button type="button" onClick={() => editCatalog(entry)}>Edit safe metadata <b>→</b></button></footer>
+            <footer><span>v{entry.version} · {shortId(entry.catalogId)}</span><button type="button" onClick={() => editCatalog(entry)}>Edit <b>→</b></button></footer>
           </article>)}</div>}
         </section>
 
         <section id="catalog-form" className={`${styles.section} ${styles.formSection}`}>
-          <div className={styles.sectionHeading}><div><span>03A / CATALOG RECORD</span><h2>{catalogForm.expectedVersion === 0 ? 'Add an approved model record' : 'Revise catalog metadata'}</h2></div><button className={styles.textButton} type="button" onClick={newCatalog}>New catalog record +</button></div>
+          <div className={styles.sectionHeading}><div><span>03A / CATALOG RECORD</span><h2>{catalogForm.expectedVersion === 0 ? 'Add a model' : 'Revise catalog metadata'}</h2></div><button className={styles.textButton} type="button" onClick={newCatalog}>Add a model +</button></div>
           <form onSubmit={submitCatalog} className={styles.formCard}>
             <fieldset disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'}>
-              <div className={styles.formTopline}><div><strong>Catalog ID <code>{shortId(catalogForm.catalogId)}</code></strong><small>Expected version <code>{catalogForm.expectedVersion}</code></small></div><span>APPROVAL METADATA</span></div>
+              <div className={styles.formTopline}><div><strong>Catalog ID <code>{shortId(catalogForm.catalogId)}</code></strong><small>Expected version <code>{catalogForm.expectedVersion}</code></small></div><span>DETAILS</span></div>
               <div className={styles.formGrid}>
                 <label>Provider type<select disabled={catalogForm.expectedVersion > 0} value={catalogForm.providerId} onChange={(event) => setCatalogForm({ ...catalogForm, providerId: event.target.value as ProviderId })}>{PROVIDER_IDS.map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
-                <label>Approved model ID<input required disabled={catalogForm.expectedVersion > 0} maxLength={120} value={catalogForm.modelId} onChange={(event) => setCatalogForm({ ...catalogForm, modelId: event.target.value })} placeholder="approved/model-v1" autoComplete="off" spellCheck={false} /></label>
-                <label>Catalog display name<input required maxLength={80} value={catalogForm.displayName} onChange={(event) => setCatalogForm({ ...catalogForm, displayName: event.target.value })} placeholder="Approved text model" autoComplete="off" /></label>
+                <label>Model ID<input required disabled={catalogForm.expectedVersion > 0} maxLength={120} value={catalogForm.modelId} onChange={(event) => setCatalogForm({ ...catalogForm, modelId: event.target.value })} placeholder="approved/model-v1" autoComplete="off" spellCheck={false} /></label>
+                <label>Display name<input required maxLength={80} value={catalogForm.displayName} onChange={(event) => setCatalogForm({ ...catalogForm, displayName: event.target.value })} placeholder="Approved text model" autoComplete="off" /></label>
                 <label>Minimum HON tier<select value={catalogForm.minimumTier} onChange={(event) => setCatalogForm({ ...catalogForm, minimumTier: event.target.value as Tier })}>{TIERS.map((tier) => <option key={tier} value={tier}>{tier}</option>)}</select></label>
-                <label>Cost (integer USD micro-units)<input required min="0" step="1" inputMode="numeric" value={catalogForm.unitCostMicros} onChange={(event) => setCatalogForm({ ...catalogForm, unitCostMicros: event.target.value })} placeholder="e.g. 10" /></label>
+                <label>Cost (USD micro-units, whole number)<input required min="0" step="1" inputMode="numeric" value={catalogForm.unitCostMicros} onChange={(event) => setCatalogForm({ ...catalogForm, unitCostMicros: event.target.value })} placeholder="e.g. 10" /></label>
                 <label>Billable unit<select disabled={catalogForm.expectedVersion > 0} value={catalogForm.costUnit} onChange={(event) => setCatalogForm({ ...catalogForm, costUnit: event.target.value as CostUnit })}>{COST_UNITS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
                 <label>Effective from<input required type="datetime-local" value={catalogForm.effectiveFrom} onChange={(event) => setCatalogForm({ ...catalogForm, effectiveFrom: event.target.value })} /></label>
                 <label>Effective until <small>Optional</small><input type="datetime-local" value={catalogForm.effectiveUntil} onChange={(event) => setCatalogForm({ ...catalogForm, effectiveUntil: event.target.value })} /></label>
               </div>
-              <div className={styles.switchRow}><label><input type="checkbox" checked={catalogForm.active} onChange={(event) => setCatalogForm({ ...catalogForm, active: event.target.checked })} /> Active for policy selection</label><span>Provider, model identity, and billable unit are immutable after approval; register a new ID to change them.</span></div>
-              <p>Privacy controls are HQ selection attestations only, not proof of external enforcement. Empty means no attestation.</p>
+              <div className={styles.switchRow}><label><input type="checkbox" checked={catalogForm.active} onChange={(event) => setCatalogForm({ ...catalogForm, active: event.target.checked })} /> Active for policy selection</label><span>Service, model and billing unit can't change later. Add a new model instead.</span></div>
+              <p>Privacy boxes record what HQ believes about this model. Leave empty if unsure.</p>
               <CheckboxList label="Privacy attestations" options={PRIVACY_CONTROLS} selected={catalogForm.privacyControls} onChange={(privacyControls) => setCatalogForm({ ...catalogForm, privacyControls })} disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'} />
               <div className={styles.checkboxGrid}><CheckboxList label="Capabilities" options={CAPABILITIES} selected={catalogForm.capabilities} onChange={(capabilities) => setCatalogForm({ ...catalogForm, capabilities })} disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'} /><CheckboxList label="Modalities" options={MODALITIES} selected={catalogForm.modalities} onChange={(modalities) => setCatalogForm({ ...catalogForm, modalities })} disabled={!canManage || catalogState.kind === 'submitting' || catalogState.kind === 'uncertain'} /></div>
-              <div className={styles.formActions}><button type="submit">{catalogState.kind === 'submitting' ? 'Saving catalog metadata…' : 'Save catalog record →'}</button><span>No model prompt is collected or sent.</span></div>
+              <div className={styles.formActions}><button type="submit">{catalogState.kind === 'submitting' ? 'Saving…' : 'Save catalog record →'}</button><span>Nothing is sent to the model.</span></div>
               <OperationNotice state={catalogState} />
             </fieldset>
-            <UncertainNotice state={catalogState} onRetry={() => void runWrite('catalog', null, setCatalogState, onCatalogReceipt, CATALOG_SAVED, 'HON could not save the catalog record.')} onDiscard={() => discard('catalog', setCatalogState)} />
+            <UncertainNotice state={catalogState} onRetry={() => void runWrite('catalog', null, setCatalogState, onCatalogReceipt, CATALOG_SAVED, 'The model didn\'t save. Nothing changed.')} onDiscard={() => discard('catalog', setCatalogState)} />
           </form>
         </section>
 
         <section className={styles.section}>
-          <div className={styles.sectionHeading}><div><span>04 / ROUTING POLICY</span><h2>Ordered, tenant-bound policy records</h2></div><p>Policies select only from registered catalog IDs in exact order. They do not grant tool, tenant, approval, or execution authority.</p></div>
-          {snapshot.policies.length === 0 ? <div className={styles.emptyState}><strong>No routing policies are registered.</strong><span>Selection remains unavailable until an HQ operator records a scoped policy.</span></div> : <div className={styles.policyGrid}>{snapshot.policies.map((policy) => <article key={policy.policyId} className={styles.policyCard}>
+          <div className={styles.sectionHeading}><div><span>STEP 3</span><h2>Which model to use, in order</h2></div><p>A rule tries the models in the order you list. It doesn't give anyone extra access.</p></div>
+          {snapshot.policies.length === 0 ? <div className={styles.emptyState}><strong>No routing rules yet.</strong><span>HON can't pick a model until you add one.</span></div> : <div className={styles.policyGrid}>{snapshot.policies.map((policy) => <article key={policy.policyId} className={styles.policyCard}>
             <header><StatePill state={policy.active ? 'ACTIVE' : 'INACTIVE'} /><code>v{policy.version}</code></header><h3>{policy.capability.replaceAll('_', ' ')} route policy</h3>
             <p>{shortId(policy.organizationId)} / {shortId(policy.schoolId)}</p><div className={styles.policyFacts}><span>Tier <b>{policy.minimumTier}</b></span><span>Ceiling <b>{policy.maxCostMicros.toLocaleString()} µUSD</b></span><span>Degraded <b>{policy.allowDegraded ? 'Allowed' : 'Blocked'}</b></span></div>
-            <ol>{policy.catalogIds.map((id, index) => <li key={id}><i>{String(index + 1).padStart(2, '0')}</i>{shortId(id)}</li>)}</ol><footer><button type="button" onClick={() => editPolicy(policy)}>Edit safe metadata <b>→</b></button><button type="button" onClick={() => applyPolicyToPreview(policy.policyId)}>Preview selection <b>↗</b></button></footer>
+            <ol>{policy.catalogIds.map((id, index) => <li key={id}><i>{String(index + 1).padStart(2, '0')}</i>{shortId(id)}</li>)}</ol><footer><button type="button" onClick={() => editPolicy(policy)}>Edit <b>→</b></button><button type="button" onClick={() => applyPolicyToPreview(policy.policyId)}>Test <b>↗</b></button></footer>
           </article>)}</div>}
         </section>
 
         <section id="policy-form" className={`${styles.section} ${styles.formSection}`}>
-          <div className={styles.sectionHeading}><div><span>04A / POLICY RECORD</span><h2>{policyForm.expectedVersion === 0 ? 'Add a scoped routing policy' : 'Revise routing policy metadata'}</h2></div><button className={styles.textButton} type="button" onClick={newPolicy}>New policy record +</button></div>
+          <div className={styles.sectionHeading}><div><span>04A / POLICY RECORD</span><h2>{policyForm.expectedVersion === 0 ? 'Add a routing rule' : 'Edit routing rule'}</h2></div><button className={styles.textButton} type="button" onClick={newPolicy}>Add a routing rule +</button></div>
           <form onSubmit={submitPolicy} className={styles.formCard}>
             <fieldset disabled={!canManage || policyState.kind === 'submitting' || policyState.kind === 'uncertain'}>
               <div className={styles.formTopline}><div><strong>Policy ID <code>{shortId(policyForm.policyId)}</code></strong><small>Expected version <code>{policyForm.expectedVersion}</code></small></div><span>SELECTION ONLY</span></div>
               <div className={styles.formGrid}>
                 <label>Organization UUID<input required disabled={policyForm.expectedVersion > 0} value={policyForm.organizationId} onChange={(event) => setPolicyForm({ ...policyForm, organizationId: event.target.value.toLowerCase() })} placeholder="organization UUID" autoComplete="off" spellCheck={false} /></label>
                 <label>School UUID<input required disabled={policyForm.expectedVersion > 0} value={policyForm.schoolId} onChange={(event) => setPolicyForm({ ...policyForm, schoolId: event.target.value.toLowerCase() })} placeholder="school UUID" autoComplete="off" spellCheck={false} /></label>
-                <label>Requested capability<select disabled={policyForm.expectedVersion > 0} value={policyForm.capability} onChange={(event) => setPolicyForm({ ...policyForm, capability: event.target.value as Capability })}>{CAPABILITIES.map((capability) => <option key={capability} value={capability}>{capability}</option>)}</select></label>
+                <label>What it's for<select disabled={policyForm.expectedVersion > 0} value={policyForm.capability} onChange={(event) => setPolicyForm({ ...policyForm, capability: event.target.value as Capability })}>{CAPABILITIES.map((capability) => <option key={capability} value={capability}>{capability}</option>)}</select></label>
                 <label>Minimum HON tier<select value={policyForm.minimumTier} onChange={(event) => setPolicyForm({ ...policyForm, minimumTier: event.target.value as Tier })}>{TIERS.map((tier) => <option key={tier} value={tier}>{tier}</option>)}</select></label>
-                <label>Per-decision ceiling (micro-units)<input required min="0" step="1" inputMode="numeric" value={policyForm.maxCostMicros} onChange={(event) => setPolicyForm({ ...policyForm, maxCostMicros: event.target.value })} placeholder="e.g. 500000" /></label>
+                <label>Cost limit per request (micro-units)<input required min="0" step="1" inputMode="numeric" value={policyForm.maxCostMicros} onChange={(event) => setPolicyForm({ ...policyForm, maxCostMicros: event.target.value })} placeholder="e.g. 500000" /></label>
                 <label>Effective from<input required type="datetime-local" value={policyForm.effectiveFrom} onChange={(event) => setPolicyForm({ ...policyForm, effectiveFrom: event.target.value })} /></label>
                 <label>Effective until <small>Optional</small><input type="datetime-local" value={policyForm.effectiveUntil} onChange={(event) => setPolicyForm({ ...policyForm, effectiveUntil: event.target.value })} /></label>
               </div>
-              <div className={styles.switchRow}><label><input type="checkbox" checked={policyForm.active} onChange={(event) => setPolicyForm({ ...policyForm, active: event.target.checked })} /> Active policy</label><label><input type="checkbox" checked={policyForm.allowDegraded} onChange={(event) => setPolicyForm({ ...policyForm, allowDegraded: event.target.checked })} /> Allow degraded connection state</label></div>
-              <fieldset className={styles.catalogPicker}><legend>Ordered approved catalog records <small>Choose up to 8</small></legend>{snapshot.catalog.length === 0 ? <p>Register catalog metadata before selecting policy candidates.</p> : snapshot.catalog.map((entry) => <label key={entry.catalogId}><input type="checkbox" checked={policyForm.catalogIds.includes(entry.catalogId)} onChange={() => setPolicyForm({ ...policyForm, catalogIds: toggle(policyForm.catalogIds, entry.catalogId) })} /><span><b>{entry.displayName}</b><small>{entry.providerId} · {entry.modelId} · {shortId(entry.catalogId)}</small></span><i>{policyForm.catalogIds.indexOf(entry.catalogId) >= 0 ? String(policyForm.catalogIds.indexOf(entry.catalogId) + 1).padStart(2, '0') : '—'}</i></label>)}</fieldset>
-              <div className={styles.formActions}><button type="submit">{policyState.kind === 'submitting' ? 'Saving routing policy…' : 'Save routing policy →'}</button><span>Tenant scope and capability are immutable after policy approval.</span></div>
+              <div className={styles.switchRow}><label><input type="checkbox" checked={policyForm.active} onChange={(event) => setPolicyForm({ ...policyForm, active: event.target.checked })} /> Active policy</label><label><input type="checkbox" checked={policyForm.allowDegraded} onChange={(event) => setPolicyForm({ ...policyForm, allowDegraded: event.target.checked })} /> Allow a service marked as having problems</label></div>
+              <fieldset className={styles.catalogPicker}><legend>Models, in order <small>Choose up to 8</small></legend>{snapshot.catalog.length === 0 ? <p>Add models in step 2 first.</p> : snapshot.catalog.map((entry) => <label key={entry.catalogId}><input type="checkbox" checked={policyForm.catalogIds.includes(entry.catalogId)} onChange={() => setPolicyForm({ ...policyForm, catalogIds: toggle(policyForm.catalogIds, entry.catalogId) })} /><span><b>{entry.displayName}</b><small>{entry.providerId} · {entry.modelId} · {shortId(entry.catalogId)}</small></span><i>{policyForm.catalogIds.indexOf(entry.catalogId) >= 0 ? String(policyForm.catalogIds.indexOf(entry.catalogId) + 1).padStart(2, '0') : '—'}</i></label>)}</fieldset>
+              <div className={styles.formActions}><button type="submit">{policyState.kind === 'submitting' ? 'Saving routing policy…' : 'Save routing policy →'}</button><span>Organization and purpose can't change after saving.</span></div>
               <OperationNotice state={policyState} />
             </fieldset>
-            <UncertainNotice state={policyState} onRetry={() => void runWrite('routing-policies', null, setPolicyState, onPolicyReceipt, POLICY_SAVED, 'HON could not save the routing policy.')} onDiscard={() => discard('routing-policies', setPolicyState)} />
+            <UncertainNotice state={policyState} onRetry={() => void runWrite('routing-policies', null, setPolicyState, onPolicyReceipt, POLICY_SAVED, 'The routing rule didn\'t save. Nothing changed.')} onDiscard={() => discard('routing-policies', setPolicyState)} />
           </form>
         </section>
 
         <section id="routing-preview" className={`${styles.section} ${styles.previewSection}`}>
-          <div className={styles.sectionHeading}><div><span>05 / DETERMINISTIC SELECTION</span><h2>Routing preview</h2></div><p>A read-only policy decision. It never reserves budget, invokes a provider, executes a model, calls a tool, or changes authority.</p></div>
+          <div className={styles.sectionHeading}><div><span>STEP 4</span><h2>Test a request</h2></div><p>Shows which model a request would use. No AI is called and no money is spent.</p></div>
           <form onSubmit={submitPreview} className={styles.previewCard}>
             <fieldset disabled={previewState.kind === 'submitting'}>
               <div className={styles.previewPolicyRow}><label>Registered policy<select value={previewForm.policyId} onChange={(event) => applyPolicyToPreview(event.target.value)}><option value="">Select an existing policy</option>{snapshot.policies.map((policy) => <option key={policy.policyId} value={policy.policyId}>{policy.capability} · {shortId(policy.policyId)}</option>)}</select></label><span>Live tier and entitlement are resolved by HON; this form cannot supply them.</span></div>

@@ -4,10 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { CHAMPIONS_COMMANDS, validateChampionsContestDetail, validateChampionsContestList, type ChampionsContestConfig, type ChampionsContestStatus } from '@hon/contracts';
 import { contestApi, contestCommandError } from '../src/components/hq-contests/http';
-import { configFrom, dayToInstant, dollarsToMinor, draftFrom, emptyDraft, scheduleBlockers } from '../src/components/hq-contests/form';
+import { chaseQuestion, configFrom, dayToInstant, dollarsToMinor, draftFrom, emptyDraft, goLiveSteps, scheduleBlockers } from '../src/components/hq-contests/form';
 import { contestText } from '../src/components/hq-contests/copy';
 import { HqContestsListView, type ContestListState } from '../src/components/hq-contests/hq-contests-list';
 import { HqContestView, type ContestState } from '../src/components/hq-contests/hq-contest';
+import type { ContestOutcome } from '../src/components/hq-contests/model';
 import { HQ_PLANNED, hqPageLabel } from '../src/components/hq-modern/catalog';
 
 const yes = () => true;
@@ -118,10 +119,10 @@ const listView = (state: ContestListState, extra: Partial<{ concealed: boolean; 
   <HqContestsListView language={extra.language ?? 'en'} formattingLocale="en-US" concealed={extra.concealed ?? false} state={state} filter={null} form={extra.form ?? false}
     schools={{ state: 'READY', schools: [{ schoolId: id(21), label: 'Synthetic School 1 · Synthetic Org' }] }} outcome={null} locked={false} canRetry={false}
     onFilter={() => {}} onRefresh={() => {}} onReveal={() => {}} onForm={() => {}} onCreate={() => {}} onInvalid={() => {}} onTryAgain={() => {}}/>);
-const view = (state: ContestState, extra: Partial<{ concealed: boolean; editing: boolean; language: string }> = {}) => renderToStaticMarkup(
+const view = (state: ContestState, extra: Partial<{ concealed: boolean; editing: boolean; language: string; outcome: ContestOutcome; now: number; chase: React.ReactNode }> = {}) => renderToStaticMarkup(
   <HqContestView language={extra.language ?? 'en'} formattingLocale="en-US" concealed={extra.concealed ?? false} state={state} editing={extra.editing ?? false}
-    schools={{ state: 'UNAVAILABLE' }} outcome={null} locked={false} canRetry={false} now={NOW} onRefresh={() => {}} onReveal={() => {}} onEdit={() => {}} onUpdate={() => {}}
-    onInvalid={() => {}} onStep={() => {}} onDuplicate={() => {}} onTryAgain={() => {}}/>);
+    schools={{ state: 'UNAVAILABLE' }} outcome={extra.outcome ?? null} locked={false} canRetry={false} now={extra.now ?? NOW} onRefresh={() => {}} onReveal={() => {}} onEdit={() => {}} onUpdate={() => {}}
+    onInvalid={() => {}} onStep={() => {}} onDuplicate={() => {}} onTryAgain={() => {}} chase={extra.chase ?? null} onChase={() => {}}/>);
 const ready = (p: Record<string, unknown> = {}, d: Record<string, unknown> = {}): ContestState => ({ state: 'READY', view: validateChampionsContestDetail(detail(contest(p), d)) });
 const steps = (html: string) => [...html.matchAll(/data-contest-step="([A-Z_]+)"/g)].map(m => m[1]);
 
@@ -132,6 +133,7 @@ it('lists contests with status, window and recorded prize cost, and opens the bu
   const form = listView({ state: 'LOADING' }, { form: true });
   for (const s of ['data-contest-form="new"', contestText('en', 'termsHelp'), contestText('en', 'budgetHelp'), 'data-contest-prize="1"', contestText('en', 'create')]) expect(form).toContain(s);
   expect(listView({ state: 'DENIED' })).toContain(contestText('en', 'denied'));
+  expect(html).toContain('data-contest-guide'); expect(html).toContain(contestText('en', 'guideStep3Help')); expect(html).not.toContain('data-state=');
   const hidden = listView({ state: 'READY', view: validateChampionsContestList({ contests: [contest()], limit: 100 }) }, { concealed: true });
   expect(hidden).toContain(contestText('en', 'concealed')); expect(hidden).not.toContain('Winter referral race');
   expect(listView({ state: 'READY', view: validateChampionsContestList({ contests: [], limit: 100 }) }, { language: 'ko' })).toContain(contestText('ko', 'none'));
@@ -187,4 +189,49 @@ it('routes, label and manifest are wired; the planned placeholder is gone; no st
   }
   for (const file of ['http.ts', 'form.ts', 'model.ts', 'parts.tsx', 'hq-contests-list.tsx', 'hq-contest.tsx'])
     expect(readFileSync(`src/components/hq-contests/${file}`, 'utf8')).not.toMatch(/localStorage|sessionStorage|dangerouslySetInnerHTML/);
+});
+
+// Going live (2026-11-24): the owner sees the three steps, what is missing, and the answer next to the button.
+it('names the three steps to go live and where the contest is', () => {
+  const c = (p: Record<string, unknown>) => validateChampionsContestDetail(detail(contest(p))).contest;
+  const after = Date.parse('2026-12-02T00:00:00.000Z');
+  expect(goLiveSteps(c({ termsReference: null }), NOW)).toEqual(['NOW', 'LATER', 'LATER']);
+  expect(goLiveSteps(c({}), NOW)).toEqual(['DONE', 'NOW', 'LATER']);
+  expect(goLiveSteps(c({ status: 'SCHEDULED', version: 2 }), NOW)).toEqual(['DONE', 'DONE', 'LATER']);
+  expect(goLiveSteps(c({ status: 'SCHEDULED', version: 2 }), after)).toEqual(['DONE', 'DONE', 'NOW']);
+  for (const status of ['ACTIVE', 'PAUSED'] as const) expect(goLiveSteps(c({ status, version: 3 }), after)).toEqual(['DONE', 'DONE', 'DONE']);
+  // A start date already behind us does not block scheduling; a passed end date does.
+  expect(goLiveSteps(c({ startsAt: '2026-11-01T00:00:00.000Z' }), NOW)).toEqual(['DONE', 'NOW', 'LATER']);
+  expect(goLiveSteps(c({ startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2026-11-02T23:59:59.999Z' }), NOW)).toEqual(['NOW', 'LATER', 'LATER']);
+});
+
+it('shows the go-live guide on top, the answer beside the button, and clearer gift card wording', () => {
+  const html = view(ready({ termsReference: null }));
+  const guide = html.indexOf('data-contest-guide'), facts = html.indexOf('id="contest-facts"');
+  expect(guide).toBeGreaterThan(-1); expect(guide).toBeLessThan(facts);
+  for (const k of ['guideTitle', 'guideStep1', 'guideStep2', 'guideStep3'] as const) expect(html).toContain(contestText('en', k));
+  expect(html).toContain('data-contest-guide-step="1" data-state="NOW"');
+  expect(html).toContain(contestText('en', 'blockTERMS'));
+  expect(view(ready({ status: 'SCHEDULED', version: 2 }), { now: Date.parse('2026-12-02T00:00:00.000Z') })).toContain(contestText('en', 'startReady'));
+  expect(view(ready({ status: 'ACTIVE', version: 3 }))).not.toContain('data-contest-guide');
+  const refused = view(ready(), { outcome: { kind: 'REFUSED', code: 'CHAMPIONS_CONTEST_WINDOW_PASSED' } as ContestOutcome });
+  const actions = refused.indexOf('data-contest-actions'), answer = refused.indexOf('data-contest-outcome="refused"');
+  expect(answer).toBeGreaterThan(actions); expect(answer).toBeLessThan(refused.indexOf('data-contest-form="schedule"'));
+  expect(refused.indexOf('data-contest-outcome')).toBe(answer);
+  expect(contestText('en', 'UNDECIDED')).toBe('Not decided (only matters if a prize is a gift card)');
+  expect(contestText('en', 'scheduleHelp')).toContain(contestText('en', 'activate'));
+  for (const lang of ['ko', 'es']) for (const k of ['guideTitle', 'askChase', 'startReady'] as const) expect(contestText(lang, k)).not.toBe(contestText('en', k));
+});
+
+it('offers Chase as a helper that only advises, with a question about this contest', () => {
+  const html = view(ready());
+  expect(html).toContain('data-contest-chase'); expect(html).toContain(contestText('en', 'askChase'));
+  expect(view(ready(), { chase: <div data-chase-panel/> })).toContain('data-chase-panel');
+  expect(view(ready({ status: 'COMPLETED', completedAt: T }))).not.toContain('data-contest-chase');
+  const c = validateChampionsContestDetail(detail(contest({ termsReference: null, prizes: [] , estimatedPrizeCostMinor: 0 }))).contest;
+  const q = chaseQuestion(c, NOW);
+  expect(q).toContain('Winter referral race'); expect(q).toContain('terms reference'); expect(q).toContain('at least one prize');
+  expect(q.length).toBeLessThanOrEqual(2000); expect(q).toBe(q.trim()); expect(q).not.toMatch(/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/);
+  const long = validateChampionsContestDetail(detail(contest({ description: 'x'.repeat(1900) }))).contest;
+  expect(chaseQuestion(long, NOW).length).toBeLessThanOrEqual(2000);
 });

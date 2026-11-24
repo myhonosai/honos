@@ -1,4 +1,5 @@
 import { validateChampionsContestCommand, type ChampionsContest, type ChampionsContestConfig, type ChampionsContestPrizeKind } from '@hon/contracts';
+import { contestText } from './copy';
 
 /** What the person typed. Dates are whole UTC days; money is US dollars with at most two decimals. */
 export type PrizeDraft = { placeFrom: string; placeTo: string; kind: ChampionsContestPrizeKind; description: string; quantity: string; unitCost: string };
@@ -74,4 +75,45 @@ export function scheduleBlockers(c: ChampionsContest, now = Date.now()): ('TERMS
   if (c.prizes.some(p => p.kind === 'GIFT_CARD') && c.giftCardCompliance !== 'PERMITTED') out.push('GIFT_CARDS');
   if (Date.parse(c.endsAt) <= now) out.push('PASSED');
   return out;
+}
+
+export type GoLiveState = 'DONE' | 'NOW' | 'LATER';
+/**
+ * Where a contest is on the way to live: 1 rules and prizes complete, 2 approved and scheduled (HQ owner), 3 started.
+ * A start date already behind us does not block step 2; starting is possible once the start time is reached.
+ */
+export function goLiveSteps(c: ChampionsContest, now = Date.now()): [GoLiveState, GoLiveState, GoLiveState] {
+  if (c.status === 'DRAFT') return scheduleBlockers(c, now).length > 0 ? ['NOW', 'LATER', 'LATER'] : ['DONE', 'NOW', 'LATER'];
+  if (c.status === 'SCHEDULED') return ['DONE', 'DONE', Date.parse(c.startsAt) <= now ? 'NOW' : 'LATER'];
+  return ['DONE', 'DONE', 'DONE'];
+}
+
+const QUESTION_MAX = 2000;
+const CONTROL = /[\u0000-\u001f\u007f]+/g;
+const oneLine = (v: string, max: number) => {
+  const s = v.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim();
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+};
+const usd = (minor: number) => `$${minorToDollars(minor)}`;
+/**
+ * The question offered to Chase (HQ growth) about this contest: its rules, prizes and what still blocks scheduling.
+ * Plain text on one line, within the HQ Ask HON question limit. It is only a pre-filled draft: the owner reads, edits and
+ * sends it, and Chase can only advise.
+ */
+export function chaseQuestion(c: ChampionsContest, now = Date.now()): string {
+  const missing = scheduleBlockers(c, now).map(b => contestText('en', `block${b}`));
+  const prizes = c.prizes.length === 0 ? 'none yet' : c.prizes.map(p => `place ${p.placeFrom === p.placeTo ? p.placeFrom : `${p.placeFrom}-${p.placeTo}`}: `
+    + `${contestText('en', p.kind)} "${oneLine(p.description, 60)}" x${p.quantity} at ${usd(p.estimatedUnitCostMinor)}`).join('; ');
+  const head = `Help me set up our HQ referral contest "${oneLine(c.name, 120)}" so I can approve, schedule and start it.`;
+  const rest = [
+    `Window ${c.startsAt.slice(0, 10)} to ${c.endsAt.slice(0, 10)} (UTC). What counts: ${contestText('en', c.countBasis)}. Minimum ${c.minimumQualified} qualified referrals.`,
+    `Who: ${contestText('en', c.eligibility.scope)} (${c.eligibility.tiers.map(t => contestText('en', t)).join(', ')}). Ties: ${contestText('en', c.tieRule)}.`,
+    `Budget: ${c.budgetMinor === null ? 'not set' : usd(c.budgetMinor)}. Prizes: ${prizes}. Gift cards: ${contestText('en', c.giftCardCompliance)}.`
+      + ` Terms reference: ${c.termsReference === null ? 'not set' : 'set'}.`,
+    missing.length > 0 ? `Still missing before I can schedule: ${missing.join('; ')}.` : 'Nothing is missing before scheduling.',
+    'Suggest clear rules, prizes that fit the budget and short wording for schools. I will make the changes and press the buttons myself.',
+  ].join(' ');
+  const room = QUESTION_MAX - head.length - rest.length - 20;
+  const description = room > 40 ? oneLine(c.description, Math.min(400, room)) : '';
+  return oneLine(description ? `${head} Description: ${description} ${rest}` : `${head} ${rest}`, QUESTION_MAX);
 }
