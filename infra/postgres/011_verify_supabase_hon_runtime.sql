@@ -5124,7 +5124,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
 ('hon.ai_text_fail(uuid,uuid,text,text)',true,false,'search_path=pg_catalog, hon','29d2f210d4f0a5a9806c37010e04371fca0ef00a52d91bf6a3724be965ed49ef'),
 ('hon.ai_text_planning_reference(uuid,uuid)',true,false,'search_path=pg_catalog, hon','07b5666966d6ab065efe82da92fa2f2b6c39fa367660a0101eb5fcd798aba0bd'),
-('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','945f932dc39bd5ef35c1c85de7b78dec655c0dffc514d37571c25ba11ade0982'),
+('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','0596cc67313ef518db75bb02a26b47a267f3499734140e030bddcfe387b4596e'),
 ('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','977c6f5b04422af647fcbf70fcf219a8f5ff4026f0ba96a3264edfa43aa81ff9'),
 ('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
 ('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','cbe5c59d888995653f5736925f6e57ff8253b6679f3d02c508c20a5dab76b416'),

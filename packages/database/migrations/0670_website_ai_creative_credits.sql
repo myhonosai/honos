@@ -300,7 +300,7 @@ CREATE OR REPLACE FUNCTION hon.ai_text_prepare(p_id uuid, p_requested_by uuid, p
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id());
   i hon.ai_text_proposals%ROWTYPE := hon.ai_text_row(p_id, p_requested_by); k hon.ai_text_kinds%ROWTYPE; p hon.ai_invocation_plans%ROWTYPE; why text;
-  creative boolean;
+  creative boolean; stale uuid;
 BEGIN
   IF p_block IS NOT NULL AND p_block NOT IN ('SUBJECT_STALE','GATE_CLOSED') THEN RAISE EXCEPTION 'INVALID_AI_TEXT_PROPOSAL' USING ERRCODE='22023'; END IF;
   IF i.status='SENDING' AND i.updated_at<clock_timestamp()-interval '90 seconds' THEN
@@ -339,7 +339,20 @@ BEGIN
   IF why IS NULL AND NOT creative AND hon.ai_org_committed_credits(i.organization_id,clock_timestamp())+p.customer_credit_estimate>hon.ai_org_ceiling(i.organization_id,clock_timestamp()) THEN
     why := 'CUSTOMER_BUDGET_EXCEEDED';
   END IF;
-  IF why IS NULL AND creative THEN why := hon.ai_text_creative_reserve(i, p); END IF;
+  -- 0670: a creative-paid edit whose API died after prepare stays SENDING and would block every later edit. Before the
+  -- wallet lock (record takes the row, then the wallet), time out this school's aged creative-paid SENDING proposals
+  -- exactly as 0550 does on re-prepare; the settle trigger moves each reservation to OUTCOME_UNKNOWN for the HQ CW1 queue.
+  IF why IS NULL AND creative THEN
+    FOR stale IN SELECT s.id FROM hon.ai_text_proposals s WHERE s.school_id=i.school_id AND s.organization_id=i.organization_id
+        AND s.id<>i.id AND s.status='SENDING' AND s.updated_at<clock_timestamp()-interval '90 seconds'
+        AND EXISTS (SELECT 1 FROM hon.ai_text_creative_reservations c JOIN hon.saas_creative_reservations x ON x.id=c.reservation_id
+          AND x.school_id=c.school_id WHERE c.proposal_id=s.id AND x.status='RESERVED')
+        ORDER BY s.id FOR UPDATE OF s SKIP LOCKED LOOP
+      UPDATE hon.ai_text_proposals SET status='UNKNOWN',reason='PROVIDER_UNKNOWN',updated_at=clock_timestamp() WHERE id=stale;
+      PERFORM hon.ai_text_event(stale,'unknown');
+    END LOOP;
+    why := hon.ai_text_creative_reserve(i, p);
+  END IF;
   UPDATE hon.ai_text_proposals SET plan_id=coalesce(p.id,plan_id),
     status=CASE WHEN why IS NULL THEN 'SENDING' WHEN why='CONFIGURATION_REQUIRED' THEN 'CONFIGURATION_REQUIRED' ELSE 'BLOCKED' END,
     reason=why, reserved_credits=CASE WHEN why IS NULL AND NOT creative THEN p.customer_credit_estimate ELSE 0 END, updated_at=clock_timestamp() WHERE id=i.id;

@@ -36,7 +36,7 @@ The read needs the same access as asking Marcus. The panel shows "Each message u
 | PRE_SEND (back to CONFIGURATION_REQUIRED) | RELEASED at a known zero cost (`NOT_SENT`) | none |
 | UNKNOWN (incl. the 90-second SENDING timeout) | OUTCOME_UNKNOWN, credits held | none |
 
-**One creative-paid edit in flight per school.** A creative-paid proposal holds no included credits, so the school AI cost limit, which counts only `reserved_credits > 0` holds, cannot see it while it runs. The reserve therefore refuses a second one while the school already has a RESERVED website reservation (`CREATIVE_EDIT_IN_PROGRESS`, nothing sent). The cost the limit cannot see is at most one request, $0.15 under the kind's cap. An OUTCOME_UNKNOWN reservation does not block.
+**One creative-paid edit in flight per school.** A creative-paid proposal holds no included credits, so the school AI cost limit, which counts only `reserved_credits > 0` holds, cannot see it while it runs. The reserve therefore refuses a second one while the school already has a RESERVED website reservation (`CREATIVE_EDIT_IN_PROGRESS`, nothing sent). The cost the limit cannot see is at most one request, $0.15 under the kind's cap. An OUTCOME_UNKNOWN reservation does not block. If the API dies after prepare, the edit stays SENDING. The next creative-paid prepare at that school, before it takes the wallet lock, moves any such edit older than 90 seconds to UNKNOWN (`FOR UPDATE SKIP LOCKED`). The settle trigger then moves its reservation to OUTCOME_UNKNOWN for the HQ CW1 queue, so it stops blocking. Proof W15 covers this.
 
 The dollar cost is recorded once, in the 0550 `AGENT_INFERENCE` usage row. The school AI cost limit and HQ usage still see it, and CW1 settlement writes no second usage row.
 
@@ -56,7 +56,7 @@ The order is `ai.budget` (0194) → the proposal row → the creative pause gate
 
 ## Evidence
 
-- `packages/database/scripts/test-website-ai-creative-credits.mjs`: 13 checks on the Champions fixture with simulated payments and a counted fake provider.
+- `packages/database/scripts/test-website-ai-creative-credits.mjs`: 15 checks on the Champions fixture with simulated payments and a counted fake provider.
 - `test-website-ai-edits.mjs` (WB5): unchanged behavior on included AI.
 - AI-0 inventory: adds the reserve and settle helpers and two triggers.
 - 011: an exact verification block.

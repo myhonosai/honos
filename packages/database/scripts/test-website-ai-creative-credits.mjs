@@ -332,6 +332,27 @@ try {
     assert.equal(third.status, 'RESULT_RECORDED');
   });
 
+  await check('W15', 'an edit whose API died after prepare (SENDING over 90 seconds) stops blocking: the next edit times it out to UNKNOWN, its reservation goes to OUTCOME_UNKNOWN for the HQ CW1 queue, and the next edit runs', async () => {
+    let release, entered; const inside = new Promise((r) => { entered = r; });
+    fake.hold = () => { entered(); return new Promise((r) => { release = r; }); };
+    const dead = settle(ask('B', 'Edit whose API process dies'));
+    await inside;
+    fake.hold = null;
+    const lost = await row("SELECT id FROM hon.ai_text_proposals WHERE school_id=$1 AND status='SENDING' ORDER BY created_at DESC LIMIT 1", [S.B]);
+    assert(lost, 'the held edit is SENDING');
+    assert.equal((await linkOf(lost.id)).status, 'RESERVED');
+    await admin.query("UPDATE hon.ai_text_proposals SET updated_at = clock_timestamp() - interval '2 minutes' WHERE id=$1", [lost.id]);
+    const next = await ask('B', 'Next edit after the lost one');
+    assert.equal(next.status, 'RESULT_RECORDED', JSON.stringify(next));
+    const was = await row('SELECT status, reason FROM hon.ai_text_proposals WHERE id=$1', [lost.id]);
+    assert.deepEqual([was.status, was.reason], ['UNKNOWN', 'PROVIDER_UNKNOWN']);
+    const held = await linkOf(lost.id);
+    assert.deepEqual([held.status, held.status_reason, held.reserved_credits], ['OUTCOME_UNKNOWN', 'PROVIDER_OUTCOME_UNKNOWN', RATE]);
+    release();
+    await dead;
+    assert.equal((await linkOf(lost.id)).status, 'OUTCOME_UNKNOWN', 'a late answer does not settle a timed-out edit');
+  });
+
   await check('W13', 'the 011 exact verification for 0670 and the shared 0550 core passes on this database', async () => {
     const fs = await import('node:fs/promises');
     const sql = await fs.readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
