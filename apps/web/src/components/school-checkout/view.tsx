@@ -9,6 +9,8 @@ import { formatMinor } from '../invoice-pickers';
 import styles from '../membership-changes/membership-changes.module.css';
 
 export type CheckoutListState = { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; read: SchoolCheckoutPages };
+/** 0620: each page's share link id by page id, read after the pages. */
+export type CheckoutLinks = { state: 'LOADING' | 'UNAVAILABLE' } | { state: 'READY'; byPage: Readonly<Record<string, string>> };
 export type CheckoutOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | CheckoutErrorKind; what: 'PAGE' | 'SETTINGS'; status: CheckoutPageStatus | null }>;
 export type EditorTab = 'DETAILS' | 'PRICING' | 'AGREEMENT';
 export type CheckoutEditor = Readonly<{ draft: PageDraft; dirty: boolean; tab: EditorTab }>;
@@ -25,7 +27,12 @@ export type SchoolCheckoutViewProps = Readonly<{
   onEditLanguage?: ((language: CheckoutLanguage) => void) | undefined; onSave?: ((status: CheckoutPageStatus) => void) | undefined; onClose?: (() => void) | undefined;
   onGroupsOpen?: (() => void) | undefined; onGroupsEdit?: ((groups: readonly GroupDraft[]) => void) | undefined; onGroupsSave?: (() => void) | undefined;
   onGroupsClose?: (() => void) | undefined; onRefreshList?: (() => void) | undefined; onTryAgain?: (() => void) | undefined;
+  links?: CheckoutLinks | undefined; origin?: string | undefined; copied?: string | null | undefined;
+  onCopyLink?: ((pageId: string, url: string) => void) | undefined;
 }>;
+
+/** The family address of a page's share link (0620). */
+export const checkoutShareUrl = (origin: string, publicId: string) => `${origin}/checkout/${publicId}`;
 
 const LANGUAGE_LABEL: Record<CheckoutLanguage, string> = { en: 'English', ko: '한국어 (Korean)', es: 'Español (Spanish)' };
 const FIELD_KIND_LABEL: Record<CheckoutFieldKind, string> = { TEXT: 'Short answer', CHOICE: 'Pick one', CHECKBOX: 'Checkbox (yes or no)' };
@@ -92,6 +99,7 @@ function PageCard({ p, read, page, index, count }: { p: SchoolCheckoutViewProps;
     <p className={styles.meta}>{price ?? 'No pricing options yet'} · {c.options.length} {c.options.length === 1 ? 'option' : 'options'}
       {c.multiParticipant.enabled ? ' · Multi-participant' : ''}{c.options.some((o) => o.createsMembership) ? ' · Creates membership' : ''}</p>
     <p className={styles.meta}>Address: {page.slug} · saved {instant(p.language, page.updatedAt)}</p>
+    <ShareLink p={p} page={page}/>
     <div className={styles.actions}>
       <button type="button" className={styles.primary} disabled={busy} onClick={() => p.onOpen?.(page.pageId)}>Edit</button>
       <button type="button" className={styles.secondary} disabled={busy} onClick={() => p.onDuplicate?.(page.pageId)}>Duplicate page</button>
@@ -103,6 +111,25 @@ function PageCard({ p, read, page, index, count }: { p: SchoolCheckoutViewProps;
       <button type="button" className={styles.secondary} disabled={busy || index === count - 1} aria-label={`Move ${c.title.en} later`} onClick={() => p.onMove?.(page.pageId, 1)}>Later</button>
     </div>
   </li>;
+}
+
+function ShareLink({ p, page }: { p: SchoolCheckoutViewProps; page: CheckoutPage }) {
+  if (page.status === 'ARCHIVED') return null;
+  const links = p.links ?? { state: 'LOADING' };
+  if (links.state === 'LOADING') return <p className={styles.meta} role="status">Getting the family link…</p>;
+  const publicId = links.state === 'READY' ? links.byPage[page.pageId] : undefined;
+  if (!publicId) return <p className={`${styles.meta} ${styles.warnText}`}>The family link could not be loaded. Choose Refresh to try again.</p>;
+  if (page.status !== 'PUBLISHED') return <p className={styles.meta} data-testid="checkout-link-draft">Family link: this page opens for families once it is live.</p>;
+  const url = checkoutShareUrl(p.origin ?? '', publicId);
+  return <div data-testid="checkout-share">
+    <p className={styles.meta}>Family link: <code data-testid="checkout-link">{url}</code></p>
+    <div className={styles.actions}>
+      <button type="button" className={styles.secondary} onClick={() => p.onCopyLink?.(page.pageId, url)}>Copy link</button>
+      <a className={styles.secondary} href={url} target="_blank" rel="noopener noreferrer" data-testid="checkout-open">Open page</a>
+      {p.copied === page.pageId ? <span className={styles.meta} role="status">Copied</span>
+        : p.copied === `failed:${page.pageId}` ? <span className={`${styles.meta} ${styles.warnText}`} role="status">Could not copy. Select the link above and copy it.</span> : null}
+    </div>
+  </div>;
 }
 
 function Groups({ p, read, groups }: { p: SchoolCheckoutViewProps; read: SchoolCheckoutPages; groups: readonly GroupDraft[] }) {
@@ -148,7 +175,7 @@ function Grid({ p, read }: { p: SchoolCheckoutViewProps; read: SchoolCheckoutPag
       ? 'No checkout pages yet. Choose New page to make your first one, for example a trial class or a membership.' : 'No pages in this group.'}</p>
       : <ul className={styles.grid} data-testid="checkout-grid">{visible.map((page) => <PageCard key={page.pageId} p={p} read={read} page={page}
         index={read.pages.indexOf(page)} count={read.pages.length}/>)}</ul>}
-    <p className={styles.meta}>Families cannot open these pages yet: the family checkout and its public link come in the next update. Card details will always be entered on your payment provider&apos;s own secure form, never stored by HON. HON adds no fee.</p>
+    <p className={styles.meta}>Share a live page&apos;s family link by text, email or social media; anyone with it can see the page without signing in. Families with the HON Family app sign up and pay under More, Sign up &amp; pay; signing up from the link without an account comes in the next update. Putting a page in draft stops its link until it is live again. Card details are always entered on your payment provider&apos;s own secure form, never stored by HON. HON adds no fee.</p>
   </>;
 }
 

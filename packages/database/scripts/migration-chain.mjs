@@ -54,6 +54,10 @@ export function compareChain(repositoryFiles, appliedFiles) {
  * in-memory text loses only its final `COMMIT;` (the file is untouched), the ledger row is written inside the migration's
  * own transaction, and one COMMIT publishes both. Any failure rolls both back.
  */
+const TRANSACTION_CONTROL = new RegExp(String.raw`^\s*(?:(?:COMMIT|ABORT|ROLLBACK)(?:\s+(?:WORK|TRANSACTION))?(?:\s+AND\s+(?:NO\s+)?CHAIN)?`
+  + String.raw`|(?:COMMIT|ROLLBACK)\s+PREPARED\s+'[^']*'|PREPARE\s+TRANSACTION\s+'[^']*'`
+  + String.raw`|START\s+TRANSACTION\b[^;]*|BEGIN(?:\s+(?:WORK|TRANSACTION|ISOLATION|READ|NOT|DEFERRABLE)\b[^;]*)?)\s*;`, 'im');
+
 export function withoutFinalCommit(file, sql) {
   const trimmed = sql.trimEnd();
   if (!sql.trimStart().startsWith('BEGIN;') || !trimmed.endsWith('COMMIT;')) {
@@ -61,7 +65,11 @@ export function withoutFinalCommit(file, sql) {
   }
   const body = trimmed.slice(0, -'COMMIT;'.length);
   // A second transaction-control statement would commit part of the file early and defeat the atomic ledger row.
-  if (/^\s*(COMMIT|ROLLBACK|START\s+TRANSACTION|BEGIN)\s*;/im.test(body.slice(body.indexOf('BEGIN;') + 'BEGIN;'.length))) {
+  // Every PostgreSQL spelling that ends or starts a top-level transaction at the start of a line is refused: COMMIT,
+  // END-free ABORT/ROLLBACK (with WORK/TRANSACTION and AND [NO] CHAIN), two-phase PREPARE/COMMIT/ROLLBACK PREPARED,
+  // START TRANSACTION and BEGIN with any options. ROLLBACK TO [SAVEPOINT] stays allowed. A bare `END;` cannot be told
+  // apart from the end of a PL/pgSQL block, so it is left to review (inside a DO body it is the block's END).
+  if (TRANSACTION_CONTROL.test(body.slice(body.indexOf('BEGIN;') + 'BEGIN;'.length))) {
     throw new Error(`${file} contains more than one transaction boundary.`);
   }
   return body;

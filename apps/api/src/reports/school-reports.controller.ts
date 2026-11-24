@@ -90,3 +90,34 @@ export class SchoolReportsDashboardController {
       meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 }
+
+/**
+ * AR1 (0633): the attendance report for one school (?week=YYYY-MM-DD, ?month=YYYY-MM|ALL). The same authority as the other
+ * school reports: the scope comes from the verified session and the database function re-proves reporting.view.
+ */
+@Controller('organizations/:organizationId/schools/:schoolId/reports/attendance')
+@UseGuards(HonIdentityGuard, SchoolReportsHumanUiGuard)
+export class AttendanceReportController {
+  constructor(private readonly database: RuntimeDatabaseService, private readonly reports: SchoolReportsService) {}
+
+  @Get()
+  @Header('Cache-Control', 'private, no-store')
+  @Header('Referrer-Policy', 'no-referrer')
+  async read(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined, @Query() query: Record<string, unknown>, @Req() request: HonRequest) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    if (Object.keys(query ?? {}).some(key => key !== 'week' && key !== 'month') || Object.values(query ?? {}).some(value => typeof value !== 'string')) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    }
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'reporting.view');
+    if (!scope || scope.organizationId.toLowerCase() !== organizationId.toLowerCase() || scope.schoolId.toLowerCase() !== schoolId.toLowerCase()) {
+      throw new ForbiddenException({ code: 'SCHOOL_REPORTS_FORBIDDEN' });
+    }
+    const requestId = randomUUID();
+    const context = { ...scope, principalType: 'HUMAN_USER' as const, requestId, correlationId: requestId, idempotencyKey: '', source: 'HUMAN_UI' as const,
+      externalSubject: identity.externalSubject };
+    return { data: await this.reports.readAttendance(context, { ...query }), meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+}
