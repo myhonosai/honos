@@ -33,16 +33,19 @@ describe('HQ Modern foundation', () => {
     const snapshot = renderToStaticMarkup(<CompanySnapshot/>);
     expect(snapshot).toContain('2 organizations');
     expect(snapshot).toContain('>3</strong>');
-    expect(snapshot).toContain('Unavailable');
+    expect(snapshot).not.toMatch(/MRR|>Unavailable<\/span>/);
     const attention = renderToStaticMarkup(<NeedsAttention/>);
-    for (const text of ['Pending approvals', 'Support escalations', 'Failed operations', 'Owner decisions', 'No pending count is assumed']) expect(attention).toContain(text);
+    for (const text of ['Pending approvals', 'Support escalations', 'Failed operations', 'Owner decisions', 'open each list to check it']) expect(attention).toContain(text);
+    expect(attention).not.toContain('Unavailable');
     expect(attention).not.toMatch(/\b(0 pending|all clear|resolved|completed)\b/i);
   });
 
   it('renders the approved dashboard with named executive workspace links and no claimed AI work', () => {
     const html = renderToStaticMarkup(<HqModernDashboard/>);
     for (const executive of HQ_EXECUTIVES) expect(html).toContain(`href="/hq/executives/${executive.executiveKey}"`);
-    for (const text of ['HON', 'Needs Your Attention', 'Company at a glance', 'Growth &amp; Referrals', 'No recorded work', 'Conversation unavailable']) expect(html).toContain(text);
+    for (const text of ['HON', 'Needs Your Attention', 'Company at a glance', 'Growth &amp; Referrals', 'Conversation unavailable', 'You approve anything important.']) expect(html).toContain(text);
+    // Empty tiles are shortcuts, never a dash or an Unavailable badge; no policy jargon on the home page.
+    expect(html).not.toMatch(/>—<|>Unavailable<\/span>|Shared Action Engine|Read-only|Verified platform facts|Commercial programs/);
     expect(html).not.toMatch(/\$[\d,]+|Working|Your AI team is on it|Ideal Martial Arts/);
     // The original command stage leads: HON with the six executives around it, then verified counts and program status.
     const order = ['id="hq-team-title"', 'aria-label="Company performance overview"', 'id="hq-commercial-title"', 'id="hq-attention-title"'].map((marker) => html.indexOf(marker));
