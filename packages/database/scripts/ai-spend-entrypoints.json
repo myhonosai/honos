@@ -99,6 +99,8 @@
     "hon.ai_school_committed_cost_micros(uuid,uuid,timestamp with time zone)",
     "hon.ai_spend_reserve_guard()",
     "hon.ai_stamp_hold_origin()",
+    "hon.ai_text_creative_reserve(hon.ai_text_proposals,hon.ai_invocation_plans)",
+    "hon.ai_text_creative_settle()",
     "hon.ai_text_fail(uuid,uuid,text,text)",
     "hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)",
     "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)",
@@ -472,7 +474,8 @@
       "ai_spend_start_guard",
       "ai_text_proposals_guard",
       "ai_text_proposals_no_truncate",
-      "zz_ai_hold_origin"
+      "zz_ai_hold_origin",
+      "zz_ai_text_creative_settle"
     ],
     "ai_usage_ledger": [],
     "chad_follow_up_invocations": [
@@ -522,7 +525,8 @@
     "saas_creative_reservations": [
       "ai_school_creative_guard",
       "saas_guarded",
-      "saas_no_truncate"
+      "saas_no_truncate",
+      "website_creative_reservation_guard"
     ],
     "saas_credit_reservations": [
       "ai_spend_b3_guard",

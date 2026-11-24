@@ -5112,7 +5112,8 @@ END $$;
 -- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
 -- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
 -- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips); the eight hashes below
--- are the 0638 bodies.
+-- are the 0638 bodies. 0670 re-created ai_text_prepare and ai_text_record (creative-billed kinds); those two hashes are the
+-- 0670 bodies.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','0ce8e55d537824e95478cab1044836ce32825dbc57c551d2728621fba3ae7420'),
@@ -5123,8 +5124,8 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
 ('hon.ai_text_fail(uuid,uuid,text,text)',true,false,'search_path=pg_catalog, hon','29d2f210d4f0a5a9806c37010e04371fca0ef00a52d91bf6a3724be965ed49ef'),
 ('hon.ai_text_planning_reference(uuid,uuid)',true,false,'search_path=pg_catalog, hon','07b5666966d6ab065efe82da92fa2f2b6c39fa367660a0101eb5fcd798aba0bd'),
-('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','8637c7fd7f7cf540513b939f44eceb5f6bf459e920159947e7984f53f7bcdde7'),
-('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','1fa1f6af3987b11c06f6877ce9ddc836de24ac9e63a989618dca4d864ef0abd8'),
+('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','945f932dc39bd5ef35c1c85de7b78dec655c0dffc514d37571c25ba11ade0982'),
+('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','977c6f5b04422af647fcbf70fcf219a8f5ff4026f0ba96a3264edfa43aa81ff9'),
 ('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
 ('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','cbe5c59d888995653f5736925f6e57ff8253b6679f3d02c508c20a5dab76b416'),
 ('hon.begin_school_website_ai_edit(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','942cb067060413f3309465c5cd4c6f8d326b8c73a41d695a00dcd452f3465f69'),
@@ -6581,3 +6582,54 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End Eian natural voice exact verification.
+
+-- AI website edits on creative credits exact verification (0670): the billing registry (exactly WEBSITE_EDIT -> website.edit)
+-- and the proposal-to-reservation link, both deny-all with forced RLS; the private reserve and settle helpers and the two
+-- guards; the CW1 functions it re-created; the runtime read of the website price; the triggers and the WEBSITE catalog
+-- rule. ai_text_prepare and ai_text_record are pinned in the 0550 section above with their 0670 bodies.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.ai_text_creative_applies(hon.ai_text_proposals,timestamptz)',true,false,'search_path=pg_catalog, hon','0d82ad6f95132caba978fcfcbc07f93f69d550078976fd95457246541c45522e'),
+('hon.ai_text_creative_reserve(hon.ai_text_proposals,hon.ai_invocation_plans)',true,false,'search_path=pg_catalog, hon','2105e4ed1ff576b2d879a9348b04b5493d7630fd3b8df523f3fb6c6ee2065d13'),
+('hon.ai_text_creative_settle()',true,false,'search_path=pg_catalog, hon','e7fa39c773cac29df7468ad105d16d6585b4862409a237c2cca924e5c11bb4fa'),
+('hon.guard_ai_text_creative()',false,false,'search_path=pg_catalog, hon','7ab0272cdad7ca16d51de0e31f3909fe7068e98fc6698fa136cce5f364b0373e'),
+('hon.guard_website_creative_reservation()',false,false,'search_path=pg_catalog, hon','ad6f745fb6ac071dc44ced7f1afc5150e9f54bb9f420ac16804f57475bbc28e9'),
+('hon.publish_saas_creative_rates(text,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','726772ab02873a60fdef12ca68e8e3f4b209f7c6861014d0196b6c93c6b52b69'),
+('hon.read_school_website_ai_price(text)',true,true,'search_path=pg_catalog, hon','5bef3ba26573d65e39c9cf6e940304bc2898b23c962f34047dbecf8de8d9f73b'),
+('hon.saas_creative_record_usage(hon.saas_creative_reservations,uuid,bigint,integer)',true,false,'search_path=pg_catalog, hon','40161eb555fa2eea3e8169f54e85246bec47c32b0ce828314dea98a7b644304b'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe website AI creative credit function: %',f.signature; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.ai_text_creative_billing','hon.ai_text_creative_reservations'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege('hon_runtime',t,'SELECT,INSERT,UPDATE,REFERENCES') THEN
+      RAISE EXCEPTION 'Unsafe website AI creative credit table: %',t;
+    END IF;
+  END LOOP;
+  IF (SELECT array_agg(kind||'='||operation_code ORDER BY kind) FROM hon.ai_text_creative_billing) IS DISTINCT FROM ARRAY['WEBSITE_EDIT=website.edit'] THEN
+    RAISE EXCEPTION 'Website AI creative billing registry changed';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger t WHERE t.tgenabled='O' AND (t.tgrelid, t.tgname, t.tgfoid) IN (
+      ('hon.ai_text_creative_billing'::regclass,'ai_text_creative_billing_immutable','hon.guard_ai_text_creative()'::regprocedure),
+      ('hon.ai_text_creative_billing'::regclass,'ai_text_creative_billing_no_truncate','hon.guard_ai_text_creative()'::regprocedure),
+      ('hon.ai_text_creative_reservations'::regclass,'ai_text_creative_reservations_immutable','hon.guard_ai_text_creative()'::regprocedure),
+      ('hon.ai_text_creative_reservations'::regclass,'ai_text_creative_reservations_no_truncate','hon.guard_ai_text_creative()'::regprocedure),
+      ('hon.saas_creative_reservations'::regclass,'website_creative_reservation_guard','hon.guard_website_creative_reservation()'::regprocedure),
+      ('hon.ai_text_proposals'::regclass,'zz_ai_text_creative_settle','hon.ai_text_creative_settle()'::regprocedure))) <> 6 THEN
+    RAISE EXCEPTION 'Website AI creative credit triggers missing';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint c WHERE c.conrelid='hon.saas_creative_rates'::regclass AND c.conname='saas_creative_rates_unit_fits_kind' AND c.convalidated
+      AND pg_get_constraintdef(c.oid) LIKE '%max_units_per_request = 1%' AND pg_get_constraintdef(c.oid) LIKE '%PROVISIONAL%') THEN
+    RAISE EXCEPTION 'Website creative rate rule missing';
+  END IF;
+END $$;
+-- End AI website edits on creative credits exact verification.

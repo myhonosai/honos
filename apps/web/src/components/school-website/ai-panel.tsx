@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { applyWebsiteAiEdits, type SchoolWebsite, type WebsiteAiEditView } from '@hon/contracts';
+import { applyWebsiteAiEdits, type SchoolWebsite, type WebsiteAiEditView, type WebsiteAiPrice } from '@hon/contracts';
 import { SiteView } from '../school-site/site-view';
 import { isWebsiteAiKey, websiteAiText, type WebsiteAiKey } from './ai-copy';
 import { WebsiteAiError, websiteAiApi, type WebsiteAiApi, type WebsiteAiCommand, type WebsiteAiErrorKind } from './ai-http';
@@ -31,6 +31,7 @@ export function WebsiteAiPanel(p: WebsiteAiPanelProps): React.ReactElement {
   const [history, setHistory] = useState<readonly WebsiteAiEditView[]>([]), [reload, setReload] = useState(0);
   const [sending, setSending] = useState<WebsiteAiCommand | null>(null), [note, setNote] = useState<Note>(null), [kept, setKept] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [price, setPrice] = useState<WebsiteAiPrice | null>(null);
   // A message Marcus never received (refused before anything was sent) still shows in the conversation, with why.
   const [unsent, setUnsent] = useState<null | Readonly<{ request: string; error: WebsiteAiErrorKind }>>(null);
   const mounted = useRef(true), pending = useRef<Pending | null>(null), inFlight = useRef(false), firstTaken = useRef(false);
@@ -48,6 +49,14 @@ export function WebsiteAiPanel(p: WebsiteAiPanelProps): React.ReactElement {
       setHistory(mine.slice(-SHOWN_TURNS));
       setCurrent((c) => c ?? [...mine].reverse().find((x) => x.status === 'RESULT_RECORDED') ?? null);
     }, () => undefined);
+    return () => abort.abort();
+  }, [api, p.scope, reload]);
+
+  // 0670: what the next message costs, refreshed after each one. Unknown stays unshown (the server still decides).
+  useEffect(() => {
+    const abort = new AbortController();
+    api.price(p.scope, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), () => mounted.current)
+      .then((x) => { if (mounted.current) setPrice(x); }, () => { if (mounted.current) setPrice(null); });
     return () => abort.abort();
   }, [api, p.scope, reload]);
 
@@ -164,6 +173,8 @@ export function WebsiteAiPanel(p: WebsiteAiPanelProps): React.ReactElement {
       <label className={styles.field}>{t('label')}
         <textarea rows={3} maxLength={MAX} value={text} disabled={locked} placeholder={t('placeholder')} onChange={(e) => setText(e.target.value)} /></label>
       <p className={styles.meta}>{t('left', { n: String(MAX - text.length) })}</p>
+      {price && <p className={styles.meta} data-website-ai-price={price.paidWith}>{price.paidWith === 'CREATIVE_CREDITS'
+        ? t('costCreative', { n: String(price.creditsPerEdit), left: String(price.availableCredits) }) : t('costIncluded')}</p>}
       {p.dirty && <p className={styles.warnText}>{t('saveFirst')}</p>}
       <div className={styles.row}>
         <button type="submit" className={styles.primary} disabled={locked || p.dirty || !request}>{sending === 'request' ? t('asking') : t('ask')}</button></div>

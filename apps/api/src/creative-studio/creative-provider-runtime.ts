@@ -1,4 +1,4 @@
-import type { CreativeAssetMediaType, CreativeAvatarStyle, CreativeGenerationFormat, SaasCreativeMediaKind } from '@hon/contracts';
+import type { CreativeAssetMediaType, CreativeAvatarStyle, CreativeGenerationFormat, CreativeMediaKind } from '@hon/contracts';
 
 export const CREATIVE_PROVIDER_RUNTIME = Symbol('CREATIVE_PROVIDER_RUNTIME');
 
@@ -6,7 +6,7 @@ export const CREATIVE_PROVIDER_RUNTIME = Symbol('CREATIVE_PROVIDER_RUNTIME');
 export interface CreativeProviderRoute { providerId: string; modelCode: string }
 /** Exactly what the database recorded for the generation, plus the server route. */
 export interface CreativeInvocation extends CreativeProviderRoute {
-  providerRequestId: string; operationCode: string; mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
+  providerRequestId: string; operationCode: string; mediaKind: CreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
   /** Present only for avatar.* operations: for avatar.create (0276) the name and look (the prompt is the description); for
    *  avatar.video (0277) the presenter's name, look and description (the prompt is the script it speaks). */
   avatar?: CreativeAvatarLook;
@@ -42,7 +42,7 @@ export interface CreativeProviderRuntime {
 export interface CreativeSubmission { providerJobId: string }
 /** What the worker knows about a submitted job: never the prompt, the school, the requester or a credential. */
 export interface CreativeProviderJob extends CreativeProviderRoute {
-  providerJobId: string; operationCode: string; mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat;
+  providerJobId: string; operationCode: string; mediaKind: CreativeMediaKind; units: number; format: CreativeGenerationFormat;
 }
 /**
  * A provider's temporary result file (C2). Held in memory only for the storage step (C3): never stored, logged or shown.
