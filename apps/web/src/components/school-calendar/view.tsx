@@ -46,6 +46,10 @@ export type CalendarViewProps = Readonly<{
   createPanel?: React.ReactNode;
   /** A short result or refusal line above the board. */
   message?: React.ReactNode;
+  /** 0583 block-out dates in view: school date -> label. Closed days are shaded and labelled; classes still show. */
+  closed?: ReadonlyMap<string, string> | undefined;
+  /** The first class of what was just added: marked, so the page can scroll to it and it stands out. */
+  fresh?: string | null | undefined;
 }>;
 
 const day = (language: string, date: string, options: Intl.DateTimeFormatOptions) => new Date(`${date}T00:00:00Z`).toLocaleDateString(language, { ...options, timeZone: 'UTC' });
@@ -81,8 +85,9 @@ export function CalendarViewPane(p: CalendarViewProps): React.ReactElement {
       </div>
       <Notices {...p} t={t}/>
       {!loading ? <Filter {...p} t={t}/> : null}
-      <div className={styles.board}>{loading ? <p className={styles.meta} role="status">{t('loading')}</p> : p.anchor !== null ? <Board {...p} anchor={p.anchor} t={t}/> : null}</div>
+      {/* Above the board, so a result is seen without scrolling past the whole day. */}
       {p.message ? <div className={styles.messageBar}>{p.message}</div> : null}
+      <div className={styles.board}>{loading ? <p className={styles.meta} role="status">{t('loading')}</p> : p.anchor !== null ? <Board {...p} anchor={p.anchor} t={t}/> : null}</div>
       {p.createPanel ? <aside className={styles.drawer} aria-label={t('createTitle')} data-testid="calendar-create-drawer">
         <div className={styles.drawerHead}><button type="button" className={styles.secondary} onClick={() => p.onSelect?.(null)}>{t('close')}</button></div>
         {p.createPanel}
@@ -204,11 +209,13 @@ function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElem
       <div role="row" className={styles.weekHead}>{weekdays.map((w) => <span role="columnheader" key={w}>{w}</span>)}</div>
       {monthGrid(anchor).map((week) => <div role="row" key={week[0]!.date} className={styles.week}>{week.map(({ date, inMonth }) => {
         const items = days.get(date) ?? [], shown = items.slice(0, MONTH_CELL_ITEMS), hidden = items.length - shown.length;
-        return <div role="gridcell" key={date} className={styles.cell} data-out={inMonth ? undefined : 'true'} data-today={date === today ? 'true' : undefined}>
+        return <div role="gridcell" key={date} className={styles.cell} data-out={inMonth ? undefined : 'true'} data-today={date === today ? 'true' : undefined}
+          data-closed={p.closed?.has(date) ? 'true' : undefined}>
           <div className={styles.cellHead}>
             <button type="button" className={styles.dateButton} onClick={() => p.onDay?.(date)} aria-label={day(language, date, { dateStyle: 'full' })}>{Number(date.slice(8))}</button>
             {items.length ? <span className={styles.count} aria-hidden="true">{items.length}</span> : null}
           </div>
+          {p.closed?.has(date) ? <span className={styles.closed} data-testid="calendar-closed">{t('closedDay', { label: p.closed.get(date)! })}</span> : null}
           <ul className={styles.items}>{shown.map((item) => <li key={keyOf(item)}><Item {...p} item={item} zone={zone} compact/></li>)}</ul>
           {hidden > 0 ? <button type="button" className={styles.more} onClick={() => p.onDay?.(date)}
             aria-label={t('moreLabel', { n: String(items.length), day: day(language, date, { dateStyle: 'medium' }) })}>{t('more', { n: String(hidden) })}</button> : null}
@@ -233,10 +240,11 @@ function Board(p: CalendarViewProps & { anchor: string; t: T }): React.ReactElem
     <div className={styles.gridScroll}>
       <div className={styles.timeGrid} data-view={view} data-testid={`calendar-${view}`} style={{ ['--days' as string]: String(entries.length) }}>
         <div className={styles.corner} aria-hidden="true"/>
-        {entries.map(([date]) => <div key={date} className={styles.dayHead} data-today={date === today ? 'true' : undefined}>
+        {entries.map(([date]) => <div key={date} className={styles.dayHead} data-today={date === today ? 'true' : undefined} data-closed={p.closed?.has(date) ? 'true' : undefined}>
           {view === 'week' ? <button type="button" className={styles.dateButton} onClick={() => p.onDay?.(date)} aria-label={day(language, date, { dateStyle: 'full' })}>
             <small>{day(language, date, { weekday: 'short' })}</small> <strong>{Number(date.slice(8))}</strong></button>
             : <strong>{day(language, date, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>}
+          {p.closed?.has(date) ? <span className={styles.closed} data-testid="calendar-closed">{t('closedDay', { label: p.closed.get(date)! })}</span> : null}
         </div>)}
         {hasEvents ? <>
           <div className={styles.rowLabel}>{t('eventsRow')}</div>
@@ -322,7 +330,8 @@ function DayColumns(p: CalendarViewProps & { anchor: string; t: T; entries: [str
   return <>{entries.map(([date, items], dayIndex) => {
     const classes = items.filter((i): i is ClassItem => i.kind === 'class');
     const lanes = layoutLanes(classes.map((c) => spans.get(c.session.sessionId)!));
-    return <section key={date} className={styles.dayColumn} style={{ height }} data-today={date === p.today ? 'true' : undefined} aria-label={day(language, date, { dateStyle: 'full' })}>
+    return <section key={date} className={styles.dayColumn} style={{ height }} data-today={date === p.today ? 'true' : undefined}
+      data-closed={p.closed?.has(date) ? 'true' : undefined} aria-label={day(language, date, { dateStyle: 'full' })}>
       {classes.length === 0 ? <p className={styles.hidden}>{t('nothing')}</p> : null}
       {p.manage && p.onCreateAt ? <div className={styles.slots}>{hours.map((h) => <button key={h} type="button" className={styles.slot} data-testid="calendar-slot"
         style={{ top: (h - first) * HOUR_HEIGHT, height: HOUR_HEIGHT }} aria-label={t('slotLabel', { day: day(language, date, { dateStyle: 'medium' }), time: clock(language, hhmm(h * 60)) })}
@@ -358,7 +367,7 @@ type ItemHandlers = {
   onPointerUp?: ((event: React.PointerEvent<HTMLButtonElement>) => void) | undefined; onPointerCancel?: (() => void) | undefined;
   onKeyDown?: ((event: React.KeyboardEvent<HTMLButtonElement>) => void) | undefined;
 };
-function Item({ item, zone, compact = false, selected, onSelect, language, t, cards, draggable, suppressClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown }:
+function Item({ item, zone, compact = false, selected, onSelect, language, t, cards, fresh, draggable, suppressClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onKeyDown }:
   CalendarViewProps & ItemHandlers & { item: CalendarItem; zone: string; compact?: boolean; t: T }): React.ReactElement {
   if (item.kind === 'event') {
     const e = item.event, current = selected?.kind === 'event' && selected.id === e.eventId;
@@ -370,6 +379,7 @@ function Item({ item, zone, compact = false, selected, onSelect, language, t, ca
   const s = item.session, current = selected?.kind === 'class' && selected.id === s.sessionId;
   const card = cards?.state === 'READY' ? cards.byId.get(s.sessionId) : undefined;
   return <button type="button" className={styles.item} data-kind="class" data-card-kind={card?.kind ?? 'CLASS'} data-status={s.status} data-draggable={draggable ? 'true' : undefined}
+    data-new={fresh === s.sessionId ? 'true' : undefined}
     aria-current={current ? 'true' : undefined} aria-keyshortcuts={draggable ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight Alt+Shift+ArrowUp Alt+Shift+ArrowDown' : undefined}
     onClick={() => { if (suppressClick?.current) { suppressClick.current = false; return; } onSelect?.({ kind: 'class', id: s.sessionId }); }}
     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} onKeyDown={onKeyDown}>

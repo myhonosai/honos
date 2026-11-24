@@ -385,6 +385,25 @@ try{
   assert.equal(out.ok,true,String(out.e?.stack??out.e));
   assert.deepEqual([out.v.generation.status,synthetic.calls.length],['SUCCEEDED',calls+1]);
  });
+ await check('G12','0637 cost basis (review [22]): the synthetic estimate is recorded as an estimate, never as an actual provider cost; a pre-0637 caller keeps no reference; a cost without a valid basis or a basis without a cost is refused; the HQ expense splits out the estimate',async()=>{
+  synthetic.behaviour='SUCCEED';const ok=(await gen('A1')).generation;
+  assert.equal((await res(ok.generationId)).cost_reference,'hon:cost-basis:estimate');
+  synthetic.behaviour='REJECT_WITH_COST';const failed=(await gen('A1')).generation;
+  assert.equal((await res(failed.generationId)).cost_reference,'hon:cost-basis:estimate');
+  synthetic.behaviour='PRE_SEND';const unsent=(await gen('A1')).generation;synthetic.behaviour='SUCCEED';
+  assert.equal((await res(unsent.generationId)).cost_reference,null);
+  const legacy=(await createOnly('A1')).generation;await record('ownerA',legacy.generationId,success(1));
+  assert.equal((await res(legacy.generationId)).cost_reference,null,'a caller without a basis is accepted unchanged');
+  for(const bad of [{...success(1),providerCostBasis:'GUESS'},{...success(1),providerCostBasis:null},{...notSent,providerCostBasis:'HON_ESTIMATE'}]){
+   const open=(await createOnly('A1')).generation;await deny(record('ownerA',open.generationId,bad),400,'INVALID_SAAS_INPUT');await record('ownerA',open.generationId,notSent);}
+  const reported=(await createOnly('A1')).generation;await record('ownerA',reported.generationId,{...success(1),providerCostBasis:'PROVIDER_REPORTED'});
+  assert.equal((await res(reported.generationId)).cost_reference,'hon:cost-basis:provider-reported');
+  const e=(await row('SELECT hon.saas_creative_expense_json($1) e',[S.A1])).e;
+  const sums=await row(`SELECT coalesce(sum(provider_cost_microunits),0)::bigint t,coalesce(sum(provider_cost_microunits) FILTER (WHERE cost_reference IS NOT NULL AND cost_reference<>'hon:cost-basis:estimate'),0)::bigint evidence
+    FROM hon.saas_creative_reservations WHERE school_id=$1 AND cost_status='RECORDED'`,[S.A1]);
+  assert.ok(Number(sums.evidence)>0);
+  assert.deepEqual([e.actualProviderCostMicrounits,e.estimatedProviderCostMicrounits],[Number(sums.t),Number(sums.t)-Number(sums.evidence)]);
+ });
  await setAccessProgram(false);programTouched=false;
 }finally{
  if(programTouched)await setAccessProgram(false).catch(e=>console.error('RESTORE FAILED',e));

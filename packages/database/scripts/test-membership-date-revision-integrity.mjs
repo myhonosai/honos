@@ -89,7 +89,8 @@ try {
     assert.equal(added, old, 'only the ACTIVE->ACTIVE revision branch was added'); }
   assert.doesNotMatch(bodyOf('preview_membership_date_revision') + bodyOf('evaluate_membership_date_revision') + bodyOf('read_membership_date_history')
     + bodyOf('read_membership_date_confirmation_queue') + bodyOf('read_school_membership_status_summary'), /\b(INSERT|UPDATE|DELETE|TRUNCATE|MERGE|LOCK)\b/, 'reads are DML- and lock-free');
-  assert.deepEqual((await admin.query(`SELECT tgname FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal`)).rows, [{ tgname: 'membership_state_transition_guard' }]);
+  assert.deepEqual((await admin.query(`SELECT tgname FROM pg_trigger WHERE tgrelid='hon.memberships'::regclass AND NOT tgisinternal ORDER BY tgname`)).rows,
+    [{ tgname: 'membership_state_transition_guard' }, { tgname: 'memberships_one_per_program' }]);
   assertions += 6;
   const evidence = ['membership_date_revisions', 'membership_date_revision_follow_ups'];
   for (const table of evidence) {

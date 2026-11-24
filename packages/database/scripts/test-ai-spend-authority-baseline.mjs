@@ -2279,9 +2279,13 @@ try {
   const before = { kai: fakes.claire.calls, marcus: fakes.marcus.calls, chad: fakes.chad.calls };
   const kai = await hon.sendTurn(tscope, conv.id, { text: 'Outline a white belt practice.', delegation: { agentKey: 'kai', curriculumId: o.curriculum } }, K());
   assert.deepEqual([kai.status, kai.delegatedAgentKeys], ['AWAITING_APPROVAL', ['kai']], JSON.stringify(kai));
-  const marcus = await hon.sendTurn(tscope, conv.id, { text: 'Draft a spring post.', delegation: { agentKey: 'marcus', campaignId: o.campaign ?? K() } }, K());
-  const chad = await hon.sendTurn(tscope, conv.id, { text: 'Check in kindly.', delegation: { agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' } }, K());
-  assert.deepEqual([marcus.status, chad.status], ['FAILED', 'FAILED'], JSON.stringify([marcus, chad]));
+  // 0635: Marcus and Chad are switched off for teaching staff, so the turn is refused before anything is recorded
+  // (it used to be recorded and then FAILED at the hand-over for the missing capability).
+  const turnsBefore = (await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [conv.id])).n;
+  const refusedTurn = async (delegation, text) => { const r = await settle(hon.sendTurn(tscope, conv.id, { text, delegation }, K())); return r.error?.getResponse?.().code ?? r.value?.status; };
+  assert.equal(await refusedTurn({ agentKey: 'marcus', campaignId: o.campaign ?? K() }, 'Draft a spring post.'), 'HON_AGENT_OFF');
+  assert.equal(await refusedTurn({ agentKey: 'chad', leadId: o.lead, expectedLeadVersion: 1, purpose: 'CHECK_IN' }, 'Check in kindly.'), 'HON_AGENT_OFF');
+  assert.equal((await row('SELECT count(*)::int n FROM hon.hon_conversation_turns WHERE conversation_id=$1', [conv.id])).n, turnsBefore, 'a switched-off agent records no turn');
   assert.deepEqual([fakes.claire.calls - before.kai, fakes.marcus.calls - before.marcus, fakes.chad.calls - before.chad], [1, 0, 0], 'one Kai call; no marketing or CRM provider call');
   // HON answers teaching staff without school business facts (no reporting.view).
   fakes.hon.mode = 'RESULT'; fakes.hon.ready = 'READY';

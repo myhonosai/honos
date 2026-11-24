@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import type { ParentJourneyView } from '@hon/contracts/parent-journey-view';
 import type { ParentApi, ParentFailureState } from '../api/client';
 import type { ChildSelection } from '../home/model';
+import { createBookingCustody, type BookingCustody } from '../schedule/booking-model';
 
 export type FamilyState =
   | { status: 'loading' }
@@ -17,6 +18,11 @@ interface FamilyContextValue {
   api: ParentApi;
   /** A fresh random Idempotency-Key for a new command. */
   newKey: () => string;
+  /**
+   * Booking command keys and the one unconfirmed booking action, owned here so a family refresh, a tab switch or a
+   * failed re-read cannot unmount them. The provider is keyed by session, so sign-out drops them.
+   */
+  booking: BookingCustody;
 }
 const FamilyContext = createContext<FamilyContextValue | null>(null);
 
@@ -29,6 +35,8 @@ export function FamilyProvider({ api, onSignedOut, now, newKey, children }: { ap
   const [state, setState] = useState<FamilyState>({ status: 'loading' });
   const [selection, setSelection] = useState<ChildSelection>('all');
   const generation = useRef(0);
+  const booking = useRef<BookingCustody | null>(null);
+  booking.current ??= createBookingCustody(newKey);
 
   const refresh = useCallback(() => {
     const mine = ++generation.current;
@@ -49,7 +57,7 @@ export function FamilyProvider({ api, onSignedOut, now, newKey, children }: { ap
     setSelection(prev => (state.status === 'ready' && (s === 'all' || state.view.children[s]) ? s : prev));
   }, [state]);
 
-  return <FamilyContext.Provider value={{ state, selection, select, refresh, now, api, newKey }}>{children}</FamilyContext.Provider>;
+  return <FamilyContext.Provider value={{ state, selection, select, refresh, now, api, newKey, booking: booking.current }}>{children}</FamilyContext.Provider>;
 }
 
 export function useFamily(): FamilyContextValue {

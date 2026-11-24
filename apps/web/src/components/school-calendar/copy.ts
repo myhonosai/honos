@@ -27,6 +27,9 @@ const en = {
   formRepeatHelp: 'A roster is made and its classes are added up to 12 weeks ahead. Change it later on the Roster page.',
   formSave: 'Add to calendar', formSaving: 'Saving…', formCancel: 'Cancel', formNoPrograms: 'This school has no program yet. Add one on the Programs page first.',
   formMissing: 'Fill in the title and program.',
+  formPast: '{time} today has already passed. Choose a later time.', formPastRepeat: '{time} today has already passed, so the first class will be on {day}.',
+  formPastNone: '{time} has already passed and no later day is left before the last date.', createdFirst: 'The first class is on {day}.',
+  createdHidden: 'It is saved, but this view cannot show it right now. Press Refresh, or find it on the Weekly timetable tab.',
   createdOne: 'Added {name}.', createdRoster: 'Roster {name} created with {n} classes.', createdSkipped: '{n} dates were skipped because the time does not exist on them.',
   moveConfirm: '{n} students are booked on {name}. They are not told about the new time.', moveYes: 'Move it', moveNo: 'Keep the old time',
   moving: 'Saving the new time…', moved: 'Moved {name} to {when}.', movedDetached: 'It no longer follows its roster.',
@@ -41,6 +44,7 @@ const en = {
   filterPrograms: 'Programs', filterInstructors: 'Instructors', noInstructor: 'No instructor', filtersChosen: '{n} chosen',
   slotLabel: 'Add a class on {day} at {time}', resizeLabel: 'Change the length of {name}', booked: '{n} booked',
   dragHint: 'Click an empty time to add a class. Drag a class to move it, or drag its bottom edge to change its length. With a class selected, Alt+arrow keys move it and Alt+Shift+arrow keys change its length.',
+  tabSettings: 'Settings', closedDay: 'Closed: {label}', blockedAsk: '{date} is blocked out ({label}). Classes still run that day unless you cancel them. Continue?', blockedContinue: 'Continue', blockedBack: 'Go back',
   cannotManage: 'Your access at this school does not include adding or moving classes.',
 };
 export type CalendarKey = keyof typeof en;
@@ -72,6 +76,9 @@ const ko: Record<CalendarKey, string> = {
   formRepeatHelp: '로스터가 만들어지고 12주 뒤까지 수업이 추가됩니다. 나중에 로스터 페이지에서 바꿀 수 있습니다.',
   formSave: '캘린더에 추가', formSaving: '저장하는 중…', formCancel: '취소', formNoPrograms: '이 학교에는 아직 프로그램이 없습니다. 먼저 프로그램 페이지에서 추가하세요.',
   formMissing: '제목과 프로그램을 입력하세요.',
+  formPast: '오늘 {time}은(는) 이미 지났습니다. 더 늦은 시간을 고르세요.', formPastRepeat: '오늘 {time}은(는) 이미 지나서 첫 수업은 {day}입니다.',
+  formPastNone: '{time}은(는) 이미 지났고 마지막 날짜 전에 남은 날이 없습니다.', createdFirst: '첫 수업은 {day}입니다.',
+  createdHidden: '저장되었지만 지금 이 화면에 표시할 수 없습니다. 새로 고침을 누르거나 주간 시간표 탭에서 확인하세요.',
   createdOne: '{name}을(를) 추가했습니다.', createdRoster: '로스터 {name}이(가) 수업 {n}개와 함께 만들어졌습니다.', createdSkipped: '시간이 존재하지 않는 날짜 {n}개는 건너뛰었습니다.',
   moveConfirm: '{name}에 학생 {n}명이 예약되어 있습니다. 바뀐 시간은 알려지지 않습니다.', moveYes: '옮기기', moveNo: '원래 시간 유지',
   moving: '새 시간을 저장하는 중…', moved: '{name}을(를) {when}(으)로 옮겼습니다.', movedDetached: '이 수업은 이제 로스터를 따르지 않습니다.',
@@ -86,6 +93,7 @@ const ko: Record<CalendarKey, string> = {
   filterPrograms: '프로그램', filterInstructors: '강사', noInstructor: '강사 없음', filtersChosen: '{n}개 선택',
   slotLabel: '{day} {time}에 수업 추가', resizeLabel: '{name} 길이 바꾸기', booked: '{n}명 예약',
   dragHint: '빈 시간을 눌러 수업을 추가하세요. 수업을 끌어 옮기거나 아래쪽 가장자리를 끌어 길이를 바꾸세요. 수업을 선택한 채로 Alt+화살표 키로 옮기고 Alt+Shift+화살표 키로 길이를 바꿉니다.',
+  tabSettings: '설정', closedDay: '휴무: {label}', blockedAsk: '{date}은(는) 휴무일입니다 ({label}). 취소하지 않는 한 그날 수업은 진행됩니다. 계속할까요?', blockedContinue: '계속', blockedBack: '돌아가기',
   cannotManage: '이 학교에서의 권한에는 수업 추가나 옮기기가 포함되어 있지 않습니다.',
 };
 const es: Record<CalendarKey, string> = {
@@ -116,6 +124,9 @@ const es: Record<CalendarKey, string> = {
   formRepeatHelp: 'Se crea una lista y sus clases se añaden hasta 12 semanas. Cámbiela después en la página de listas.',
   formSave: 'Añadir al calendario', formSaving: 'Guardando…', formCancel: 'Cancelar', formNoPrograms: 'Esta escuela aún no tiene programas. Añada uno primero en la página de programas.',
   formMissing: 'Escriba el título y elija el programa.',
+  formPast: 'Las {time} de hoy ya pasaron. Elija una hora más tarde.', formPastRepeat: 'Las {time} de hoy ya pasaron, así que la primera clase será el {day}.',
+  formPastNone: 'Las {time} ya pasaron y no queda ningún día antes de la última fecha.', createdFirst: 'La primera clase es el {day}.',
+  createdHidden: 'Se guardó, pero esta vista no puede mostrarla ahora. Pulse Actualizar o búsquela en la pestaña Horario semanal.',
   createdOne: 'Se añadió {name}.', createdRoster: 'Se creó la lista {name} con {n} clases.', createdSkipped: 'Se omitieron {n} fechas porque esa hora no existe en ellas.',
   moveConfirm: 'Hay {n} alumnos reservados en {name}. No se les avisa de la nueva hora.', moveYes: 'Moverla', moveNo: 'Dejar la hora anterior',
   moving: 'Guardando la nueva hora…', moved: 'Se movió {name} a {when}.', movedDetached: 'Ya no sigue su lista.',
@@ -130,6 +141,7 @@ const es: Record<CalendarKey, string> = {
   filterPrograms: 'Programas', filterInstructors: 'Instructores', noInstructor: 'Sin instructor', filtersChosen: '{n} elegidos',
   slotLabel: 'Añadir una clase el {day} a las {time}', resizeLabel: 'Cambiar la duración de {name}', booked: '{n} reservados',
   dragHint: 'Haga clic en una hora libre para añadir una clase. Arrastre una clase para moverla o su borde inferior para cambiar la duración. Con una clase seleccionada, Alt+flechas la mueven y Alt+Mayús+flechas cambian su duración.',
+  tabSettings: 'Configuración', closedDay: 'Cerrado: {label}', blockedAsk: '{date} está bloqueado ({label}). Las clases de ese día siguen en pie a menos que las cancele. ¿Continuar?', blockedContinue: 'Continuar', blockedBack: 'Volver',
   cannotManage: 'Su acceso en esta escuela no incluye añadir ni mover clases.',
 };
 export const CALENDAR_LANGUAGES = { en, ko, es } as const;

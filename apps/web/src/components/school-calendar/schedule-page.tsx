@@ -4,18 +4,19 @@ import { useLocale } from '../localization/provider';
 import { ClassSeriesPage } from '../class-series/class-series';
 import { SchoolEventsPage } from '../school-events/school-events';
 import { SchoolCalendar } from './calendar';
+import { CalendarSettingsPage } from './settings';
 import { calendarText, type CalendarKey } from './copy';
 import { CALENDAR_TABS, type CalendarTab, type CalendarView } from './range';
 import styles from './school-calendar.module.css';
 
-const TAB_LABEL: Record<CalendarTab, CalendarKey> = { calendar: 'tabCalendar', timetable: 'tabTimetable', events: 'tabEvents' };
+const TAB_LABEL: Record<CalendarTab, CalendarKey> = { calendar: 'tabCalendar', timetable: 'tabTimetable', events: 'tabEvents', settings: 'tabSettings' };
 
 /** The URL for a tab: the calendar is the page itself; other tabs add a closed `tab` value. */
 export function scheduleTabHref(tab: CalendarTab): string { return tab === 'calendar' ? '/staff/schedule' : `/staff/schedule?tab=${tab}`; }
 
 /**
  * Classes > Calendar: one page for the school's schedule. The calendar (classes, rosters, booking, sale days and events),
- * the weekly timetable and sale days and events are tabs of it; each tab is the existing page, with its own reads and checks.
+ * the weekly timetable, sale days and events, and calendar settings (block-out dates and share links) are tabs of it; each tab is the existing page, with its own reads and checks.
  * The timetable and events pages carry their own main landmark; only the calendar tab adds one.
  */
 export function SchoolSchedulePage({ initialTab = 'calendar', initialView = 'week' }: { initialTab?: CalendarTab; initialView?: CalendarView }): React.ReactElement {
@@ -41,7 +42,8 @@ export function SchoolSchedulePage({ initialTab = 'calendar', initialView = 'wee
         className={styles.tab} onClick={() => choose(key)}>{t(TAB_LABEL[key])}</button>)}
     </div>
     <div className={styles.panel} id="schedule-panel" role="tabpanel" aria-labelledby={`schedule-tab-${tab}`}>
-      {tab === 'calendar' ? <main aria-labelledby="schedule-title"><SchoolCalendar initialView={initialView} onManageEvent={() => choose('events')} addSignal={addSignal}/></main> : tab === 'timetable' ? <ClassSeriesPage/> : <SchoolEventsPage/>}
+      {tab === 'calendar' ? <main aria-labelledby="schedule-title"><SchoolCalendar initialView={initialView} onManageEvent={() => choose('events')} addSignal={addSignal}/></main> : tab === 'timetable' ? <ClassSeriesPage/>
+        : tab === 'events' ? <SchoolEventsPage/> : <main aria-labelledby="schedule-title"><CalendarSettingsPage onManagePrograms={() => choose('timetable')}/></main>}
     </div>
   </div>;
 }

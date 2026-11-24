@@ -26,7 +26,7 @@ describe('human student achievements UI', () => {
       const staff = renderToStaticMarkup(<AchievementsWorkbench/>);
       const parent = renderToStaticMarkup(<ParentAchievements/>);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['Create your school’s achievements and award them to students.', 'School UUID', 'Student record ID']) expect(staff).toContain(text);
+      for (const text of ['Make a list of awards your school gives', 'School UUID', 'Student record ID']) expect(staff).toContain(text);
       for (const text of ['Known school', 'selectors are not authorization', 'human principal', 'UUID (optional']) expect(staff).not.toContain(text);
       for (const text of ['Your child’s human-recorded achievements', 'No social feed or sibling records.', 'Private staff reasons and revision history are never shared here.', 'Current authorized child']) expect(parent).toContain(text);
       expect(staff).not.toContain('Careful practice');
@@ -53,7 +53,7 @@ describe('human student achievements UI', () => {
       const create = { op: 'DEFINITION' as const, id: null, input: definitionInput };
       const createdDefinition = { ...definition, version: 1 };
       fetchSpy.mockResolvedValue({ ok: false, status: 503 } as Response);
-      await expect(saveAchievement(school, create, 'retained-key')).rejects.toThrow('No verified result');
+      await expect(saveAchievement(school, create, 'retained-key')).rejects.toThrow('may or may not have been saved');
       fetchSpy.mockResolvedValue(response(createdDefinition));
       await expect(saveAchievement(school, create, 'retained-key')).resolves.toEqual(createdDefinition);
       const previous = fetchSpy.mock.calls.at(-2), last = fetchSpy.mock.calls.at(-1);

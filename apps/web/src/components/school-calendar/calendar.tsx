@@ -10,12 +10,13 @@ import { RosterSessionDetail } from '../class-roster/view';
 import { ClassBookingWorkbench } from '../class-booking-workbench';
 import { EventError, schoolEventsApi, type SchoolEventsApi } from '../school-events/http';
 import type { CreateCalendarCardInput } from '@hon/contracts';
-import { CalendarCardForm, initialCardForm } from './card-form';
+import { CalendarCardForm, firstRosterDate, initialCardForm } from './card-form';
 import { CardError, calendarCardsApi, type CalendarCardsApi } from './cards-http';
 import { calendarText, type CalendarKey } from './copy';
 import { zonedInstant } from './drag';
 import { loadCalendarClasses } from './http';
-import { addDays, calendarRange, localMinutesOf, shiftAnchor, type CalendarView } from './range';
+import { addDays, calendarRange, closedDays, localDateOf, localMinutesOf, shiftAnchor, type CalendarView } from './range';
+import { calendarSettingsApi, type CalendarSettingsApi } from './settings-http';
 import { CalendarViewPane, type CalendarSelection, type CardsState, type ClassesState, type EventsState, type PendingMove } from './view';
 import styles from './school-calendar.module.css';
 
@@ -33,7 +34,8 @@ const signalFor = (abort: AbortController) => AbortSignal.any([abort.signal, Abo
  */
 type Pending = PendingMove & Readonly<{ startsAt: string; endsAt: string; version: number; name: string; booked: number; done?: boolean }>;
 type Creating = Readonly<{ date: string; minutes: number; key: string; busy: boolean; error: string | null; serial: number }>;
-type Message = Readonly<{ text: string; confirm?: boolean }>;
+/** `confirm` asks about moving a booked class; `ask` asks before adding or moving onto a closed day (0583). */
+type Message = Readonly<{ text: string; confirm?: boolean; ask?: () => void }>;
 const newKey = () => crypto.randomUUID();
 /** The next whole hour in school time, today; after 11 PM, 9 AM tomorrow. */
 export function nextWholeHour(localToday: string, nowMinutes: number): { date: string; minutes: number } {
@@ -41,8 +43,8 @@ export function nextWholeHour(localToday: string, nowMinutes: number): { date: s
   return next >= 24 * 60 ? { date: addDays(localToday, 1), minutes: 9 * 60 } : { date: localToday, minutes: next };
 }
 
-export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEventsApi, cardsApi = calendarCardsApi, initialView = 'week', onManageEvent, addSignal = 0 }: {
-  api?: RosterApi; events?: Pick<SchoolEventsApi, 'list'>; cardsApi?: CalendarCardsApi; initialView?: CalendarView; onManageEvent?: () => void;
+export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEventsApi, cardsApi = calendarCardsApi, blockOutsApi = calendarSettingsApi, initialView = 'week', onManageEvent, addSignal = 0 }: {
+  api?: RosterApi; events?: Pick<SchoolEventsApi, 'list'>; cardsApi?: CalendarCardsApi; blockOutsApi?: Pick<CalendarSettingsApi, 'blockOuts'>; initialView?: CalendarView; onManageEvent?: () => void;
   /** Each increase opens the create form at the next whole hour today ("Add a class"). */
   addSignal?: number;
 }): React.ReactElement {
@@ -61,9 +63,14 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   const [programFilter, setProgramFilter] = useState<readonly string[]>([]);
   const [instructorFilter, setInstructorFilter] = useState<readonly string[]>([]);
   const [cards, setCards] = useState<CardsState>({ state: 'LOADING' });
+  const [closed, setClosed] = useState<ReadonlyMap<string, string>>(new Map());
   const [creating, setCreating] = useState<Creating | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [message, setMessage] = useState<Message | null>(null);
+  // The first class of what was just added, with the result line: the page scrolls to it, or says when it cannot show it.
+  const [fresh, setFresh] = useState<{ id: string; text: string; shown?: boolean } | null>(null);
+  // Only a read that started after the save counts: the calendar shown at the moment of saving is the old one.
+  const freshRead = useRef(false);
   const writes = useRef(0);
   const [refresh, setRefresh] = useState(0);
   const privacy = useRef(0), mounted = useRef(false), generation = useRef(0), lastSchool = useRef<string | null>(null);
@@ -75,12 +82,12 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); retire(); privacy.current++;
     setClasses({ state: 'LOADING' }); setEvents({ state: 'LOADING' }); setSelected(null); setBooking(false); detail.clear();
-    setCards({ state: 'LOADING' }); setCreating(null); setPending(null); setMessage(null); writes.current++;
+    setCards({ state: 'LOADING' }); setCreating(null); setPending(null); setMessage(null); setFresh(null); writes.current++;
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (school !== null && lastSchool.current !== null && school !== lastSchool.current) { setAnchor(null); setSelected(null); setBooking(false); setClassFilter([]);
-      setProgramFilter([]); setInstructorFilter([]); setCreating(null); setPending(null); setMessage(null); writes.current++; }
+      setProgramFilter([]); setInstructorFilter([]); setCreating(null); setPending(null); setMessage(null); setFresh(null); writes.current++; }
     if (school !== null) lastSchool.current = school;
   }, [school]);
 
@@ -126,6 +133,17 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     return () => abort.abort();
   }, [school, anchor, view, refresh, cardsApi]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Block-out dates (0583) for the same visible days. A school whose block-outs cannot be read shows no closed days.
+  useEffect(() => {
+    if (!scope || anchor === null) return;
+    const shown = privacy.current, abort = new AbortController(), range = calendarRange(view, anchor), last = addDays(range.end, -1);
+    const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
+    setClosed(new Map());
+    blockOutsApi.blockOuts(scope, range.start, last, signalFor(abort), owned).then(
+      (read) => { if (owned()) setClosed(closedDays(read.blockOuts, range.start, last)); }, () => { /* no closed days shown */ });
+    return () => abort.abort();
+  }, [school, anchor, view, refresh, blockOutsApi]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // A confirmed move keeps its ghost until the calendar has been read again, so the card never jumps back first.
   useEffect(() => { if (pending?.done && classes.state !== 'LOADING') setPending(null); }, [classes]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -151,11 +169,18 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
   const manage = cards.state === 'READY' && cards.canManage;
   const zone = classes.state === 'READY' ? classes.timezone : null;
   const errorText = (error: unknown) => t(`err${error instanceof CardError ? error.kind : 'UNKNOWN'}` as CalendarKey);
+  const dayName = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString(preferences.language, { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  /** On a closed day, asks first and runs `go` on Continue; otherwise runs it now. A block-out never refuses a class. */
+  const askIfClosed = (date: string, go: () => void) => {
+    const label = closed.get(date);
+    if (label === undefined) { go(); return; }
+    setMessage({ text: t('blockedAsk', { date: dayName(date), label }), ask: () => { setMessage(null); go(); } });
+  };
   const openCreate = useCallback((date: string, minutes: number) => {
     if (!manage) { setMessage({ text: t('cannotManage') }); return; }
     setSelected(null); setBooking(false); setMessage(null);
-    setCreating((c) => c?.busy ? c : { date, minutes, key: newKey(), busy: false, error: null, serial: (c?.serial ?? 0) + 1 });
-  }, [manage, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
+    askIfClosed(date, () => setCreating((c) => c?.busy ? c : { date, minutes, key: newKey(), busy: false, error: null, serial: (c?.serial ?? 0) + 1 }));
+  }, [manage, closed, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
   // "Add a class": waits for the calendar and card details, then opens the form at the next whole hour in school time.
   const handledSignal = useRef(0);
   useEffect(() => {
@@ -174,15 +199,38 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     cardsApi.create(scope, input, key, signalFor(abort), owned).then((receipt) => {
       if (!owned()) return;
       setCreating(null);
-      const text = receipt.repeats ? t('createdRoster', { name: input.name, n: String(receipt.created) }) : t('createdOne', { name: input.name });
-      setMessage({ text: receipt.skippedDates.length ? `${text} ${t('createdSkipped', { n: String(receipt.skippedDates.length) })}` : text });
-      setAnchor(input.localDate); setRefresh((n) => n + 1);
+      // A roster begins on its first class still ahead (0251 fill): one started today at an earlier time begins next week,
+      // so the calendar goes to that day rather than to a week where nothing new shows.
+      const first = receipt.repeats && zone ? firstRosterDate(input, zone) ?? input.localDate : input.localDate;
+      let text = receipt.repeats ? t('createdRoster', { name: input.name, n: String(receipt.created) }) : t('createdOne', { name: input.name });
+      if (receipt.repeats && receipt.created > 0) text = `${text} ${t('createdFirst', { day: dayName(first) })}`;
+      if (receipt.skippedDates.length) text = `${text} ${t('createdSkipped', { n: String(receipt.skippedDates.length) })}`;
+      setMessage({ text });
+      // A filter chosen before could hide the new class.
+      setClassFilter([]); setProgramFilter([]); setInstructorFilter([]);
+      freshRead.current = false; setFresh(receipt.created > 0 && receipt.sessionId ? { id: receipt.sessionId, text } : null);
+      setAnchor(first); setRefresh((n) => n + 1);
     }, (error) => {
       if (!owned()) return;
       setCreating((c) => c ? { ...c, busy: false, error: errorText(error), key: newKey() } : c);
       if (error instanceof CardError && (error.kind === 'GONE' || error.kind === 'UNKNOWN')) setRefresh((n) => n + 1);
     });
   };
+
+  // Once the calendar is read again, scroll to the class just added; if this view cannot show it, say so instead of leaving
+  // an empty week behind a success line.
+  useEffect(() => {
+    if (!fresh || fresh.shown) { freshRead.current = false; return; }
+    if (classes.state === 'LOADING') { freshRead.current = true; return; }
+    if (!freshRead.current) return;
+    if (classes.state === 'READY' && classes.items.some((x) => x.sessionId === fresh.id)) {
+      try { document.querySelector(`[data-new="true"]`)?.scrollIntoView?.({ block: 'center' }); } catch { /* not available */ }
+      setFresh({ ...fresh, shown: true });
+      return;
+    }
+    setMessage({ text: `${fresh.text} ${t('createdHidden')}` });
+    setFresh(null);
+  }, [fresh, classes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMove = (move: Pending) => {
     if (!scope) return;
@@ -207,19 +255,26 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
     const startsAt = zonedInstant(date, start, classes.timezone), endsAt = zonedInstant(date, end, classes.timezone);
     if (!startsAt || !endsAt) { setMessage({ text: t('errGap') }); return; }
     const move: Pending = { sessionId, date, start, end, saving: false, startsAt, endsAt, version: card.version, name: session.name, booked: card.booked };
-    if (card.booked > 0) { setPending(move); setMessage({ text: t('moveConfirm', { n: String(card.booked), name: session.name }), confirm: true }); return; }
-    sendMove(move);
-  }, [classes, cards, pending, preferences.language, scope]); // eslint-disable-line react-hooks/exhaustive-deps
+    const onto = () => {
+      if (card.booked > 0) { setPending(move); setMessage({ text: t('moveConfirm', { n: String(card.booked), name: session.name }), confirm: true }); return; }
+      sendMove(move);
+    };
+    // Moving within the same closed day asks nothing new.
+    if (date !== localDateOf(session.startsAt, classes.timezone)) askIfClosed(date, onto); else onto();
+  }, [classes, cards, pending, closed, preferences.language, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const messageBar = message ? <div className={styles.message} role={message.confirm ? 'alert' : 'status'} data-testid="calendar-message">
+  const messageBar = message ? <div className={styles.message} role={message.confirm || message.ask ? 'alert' : 'status'} data-testid="calendar-message">
     <span>{message.text}</span>
-    {message.confirm && pending && !pending.saving ? <span className={styles.messageActions}>
+    {message.ask ? <span className={styles.messageActions}>
+      <button type="button" className={styles.primary} onClick={message.ask} data-testid="calendar-blocked-continue">{t('blockedContinue')}</button>
+      <button type="button" className={styles.secondary} onClick={() => setMessage(null)}>{t('blockedBack')}</button>
+    </span> : message.confirm && pending && !pending.saving ? <span className={styles.messageActions}>
       <button type="button" className={styles.primary} onClick={() => sendMove(pending)}>{t('moveYes')}</button>
       <button type="button" className={styles.secondary} onClick={() => { setPending(null); setMessage(null); }}>{t('moveNo')}</button>
     </span> : pending?.saving ? null : <button type="button" className={styles.clearLink} onClick={() => setMessage(null)}>{t('dismiss')}</button>}
   </div> : null;
   const createPanel = creating && cards.state === 'READY' ? <CalendarCardForm key={creating.serial} language={preferences.language} programs={cards.programs} instructors={cards.instructors}
-    initial={initialCardForm(creating.date, creating.minutes, cards.programs)} busy={creating.busy} error={creating.error}
+    initial={initialCardForm(creating.date, creating.minutes, cards.programs)} busy={creating.busy} error={creating.error} timeZone={zone}
     onCancel={() => setCreating(null)} onSubmit={submitCreate}/> : null;
 
   const session = selectedClass && classes.state === 'READY' ? classes.items.find((s) => s.sessionId === selectedClass) ?? null : null;
@@ -241,6 +296,6 @@ export function SchoolCalendar({ api = rosterApi, events: eventsApi = schoolEven
       onView={onView} onShift={onShift} onToday={onToday} onSelect={onSelect} onDay={onDay} onRefresh={onRefresh} onManageEvent={onManageEvent}
       classFilter={classFilter} onClassFilter={setClassFilter} cards={cards} programFilter={programFilter} onProgramFilter={setProgramFilter}
       instructorFilter={instructorFilter} onInstructorFilter={setInstructorFilter} onCreateAt={manage ? openCreate : undefined} onDrop={manage ? onDrop : undefined}
-      pending={pending} createPanel={createPanel} message={messageBar}/>
+      pending={pending} createPanel={createPanel} message={messageBar} closed={closed} fresh={fresh?.id ?? null}/>
   </div>;
 }

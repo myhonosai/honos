@@ -17,7 +17,7 @@ function fakeSession(token: string | null) {
 }
 function fakeApi(journey: ParentRead<ReturnType<typeof verifyParentJourneyView>>, zone: string | null = 'America/Los_Angeles'): ParentApi {
   return { journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => zone), classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
-    announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })) } as unknown as ParentApi;
+    announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })), attendanceStreaks: jest.fn(async () => ({ ok: false, state: 'unavailable' })), journeyRecommendations: jest.fn(async () => ({ ok: false, state: 'unavailable' })) } as unknown as ParentApi;
 }
 const ok = { ok: true as const, data: verifyParentJourneyView(journeyBody()) };
 const now = () => new Date(NOW);
@@ -28,6 +28,18 @@ describe('Parent app shell', () => {
     await screen.findByRole('button', { name: 'Open Test Child A journey' });
     const labels = ['Home', 'Schedule', 'Eian', 'Messages', 'More'].map(l => screen.getByRole('tab', { name: l }));
     expect(labels).toHaveLength(5);
+  });
+
+  it('home: progress is a belt path with the next requirement, from the school\'s records only', async () => {
+    await render(<ParentApp api={fakeApi(ok)} session={fakeSession('t')} now={now} />);
+    await screen.findByRole('button', { name: 'Open Test Child A journey' });
+    expect(screen.getByText('Next: Form 1')).toBeTruthy();
+    expect(screen.getByText('Test has 1 of 3 done. Keep going!')).toBeTruthy();
+    expect(screen.getByLabelText('Front kick: met')).toBeTruthy();
+    expect(screen.getByLabelText('Respect: still to come, optional')).toBeTruthy();
+    expect(screen.getByText('1/3')).toBeTruthy();
+    // A child whose requirements the school did not return says so instead of drawing a path.
+    expect(screen.getByText("Requirements aren't available right now.")).toBeTruthy();
   });
 
   it('signed out: shows sign-in and never calls a family read', async () => {

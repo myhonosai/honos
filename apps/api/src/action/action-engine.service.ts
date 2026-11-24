@@ -84,6 +84,9 @@ function payloadHash(payload: Record<string, unknown>): string {
   return createHash('sha256').update(JSON.stringify(canonicalize(payload))).digest('hex');
 }
 
+/** Returned (never thrown) from inside the execution transaction so the expiry evidence commits. */
+const APPROVAL_EXPIRED: unique symbol = Symbol('APPROVAL_EXPIRED');
+
 function actionFailure(error: unknown): never {
   const code = error instanceof Error ? error.message : 'ACTION_POLICY_BLOCKED';
   if (code === 'TIER_ENTITLEMENT_REQUIRED' || code === 'PERMISSION_DENIED') {
@@ -393,7 +396,9 @@ export class ActionEngineService {
    * ordinary-domain-service adapter executes it. This is internal only.
    */
   async beginExecution(context: CommandContext, actionRequestId: string): Promise<ExecutableAction> {
-    return this.database.withTenantTransaction(context, async (client) => {
+    // Review [21]: an expiry is durable evidence. The EXPIRED status, its audit row and its outbox event commit first;
+    // the refusal is raised only after the transaction ends, so a throw can never roll that evidence back.
+    const begun = await this.database.withTenantTransaction(context, async (client): Promise<ExecutableAction | typeof APPROVAL_EXPIRED> => {
       const requestResult = await client.query<ExecutionRequestRow>(
         `SELECT id, action_code, normalized_payload, requested_by_principal_id, required_permission,
                 effective_authority_mode, policy_version, approval_expires_at, status
@@ -425,7 +430,7 @@ export class ActionEngineService {
         await client.query(`INSERT INTO hon.outbox_events (id,organization_id,school_id,event_type,schema_version,aggregate_type,aggregate_id,aggregate_version,correlation_id,causation_id,payload)
           VALUES ($1::uuid,$2,$3,'action.request.expired',1,'ACTION_REQUEST',$4::uuid,3,$5::uuid,$6::uuid,$7::jsonb)`,
         [randomUUID(), context.organizationId, context.schoolId, request.id, context.correlationId, context.requestId, JSON.stringify(expiryPayload)]);
-        throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'This approval expired before HON began execution.' });
+        return APPROVAL_EXPIRED;
       }
 
       const registeredAction = actionDefinition(request.action_code);
@@ -471,6 +476,8 @@ export class ActionEngineService {
       [randomUUID(), context.organizationId, context.schoolId, request.id, context.correlationId, context.requestId, JSON.stringify(payload)]);
       return { id: request.id, actionCode: request.action_code, normalizedPayload: request.normalized_payload, requestedByPrincipalId: request.requested_by_principal_id, effectiveAuthorityMode: request.effective_authority_mode, policyVersion: request.policy_version };
     });
+    if (begun === APPROVAL_EXPIRED) throw new ConflictException({ code: 'POLICY_BLOCKED', detail: 'This approval expired before HON began execution.' });
+    return begun;
   }
 
   /** Records the verified result of a typed adapter; UNKNOWN is intentionally not success. */

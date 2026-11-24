@@ -161,6 +161,10 @@
       "title": "Human Public Lead Forms"
     },
     {
+      "path": "/staff/marketing/referrals",
+      "title": "Family Referrals"
+    },
+    {
       "path": "/staff/marketing/intake",
       "title": "HON | Lead Sources & Intake Monitor"
     },
@@ -193,6 +197,10 @@
       "title": "HON | Creative Studio"
     },
     {
+      "path": "/staff/creative-studio/designs",
+      "title": "HON | Designs"
+    },
+    {
       "path": "/staff/people",
       "title": "HON | People"
     },
@@ -213,12 +221,24 @@
       "title": "School Enquiry Form"
     },
     {
+      "path": "/refer/:code",
+      "title": "Family Referral Invitation"
+    },
+    {
       "path": "/book/:publicId",
       "title": "Book a time"
     },
     {
       "path": "/book/t/:publicId",
       "title": "Book a time"
+    },
+    {
+      "path": "/checkout/:publicId",
+      "title": "Sign up"
+    },
+    {
+      "path": "/calendars/:publicId",
+      "title": "Class calendar"
     },
     {
       "path": "/agreement/:token",
@@ -231,6 +251,14 @@
     {
       "path": "/staff/team/hours",
       "title": "HON | Hours"
+    },
+    {
+      "path": "/staff/marketing/blasts",
+      "title": "HON | Blasts"
+    },
+    {
+      "path": "/staff/marketing/media",
+      "title": "HON | Media"
     },
     {
       "path": "/staff/team/availability",
@@ -263,6 +291,10 @@
     {
       "path": "/staff/attendance/planned-absences",
       "title": "HON | Human Planned Absence Review"
+    },
+    {
+      "path": "/staff/attendance/report",
+      "title": "HON | Attendance report"
     },
     {
       "path": "/staff/attendance/cards",
@@ -341,6 +373,14 @@
       "title": "HON | Checkout pages"
     },
     {
+      "path": "/staff/billing/checkout-orders",
+      "title": "HON | Checkout orders"
+    },
+    {
+      "path": "/staff/billing/pos",
+      "title": "HON | Point of Sale"
+    },
+    {
       "path": "/staff/billing/saved-payment-methods",
       "title": "HON | Saved payment methods"
     },
@@ -385,12 +425,44 @@
       "title": "HON | Send a text"
     },
     {
+      "path": "/staff/texts/history",
+      "title": "HON | Text history"
+    },
+    {
+      "path": "/staff/texts/templates",
+      "title": "HON | Text templates"
+    },
+    {
+      "path": "/staff/texts/opted-out",
+      "title": "HON | Opted out of texts"
+    },
+    {
+      "path": "/staff/email",
+      "title": "HON | Send an email"
+    },
+    {
+      "path": "/staff/email/history",
+      "title": "HON | Email history"
+    },
+    {
+      "path": "/staff/email/templates",
+      "title": "HON | Email templates"
+    },
+    {
+      "path": "/staff/email/opted-out",
+      "title": "HON | Opted out of email"
+    },
+    {
       "path": "/staff/family-messages",
       "title": "HON | Parent app"
     },
     {
       "path": "/staff/family-messages/announcements",
       "title": "HON | Announcements"
+    },
+    {
+      "path": "/staff/parent-app/curriculum",
+      "title": "HON | Parent app curriculum"
     },
     {
       "path": "/staff/conversations",
@@ -567,6 +639,10 @@
     {
       "path": "/staff/curriculum/library",
       "title": "Private curriculum library"
+    },
+    {
+      "path": "/staff/curriculum/ranks",
+      "title": "HON | Rank setup"
     },
     {
       "path": "/staff/curriculum/progress",

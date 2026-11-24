@@ -318,6 +318,25 @@ try {
   await refused(() => submit(TOKEN, trialVisit(S.demoClass, uniqueContact())), 409, 'CLASS_FULL', 'a demo class');
   ok(JSON.stringify(await counts()) === JSON.stringify(before), 'a demo class writes nothing');
 
+  // 2b. Closed days (0607): a trial class on a school-local date inside an ACTIVE block-out of this school is not listed on the
+  //     tablet and is refused at submit with nothing written; another school's block-out changes nothing; removing it lists it again.
+  await classSession('holiday', 'a', { hoursAhead: 24 * 5, capacity: 5 });
+  const holidayDay = (await sql('SELECT (starts_at AT TIME ZONE $2)::date::text d FROM hon.class_sessions WHERE id=$1', [S.holiday, LA])).rows[0].d;
+  const blockOut = async (school) => { const id = randomUUID();
+    await sql("INSERT INTO hon.calendar_block_outs(id,organization_id,school_id,label,first_day,last_day,created_by_principal_id,updated_by_principal_id) VALUES($1,$2,$3,'Holiday break',$4::date,$4::date,$5,$5)",
+      [id, ids.organization, school, holidayDay, OWNER.principal]); return id; };
+  const tabletClasses = async (label) => offerOf(await success(() => terminal(TOKEN), label), 'trial-class').classes.map(c => c.sessionId);
+  await blockOut(ids.schoolB);
+  ok(JSON.stringify(await tabletClasses('tablet with another school closed')) === JSON.stringify([S.one, S.two, S.holiday]), 'another school closing that day hides nothing');
+  const closedDay = await blockOut(ids.schoolA);
+  ok(JSON.stringify(await tabletClasses('tablet on a closed day')) === JSON.stringify([S.one, S.two]), 'a trial class on a closed day is not listed');
+  const beforeClosed = await counts();
+  await refused(() => submit(TOKEN, trialVisit(S.holiday, uniqueContact())), 409, 'CLASS_FULL', 'a trial class on a closed day');
+  ok(JSON.stringify(await counts()) === JSON.stringify(beforeClosed), 'a closed-day trial writes nothing');
+  await sql("UPDATE hon.calendar_block_outs SET status='REMOVED',version=version+1 WHERE id=$1", [closedDay]);
+  ok(JSON.stringify(await tabletClasses('tablet after reopening')) === JSON.stringify([S.one, S.two, S.holiday]), 'removing the block-out lists the class again');
+  await sql("UPDATE hon.class_sessions SET status='CANCELLED',cancellation_reason='Proof' WHERE id=$1", [S.holiday]);
+
   // 3. P2 preflight: the migration refuses settings that already name a demo program (as a pre-0538 save could have).
   await sql('BEGIN');
   try {
@@ -377,7 +396,8 @@ try {
   const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
   for (const [startMark, endMark] of [['-- Walk-in kiosk trial seats exact verification (0538)', '-- End walk-in kiosk trial seats exact verification.'],
     ['-- Walk-in kiosk trial class exact verification (0537)', '-- End walk-in kiosk trial class exact verification.'],
-    ['-- Parent class booking exact verification (0329)', '-- End parent class booking exact verification.']]) {
+    ['-- Parent class booking exact verification (0329)', '-- End parent class booking exact verification.'],
+    ['-- Closed days for families exact verification (0607)', '-- End closed days for families exact verification.']]) {
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
     await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;

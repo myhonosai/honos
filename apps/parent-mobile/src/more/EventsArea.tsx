@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import { Text } from '../ui/text';
 import type { BookingTypeAnswer } from '@hon/contracts/school-booking-types';
 import type {
   ParentSchoolBooking, ParentSchoolBookingReceipt, ParentSchoolBookings, ParentSchoolBookingTypeChoice, ParentSchoolEventChoice, ParentSchoolEventSlot,
@@ -7,7 +8,8 @@ import type {
 import type { ParentRead, ParentWrite } from '../api/client';
 import { useFamily } from '../family/family-data';
 import { Body, Button, Card, Loading, Pill, Section, StateMessage } from '../ui/parts';
-import { radius, space, TOUCH, type, useColors } from '../ui/theme';
+import { Celebration } from '../ui/Celebration';
+import { EDGE, radius, space, TOUCH, type, useColors } from '../ui/theme';
 
 /** A school-local calendar date is shown as that date, never shifted by the phone's time zone. */
 export function schoolDay(localDate: string): string {
@@ -57,6 +59,7 @@ export function EventsArea() {
   const [read, setRead] = useState<ParentRead<ParentSchoolBookings> | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
+  const [party, setParty] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const generation = useRef(0);
   const keys = useRef(new Map<string, string>());
@@ -95,6 +98,7 @@ export function EventsArea() {
     if (result.ok) {
       const b = result.data.booking;
       setStatus({ phase: 'result', tone: 'good', message: `${p.kind === 'cancel' ? 'Cancelled' : 'Booked'}: ${b.title}, ${schoolDay(b.localDate)} at ${b.localStart}.` });
+      if (p.kind !== 'cancel') setParty(`${b.title}, ${schoolDay(b.localDate)} at ${b.localStart}`);
     } else {
       const message = result.state === 'refused' ? (result.code && SCHOOL_BOOKING_REFUSALS[result.code]) || 'This was not accepted. Nothing was changed.'
         : 'Booking is not available on this account right now.';
@@ -108,10 +112,10 @@ export function EventsArea() {
   const v = read.data;
   const busy = !!pending;
 
-  const field = { marginTop: space.sm, minHeight: TOUCH, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, color: c.text, padding: space.md, fontSize: type.body } as const;
-  const choice = (selected: boolean) => ({ minHeight: TOUCH, paddingHorizontal: space.md, justifyContent: 'center' as const, borderRadius: radius.pill, borderWidth: 1,
-    borderColor: selected ? c.accent : c.border, backgroundColor: selected ? c.accent : c.surface, marginRight: space.sm, marginTop: space.sm });
-  const choiceText = (selected: boolean) => ({ color: selected ? c.accentText : c.text, fontWeight: '600' as const });
+  const field = { marginTop: space.sm, minHeight: TOUCH, borderRadius: radius.md, borderWidth: 2, borderColor: c.edge, color: c.text, padding: space.md, fontSize: type.body } as const;
+  const choice = (selected: boolean) => ({ minHeight: TOUCH, paddingHorizontal: space.md, justifyContent: 'center' as const, borderRadius: radius.md, borderWidth: 2, borderBottomWidth: 2 + EDGE,
+    borderColor: selected ? c.accent : c.edge, backgroundColor: selected ? c.accentSoft : c.surface, marginRight: space.sm, marginTop: space.sm });
+  const choiceText = (selected: boolean) => ({ color: selected ? c.accentEdge : c.text, fontWeight: '700' as const });
 
   const confirmCard = pending && status ? (
     <Card style={{ borderColor: c.accent, marginTop: space.md }}>
@@ -187,6 +191,7 @@ export function EventsArea() {
 
   return (
     <View>
+      <Celebration visible={!!party} title="You're booked!" detail={party ?? ''} onClose={() => setParty(null)} />
       {!v.canBook ? <Card style={{ marginTop: space.md }}><Body muted>{v.contact ? 'Your access to this family lets you see these times but not book them. A guardian on the account can book.'
         : 'Your account has no email the school can use for a booking. Please contact the school.'}</Body></Card> : null}
       {confirmCard}

@@ -31,7 +31,7 @@ Owner ask (David, 2026-11-19): "i need this calendar to be clickable and let me 
 
 **Reads.** One new read, `hon.read_school_calendar_cards(subject, {from, to})`, for school-local dates at most 42 days apart: for each class starting in the range (at most 1000) its version, kind, program id and name, roster id, lead instructor (id and display name only) and booked count; plus `canManage`, and when the caller can manage, the school's programs and the staff who can be picked as instructor (id and display name only, the 0404/0467 name rule). No email, contact or role is returned.
 
-**Out of scope.** Editing a card's title/program/instructor after creation (use the Roster page for repeating classes), copy/paste, multi-select drag, month-view drag, notifying families, calendar settings, block-out dates and shareable calendars (0552).
+**Out of scope.** Editing a card's title/program/instructor after creation (use the Roster page for repeating classes), copy/paste, multi-select drag, month-view drag, notifying families, calendar settings, block-out dates and shareable calendars (0583).
 
 **Security.** Direct human commands only (HUMAN_UI, no delegation or action request), exact current school and organization from the tenant transaction, live entitlement, forced RLS, definer functions with an EXECUTE-only runtime ACL, idempotency key with exact replay and key-reuse refusal, row lock and version check, audit and outbox with identifiers only, authority checked again after the last write. The runtime keeps no UPDATE on class sessions.
 

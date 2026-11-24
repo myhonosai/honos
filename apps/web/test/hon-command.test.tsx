@@ -9,7 +9,7 @@ import { CommandCenterAccessError } from '../src/components/command-center-http'
 import { ActionReviewAccessError } from '../src/components/action-approvals-http';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, HON_TURN_STATUSES, honComposerEnabled, honTurnStatusPresentation } from '../src/components/hon-command/hon-conversation';
-import { HonLauncher, HonPanel, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
+import { HonCornerDock, HonLauncher, HonPanel, HonTeamBand, honExpandHref } from '../src/components/hon-command/hon-command';
 import { HonWorkspaceView, type HonTab } from '../src/components/hon-command/hon-workspace-view';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_TEACHING_AI, HON_TEACHING_AI_PORTRAITS, approvalSourceLabel, safeHonReturnPath, teachingAiPortrait } from '../src/components/hon-command/roster';
 
@@ -102,7 +102,7 @@ describe('HON command roster', () => {
     expect(HON_TEACHING_AI.portrait).toBe('/ai/kai.webp');
     expect(existsSync(join('public', HON_TEACHING_AI.portrait))).toBe(true);
     expect(HON_AI_TEAM.map((member) => member.portrait)).not.toContain(HON_TEACHING_AI.portrait);
-    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching drafts']);
+    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Videos and links', 'Curriculum progress', 'Scheduled classes', 'Teaching drafts']);
   });
 
   it('maps only server-reported conversation states and keeps the composer off without full readiness', () => {
@@ -131,6 +131,24 @@ describe('HON command roster', () => {
     for (const bad of ['https://evil.example', '//evil.example', '/staff/../hq', '/hq', '/staff/hon', '/staff/dashboard?x=1', 'javascript:alert(1)', undefined, 42]) expect(safeHonReturnPath(bad)).toBe('/staff/dashboard');
     expect(honExpandHref('/staff/crm/leads', 'chad')).toBe('/staff/hon?return=%2Fstaff%2Fcrm%2Fleads&agent=chad');
     expect(honExpandHref('https://evil.example', 'root')).toBe('/staff/hon?return=%2Fstaff%2Fdashboard');
+  });
+});
+
+describe('Plan with Alex in the team view', () => {
+  it('shows the Alex planning panel only on Alex, and only for a verified school', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'team', 'alex')).toContain('id="alex-plan"');
+    expect(view(snapshot, 'team', 'chad')).not.toContain('id="alex-plan"');
+    const unverified = (await loaded({ resolveScope: vi.fn(async () => ({ state: 'MANUAL_ENTRY_REQUIRED' as const })) }, null)).snapshot;
+    expect(view(unverified, 'team', 'alex')).not.toContain('id="alex-plan"');
+  });
+
+  it('shows the Jordan follow-through panel only on Jordan, for a verified school', async () => {
+    const { snapshot } = await loaded();
+    expect(view(snapshot, 'team', 'jordan')).toContain('id="jordan-follow-up"');
+    expect(view(snapshot, 'team', 'alex')).not.toContain('id="jordan-follow-up"');
+    expect(view(snapshot, 'team', 'marcus')).toContain('id="marcus-review"');
+    expect(view(snapshot, 'team', 'jordan')).not.toContain('id="marcus-review"');
   });
 });
 
@@ -359,6 +377,25 @@ describe('HON integration boundaries', () => {
       expect(html).toContain('>Full workspace<');
       expect(html).toContain('aria-label="Close HON"');
       expect(renderToStaticMarkup(<HonPanel open onClose={() => {}} returnPath="/staff/crm/leads" />)).toContain('data-placement="side"');
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally { fetcher.mockRestore(); }
+  });
+
+  it('docks the corner chat in the corner, not modal, with expand, minimize and close, and reads nothing until it opens', () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+    try {
+      const html = renderToStaticMarkup(<HonCornerDock onMinimize={() => {}} onClose={() => {}} returnPath="/staff/crm/leads" />);
+      expect(html).toMatch(/<section[^>]*role="dialog"[^>]*aria-modal="false"/);
+      expect(html).toContain('data-hon-dock=""');
+      expect(html).toContain(`href="${honExpandHref('/staff/crm/leads', null).replaceAll('&', '&amp;')}"`);
+      expect(html).toContain('aria-label="Full workspace"');
+      expect(html).toContain('aria-label="Minimize HON"');
+      expect(html).toContain('aria-label="Close HON"');
+      // No dimming scrim: the page stays visible beside it.
+      expect(html).not.toContain('Close HON" tabindex="-1"');
+      expect(html).not.toContain('hidden=""');
+      expect(renderToStaticMarkup(<HonCornerDock hidden onMinimize={() => {}} onClose={() => {}} returnPath="/staff/crm/leads" />)).toMatch(/<section[^>]*hidden=""/);
+      expect(renderToStaticMarkup(<HonCornerDock closing onMinimize={() => {}} onClose={() => {}} returnPath="/staff/crm/leads" />)).toContain('data-closing="true"');
       expect(fetcher).not.toHaveBeenCalled();
     } finally { fetcher.mockRestore(); }
   });
