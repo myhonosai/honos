@@ -47,6 +47,27 @@ export class TuitionPaymentController {
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 
+  /** B-TUI-1b (0280): GET .../billing/invoices?status=ALL|DRAFT|ISSUED|PAID|VOID|UNCOLLECTIBLE&after=<invoice id>. */
+  @Get('invoices')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(TuitionReadHumanUiGuard)
+  async invoices(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Query() query: Record<string, unknown>,
+    @Req() request: HonRequest,
+  ) {
+    if (idempotencyKey !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    const keys = Object.keys(query ?? {});
+    if (keys.some(key => !['status', 'after'].includes(key)) || Object.values(query ?? {}).some(value => typeof value !== 'string')) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED' });
+    }
+    const context = await this.context(request, organizationId, schoolId, READ, '');
+    const data = await this.tuition.invoices(context, { status: query.status ?? 'ALL', ...(query.after === undefined ? {} : { after: query.after }) });
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
   @Get('invoices/:invoiceId/payments')
   @Header('Cache-Control', 'private, no-store')
   @UseGuards(TuitionReadHumanUiGuard)

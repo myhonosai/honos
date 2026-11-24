@@ -134,7 +134,7 @@ export async function submitInvoiceCommand(command: PreparedInvoiceCommand): Pro
     throw new InvoiceUncertainError('The exact invoice command is still processing. A retry is a separate human action.');
   }
   if ([400, 404, 409, 413, 415, 422].includes(response.status)) {
-    throw new InvoiceRejectedError('Invoice command rejected or conflicted. Invalid receipt and retry facts were cleared. Review the inputs and start a new explicit draft attempt; no historic issue is available.');
+    throw new InvoiceRejectedError('Invoice command rejected or conflicted. Invalid receipt and retry facts were cleared. Review the inputs and start a new explicit draft attempt, or issue an earlier draft from the school invoice list.');
   }
   try {
     if (!response.ok || (command.operation === 'CREATE' ? ![200, 201].includes(response.status) : response.status !== 200)) invalid();

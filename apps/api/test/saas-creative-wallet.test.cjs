@@ -197,7 +197,7 @@ test('CW1 review refusals: S4 pause, access and school state refuse with stable 
   await assert.rejects(pending.readWallets('verified-human'), e => e.getStatus() === 409 && e.getResponse().code === 'SAAS_CREATIVE_OUTCOME_PENDING');
 });
 
-test('0275 trial lot: a TRIAL lot expires with the trial; byKind lists TRIAL after included credits only when the school has one', () => {
+test('0663 trial lot: a TRIAL lot expires with the trial; byKind lists TRIAL after included credits only when the school has one', () => {
   const trialLot = lot({ kind:'TRIAL', credits:1500, window:null, expiresAt:E, availableCredits:1200, heldCredits:100, consumedCredits:200 });
   const byKind = ['INCLUDED_MONTHLY','TRIAL','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'].map((kind) => ({ kind, grantedCredits:kind === 'TRIAL' ? 1500 : 0,
     availableCredits:kind === 'TRIAL' ? 1200 : 0, heldCredits:kind === 'TRIAL' ? 100 : 0, consumedCredits:kind === 'TRIAL' ? 200 : 0, expiredCredits:0, debitedCredits:0 }));

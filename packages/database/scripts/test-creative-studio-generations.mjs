@@ -29,7 +29,8 @@ const admin=new pg.Client(targets.owner);
 const ownerPool=new pg.Pool({...targets.owner,max:8});
 const creativeTables=['creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
-const optionalCreativeTables=['saas_creative_cost_events'];
+// creative_avatars (0276) and creative_avatar_videos (0277) reference generations: delete them first when present.
+const optionalCreativeTables=['saas_creative_cost_events','creative_avatars','creative_avatar_videos'];
 const saasTables=['saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions',
@@ -332,7 +333,7 @@ try{
   await assert.rejects(admin.query("UPDATE hon.creative_generations SET prompt='changed' WHERE id=$1",[g.generationId]),e=>e.code==='42501');
   await assert.rejects(admin.query('DELETE FROM hon.creative_generations WHERE id=$1',[g.generationId]),e=>e.code==='42501');
   await assert.rejects(admin.query("UPDATE hon.creative_generation_assets SET width=1 WHERE generation_id=$1",[g.generationId]),e=>/IMMUTABLE|42501/.test(e.code+e.message));
-  await assert.rejects(admin.query("INSERT INTO hon.creative_generation_assets(generation_id,school_id,ordinal,media_type,width,height,origin,provider_asset_reference,created_at) VALUES($1,$2,3,'image/png',1,1,'PROVIDER','x',now())",[g.generationId,S.A1]),e=>e.code==='23514','only SYNTHETIC results in CS1');
+  await assert.rejects(admin.query("INSERT INTO hon.creative_generation_assets(generation_id,school_id,ordinal,media_type,width,height,origin,provider_asset_reference,created_at) VALUES($1,$2,3,'image/png',1,1,'REAL','x',now())",[g.generationId,S.A1]),e=>e.code==='23514','only SYNTHETIC or PROVIDER (0354) results in CS1');
  });
 
  // ---------- P2-162-1 (Manus): authority is final for the generation write, not only for the CW1 reserve ----------
@@ -383,6 +384,25 @@ try{
   const out=await duringGenerationWriteWait(()=>gen('B'),async()=>{});
   assert.equal(out.ok,true,String(out.e?.stack??out.e));
   assert.deepEqual([out.v.generation.status,synthetic.calls.length],['SUCCEEDED',calls+1]);
+ });
+ await check('G12','0637 cost basis (review [22]): the synthetic estimate is recorded as an estimate, never as an actual provider cost; a pre-0637 caller keeps no reference; a cost without a valid basis or a basis without a cost is refused; the HQ expense splits out the estimate',async()=>{
+  synthetic.behaviour='SUCCEED';const ok=(await gen('A1')).generation;
+  assert.equal((await res(ok.generationId)).cost_reference,'hon:cost-basis:estimate');
+  synthetic.behaviour='REJECT_WITH_COST';const failed=(await gen('A1')).generation;
+  assert.equal((await res(failed.generationId)).cost_reference,'hon:cost-basis:estimate');
+  synthetic.behaviour='PRE_SEND';const unsent=(await gen('A1')).generation;synthetic.behaviour='SUCCEED';
+  assert.equal((await res(unsent.generationId)).cost_reference,null);
+  const legacy=(await createOnly('A1')).generation;await record('ownerA',legacy.generationId,success(1));
+  assert.equal((await res(legacy.generationId)).cost_reference,null,'a caller without a basis is accepted unchanged');
+  for(const bad of [{...success(1),providerCostBasis:'GUESS'},{...success(1),providerCostBasis:null},{...notSent,providerCostBasis:'HON_ESTIMATE'}]){
+   const open=(await createOnly('A1')).generation;await deny(record('ownerA',open.generationId,bad),400,'INVALID_SAAS_INPUT');await record('ownerA',open.generationId,notSent);}
+  const reported=(await createOnly('A1')).generation;await record('ownerA',reported.generationId,{...success(1),providerCostBasis:'PROVIDER_REPORTED'});
+  assert.equal((await res(reported.generationId)).cost_reference,'hon:cost-basis:provider-reported');
+  const e=(await row('SELECT hon.saas_creative_expense_json($1) e',[S.A1])).e;
+  const sums=await row(`SELECT coalesce(sum(provider_cost_microunits),0)::bigint t,coalesce(sum(provider_cost_microunits) FILTER (WHERE cost_reference IS NOT NULL AND cost_reference<>'hon:cost-basis:estimate'),0)::bigint evidence
+    FROM hon.saas_creative_reservations WHERE school_id=$1 AND cost_status='RECORDED'`,[S.A1]);
+  assert.ok(Number(sums.evidence)>0);
+  assert.deepEqual([e.actualProviderCostMicrounits,e.estimatedProviderCostMicrounits],[Number(sums.t),Number(sums.t)-Number(sums.evidence)]);
  });
  await setAccessProgram(false);programTouched=false;
 }finally{

@@ -5,12 +5,13 @@ import {journeyCatalog,journeyText} from '../src/components/crm-journey/catalog'
 import {CrmJourneyLink} from '../src/components/crm-journey/entry';
 import {SchoolOperationsNavigation} from '../src/components/school-operations-navigation';
 import {scope,row,identity,envelope,closeReceipt,appointment,queue,id} from './crm-journey-fixtures';
-const h=vi.hoisted(()=>({values:[] as any[],cursor:0,effects:[] as (()=>void)[],language:'en'}));
+const h=vi.hoisted(()=>({values:[] as any[],cursor:0,effects:[] as (()=>void)[],language:'en',shell:null as null|{organizationId:string;schoolId:string}}));
 vi.mock('react',async()=>{const r=await vi.importActual<typeof import('react')>('react');return {...r,
  useState:(initial:unknown)=>{const i=h.cursor++;if(!(i in h.values))h.values[i]=initial;return [h.values[i],(v:any)=>{h.values[i]=typeof v==='function'?v(h.values[i]):v;}];},
  useRef:(initial:unknown)=>{const i=h.cursor++;if(!(i in h.values))h.values[i]={current:initial};return h.values[i];},
  useEffect:(effect:()=>unknown)=>{const i=h.cursor++;if(!(i in h.values)){h.values[i]={};h.effects.push(()=>{h.values[i].cleanup=effect();});}},
 };});
+vi.mock('../src/components/school-shell/page-school',()=>({useShellSchool:()=>h.shell}));
 vi.mock('../src/components/localization/provider',()=>({useLocale:()=>({preferences:{language:h.language},date:(v:string)=>v,number:(v:number)=>String(v)})}));
 type El=ReactElement<Record<string,any>>;
 const nodes=(v:unknown):El[]=>Array.isArray(v)?v.flatMap(nodes):React.isValidElement(v)?[v as El,...nodes((v as El).props.children)]:[];
@@ -23,7 +24,7 @@ const change=(test:string,value:string)=>el(test).props.onChange({target:{value}
 const settle=async()=>{for(let i=0;i<120;i++)await Promise.resolve();};
 const hidden=()=>nodes(render()).some(e=>e.props.hidden===true&&e.props.inert===true);
 function cleanup(){for(const v of h.values)v?.cleanup?.();}
-beforeEach(()=>{clock.reader=async()=>({state:'UNAVAILABLE'});h.values=[];h.cursor=0;h.effects=[];h.language='en';vi.stubGlobal('window',new EventTarget());vi.stubGlobal('document',Object.assign(new EventTarget(),{visibilityState:'visible'}));});
+beforeEach(()=>{clock.reader=async()=>({state:'UNAVAILABLE'});h.shell=null;h.values=[];h.cursor=0;h.effects=[];h.language='en';vi.stubGlobal('window',new EventTarget());vi.stubGlobal('document',Object.assign(new EventTarget(),{visibilityState:'visible'}));});
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
 async function loaded(){const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row])).mockResolvedValueOnce(identity());click('load');await settle();expect(text(render())).toContain('Private');return f;}
 function prepareClose(){click('step-close');el('confirm').props.onChange({target:{checked:true}});return nodes(render()).find(e=>e.type==='form')!.props.onSubmit;}
@@ -299,4 +300,21 @@ it('a conflicting exact retry retains its key and permits another protected reco
 });
 it.each(['en','ko','es'])('%s announces saved-trial verification as a read, never as a command receipt',async language=>{
  h.language=language;const f=await loaded();click('step-trial');readTrialResponses(f);click('read-trials');await settle();expect(text(el('command-status'))).toBe(journeyText(language,'trialReadComplete'));expect(el('receipt')).toBeUndefined();window.dispatchEvent(new Event('blur'));expect(text(el('command-status'))).toBe('');
+});
+it('inside the school shell opens on the signed-in school with no school box, IDs or verification wording',async()=>{
+ h.shell={organizationId:scope.organizationId,schoolId:scope.schoolId};
+ const f=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row])).mockResolvedValueOnce(identity());
+ render();await settle();
+ expect(f.mock.calls[1]?.[0]).toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/crm/leads?limit=50`);
+ const page=text(render());expect(page).toContain(journeyCatalog.en.yourLeads);expect(page).toContain('Private');
+ for(const word of [journeyCatalog.en.school,journeyCatalog.en.currentSchool,journeyCatalog.en.knownSchool,journeyCatalog.en.organization,journeyCatalog.en.schoolId,'Verifying','Known school'])expect(page).not.toContain(word);
+ expect(el('current-school')).toBeUndefined();expect(el('organization')).toBeUndefined();expect(el('load').props.children).toBe(journeyCatalog.en.refreshList);
+ f.mockResolvedValueOnce(identity()).mockResolvedValueOnce(envelope([row])).mockResolvedValueOnce(identity());click('load');await settle();expect(f).toHaveBeenCalledTimes(6);
+});
+it('outside the shell still offers the school box as the only way in',()=>{const page=text(render());expect(page).toContain(journeyCatalog.en.school);expect(el('current-school')).toBeDefined();expect(el('organization')).toBeDefined();});
+it('starts at the trial step when opened from Book trial, and at the lead step otherwise',()=>{
+ const current=(initialStep?:'trial')=>{h.values=[];h.cursor=0;const tree=CrmJourney({sessionSubject:'staff:synthetic',initialScope:scope,initialLeadId:row.id,...(initialStep?{initialStep}:{}),clockReader:(s,signal)=>clock.reader(s,signal)});h.effects.splice(0);
+  return nodes(tree).find(e=>e.props['aria-current']==='step')!.props['data-testid'];};
+ expect(current('trial')).toBe('step-trial');
+ expect(current()).toBe('step-lead');
 });

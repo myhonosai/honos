@@ -31,3 +31,13 @@
 .page :is(button,input,select,textarea,a,summary):focus-visible, .picker :is(button,input,select,a,summary):focus-visible { outline: 3px solid #0085b0; outline-offset: 3px; }
 .page small, .picker small { font-weight: 400; line-height: 1.6; }
 @media(max-width:640px) { .page { padding: 22px 14px 65px; } .panel,.card,.review,.intro,.picker { padding: 18px; } .formGrid,.terms dl { grid-template-columns: 1fr; } .actions { align-items: stretch; } .actions button { flex: 1 1 100%; } }
+.optionsBox { margin-block: 18px; padding: 18px; border: 1px solid #c2dce9; background: #f4f9fc; border-radius: 12px; }
+.optionsBox h3 { margin: 0; }
+.optionsBox p { margin: 4px 0 0; }
+.optionsHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.page fieldset.option { margin-top: 14px; padding: 14px; border: 1px solid #cddde8; background: #fff; border-radius: 10px; }
+.optionList { padding-left: 20px; }
+.optionList li { margin-block: 6px; line-height: 1.5; }
+.options { list-style: none; padding: 0; margin: 12px 0; }
+.options li { padding: 8px 0; border-top: 1px solid #e2ebf1; line-height: 1.5; }
+.features { padding-left: 18px; color: #3c566b; }

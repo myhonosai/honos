@@ -1,6 +1,6 @@
 import {
   AI_CAPABILITIES, AI_CONNECTION_STATES, AI_MODALITIES, AI_PROVIDER_IDS, HON_TIERS,
-  AI_PRIVACY_CONTROLS, AI_TASK_TIMEOUT_CATEGORIES, AI_TASK_RETRY_CATEGORIES, HON_AI_TEAM_AGENT_KEYS, AI_MODEL_EVALUATION_TASK_CATEGORIES,
+  AI_PRIVACY_CONTROLS, AI_TASK_TIMEOUT_CATEGORIES, AI_TASK_RETRY_CATEGORIES, AI_TASK_PROFILE_AGENT_KEYS, AI_MODEL_EVALUATION_TASK_CATEGORIES,
   type AiCatalogEntryWrite, type AiControlPlaneKind, type AiProviderConnectionWrite, type AiRoutingPolicyWrite, type AiTaskProfileWrite,
 } from '@hon/contracts';
 
@@ -112,7 +112,7 @@ export function validateAiTaskProfileWrite(input: unknown): AiTaskProfileWrite {
   if (new Set(ids).size !== ids.length || ids.length > 8) throw new Error('VALIDATION_FAILED');
   return {
     profileId: aiConfigUuid(object.profileId), routingPolicyId: aiConfigUuid(object.routingPolicyId),
-    agentKey: aiConfigEnum(object.agentKey, HON_AI_TEAM_AGENT_KEYS), taskCategory: aiConfigEnum(object.taskCategory, AI_MODEL_EVALUATION_TASK_CATEGORIES),
+    agentKey: aiConfigEnum(object.agentKey, AI_TASK_PROFILE_AGENT_KEYS), taskCategory: aiConfigEnum(object.taskCategory, AI_MODEL_EVALUATION_TASK_CATEGORIES),
     costUnit: aiConfigEnum(object.costUnit, AI_COST_UNITS), active: boolean(object.active), maxCostMicros: aiConfigInteger(object.maxCostMicros),
     defaultCatalogId, fallbackCatalogIds, advancedCatalogId,
     requiredCapabilities: list(object.requiredCapabilities, AI_CAPABILITIES), requiredModalities: list(object.requiredModalities, AI_MODALITIES),

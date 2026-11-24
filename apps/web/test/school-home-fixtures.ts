@@ -1,4 +1,4 @@
-import type { AiTeamReadiness, CurrentSchoolClassSession, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
+import type { AiTeamReadiness, HonConversationReadiness, CurrentSchoolClassSession, HumanWorkQueueItem, LeadListItem, OperationalSnapshot, SchoolCommandCenterSnapshot } from '@hon/contracts';
 import type { HomeSources } from '../src/components/home/model';
 
 // Synthetic values only; no real school, family or student data.
@@ -26,7 +26,7 @@ export const operations = (): OperationalSnapshot => ({
   paymentAttempts: { inRangeByState: { PENDING: 0, PROCESSING: 0, SUCCEEDED: 30, FAILED: 1, REQUIRES_ACTION: 0, UNKNOWN: 0, REFUNDED: 0 } },
 });
 
-const agent = (agentKey: 'marcus' | 'kai' | 'chad' | 'hon', agentName: string, credits: number, over: Partial<AiTeamReadiness['agents'][number]> = {}) => ({
+const agent = (agentKey: AiTeamReadiness['agents'][number]['agentKey'], agentName: string, credits: number, over: Partial<AiTeamReadiness['agents'][number]> = {}) => ({
   agentKey, agent: agentName, authorized: true, spendDecision: 'ALLOWED', route: 'CONFIGURED' as const, requestCredits: credits,
   providerRuntime: 'CONFIGURATION_REQUIRED' as const, available: false, blockedBy: 'PROVIDER_RUNTIME_NOT_CONFIGURED', ...over });
 export const readiness = (agents?: AiTeamReadiness['agents']): AiTeamReadiness => ({
@@ -54,7 +54,12 @@ export const work = (): HumanWorkQueueItem[] => [
   { title: 'Order belts', workItemId: 'w2', version: 1, status: 'READY', priority: 'LOW', dueAt: null, assigneeId: null },
 ];
 
+export const honReadiness = (over: Partial<HonConversationReadiness> = {}): HonConversationReadiness => ({
+  contract: true, providerRoute: true, entitlement: true, authorization: true, availableAgentKeys: [], honReply: false, businessPerformance: false,
+  availableAnalystKeys: [], asOf: '2026-11-06T09:00:00.000Z', ...over });
+
 export const ready = (): HomeSources => ({
   command: { state: 'READY', value: command() }, operations: { state: 'READY', value: operations() }, readiness: { state: 'READY', value: readiness() },
   leads: { state: 'READY', value: leads() }, sessions: { state: 'READY', value: sessions() }, work: { state: 'READY', value: work() },
+  hon: { state: 'READY', value: honReadiness() },
 });

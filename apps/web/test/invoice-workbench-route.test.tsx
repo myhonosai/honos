@@ -5,7 +5,7 @@ const session = vi.hoisted(() => ({ require: vi.fn<() => Promise<{ externalSubje
 vi.mock('../src/server/require-web-session', () => ({ requireVerifiedWebSession: session.require }));
 import StaffLayout from '../src/app/staff/layout';
 import StaffInvoicesPage, { dynamic, metadata } from '../src/app/staff/billing/invoices/page';
-import { InvoiceWorkbenchEntry } from '../src/components/invoice-workbench-entry';
+import { SimpleInvoicesEntry } from '../src/components/simple-invoice/simple-invoices-entry';
 afterEach(() => vi.restoreAllMocks());
 describe('protected dynamic human invoice route', () => {
   it('cannot render a staff child without the verified signed-session layout', async () => {
@@ -16,7 +16,7 @@ describe('protected dynamic human invoice route', () => {
   });
   it('is dynamic/noindex, starts with no selectors or prefill and allocates no transport/key', () => {
     const fetcher = vi.spyOn(globalThis, 'fetch'); const allocate = vi.spyOn(crypto, 'randomUUID');
-    const page = StaffInvoicesPage(); expect(page.type).toBe(InvoiceWorkbenchEntry); expect(page.props).toEqual({});
+    const page = StaffInvoicesPage(); expect(page.type).toBe(SimpleInvoicesEntry); expect(page.props).toEqual({});
     expect(dynamic).toBe('force-dynamic'); expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(fetcher).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
     expect(readFileSync('src/app/staff/billing/invoices/page.tsx', 'utf8')).not.toMatch(/searchParams|initialScope|organizationId|schoolId|fetch\(|load[A-Z]|submitInvoiceCommand|prepareInvoice/);
@@ -24,7 +24,7 @@ describe('protected dynamic human invoice route', () => {
   it('declares only the exact new page once and no read/detail/payer/invoice-ID route', () => {
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8'));
     expect(Object.keys(manifest)).toEqual(['routes']);
-    expect(manifest.routes.filter((route: { path: string }) => route.path.startsWith('/staff/billing/invoices'))).toEqual([{ path: '/staff/billing/invoices', title: 'HON | Human Invoice Workbench' }]);
+    expect(manifest.routes.filter((route: { path: string }) => route.path.startsWith('/staff/billing/invoices'))).toEqual([{ path: '/staff/billing/invoices', title: 'HON | Invoices' }]);
     expect(new Set(manifest.routes.map((route: { path: string }) => route.path)).size).toBe(manifest.routes.length);
   });
 });

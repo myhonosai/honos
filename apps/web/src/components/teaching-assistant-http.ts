@@ -1,12 +1,12 @@
-import { validateTeachingAssistantRequest, validateTeachingDraft, type TeachingInvocationView } from '@hon/contracts';
+import { validateTeachingAssistantRequest, validateTeachingCurriculumOptions, validateTeachingDraft, type TeachingCurriculumOption, type TeachingInvocationView } from '@hon/contracts';
 const base = '/api/v1/staff/teaching-assistant';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export class TeachingAssistantUiError extends Error { constructor(message: string, readonly status: number) { super(message); } }
 function endpoint(path: string) {
   const url = new URL(path, 'http://hon.invalid');
   const parts = url.pathname.slice(base.length).split('/').filter(Boolean);
-  const allowed = url.pathname === base || url.pathname === `${base}/mine` || (parts.length === 1 && UUID.test(parts[0]!)) || (parts.length === 2 && UUID.test(parts[0]!) && ['retry', 'save-approved'].includes(parts[1]!));
-  if (!path.startsWith(base) || url.origin !== 'http://hon.invalid' || url.search || url.hash || !allowed) throw new Error('Only fixed same-origin Claire endpoints are allowed.');
+  const allowed = url.pathname === base || url.pathname === `${base}/mine` || url.pathname === `${base}/curricula` || (parts.length === 1 && UUID.test(parts[0]!)) || (parts.length === 2 && UUID.test(parts[0]!) && ['retry', 'save-approved'].includes(parts[1]!));
+  if (!path.startsWith(base) || url.origin !== 'http://hon.invalid' || url.search || url.hash || !allowed) throw new Error('Only fixed same-origin teaching assistant endpoints are allowed.');
   return path;
 }
 export function verifyTeachingInvocation(value: unknown, curriculumId?: string, invocationId?: string): TeachingInvocationView {
@@ -28,3 +28,8 @@ export async function teachingAssistantRequest(path: string, body?: unknown, key
   return payload.data;
 }
 export function normalizedTeachingRequest(curriculumId: string, brief: string) { return validateTeachingAssistantRequest(brief.trim() ? { curriculumId, brief: brief.trim() } : { curriculumId }); }
+
+/** The published curricula Kai accepts at the signed-in staff member's school (the server resolves the school). */
+export async function loadTeachingCurricula(): Promise<TeachingCurriculumOption[]> {
+  return validateTeachingCurriculumOptions(await teachingAssistantRequest(`${base}/curricula`)).items;
+}

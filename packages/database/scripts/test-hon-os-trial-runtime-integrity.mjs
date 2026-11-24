@@ -62,7 +62,7 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('hon_os_trial_open','hon_os_trial_live','hon_os_trial_json','hon_os_trial_campaign_offer','start_hon_os_trial','read_hon_os_trial','guard_hon_os_trial_checkout','ai_spend_allowed','ai_trial_funding_available','ai_org_ceiling')");
- assert.equal(fns.length,10);
+ assert.equal(fns.length,11); // 0288 adds the school-explicit ai_spend_allowed(org,school,at,class) overload (also internal, SECURITY DEFINER)
  for(const f of fns){const entry=['start_hon_os_trial','read_hon_os_trial'].includes(f.proname);
   assert.equal(f.prosecdef,entry||f.proname==='ai_spend_allowed',f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
  assert.equal((await q('SELECT status FROM hon.hon_os_trial_program'))[0].status,'CLOSED');
@@ -70,8 +70,8 @@ try{
  await assert.rejects(()=>q("UPDATE hon.hon_os_trial_program SET status='LIVE'"),e=>e.code==='23514');
  await assert.rejects(()=>q('DELETE FROM hon.hon_os_trial_program'),e=>/SIGNUP_PROGRAM_IMMUTABLE/.test(e.message));
  assert.equal((await q('SELECT hon.ai_trial_funding_available($1,clock_timestamp(),$2) f',[K(),'AGENT_INFERENCE']))[0].f,false);
- assert.equal((await q('SELECT hon.ai_org_ceiling($1,clock_timestamp()) c',[K()]))[0].c,12000);
- pass('forced deny-all RLS on two new tables; runtime executes exactly two entry points; trial program seeded CLOSED with no LIVE value; 0187 program stays INACTIVE; no trial: funding hook false and the interim 12000 ceiling unchanged');
+ assert.equal((await q('SELECT hon.ai_org_ceiling($1,clock_timestamp()) c',[K()]))[0].c,2147483647); // 0310: no organization budget without a trial
+ pass('forced deny-all RLS on two new tables; runtime executes exactly two entry points; trial program seeded CLOSED with no LIVE value; 0187 program stays INACTIVE; no trial: funding hook false and no organization agent budget (0310)');
 
  // HQ owner publishes one PUBLIC 14-day campaign (capacity 2) and one PRIVATE_INVITATION campaign under a new approval.
  const hq={id:K(),user:K(),subject:'trial-hq-'+K()};
@@ -94,10 +94,16 @@ try{
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  const excluded=new Set([...tables,'users','principals','organizations','schools','roles','role_permissions','principal_role_grants','hon_os_school_registrations','hon_os_signup_program','hon_os_trial_program',
   'hq_operator_grants','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_requests','saas_audit','saas_outbox',
-  // 0275: a trial grants its own creative lot (wallet, lot, ledger GRANT, grant snapshot); checked by count at the end.
+  // 0663: a trial grants its own creative lot (wallet, lot, ledger GRANT, grant snapshot); checked by count at the end.
   'saas_creative_wallets','saas_creative_lots','saas_creative_ledger','hon_os_trial_creative_grants']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
  const snapshot=async()=>{const out={};for(const t of others){assert.match(t,/^[a-z_0-9]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};
+ // Earlier proofs on this shared fixture register schools too, which can use up the global hourly signup limit before this
+ // proof's own registrations. Give it signup headroom with a fixture-only limit version (trial limits unchanged; 0273 below still applies).
+ {const l=(await q('SELECT version v,signups_per_hour sh,signups_per_day sd,trials_per_hour h,trials_per_day d FROM hon.hon_os_admission_limit_versions ORDER BY version DESC LIMIT 1'))[0];
+  const used=(await q("SELECT count(*) FILTER (WHERE registered_at>clock_timestamp()-interval '1 hour') hr,count(*) FILTER (WHERE registered_at>clock_timestamp()-interval '1 day') dy FROM hon.hon_os_school_registrations"))[0];
+  const sh=Math.max(l.sh,Number(used.hr)+20),sd=Math.max(l.sd,Number(used.dy)+20,sh);
+  if(sh>l.sh||sd>l.sd)await q('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day) VALUES($1,$2,$3,$4,$5)',[l.v+1,sh,sd,l.h,l.d]);}
  const baseline=await snapshot(),guarded=await counts();
  await setPrograms('TEST_MODE');
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;
@@ -147,9 +153,17 @@ try{
  assert.equal(row.program_status,'TEST_MODE');assert.equal(row.prior_entitlement.status,'SUSPENDED');assert.equal(row.granted_entitlement_version,prior.version+1);assert.equal(row.terms_reference,'HON_OS_TRIAL_SYNTHETIC_TERMS');assert.deepEqual(row.ai_budget,budget);
  assert(await gated(ana.externalSubject)>0,'the trial school can use entitlement-gated school features');
  assert.notEqual((await q('SELECT hon.school_staff_manager($1,$2) m',[ana.externalSubject,ana.reg.schoolId]))[0].m,null);
- // Agent AI is allowed under the HQ-set credit; Creative Studio media under the trial's own creative grant (0275).
+ // Agent AI is allowed under the HQ-set credit; Creative Studio media under the trial's own creative grant (0663).
  assert.equal(await ai(ana.reg.organizationId),null);assert.equal(await ai(ana.reg.organizationId,'clock_timestamp()','CREATIVE_MEDIA'),null);
  assert.equal(await ai(ben.reg.organizationId),'AI_ACCESS_NOT_PAID');
+ // 0288 (owner 2026-11-12): while the trial owns access the school's internal AI cost ceiling defaults to $15; a school
+ // without a live trial has no default ceiling (paying schools' conversations are not capped). HQ sees which applies.
+ {const list=(await q('SELECT hon.read_ai_school_cost_limits_from_hq($1) r',[hq.subject]))[0].r;
+  assert.equal(list.trialDefaultCeilingMicros,15000000);assert.equal('defaultCeilingMicros' in list,false);
+  const of=id=>list.schools.find(x=>x.schoolId===id);
+  assert.deepEqual([of(ana.reg.schoolId).trial,of(ana.reg.schoolId).ceilingMicros,of(ana.reg.schoolId).defaultCeiling],[true,15000000,true]);
+  assert.deepEqual([of(ben.reg.schoolId).trial,of(ben.reg.schoolId).ceilingMicros,of(ben.reg.schoolId).level],[false,null,'NO_CEILING']);
+  assert.equal((await q('SELECT hon.ai_school_default_ceiling_for($1,clock_timestamp()+interval \'15 days\') n',[ana.reg.organizationId]))[0].n,null,'after the trial window no default applies');}
  // Credits expire after creditExpiryDays (7) while the trial itself runs 14; access ends by the clock at endsAt.
  const startsAt="(SELECT starts_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)",endsAt="(SELECT ends_at FROM hon.hon_os_trial_enrollments WHERE organization_id=$1)";
  assert.equal(await ai(ana.reg.organizationId,startsAt+"+interval '7 days'-interval '1 millisecond'"),null);
@@ -158,7 +172,7 @@ try{
  assert.deepEqual((await q(`SELECT hon.hon_os_trial_live($1,${endsAt}) a,hon.hon_os_trial_live($1,${endsAt}-interval '1 millisecond') b`,[ana.reg.organizationId]))[0],{a:false,b:true});
  pass('the trial sets the entitlement to COMPLETE ACTIVE until exactly start + 14 days (gated features open, access ends by the clock); no access state, subscription, checkout, allowance or exception; agent AI allowed under the HQ-set credit until it expires on day 7, Creative Studio media under its own trial grant until the trial ends');
 
- // 0275. The trial's own Creative Studio credits: one TRIAL lot per trial, spent through the real wallet reservation path, stopped by credits and by $15 of real cost.
+ // 0663. The trial's own Creative Studio credits: one TRIAL lot per trial, spent through the real wallet reservation path, stopped by credits and by $15 of real cost.
  {const org=ana.reg.organizationId,school=ana.reg.schoolId,tr=(await q('SELECT * FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[org]))[0];
   const g=(await q('SELECT * FROM hon.hon_os_trial_creative_grants WHERE enrollment_id=$1',[tr.id]))[0];
   assert.deepEqual([g.organization_id,g.school_id,g.credits,g.cost_cap_minor,+g.starts_at,+g.ends_at],[org,school,1500,1500,+tr.starts_at,+tr.ends_at]);
@@ -202,7 +216,7 @@ try{
    assert.equal((await admin.query('SELECT hon.saas_creative_eligibility($1,t.ends_at) e FROM hon.hon_os_trial_enrollments t WHERE t.id=$2',[school,tr.id])).rows[0].e.reason,'PAID_ACCESS_REQUIRED');
   }finally{await admin.query('ROLLBACK');}
   assert.equal((await q('SELECT count(*) n FROM hon.saas_creative_reservations WHERE school_id=$1',[school]))[0].n,'0','the spending fixture rolled back');}
- pass('0275: each trial gets its own 1,500-credit TRIAL creative lot ending with the trial (no lot without a trial); the real reservation path spends it (images, avatars), never past the credits, never once $15 of real creative cost is recorded, never after the trial; no included monthly window; agent AI unaffected');
+ pass('0663: each trial gets its own 1,500-credit TRIAL creative lot ending with the trial (no lot without a trial); the real reservation path spends it (images, avatars), never past the credits, never once $15 of real creative cost is recorded, never after the trial; no included monthly window; agent AI unaffected');
 
  // 5. Replay, key reuse, second trial.
  assert.deepEqual(ok(await send('account/trial',{identity:ana,body:form(ana),key})),trial);
@@ -251,10 +265,10 @@ try{
  await admin.query('BEGIN');
  try{
   await spend(ben,0,1000*10000);assert.equal(await room(ana.reg.organizationId),0,'campaign provider cost reached its cap (another school spent it): no school in the campaign may commit more');
-  assert.equal(await room(eli.reg.organizationId),12000-Number((await q('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) u',[eli.reg.organizationId]))[0].u),'a school with no trial keeps the interim ceiling');
+  assert.equal(await room(eli.reg.organizationId),2147483647-Number((await q('SELECT hon.ai_org_committed_credits($1,clock_timestamp()) u',[eli.reg.organizationId]))[0].u),'a school with no trial has no organization budget (0310)');
  }finally{await admin.query('ROLLBACK');}
  assert.equal(ok(await send('account/trial',{identity:ana,method:'GET'})).trial.aiCredits.used,0);
- pass('trial AI credit: per-request cap 10, daily cap 20 resetting each UTC day, 100 credits per school, and the campaign cost cap across schools all bound the ceiling agent prepares enforce; schools without a trial keep 12000');
+ pass('trial AI credit: per-request cap 10, daily cap 20 resetting each UTC day, 100 credits per school, and the campaign cost cap across schools all bound the ceiling agent prepares enforce; schools without a trial have no organization agent budget (0310)');
 
  // 8. No checkout for a trial school until the reviewed conversion slice exists.
  await assert.rejects(()=>q("INSERT INTO hon.saas_checkout_sessions(organization_id) VALUES($1)",[ana.reg.organizationId]),e=>e.message==='TRIAL_CONVERSION_UNAVAILABLE');
@@ -288,10 +302,12 @@ try{
  assert.deepEqual(holdTables(await body('ai_org_open_agent_holds')),holdTables(await body('ai_org_committed_credits')));
  assert.equal(holdTables(await body('ai_org_open_agent_holds')).length,4);
  assert.deepEqual(await q('SELECT * FROM hon.ai_org_open_agent_holds($1)',[ana.reg.organizationId]),[]);
- for(const reader of ['read_ai_school_usage_from_hq','read_ai_team_readiness'])assert.match(await body(reader),/ai_org_display_ceiling/,reader);
+ // 0635 keeps the 0284 readiness body as read_ai_team_readiness_0284 behind a wrapper that only narrows agents.
+ for(const reader of ['read_ai_school_usage_from_hq','read_ai_team_readiness_0284'])assert.match(await body(reader),/ai_org_display_ceiling/,reader);
+ assert.match(await body('read_ai_team_readiness'),/hon\.read_ai_team_readiness_0284\(p_subject\)/);
  const display=async(org,at='clock_timestamp()')=>Number((await q(`SELECT hon.ai_org_display_ceiling($1,${at}) c`,[org]))[0].c);
  assert.equal(await display(ana.reg.organizationId),100,'HQ sees the trial credits left, not the per-request minimum');assert.equal(await room(ana.reg.organizationId),10);
- assert.equal(await display(eli.reg.organizationId),12000);assert.equal(await display(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);
+ assert.equal(await display(eli.reg.organizationId),2147483647);assert.equal(await display(ana.reg.organizationId,startsAt+"+interval '7 days'"),0);
  // A trial that crosses a UTC month boundary, always: evaluated 1 hour into next month, started 6-7 days before it.
  const monthAt="(date_trunc('month',clock_timestamp() AT TIME ZONE 'UTC')+interval '1 month 1 hour') AT TIME ZONE 'UTC'";
  const ahead=Number((await q(`SELECT ceil(extract(epoch from ${monthAt}-interval '7 days'-clock_timestamp())/86400) d`))[0].d);

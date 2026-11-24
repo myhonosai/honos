@@ -67,9 +67,21 @@ test('HON reply runtime records a verified stop at the output limit as truncated
 });
 
 test('HON reply runtime maps rejections to FAILED and every uncertain outcome to UNKNOWN (never resent)', async () => {
-  for (const status of [400, 401, 402, 429]) {
+  for (const status of [400, 401, 402, 403, 422]) {
     await assert.rejects(new OpenRouterHonReplyRuntime(approved, async () => ({ status, ok: false })).generate(input), isErr('FAILED', 'PROVIDER_REJECTED'));
   }
+  // 0336 (RA-1): model not available (404), rate limited (429) and OpenRouter's own 503 body are definite and may fall back once.
+  const body = (status, json) => async () => ({ status, ok: false, text: async () => (typeof json === 'string' ? json : JSON.stringify(json)) });
+  for (const transport of [async () => ({ status: 404, ok: false }), async () => ({ status: 429, ok: false }),
+    body(503, { error: { code: 503, message: 'No available model provider that meets your routing requirements' } })]) {
+    await assert.rejects(new OpenRouterHonReplyRuntime(approved, transport).generate(input), isErr('FAILED', 'PROVIDER_UNAVAILABLE'));
+  }
+  // Any other 503 is not proof that nothing was generated: UNKNOWN, never resent.
+  for (const transport of [async () => ({ status: 503, ok: false }), body(503, '<html>Service Unavailable</html>'), body(503, { error: { code: 502, message: 'x' } }),
+    body(503, { error: { code: 503 } }), body(503, { error: { code: 503, message: 'x' }, choices: [] }), body(503, 'x'.repeat(5000))]) {
+    await assert.rejects(new OpenRouterHonReplyRuntime(approved, transport).generate(input), isErr('UNKNOWN', 'PROVIDER_UNKNOWN'));
+  }
+  for (const status of [502, 504]) await assert.rejects(new OpenRouterHonReplyRuntime(approved, async () => ({ status, ok: false })).generate(input), isErr('UNKNOWN', 'PROVIDER_UNKNOWN'));
   const uncertain = [
     async () => ({ status: 500, ok: false }),
     async () => { throw Error('socket reset'); },
@@ -103,12 +115,16 @@ test('HON prompt keeps the owner identities: Kai teaches, Claire is business per
 
 test('HON reply suggestions are parsed from one closing SUGGEST line into a closed, unique list of at most three delegates', async () => {
   assert.deepEqual(splitHonReplySuggestions('Enrollment is flat.\nSUGGEST: marcus, chad'), { reply: 'Enrollment is flat.', suggestions: ['marcus', 'chad'] });
-  assert.deepEqual(splitHonReplySuggestions('Plan below.\nsuggest:  Kai ,kai, claire, hon, chad, marcus'), { reply: 'Plan below.', suggestions: ['kai', 'chad', 'marcus'] });
+  assert.deepEqual(splitHonReplySuggestions('Plan below.\nsuggest:  Kai ,kai, maya, hon, chad, marcus'), { reply: 'Plan below.', suggestions: ['kai', 'chad', 'marcus'] });
+  assert.deepEqual(splitHonReplySuggestions('Plan below.\nSUGGEST: claire, kai, chad, marcus'), { reply: 'Plan below.', suggestions: ['claire', 'kai', 'chad'] }, 'at most three, in order');
   // The line is always removed, even when it names nothing usable; a SUGGEST line elsewhere is ordinary text.
-  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: claire, lena'), { reply: 'Answer.', suggestions: [] });
+  // K2c: Claire joins the closed set; any other name is dropped.
+  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: claire, lena'), { reply: 'Answer.', suggestions: ['claire'] });
+  assert.deepEqual(splitHonReplySuggestions('Answer.\nSUGGEST: maya, hon'), { reply: 'Answer.', suggestions: [] });
   assert.deepEqual(splitHonReplySuggestions('SUGGEST: kai\nBut more text follows.'), { reply: 'SUGGEST: kai\nBut more text follows.', suggestions: [] });
   assert.deepEqual(splitHonReplySuggestions('Plain answer.'), { reply: 'Plain answer.', suggestions: [] });
-  assert.match(HON_REPLY_SYSTEM_PROMPT, /SUGGEST: marcus, kai/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /SUGGEST: marcus, claire/);
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /naming up to three of marcus, chad, kai and claire/);
   const run = (content, finish = 'stop') => new OpenRouterHonReplyRuntime(approved, async () => ok({ choices: [{ finish_reason: finish, message: { content } }] })).generate(input);
   assert.deepEqual(await run('Try a trial-week campaign.\nSUGGEST: marcus'), { reply: 'Try a trial-week campaign.', inputTokens: 300, outputTokens: 20, providerCostMicrounits: 123, truncated: false, suggestions: ['marcus'], followUps: [], sources: [] });
   // A cut-off answer never carries suggestions (the line may itself be cut off).

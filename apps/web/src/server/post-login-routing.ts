@@ -2,7 +2,7 @@ import 'server-only';
 import { HON_SESSION_COOKIE } from '@hon/auth';
 import { verifyStaffReportingSchools } from '../components/staff-reporting-schools-http';
 
-export type PostLoginDestination = '/hq' | '/staff/entry' | '/auth/access' | '/auth/login';
+export type PostLoginDestination = '/hq' | '/staff/dashboard' | '/staff/entry' | '/auth/access' | '/auth/login';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HQ_ROLES = ['HON_HQ_OWNER', 'HON_HQ_OPERATOR', 'HON_HQ_SUPPORT'];
 
@@ -94,7 +94,8 @@ export async function resolvePostLoginDestination(token: string): Promise<PostLo
     const scope = record(data, ['state', 'organizationId', 'schoolId']);
     if (scope.state !== 'RESOLVED' || typeof scope.organizationId !== 'string' || !UUID.test(scope.organizationId)
       || typeof scope.schoolId !== 'string' || !UUID.test(scope.schoolId)) throw new Error('Unverified school access.');
-    return '/staff/entry';
+    // One verified school: open the school home (HON and the AI team). Several schools still choose on /staff/entry.
+    return '/staff/dashboard';
   } catch {
     // Ambiguity, transport failures and unsupported contracts do not prove absent roles.
     return '/auth/access';

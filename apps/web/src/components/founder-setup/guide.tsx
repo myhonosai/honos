@@ -85,9 +85,9 @@ export function FounderSetup({ plane = 'school' }: { plane?: 'school' | 'hq' }):
       <div className={styles.content}><p className={styles.stageAnnouncement} role="status" aria-live="polite" aria-atomic="true" data-founder-stage-status>{stageAnnounced ? `${t('guide')}: ${number(step + 1)} / ${number(8)} · ${t(STEP_TITLES[step]!)}` : ''}</p><section className={styles.card} aria-labelledby="founder-current-step"><p className={styles.kicker}>{number(step + 1)} / {number(8)} · {t('guide')}</p><h2 id="founder-current-step">{t(STEP_TITLES[step]!)}</h2><p>{t(STEP_BODIES[step]!)}</p>
         {step === 0 && <><h3>{t('resume')}</h3><p>{t('resumeText')}</p></>}
         {step === 1 && <><h3>{t('school')}</h3><p>{facts?.schoolName ?? t('unknown')}</p><p>{t('profileGap')}</p><button type="button" disabled>{t('unsupported')}</button></>}
-        {step === 2 && <><p>{t('staffGap')}</p><a href="/staff/roles">{t('openRoles')} →</a><button type="button" disabled>{t('unsupported')}</button></>}
+        {step === 2 && <><p>{t('staffGap')}</p><div className={styles.links}><a href="/staff/team/invitations">{t('openInvites')} →</a><a href="/staff/family-access">{t('openFamilyAccess')} →</a><a href="/staff/roles">{t('openRoles')} →</a></div></>}
         {step === 3 && <div className={styles.links}><a href="/staff/launch">{t('openLaunch')} →</a><a href="/staff/schedule/sessions">{t('openSchedule')} →</a></div>}
-        {step === 4 && <><p>{t('crmCheck')}</p><div className={styles.links}><a href="/staff/crm/leads">{t('openCrm')} →</a><a href="/staff/billing/membership-plans">{t('openPlans')} →</a><a href="/staff/migration/leads">{t('openImport')} →</a></div></>}
+        {step === 4 && <><p>{t('crmCheck')}</p><div className={styles.links}><a href="/staff/crm/leads">{t('openCrm')} →</a><a href="/staff/billing/membership-plans">{t('openPlans')} →</a><a href="/staff/migration/leads">{t('openImport')} →</a><a href="/staff/migration/students">{t('openStudentImport')} →</a></div></>}
         {step === 5 && <><p>{t('aiIntro')}</p><a href="/staff/hon">{t('openHon')} →</a></>}
         {step === 6 && <><p>{t('reviewNote')}</p><a href="/staff/subscription">{t('openSubscription')} →</a></>}
         {step === 7 && <p>{t('supportNote')}</p>}

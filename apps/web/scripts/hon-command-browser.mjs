@@ -162,6 +162,12 @@ async function honApi(route, path, method, prefix) {
     c.turns.push({ turnId, role: 'HUMAN', text: ask.text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: null, actionRequestId: null, invocationId: null }, replyDetail: null });
     c.turns.push({ turnId, role: 'claire', text, createdAt: iso(0), status: 'COMPLETED', reason: null, references: { workItemId: id(honSeq += 1), actionRequestId: null, invocationId: id(honSeq += 1) }, replyDetail: detail });
     c.turnCount += 1; c.status = 'COMPLETED';
+    if (ask.fromSuggestionTurnId) {
+      // K2c: a confirmed Claire suggestion joins the answer's group; her member status is her answer's.
+      const byConversation = hon.groups.get(c.id) ?? new Map(); hon.groups.set(c.id, byConversation);
+      const g = byConversation.get(ask.fromSuggestionTurnId) ?? { sourceTurnId: ask.fromSuggestionTurnId, members: [] }; byConversation.set(ask.fromSuggestionTurnId, g);
+      g.members.push({ agentKey: 'claire', turnId, status: 'COMPLETED' });
+    }
     const receipt = { turnId, conversationId: c.id, status: 'COMPLETED', reason: null, delegatedAgentKeys: ['claire'], actionRequestIds: [], workItemIds: [c.turns.at(-1).references.workItemId], invocationId: c.turns.at(-1).references.invocationId, reply: text, replyDetail: detail };
     hon.turns.set(headers['idempotency-key'], receipt);
     return json(route, 200, { data: receipt });
@@ -187,7 +193,7 @@ async function honApi(route, path, method, prefix) {
     if (!g || ask.continueTurnId || !['COMPLETED', 'FAILED', 'PARTIAL'].includes(groupStatus(g.members.map((m) => m.status)))) return json(route, 400, { code: 'HON_GROUP_NOT_SUMMARIZABLE' });
   }
   const long = /long/i.test(ask.text);
-  const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : [];
+  const suggest = /saturday/i.test(ask.text) ? ['marcus', 'chad', 'kai'] : /how are we doing/i.test(ask.text) ? (hon.claire ? ['claire', 'marcus'] : ['marcus']) : [];
   const text = ask.summarizeTurnId ? 'Summary: Marcus recorded a Saturday trial post draft that a human approved. Next, share it with parents this week.' : ask.continueTurnId ? 'Second part: book the two trial follow-ups for Tuesday and confirm the testing date with parents.'
     : long ? 'Here is a detailed plan for this week. First, follow up the three new leads from the weekend…' : 'You have 3 new leads in the last 24 hours and 2 trial appointments tomorrow. I suggest following up the leads first.';
   const detail = ask.continueTurnId ? replyDetail('DETAILED', { step: 2, continuesTurnId: ask.continueTurnId }) : replyDetail(ask.replyMode ?? 'STANDARD', long ? { truncated: true, canContinue: true } : { suggestions: suggest });
@@ -214,7 +220,9 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
     { entryId: id(303), lotId: id(300), lotKind: 'INCLUDED_MONTHLY', entryKind: 'RESERVE', credits: 120, reservationId: null, adjustmentId: null, occurredAt: iso(-1) }],
   rates: { rateVersionId: id(310), rateVersion: 1, termsReference: 'synthetic-terms-v1', publishedAt: iso(-200), rates: [
     { operationCode: 'image.standard', mediaKind: 'IMAGE', displayName: 'Standard image', billingUnit: 'IMAGE', creditsPerUnit: 40, maxUnitsPerRequest: 4, rateBasis: 'PROVISIONAL' },
-    { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' }] },
+    { operationCode: 'video.short_clip', mediaKind: 'VIDEO', displayName: 'Short promo video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 60, maxUnitsPerRequest: 15, rateBasis: 'PROVISIONAL' },
+    { operationCode: 'avatar.create', mediaKind: 'IMAGE', displayName: 'AI avatar', billingUnit: 'REQUEST', creditsPerUnit: 100, maxUnitsPerRequest: 1, rateBasis: 'PROVISIONAL' },
+    { operationCode: 'avatar.video', mediaKind: 'VIDEO', displayName: 'AI avatar video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 50, maxUnitsPerRequest: 60, rateBasis: 'PROVISIONAL' }] },
   packages: [['STARTER', 3000, 0, 3000], ['GROWTH', 6000, 1200, 6000], ['CREATOR', 12000, 4800, 12000]].map(([packageCode, base, bonus, price]) => ({ packageCode, packageVersion: 1, baseCredits: base, bonusCredits: bonus, totalCredits: base + bonus, priceMinor: price, currency: 'usd' })),
   agentConversationsDeductCredits: false, paymentsActive: false });
 // Creative Studio generations (CS1, synthetic). provider: NOT_CONNECTED unless a check connects it.
@@ -222,6 +230,22 @@ const creativeWallet = () => ({ schoolId: scope.schoolId, walletVersion: 3, prog
 // 'notConnected' (503 CREATIVE_PROVIDER_NOT_CONNECTED), 'denied' (403), 'transition' (409 SAAS_TRANSITION_NOT_ALLOWED).
 // gate: when set, the next POST waits for it before answering (a create still in flight).
 const creative = { provider: 'NOT_CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null };
+// A1 (0276) avatars: the same provider flag; each avatar carries its avatar.create generation.
+const avatarsFake = { items: [], posts: [], replies: [], byKey: new Map() };
+const creativeAvatar = (body, n) => {
+  const createdAt = iso(n), generation = { generationId: id(760 + n), schoolId: scope.schoolId, operationCode: 'avatar.create', mediaKind: 'IMAGE', units: 1, format: 'PORTRAIT',
+    prompt: body.description, status: 'SUCCEEDED', failureReason: null, reservedCredits: 100, chargedCredits: 100, createdAt, completedAt: createdAt,
+    assets: [{ assetId: id(780 + n), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC' }] };
+  return { avatarId: id(740 + n), schoolId: scope.schoolId, name: body.name, style: body.style, description: body.description, status: 'READY', createdAt, generation };
+};
+// A2 (0277) avatar videos: each video carries its avatar.video generation (per second). replies: 'ok', 'unknown', 'notReady'.
+const videosFake = { items: [], posts: [], replies: [], byKey: new Map() };
+const creativeVideo = (body, n) => {
+  const createdAt = iso(n), generation = { generationId: id(800 + n), schoolId: scope.schoolId, operationCode: 'avatar.video', mediaKind: 'VIDEO', units: body.seconds, format: body.format,
+    prompt: body.script, status: 'SUCCEEDED', failureReason: null, reservedCredits: 50 * body.seconds, chargedCredits: 50 * body.seconds, createdAt, completedAt: createdAt,
+    assets: [{ assetId: id(820 + n), ordinal: 1, mediaType: 'video/mp4', width: 1920, height: 1080, durationSeconds: body.seconds, origin: 'SYNTHETIC' }] };
+  return { videoId: id(840 + n), schoolId: scope.schoolId, avatarId: body.avatarId, script: body.script, seconds: body.seconds, format: body.format, status: 'READY', createdAt, generation };
+};
 const creativeGeneration = (body, n) => ({ generationId: id(700 + n), schoolId: scope.schoolId, operationCode: body.operationCode, mediaKind: 'IMAGE', units: body.units,
   format: body.format, prompt: body.prompt, status: 'SUCCEEDED', failureReason: null, reservedCredits: 40 * body.units, chargedCredits: 40 * body.units,
   createdAt: iso(0), completedAt: iso(0), assets: Array.from({ length: body.units }, (_, i) => ({ assetId: id(720 + n * 10 + i), ordinal: i + 1, mediaType: 'image/png', width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' })) });
@@ -257,7 +281,7 @@ async function api(route) {
   if (path === `${prefix}/billing/memberships`) { const answered = await membershipListApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`${prefix}/crm/leads`)) { const answered = await leadsApiRoute(route, path, method, url, prefix); if (answered !== null) return answered; }
   if (path.startsWith(`/api/v1/schools/${scope.schoolId}/champions/`)) { const answered = await championsApiRoute(route, path, method, url); if (answered !== null) return answered; }
-  if (path.includes('/people')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
+  if (path.includes('/people') || path.includes('/contacts')) { const answered = await peopleApiRoute(route, path, method, url); if (answered !== null) return answered; }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/generations`) {
     if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, generations: creative.items, limit: 50 } });
     const request = route.request();
@@ -283,6 +307,34 @@ async function api(route) {
     }
     creative.items = [g, ...creative.items];
     return json(route, 200, { data: { generation: g, balance: creativeWallet().balance, replayed: false } });
+  }
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/avatars`) {
+    if (method === 'GET') return json(route, 200, { data: { provider: creative.provider, avatars: avatarsFake.items, limit: 50 } });
+    const request = route.request(), idem = request.headers()['idempotency-key'];
+    avatarsFake.posts.push({ key: idem, command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = avatarsFake.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (next === 'limit') return json(route, 422, { code: 'CREATIVE_AVATAR_LIMIT_REACHED' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), prior = avatarsFake.byKey.get(idem);
+    if (prior) return json(route, 200, { data: { avatar: prior, balance: creativeWallet().balance, replayed: true } });
+    const a = creativeAvatar(body, avatarsFake.items.length + 1);
+    avatarsFake.items = [a, ...avatarsFake.items]; avatarsFake.byKey.set(idem, a);
+    return json(route, 200, { data: { avatar: a, balance: creativeWallet().balance, replayed: false } });
+  }
+  if (path === `/api/v1/schools/${scope.schoolId}/creative-studio/avatar-videos`) {
+    if (method === 'GET') return json(route, 200, { data: { videos: videosFake.items, limit: 50 } });
+    const request = route.request(), idem = request.headers()['idempotency-key'];
+    videosFake.posts.push({ key: idem, command: request.headers()['x-hon-human-command'], body: request.postData() });
+    const next = videosFake.replies.shift() ?? 'ok';
+    if (next === 'unknown') return json(route, 503, { code: 'SAAS_UNAVAILABLE' });
+    if (next === 'notReady') return json(route, 422, { code: 'CREATIVE_AVATAR_NOT_READY' });
+    if (creative.provider !== 'CONNECTED') return json(route, 503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const body = JSON.parse(request.postData() ?? '{}'), prior = videosFake.byKey.get(idem);
+    if (prior) return json(route, 200, { data: { video: prior, balance: creativeWallet().balance, replayed: true } });
+    const v = creativeVideo(body, videosFake.items.length + 1);
+    videosFake.items = [v, ...videosFake.items]; videosFake.byKey.set(idem, v);
+    return json(route, 200, { data: { video: v, balance: creativeWallet().balance, replayed: false } });
   }
   if (path === `/api/v1/schools/${scope.schoolId}/creative-credits`) {
     assert.equal(method, 'GET', 'Creative Studio only reads the wallet');
@@ -1104,7 +1156,7 @@ function resetPeople(over = {}) {
     version: 1, updatedAt: iso(-48), student: { birthDate: '2015-04-02', status: 'ACTIVE', version: 1 }, consents: { EMAIL: 'OPTED_IN', SMS: 'NOT_RECORDED' } }],
   [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
     version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
-  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null }, over);
+  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null, cardOn: false }, over);
   // Contact consent records (0217 rule source): one row per recorded channel. puts/replies are the consent commands' own.
   ppl.consents = new Map([[id(301), new Map([['EMAIL', { channel: 'EMAIL', status: 'OPTED_IN', source: 'STAFF', capturedAt: '2026-10-01T16:00:00.000Z', version: 1, updatedAt: '2026-10-01T16:00:00.000Z' }]])],
     [id(302), new Map([['SMS', { channel: 'SMS', status: 'OPTED_OUT', source: 'PARENT', capturedAt: '2026-10-02T16:00:00.000Z', version: 1, updatedAt: '2026-10-02T16:00:00.000Z' }]])]]);
@@ -1144,11 +1196,33 @@ const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents
 async function peopleApiRoute(route, path, method, url) {
   const consent = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people/([0-9a-f-]{36})/communication-consents(?:/([A-Z]+))?$`));
   if (consent) return consentApiRoute(route, method, url, consent[1], consent[2] ?? null);
+  // C1 (0521): the People page lists contacts with segment counts; the synthetic people are students or other contacts.
+  if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts` && method === 'GET') {
+    const q = (url.searchParams.get('query') ?? '').toLowerCase(), segment = url.searchParams.get('segment') ?? 'ALL';
+    const all = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
+      .map((r) => ({ personId: r.personId, version: r.version, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164,
+        segment: r.student ? 'STUDENT' : 'OTHER', planName: null, planCode: null, programName: null, membershipEndsAt: null, membershipState: null, age: null, ranks: [] }));
+    const counts = { ALL: all.length, STUDENT: all.filter((r) => r.segment === 'STUDENT').length, TRIAL: 0, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 };
+    const rows = all.filter((r) => segment === 'ALL' || r.segment === segment);
+    return json(route, 200, { data: { generatedAt: iso(0), segment, counts, rows, hasMore: false, nextCursor: null,
+      options: url.searchParams.get('options') === 'true' ? { ranks: [], programs: [], plans: [], tags: [] } : null }, meta: { requestId: id(900), correlationId: id(900) } });
+  }
   if (path === `/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people` && method === 'GET') {
     const q = (url.searchParams.get('query') ?? '').toLowerCase();
     const items = [...ppl.records.values()].filter((r) => !q || [r.givenName, r.familyName, r.email, r.phoneE164].join(' ').toLowerCase().includes(q))
       .map((r) => ({ id: r.personId, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164, version: r.version, createdAt: iso(-500) }));
     return json(route, 200, { data: items, meta: { requestId: id(900), correlationId: id(900) } });
+  }
+  // C2 (0522) contact card, served only when a check asks for it (cardOn); otherwise the card stays unavailable and the forms inline.
+  const cardRead = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts/([0-9a-f-]{36})$`));
+  if (cardRead && method === 'GET' && ppl.cardOn) {
+    const r = ppl.records.get(cardRead[1]);
+    if (!r) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
+    return json(route, 200, { data: { generatedAt: iso(0),
+      person: { personId: r.personId, version: r.version, givenName: r.givenName, familyName: r.familyName, email: r.email, phoneE164: r.phoneE164, createdAt: iso(-500) },
+      overview: { segment: r.student ? 'STUDENT' : 'OTHER', planName: null, programName: null, membershipEndsAt: null, ranks: [], openLead: false },
+      family: { allowed: false }, appointments: { allowed: false }, tasks: { allowed: false }, membership: { allowed: false }, billing: { allowed: true, open: [], invoices: [] },
+      messages: { allowed: false }, timeline: [] }, meta: { requestId: id(901), correlationId: id(901) } });
   }
   const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
   if (read && method === 'GET') { ppl.recordReads = (ppl.recordReads ?? 0) + 1; const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
@@ -1229,7 +1303,7 @@ async function axe(page, name) {
 // phone width; it is recorded as a pre-existing finding and excluded from this gate.
 /**
  * Horizontal overflow, measured in the page. The document itself must fit the viewport. Only one container may
- * hold content past the edge: the shell's section tabs ([data-shell-tabs]), and only while that nav is itself a
+ * hold content past the edge: the shell's section tabs ([data-shell-tabs]) and group row ([data-shell-groups]), and only while that nav is itself a
  * scroll container inside the viewport and the item is laid out in its normal flow (so the nav clips it).
  * The existing Platform View picker is reported separately as a pre-existing finding; the page-width check in
  * noOverflow excludes only that picker.
@@ -1237,7 +1311,7 @@ async function axe(page, name) {
 function overflowAudit() {
   const width = window.innerWidth;
   const clippedByShellTabs = (e) => {
-    const nav = e.closest('[data-shell-tabs]');
+    const nav = e.closest('[data-shell-tabs], [data-shell-groups]');
     if (!nav || nav === e) return false;
     const style = getComputedStyle(nav), box = nav.getBoundingClientRect();
     if (!['auto', 'scroll', 'hidden', 'clip'].includes(style.overflowX) || box.left < -1 || box.right > width + 1) return false;
@@ -1706,6 +1780,34 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
   });
 }
 
+await check('Ask HON suggestions (K2c): HON suggests Claire; confirming her sends a question, grouped under the answer', async () => {
+  resetHon(true, true);
+  const { ctx, page, ask } = await fullHon({ width: 1440, height: 900 });
+  await askBox(ask).fill('How are we doing this month?');
+  await ask.getByRole('button', { name: 'Send' }).click();
+  await ask.getByRole('button', { name: 'Ask Claire' }).waitFor();
+  assert.ok(await ask.getByText(/She never drafts, sends or changes anything/).first().isVisible());
+  const posts = hon.posts.length; const reads = hon.targets.reads.length;
+  await ask.getByRole('button', { name: 'Ask Claire' }).click();
+  const form = ask.getByRole('form', { name: 'Ask Claire' });
+  assert.equal(await form.getByRole('button', { name: 'Send to Claire' }).isDisabled(), true);
+  assert.equal(hon.targets.reads.length, reads, 'Claire has no target list to read');
+  await form.getByLabel('What should Claire look at?').fill('Why did trial conversion change?');
+  assert.equal(hon.posts.length, posts, 'nothing is sent before Send');
+  await axe(page, 'ask-hon-suggest-claire');
+  await shot(page, 'ask-hon-suggest-claire-confirm');
+  await form.getByRole('button', { name: 'Send to Claire' }).click();
+  await ask.getByText('Specialists you asked').waitFor();
+  assert.deepEqual(lastBody(), { text: 'Why did trial conversion change?', delegation: { agentKey: 'claire' }, fromSuggestionTurnId: sourceTurn() });
+  await ask.getByText(/Recorded facts: trial conversion is 40%/).waitFor();
+  assert.ok(await ask.locator('[data-orchestration="COMPLETED"]').getByText('Claire', { exact: true }).isVisible());
+  assert.equal(await ask.getByRole('button', { name: 'Ask Claire' }).count(), 0, 'Claire is not offered again from this answer');
+  assert.ok(await ask.getByRole('button', { name: 'Ask Marcus' }).isEnabled());
+  await noOverflow(page, 'ask-hon-suggest-claire-grouped');
+  await shot(page, 'ask-hon-suggest-claire-grouped', true);
+  await ctx.close();
+});
+
 await check('Ask HON suggestions: a refused confirmation reopens the form with what was chosen; nothing is retried', async () => {
   const { ctx, ask } = await suggestedAnswer({ width: 1440, height: 900 });
   await ask.getByRole('button', { name: 'Ask Kai' }).click();
@@ -1885,7 +1987,8 @@ for (const [name, viewport, mode_] of [['desktop-1440', { width: 1440, height: 9
     const section = page.locator('section[aria-labelledby="creative-studio-title"]');
     await section.getByTestId('creative-available').waitFor();
     assert.equal(await section.getByTestId('creative-available').innerText(), '11,640');
-    assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+    assert.ok(await section.getByText('Not connected yet', { exact: true }).first().isVisible());
+    assert.ok(await section.getByText('Avatar creation is not connected yet. Nothing can be created here and nothing is charged.').isVisible());
     assert.ok(await section.getByText('Standard image').isVisible());
     assert.ok(await section.getByText('Buying top-ups is not connected yet. No card is charged.').isVisible());
     assert.equal(await section.locator('textarea, input, select, form').count(), 0, 'no inert creation controls');
@@ -2037,13 +2140,79 @@ await check('Creative Studio: a Refresh while a create is in flight still shows 
   creative.provider = 'NOT_CONNECTED'; creative.items = [];
   await ctx.close();
 });
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`Creative Studio avatars ${name}: create an avatar from the Avatars card; a lost answer replays the same request once`, async () => {
+    studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null });
+    Object.assign(avatarsFake, { items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map() });
+    const { ctx, page } = await creativeStudio(viewport);
+    const card = page.locator('article[aria-labelledby="creative-avatars-title"]');
+    await page.locator('article[aria-labelledby="creative-avatars-title"][data-avatar-state="OPEN"]').waitFor();
+    assert.equal(await page.locator('section[aria-labelledby="creative-studio-title"] select option[value="avatar.create"]').count(), 0, 'the generic form never offers avatar.create');
+    await card.getByLabel('Avatar name').fill('Master Kim');
+    await card.getByLabel('Illustrated').check();
+    await card.getByLabel('Describe how your avatar looks').fill('Friendly taekwondo master in a black dobok, warm smile');
+    assert.ok(await card.getByText('Uses 100 credits. You have 11,640 available.').isVisible());
+    await shot(page, `creative-studio-avatar-form-${name}`);
+    await card.getByRole('button', { name: 'Create avatar' }).click();
+    await card.getByText(/We could not confirm whether this request went through/).waitFor();
+    assert.equal(await card.getByLabel('Avatar name').isDisabled(), true, 'locked while the outcome is unknown');
+    await card.getByRole('button', { name: 'Check again' }).click();
+    await card.getByText('Done. The result is listed below.').waitFor();
+    await card.getByText('Master Kim').waitFor();
+    assert.equal(avatarsFake.posts.length, 2);
+    assert.equal(avatarsFake.posts[0].key, avatarsFake.posts[1].key, 'Check again reuses the idempotency key');
+    assert.equal(avatarsFake.posts[0].body, avatarsFake.posts[1].body);
+    assert.equal(avatarsFake.posts[0].command, 'saas-creative-avatar-create');
+    assert.deepEqual(JSON.parse(avatarsFake.posts[0].body), { name: 'Master Kim', style: 'ILLUSTRATED', description: 'Friendly taekwondo master in a black dobok, warm smile' });
+    assert.equal(creative.posts.length, 0, 'the avatar never goes through the generic generation route');
+    await noOverflow(page, `creative-studio-avatar-${name}`);
+    await axe(page, `creative-studio-avatar-${name}`);
+    await shot(page, `creative-studio-avatar-done-${name}`, true);
+    creative.provider = 'NOT_CONNECTED'; creative.items = []; avatarsFake.items = [];
+    await ctx.close();
+  });
+}
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`Creative Studio avatar videos ${name}: a ready avatar speaks a script; a lost answer replays the same request once`, async () => {
+    studio = 'ready'; Object.assign(creative, { provider: 'CONNECTED', items: [], posts: [], replies: [], byKey: new Map(), gate: null });
+    const kim = creativeAvatar({ name: 'Master Kim', style: 'REALISTIC', description: 'Friendly taekwondo master in a black dobok' }, 1);
+    Object.assign(avatarsFake, { items: [kim], posts: [], replies: [], byKey: new Map() });
+    Object.assign(videosFake, { items: [], posts: [], replies: ['unknown', 'ok'], byKey: new Map() });
+    const { ctx, page } = await creativeStudio(viewport);
+    const card = page.locator('article[aria-labelledby="creative-avatar-videos-title"]');
+    await page.locator('article[aria-labelledby="creative-avatar-videos-title"][data-avatar-video-state="OPEN"]').waitFor();
+    assert.equal(await page.locator('section[aria-labelledby="creative-studio-title"] select option[value="avatar.video"]').count(), 0, 'the generic form never offers avatar.video');
+    await card.getByLabel('What your avatar says').fill('Hi, I am Master Kim. Join our free trial class this Saturday!');
+    await card.getByLabel(/Length in seconds/).fill('10');
+    await card.getByLabel('Landscape').check();
+    assert.ok(await card.getByText('Uses 500 credits. You have 11,640 available.').isVisible());
+    await shot(page, `creative-studio-avatar-video-form-${name}`);
+    await card.getByRole('button', { name: 'Make video' }).click();
+    await card.getByText(/We could not confirm whether this request went through/).waitFor();
+    assert.equal(await card.getByLabel('What your avatar says').isDisabled(), true, 'locked while the outcome is unknown');
+    await card.getByRole('button', { name: 'Check again' }).click();
+    await card.getByText('Done. The result is listed below.').waitFor();
+    await card.getByText('Presented by Master Kim').waitFor();
+    assert.equal(videosFake.posts.length, 2);
+    assert.equal(videosFake.posts[0].key, videosFake.posts[1].key, 'Check again reuses the idempotency key');
+    assert.equal(videosFake.posts[0].body, videosFake.posts[1].body);
+    assert.equal(videosFake.posts[0].command, 'saas-creative-avatar-video-create');
+    assert.deepEqual(JSON.parse(videosFake.posts[0].body), { avatarId: kim.avatarId, script: 'Hi, I am Master Kim. Join our free trial class this Saturday!', seconds: 10, format: 'LANDSCAPE' });
+    assert.equal(creative.posts.length + avatarsFake.posts.length, 0, 'the video never goes through the generic or avatar route');
+    await noOverflow(page, `creative-studio-avatar-video-${name}`);
+    await axe(page, `creative-studio-avatar-video-${name}`);
+    await shot(page, `creative-studio-avatar-video-done-${name}`, true);
+    creative.provider = 'NOT_CONNECTED'; creative.items = []; avatarsFake.items = []; videosFake.items = [];
+    await ctx.close();
+  });
+}
 await check('Creative Studio: a refused wallet read shows no numbers', async () => {
   studio = 'denied';
   const { ctx, page } = await creativeStudio({ width: 1440, height: 900 });
   const section = page.locator('section[aria-labelledby="creative-studio-title"]');
   await section.getByText(/does not include creative credits/).waitFor();
   assert.equal(await section.getByTestId('creative-available').count(), 0);
-  assert.ok(await section.getByText('Not connected yet', { exact: true }).isVisible());
+  assert.ok(await section.getByText('Not connected yet', { exact: true }).first().isVisible());
   await shot(page, 'creative-studio-denied');
   studio = 'ready';
   await ctx.close();
@@ -2154,6 +2323,45 @@ await check('People: consent, busy and version refusals say what to do; a new sa
   assert.equal(await section().locator('input[name="givenName"]').inputValue(), 'Anna', 'reload shows the saved record');
   await ctx.close();
 });
+for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], ['phone-390', { width: 390, height: 844 }]]) {
+  await check(`People ${name}: Edit profile beside the name opens the edit forms in a pop-up; sections minimize`, async () => {
+    resetPeople({ cardOn: true });
+    const { ctx, page, section } = await peoplePage(viewport);
+    await open(section, 'Ana Rivera');
+    const edit = section().getByTestId('contact-edit-profile');
+    await edit.waitFor();
+    assert.equal(await section().locator('input[name="givenName"]').count(), 0, 'the forms are not on the page until Edit profile is pressed');
+    const fold = section().getByRole('button', { name: 'Details' });
+    assert.equal(await fold.getAttribute('aria-expanded'), 'true');
+    await fold.click();
+    assert.equal(await fold.getAttribute('aria-expanded'), 'false', 'Details minimizes');
+    assert.equal(await page.evaluate(() => localStorage.getItem('hon.people.folds.v1')), '{"overview-details":true}');
+    await fold.click();
+    assert.equal(await fold.getAttribute('aria-expanded'), 'true');
+    await edit.click();
+    const dialog = section().getByRole('dialog', { name: 'Edit profile' });
+    await dialog.waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), true, 'focus moves into the pop-up');
+    await shot(page, `people-profile-popup-${name}`); await noOverflow(page, `people-profile-popup-${name}`); await axe(page, `people-profile-popup-${name}`);
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true, 'Shift+Tab stays inside the pop-up');
+    for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
+    assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true, 'Tab stays inside the pop-up');
+    await dialog.locator('input[name="familyName"]').click();
+    await dialog.locator('input[name="familyName"]').fill('Rivera-Lopez');
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await dialog.getByText('Saved. Changed: last name.').waitFor();
+    assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), false, 'the page re-rendering after the save does not pull focus back to Close');
+    assert.equal(ppl.records.get(id(301)).familyName, 'Rivera-Lopez');
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'detached' });
+    assert.equal(await edit.evaluate((el) => el === document.activeElement), true, 'focus returns to Edit profile');
+    await edit.click(); await dialog.waitFor();
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await dialog.waitFor({ state: 'detached' });
+    await ctx.close();
+  });
+}
 const CONSENT_TEXT = { en: ['Contact consent', 'Record opt-out', 'Record opt-out now', 'Opt-out recorded for email.', 'Opted out'],
   ko: ['연락 동의', '수신 거부 기록', '지금 수신 거부 기록', '이메일 수신 거부가 기록되었습니다.', '수신 거부'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
@@ -3469,7 +3677,7 @@ await check('Pause, cancel & refunds: turning pauses off removes Pause; leaving 
 
 // ---------- Champions Club school page ----------
 const chpPage = (page) => page.getByTestId('champions-school');
-const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Referrals & Rewards'], ko: ['챔피언스 클럽', '4', '추천 및 보상'] };
+const CHP_TEXT = { en: ['Champions Club', 'Your school is #2 with 4 qualified referrals.', 'Enrollment'], ko: ['챔피언스 클럽', '4', '등록'] };
 for (const [name, viewport, nextTheme, language] of [['desktop-1440', { width: 1440, height: 900 }, 'modern', 'en'], ['phone-390', { width: 390, height: 844 }, 'big-button', 'ko']]) {
   await check(`Champions Club ${nextTheme} ${language} ${name}: code, referrals, rewards, leaderboard, contests and history from the reads`, async () => {
     resetChampions({ code: 'K7M2Q9X4PA' });

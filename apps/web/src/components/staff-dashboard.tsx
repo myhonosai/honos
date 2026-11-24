@@ -15,6 +15,7 @@ import { useLocale } from './localization/provider';
 import { entryText } from './school-entry/copy';
 import { HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT } from './session-invalidation';
 import styles from './staff-dashboard.module.css';
+import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
 
 type VerifiedSelection = Pick<OperationalSnapshot, 'organizationId' | 'schoolId' | 'generatedAt' | 'from' | 'to'>;
 type InterfaceThemeState = 'UNAVAILABLE' | 'LOADING' | 'READY' | 'SAVING' | 'ERROR';
@@ -33,8 +34,9 @@ function WorkflowLink({ href, children }: { href: string; children: React.ReactN
 function crmScopeHref(path: '/staff/crm/leads' | '/staff/crm/trials', organizationId: string, schoolId: string): string {
   return `${path}?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
 }
-function classPassScopeHref(organizationId: string, schoolId: string): string {
-  return `/staff/classpass?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
+/** ClassPass opens on the signed-in school, so its link carries no school IDs. */
+function classPassScopeHref(_organizationId: string, _schoolId: string): string {
+  return '/staff/classpass';
 }
 export function attendanceScopeHref(organizationId: string, schoolId: string): string {
   return `/staff/attendance?${new URLSearchParams({ organizationId, schoolId }).toString()}`;
@@ -196,6 +198,9 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   const { preferences } = useLocale();
   const [organizationId, setOrganizationId] = useState(initialScope.organizationId ?? '');
   const [schoolId, setSchoolId] = useState(initialScope.schoolId ?? '');
+  // Inside the school shell the dashboard opens on the signed-in school; the operations report still verifies it.
+  const shellSchool = useShellSchoolInto(school => { setOrganizationId(school.organizationId); setSchoolId(school.schoolId); });
+  const inShell = useRef(false); inShell.current = shellSchool !== null;
   const [selection, setSelection] = useState<VerifiedSelection | null>(null);
   const [snapshot, setSnapshot] = useState<OperationalSnapshot | null>(null);
   const [ownerWorkflowProgress, setOwnerWorkflowProgress] = useState<OwnerWorkflowProgress | null>(null);
@@ -257,6 +262,7 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
   }, []);
   useEffect(() => () => { generation.current += 1; interfaceThemeGeneration.current += 1; }, []);
   useEffect(() => {
+    if (inShell.current) return; // the shell already chose the school; see openShellSchool
     clear(); setLoading(true);
     const requestGeneration = generation.current;
     let active = true;
@@ -315,6 +321,12 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     });
     return () => { if (current === interfaceThemeGeneration.current) interfaceThemeGeneration.current += 1; };
   }, [selection?.organizationId, selection?.schoolId]);
+  function openShellSchool(scope: { organizationId: string; schoolId: string }) {
+    if (sessionEnded.current) return;
+    clear(); const requestGeneration = generation.current; setLoading(true);
+    void readDashboard(scope.organizationId, scope.schoolId, requestGeneration);
+  }
+  useEffect(() => { if (shellSchool) openShellSchool(shellSchool); }, [shellSchool?.organizationId, shellSchool?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   async function chooseInterfaceTheme(next: HonInterfaceTheme) {
     if (!selection || interfaceThemeState !== 'READY' || privacyShield.current || sessionEnded.current || preferenceBusy.current) return;
     preferenceBusy.current = true;
@@ -438,10 +450,10 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
     <div key={`team-${navigationRevision}`} ref={privateTeam} hidden={!privateVisible} inert={!privateVisible}>
       {privateVisible && selection && <HonTeamBand scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} variant={interfaceTheme} />}
     </div>
-    <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>
+    {!shellSchool && <aside className={styles.notice}><strong>Read-only operational view.</strong><p>The server derives the signed-in human and verifies reporting access for the selected school. IDs below select a school; they never grant access. Where an approved aggregate is absent, this dashboard says so rather than deriving one from private records.</p></aside>}
     <section key={scopeDomEpoch.current} ref={privateScope} className={styles.scopeSection} aria-labelledby="scope-heading" data-testid="dashboard-scope">
-      <div><h2 id="scope-heading">Current verified school</h2><p>A single eligible current school loads automatically without entering IDs. For multiple eligible schools, choose one explicitly. Manual fallback: enter already-known staff-context IDs. Loading validates the exact organization, school, active human session, and <code>reporting.view</code> authority through the existing school operations report.</p></div>
-      {schoolChoices.length > 0 && <>
+      <div><h2 id="scope-heading">{shellSchool ? 'Your school' : 'Current verified school'}</h2>{!shellSchool && <p>A single eligible current school loads automatically without entering IDs. For multiple eligible schools, choose one explicitly. Manual fallback: enter already-known staff-context IDs. Loading validates the exact organization, school, active human session, and <code>reporting.view</code> authority through the existing school operations report.</p>}</div>
+      {!shellSchool && schoolChoices.length > 0 && <>
         {!manualEntry && <form onSubmit={submitSchoolChoice} aria-busy={loading}>
           <fieldset disabled={loading} className={styles.schoolChooser}>
             <label htmlFor="reporting-school-choice">School<select id="reporting-school-choice" required autoComplete="off" aria-describedby="reporting-school-choice-help" value={schoolChoiceId} onChange={(event) => { clear(); setSchoolChoiceId(event.target.value); }}>
@@ -454,13 +466,14 @@ export function StaffDashboard({ initialScope = {} }: { initialScope?: StaffDash
         </form>}
         <button type="button" onClick={() => { clear(); setManualEntry(!manualEntry); }}>{manualEntry ? 'Choose from authorized schools' : 'Use manual known-ID entry'}</button>
       </>}
-      {(manualEntry || schoolChoices.length === 0) && <form onSubmit={submit} aria-busy={loading}>
-        <fieldset disabled={loading || sessionEnded.current}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
+      {shellSchool && !selection && !loading && !sessionEnded.current && <button type="button" onClick={() => openShellSchool(shellSchool)}>Show again</button>}
+      {!shellSchool && (manualEntry || schoolChoices.length === 0) && <form onSubmit={submit} aria-busy={loading}>
+        <fieldset disabled={loading || sessionEnded.current}><ManualSchoolFields current={schoolId}><label>Organization UUID<input required autoComplete="off" spellCheck={false} value={organizationId} onChange={(event) => { setOrganizationId(event.target.value); clear(); }} /></label><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={(event) => { setSchoolId(event.target.value); clear(); }} /></label></ManualSchoolFields><button type="submit">{loading ? 'Verifying school…' : 'Load verified dashboard'}</button></fieldset>
       </form>}
       {!selection && !loading && !error && <p className={styles.scopeState} role="status">{scopeMessage}</p>}
-      {loading && <p className={styles.scopeState} role="status">Checking current school access and loading the aggregate-only operations report…</p>}
+      {loading && <p className={styles.scopeState} role="status">{shellSchool ? 'Loading your school dashboard…' : 'Checking current school access and loading the aggregate-only operations report…'}</p>}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      {selection && <div className={styles.verified} role="status"><strong>Verified current school</strong>{verifiedSchoolName ? <span>{verifiedSchoolName.schoolName} — {verifiedSchoolName.organizationName}</span> : <><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span></>}<span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}
+      {selection && <div className={styles.verified} role="status"><strong>{shellSchool ? 'Your school' : 'Verified current school'}</strong>{verifiedSchoolName ? <span>{verifiedSchoolName.schoolName} — {verifiedSchoolName.organizationName}</span> : shellSchool ? null : <><span>Organization <code>{selection.organizationId}</code></span><span>School <code>{selection.schoolId}</code></span></>}<span>Window: {utc(selection.from)} – {utc(selection.to)} UTC</span><span>Generated: {utc(selection.generatedAt)} UTC</span></div>}
     </section>
     <div key={navigationRevision} ref={privateArea} hidden={!privateVisible} inert={!privateVisible} data-testid="dashboard-private">
       {privateVisible && snapshot && selection && <>

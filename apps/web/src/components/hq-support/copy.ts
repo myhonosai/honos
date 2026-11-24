@@ -34,7 +34,7 @@ const en = {
   addNote: 'Add a note', note: 'Note', submitNote: 'Add note', noted: 'Note added.',
   change: 'Update the case', changeNote: 'Note (optional)', submitChange: 'Save changes', changedOk: 'Case updated.', keep: 'No change',
   closedFinal: 'This case is closed. Closed cases cannot be changed or noted. Open a new case if the school needs more help.',
-  reopenHelp: 'A resolved case can be reopened by setting it back to Open.',
+  reopenHelp: 'A resolved case can be reopened by setting it back to Open.', messageOwners: 'Message the owners',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
@@ -72,7 +72,7 @@ const ko: Record<Key, string> = {
   addNote: '메모 추가', note: '메모', submitNote: '메모 추가', noted: '메모가 추가되었습니다.',
   change: '지원 건 변경', changeNote: '메모(선택)', submitChange: '변경 저장', changedOk: '지원 건이 변경되었습니다.', keep: '변경 안 함',
   closedFinal: '이 지원 건은 종료되었습니다. 종료된 건은 변경하거나 메모할 수 없습니다. 도장에 도움이 더 필요하면 새 지원 건을 여세요.',
-  reopenHelp: '해결된 건은 상태를 다시 열림으로 바꾸어 다시 열 수 있습니다.',
+  reopenHelp: '해결된 건은 상태를 다시 열림으로 바꾸어 다시 열 수 있습니다.', messageOwners: '원장님께 메시지 보내기',
 };
 const es: Record<Key, string> = {
   title: 'Soporte', caseTitle: 'Caso de soporte', back: 'Todos los casos', refresh: 'Actualizar',
@@ -109,7 +109,7 @@ const es: Record<Key, string> = {
   addNote: 'Agregar una nota', note: 'Nota', submitNote: 'Agregar nota', noted: 'Nota agregada.',
   change: 'Actualizar el caso', changeNote: 'Nota (opcional)', submitChange: 'Guardar cambios', changedOk: 'Caso actualizado.', keep: 'Sin cambio',
   closedFinal: 'Este caso está cerrado. Los casos cerrados no se pueden cambiar ni anotar. Abre un caso nuevo si la escuela necesita más ayuda.',
-  reopenHelp: 'Un caso resuelto se puede reabrir poniéndolo de nuevo en Abierto.',
+  reopenHelp: 'Un caso resuelto se puede reabrir poniéndolo de nuevo en Abierto.', messageOwners: 'Escribir a los dueños',
 };
 export type SupportKey = Key;
 export function supportText(language: string, key: Key, vars: Record<string, string> = {}): string {

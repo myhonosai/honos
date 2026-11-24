@@ -2,18 +2,19 @@ import { ForbiddenException, Inject, Injectable, ServiceUnavailableException } f
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
-  HON_DELEGATE_AGENTS, HON_REPLY_LIMITS, isHonAnalystAgent, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
+  HON_SUGGESTED_AGENTS, HON_REPLY_LIMITS, isHonAnalystAgent, HON_REPLY_MAX_FOLLOW_UPS, HON_REPLY_MAX_SOURCES, HON_REPLY_MAX_SUGGESTIONS, HON_REPLY_MODES, isHonReplyFollowUp, isHonReplySourceKey,
   type HonAiTone, type HonAnalystAgentKey, type HonReplyMode,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type ResolvedPrincipalScope } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
 import {
-  HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, type HonReplyInvocation, type HonReplyProviderRuntime, type HonReplyResult,
+  HON_REPLY_PROVIDER_RUNTIME, HonReplyProviderRuntimeError, type HonReplyInvocation, type HonReplyProviderRuntime, type HonReplyResult, type HonReplySpecialist,
 } from '../ai/hon-reply-provider-runtime.js';
 
 type Scope = ResolvedPrincipalScope & { externalSubject: string };
 type Limits = { replyMode: HonReplyMode; taskClass: string; inputBudget: number; outputBudget: number; maxProviderCostMicrounits: number };
-type Reference = { invocationId: string; workItemId: string; workVersion: number; limits: Limits; agentKey: 'hon' | HonAnalystAgentKey };
+/** planKey (0336): the planning idempotency key, the invocation id first and the fallback attempt id after one reopen. */
+type Reference = { invocationId: string; planKey?: string; workItemId: string; workVersion: number; limits: Limits; agentKey: 'hon' | HonAnalystAgentKey };
 
 /** The database names the mode; its budgets must be exactly the contract's (no caller or stored value can raise them). */
 function modeLimits(limits: Limits | undefined) {
@@ -25,11 +26,11 @@ function modeLimits(limits: Limits | undefined) {
 }
 
 const tokens = (n: unknown, max: number) => Number.isSafeInteger(n) && (n as number) >= 1 && (n as number) <= max;
-/** Optional closed list: delegate keys only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
+/** Optional closed list: delegate keys and Claire (K2c) only, unique, at most HON_REPLY_MAX_SUGGESTIONS, never on a cut-off answer. */
 function suggestionsValid(v: unknown, truncated: boolean): boolean {
   if (v === undefined) return true;
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SUGGESTIONS && (!truncated || v.length === 0) && new Set(v).size === v.length
-    && v.every((k) => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(k));
+    && v.every((k) => (HON_SUGGESTED_AGENTS as readonly unknown[]).includes(k));
 }
 /** 0254: optional follow-ups (bounded plain text, unique ignoring case) and sources (closed set, unique); none on a cut-off answer. */
 function followUpsValid(v: unknown, truncated: boolean): boolean {
@@ -41,7 +42,7 @@ function sourcesValid(v: unknown, truncated: boolean): boolean {
   if (v === undefined) return true;
   return Array.isArray(v) && v.length <= HON_REPLY_MAX_SOURCES && (!truncated || v.length === 0) && v.every(isHonReplySourceKey) && new Set(v).size === v.length;
 }
-function verified(result: HonReplyResult, specialist: 'hon' | HonAnalystAgentKey): HonReplyResult {
+function verified(result: HonReplyResult, specialist: HonReplySpecialist): HonReplyResult {
   // An analysis specialist (K2, 0260) never suggests specialists; any suggestion from its runtime is unverified output.
   if (specialist !== 'hon' && (result?.suggestions ?? []).length > 0) throw new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
   const reply = typeof result?.reply === 'string' ? result.reply.trim() : '';
@@ -84,15 +85,26 @@ export class HonReplyService {
     });
   }
 
+  /**
+   * 0336 (RA-1): one reply, and at most one automatic fallback. A definite PROVIDER_UNAVAILABLE on the profile's default
+   * model reopens the reply once (the database decides, records the attempt and excludes that model); the second
+   * attempt plans, prepares and calls exactly like the first. Anything else ends the turn as before.
+   */
   async run(scope: Scope, turnId: string): Promise<void> {
+    if (await this.attempt(scope, turnId) !== 'UNAVAILABLE') return;
+    const reopened = await this.transaction(scope, async (client) => (await client.query<{ r: boolean }>('SELECT hon.reopen_hon_reply_for_fallback($1,$2::uuid) r', [scope.externalSubject, turnId])).rows[0]!.r);
+    if (reopened) await this.attempt(scope, turnId);
+  }
+
+  private async attempt(scope: Scope, turnId: string): Promise<'DONE' | 'UNAVAILABLE'> {
     const ref = await this.transaction(scope, async (client) => (await client.query<{ data: Reference | null }>('SELECT hon.hon_reply_planning_reference($1,$2::uuid) data', [scope.externalSubject, turnId])).rows[0]!.data);
-    if (!ref) return;
+    if (!ref) return 'DONE';
     const limits = modeLimits(ref.limits);
     // The database names the agent: HON, or an analysis specialist whose answer is always the DETAILED (ANALYZE) mode.
     if ((ref.agentKey !== 'hon' && !isHonAnalystAgent(ref.agentKey)) || (ref.agentKey !== 'hon' && ref.limits.replyMode !== 'DETAILED')) throw new Error('HON_REPLY_AGENT_DRIFT');
     let planId: string | null = null;
     try {
-      const planned = await this.plans.plan({ ...this.context(scope), idempotencyKey: ref.invocationId }, ref.workItemId, {
+      const planned = await this.plans.plan({ ...this.context(scope), idempotencyKey: ref.planKey ?? ref.invocationId }, ref.workItemId, {
         expectedVersion: ref.workVersion, expectedState: 'READY', agentKey: ref.agentKey, modality: 'TEXT', taskClass: limits.taskClass,
         inputBudget: limits.inputTokens, outputBudget: limits.outputTokens, maxProviderCostMicrounits: limits.maxProviderCostMicrounits,
       });
@@ -108,14 +120,14 @@ export class HonReplyService {
       if (!prepared || prepared.specialist !== 'hon') return prepared;
       return { ...prepared, tone: (await client.query<{ tone: HonAiTone }>('SELECT hon.hon_ai_tone() tone')).rows[0]!.tone };
     });
-    if (!invocation) return;
+    if (!invocation) return 'DONE';
     let result: HonReplyResult;
     try {
       result = verified(await this.provider.generate(invocation), invocation.specialist);
     } catch (error) {
       const failure = error instanceof HonReplyProviderRuntimeError ? error : new HonReplyProviderRuntimeError('UNKNOWN', 'PROVIDER_UNKNOWN');
       await this.transaction(scope, async (client) => { await client.query('SELECT hon.fail_hon_reply($1,$2::uuid,$3,$4)', [scope.externalSubject, turnId, failure.outcome, failure.reason]); });
-      return;
+      return failure.outcome === 'FAILED' && failure.reason === 'PROVIDER_UNAVAILABLE' ? 'UNAVAILABLE' : 'DONE';
     }
     try {
       await this.transaction(scope, async (client) => { await client.query('SELECT hon.record_hon_reply_result($1,$2::uuid,$3::jsonb)', [scope.externalSubject, turnId, JSON.stringify(result)]); });
@@ -124,6 +136,7 @@ export class HonReplyService {
       catch { /* The SENDING hold stays and turns UNKNOWN after the stale limit; it is resolved in the HQ queue. */ }
       throw new ServiceUnavailableException({ code: 'HON_REPLY_PERSISTENCE_UNKNOWN', detail: 'The provider outcome needs reconciliation. It will not be resent.' });
     }
+    return 'DONE';
   }
 
   /** Shows a reply that was recorded while access had lapsed, once access has returned. No provider call. */

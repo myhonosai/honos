@@ -8,12 +8,15 @@ import {
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import {
+  COMMUNICATION_DELIVERY_STATUSES,
+  COMMUNICATION_EMAIL_SUBJECT_MAX,
   COMMUNICATION_MESSAGE_CHANNELS,
   COMMUNICATION_MESSAGE_LIFECYCLES,
   type CommandContext,
   type CommunicationMessageChannel,
   type CommunicationMessageLifecycle,
   type CommunicationMessageSummary,
+  type CommunicationDeliveryView,
   type CreateCommunicationMessageInput,
   type QueueCommunicationMessageInput,
 } from '@hon/contracts';
@@ -32,6 +35,7 @@ interface CommunicationMessageRow {
   scheduledAt: Date | string | null;
   createdByPrincipalId: string;
   queuedByPrincipalId: string | null;
+  emailSubject: string | null;
   version: number;
   createdAt: Date | string;
   updatedAt: Date | string;
@@ -48,6 +52,7 @@ interface NormalizedCreateInput {
   channel: CommunicationMessageChannel;
   content: string;
   scheduledAt: string | null;
+  emailSubject: string | null;
 }
 
 function validationError(detail: string): BadRequestException {
@@ -92,11 +97,22 @@ function normalizeCreateInput(input: CreateCommunicationMessageInput): Normalize
   if (content.length < 1 || content.length > 4000) {
     throw validationError('content must contain between 1 and 4000 characters.');
   }
+  let emailSubject: string | null = null;
+  if (input.emailSubject !== undefined) {
+    // TE1: a subject only for an email, already trimmed, 1-150 characters, one line (the 0423 column check).
+    const subject = input.emailSubject;
+    if (input.channel !== 'EMAIL' || typeof subject !== 'string' || subject.trim() !== subject || subject.length < 1
+      || subject.length > COMMUNICATION_EMAIL_SUBJECT_MAX || /[\u0000-\u001f\u007f]/.test(subject)) {
+      throw validationError('emailSubject must be 1-150 characters on one line, and only for an email.');
+    }
+    emailSubject = subject;
+  }
   return {
     recipientPersonId: input.recipientPersonId,
     channel: input.channel,
     content,
     scheduledAt: normalizeOptionalInstant(input.scheduledAt),
+    emailSubject,
   };
 }
 
@@ -121,6 +137,7 @@ function toSummary(row: CommunicationMessageRow): CommunicationMessageSummary {
     ...(row.scheduledAt === null ? {} : { scheduledAt: asIso(row.scheduledAt) }),
     createdByPrincipalId: row.createdByPrincipalId,
     ...(row.queuedByPrincipalId === null ? {} : { queuedByPrincipalId: row.queuedByPrincipalId }),
+    ...(row.emailSubject === null ? {} : { emailSubject: row.emailSubject }),
     version: row.version,
     createdAt: asIso(row.createdAt),
     updatedAt: asIso(row.updatedAt),
@@ -136,6 +153,7 @@ const MESSAGE_COLUMNS = `
   scheduled_at AS "scheduledAt",
   created_by_principal_id AS "createdByPrincipalId",
   queued_by_principal_id AS "queuedByPrincipalId",
+  email_subject AS "emailSubject",
   version,
   created_at AS "createdAt",
   updated_at AS "updatedAt"
@@ -157,7 +175,9 @@ export class CommunicationMessageService {
     this.assertHumanUi(context, 'creation');
     const normalized = normalizeCreateInput(input);
     const requestFingerprint = createHash('sha256')
-      .update(JSON.stringify({ command: 'communication.message.create', ...normalized }))
+      // The subject joins the fingerprint only when given, so a create without one keeps its pre-TE1 fingerprint.
+      .update(JSON.stringify({ command: 'communication.message.create', recipientPersonId: normalized.recipientPersonId, channel: normalized.channel,
+        content: normalized.content, scheduledAt: normalized.scheduledAt, ...(normalized.emailSubject === null ? {} : { emailSubject: normalized.emailSubject }) }))
       .digest('hex');
 
     return this.database.withTenantTransaction(context, async (client) => {
@@ -171,8 +191,8 @@ export class CommunicationMessageService {
       const inserted = await client.query<CommunicationMessageRow>(
         `INSERT INTO hon.communication_messages (
            organization_id, school_id, recipient_person_id, channel, content, lifecycle,
-           scheduled_at, created_by_principal_id
-         ) VALUES ($1, $2, $3::uuid, $4::hon.communication_message_channel, $5, 'DRAFT', $6::timestamptz, $7::uuid)
+           scheduled_at, created_by_principal_id, email_subject
+         ) VALUES ($1, $2, $3::uuid, $4::hon.communication_message_channel, $5, 'DRAFT', $6::timestamptz, $7::uuid, $8)
          RETURNING ${MESSAGE_COLUMNS}`,
         [
           context.organizationId,
@@ -182,6 +202,7 @@ export class CommunicationMessageService {
           normalized.content,
           normalized.scheduledAt,
           context.principalId,
+          normalized.emailSubject,
         ],
       );
       const row = inserted.rows[0];
@@ -301,6 +322,50 @@ export class CommunicationMessageService {
         [input.recipientPersonId ?? null, input.channel ?? null, input.lifecycle ?? null, limit],
       );
       return records.rows.map(toSummary);
+    });
+  }
+
+  /** 0243: the delivery status and receipt timeline of one message in this school. No address, provider IDs or cost. */
+  async readDelivery(
+    context: Pick<CommandContext, 'organizationId' | 'schoolId' | 'principalId' | 'principalType' | 'requestId'>,
+    messageId: string,
+  ): Promise<CommunicationDeliveryView> {
+    if (!UUID.test(messageId)) throw validationError('messageId must be a UUID.');
+    return this.database.withTenantTransaction(context, async (client) => {
+      const found = await client.query<{ channel: CommunicationMessageChannel; lifecycle: CommunicationMessageLifecycle }>(
+        'SELECT channel::text AS channel, lifecycle::text AS lifecycle FROM hon.communication_messages WHERE id = $1::uuid', [messageId]);
+      const message = found.rows[0];
+      if (!message) throw new NotFoundException('Communication message was not found in this school.');
+      const rows = await client.query<{
+        id: string; status: string; holdReason: string | null; nextAttemptAt: Date | string; attempts: number; sentAs: string | null;
+        segments: number | null; failureCode: string | null; acceptedAt: Date | string | null; finalAt: Date | string | null; updatedAt: Date | string;
+      }>(
+        `SELECT id, status::text AS status, hold_reason AS "holdReason", next_attempt_at AS "nextAttemptAt", attempt_count AS attempts,
+                sent_as AS "sentAs", segments, failure_code AS "failureCode", accepted_at AS "acceptedAt", final_at AS "finalAt",
+                updated_at AS "updatedAt"
+         FROM hon.communication_deliveries WHERE message_id = $1::uuid`, [messageId]);
+      const row = rows.rows[0];
+      if (!row) return { messageId, channel: message.channel, status: 'NOT_STARTED', attempts: 0, receipts: [] };
+      const receipts = await client.query<{ type: string; occurredAt: Date | string }>(
+        `SELECT event_type::text AS type, occurred_at AS "occurredAt" FROM hon.communication_delivery_events
+         WHERE delivery_id = $1::uuid ORDER BY occurred_at, id LIMIT 50`, [row.id]);
+      if (!(COMMUNICATION_DELIVERY_STATUSES as readonly string[]).includes(row.status)) {
+        throw new Error('HON communication delivery query returned an invalid status.');
+      }
+      return {
+        messageId,
+        channel: message.channel,
+        status: row.status as CommunicationDeliveryView['status'],
+        ...(row.holdReason === null ? {} : { holdReason: row.holdReason as NonNullable<CommunicationDeliveryView['holdReason']>, nextAttemptAt: asIso(row.nextAttemptAt) }),
+        attempts: row.attempts,
+        ...(row.sentAs === null ? {} : { sentAs: row.sentAs as NonNullable<CommunicationDeliveryView['sentAs']> }),
+        ...(row.segments === null ? {} : { segments: row.segments }),
+        ...(row.failureCode === null ? {} : { failureCode: row.failureCode as NonNullable<CommunicationDeliveryView['failureCode']> }),
+        ...(row.acceptedAt === null ? {} : { acceptedAt: asIso(row.acceptedAt) }),
+        ...(row.finalAt === null ? {} : { finalAt: asIso(row.finalAt) }),
+        updatedAt: asIso(row.updatedAt),
+        receipts: receipts.rows.map((event) => ({ type: event.type as CommunicationDeliveryView['receipts'][number]['type'], occurredAt: asIso(event.occurredAt) })),
+      };
     });
   }
 

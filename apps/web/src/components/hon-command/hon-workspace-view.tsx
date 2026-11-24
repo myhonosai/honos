@@ -7,6 +7,9 @@ import { NO_SCHOOL_SHELL, useSchoolShell } from '../school-shell/context';
 import type { HonCommandSnapshot, HonSection } from './hon-command-data';
 import { HON_CONVERSATION_BOUNDARY, honComposerEnabled } from './hon-conversation';
 import { HON_COMMAND_ROSTER, HON_DRAFT_WORK_SOURCES, HON_RECOMMENDATION_AREAS, HON_TEACHING_AI, teachingAiPortrait, aiTeamPortrait, HON_CORE_SOURCE, approvalSourceLabel, honAgent, type HonCommandAgent } from './roster';
+import { AlexPlanPanel } from './alex-plan-panel';
+import { JordanFollowUpPanel } from './jordan-follow-up-panel';
+import { MarcusReviewPanel } from './marcus-review-panel';
 import styles from './hon-command.module.css';
 
 /** The existing requester-scoped reads return at most 20 records per source across all schools. */
@@ -82,6 +85,12 @@ function PortraitImage({ agent, size = 'md', source }: { agent: Pick<HonCommandA
   </span>;
 }
 
+/** The screen-reader wording for an agent's availability; matches the visible badge. */
+export function availabilityLabel(agent: Pick<HonCommandAgent, 'availability'>): string {
+  return agent.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval'
+    : agent.availability === 'ANSWERS' ? 'Answers questions, read only' : 'Planned, not yet available';
+}
+
 export function AvailabilityBadge({ agent, compact = false }: { agent: HonCommandAgent; compact?: boolean }): React.ReactElement {
   return agent.availability === 'GOVERNED_DRAFTS'
     ? <span className={styles.badge} data-tone="ready">{compact ? 'Drafts · approval' : 'Drafts · approval required'}</span>
@@ -130,7 +139,7 @@ function TeamGrid({ snapshot, variant, onSelectAgent }: { snapshot: HonCommandSn
     {HON_COMMAND_ROSTER.map((agent) => {
       const count = draftCount(snapshot, agent);
       return <li key={agent.id}>
-        <button type="button" className={styles.agentCard} style={{ '--agent': agent.color } as React.CSSProperties} onClick={() => onSelectAgent?.(agent.id)} aria-label={`${agent.name}, ${agent.title}. ${agent.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval' : 'Planned, not yet available'}. Open details`}>
+        <button type="button" className={styles.agentCard} style={{ '--agent': agent.color } as React.CSSProperties} onClick={() => onSelectAgent?.(agent.id)} aria-label={`${agent.name}, ${agent.title}. ${availabilityLabel(agent)}. Open details`}>
           <AgentPortrait agent={agent} />
           <span className={styles.agentText}>
             <strong>{agent.name}</strong>
@@ -198,11 +207,20 @@ function AgentDetail({ agent, snapshot, onBack }: { agent: HonCommandAgent; snap
     <ul className={styles.capabilities}>
       {agent.capabilities.map((capability) => <li key={capability.label} data-state={capability.state}>
         <span>{capability.label}</span>
-        {capability.state === 'AVAILABLE' && capability.href
-          ? <a href={capability.href}>Available · open</a>
+        {capability.state === 'AVAILABLE'
+          ? capability.href ? <a href={capability.href}>Available · open</a> : <em>Available</em>
           : <em>Backend required</em>}
       </li>)}
     </ul>
+    {agent.id === 'alex' && snapshot.scope.state === 'VERIFIED'
+      ? <AlexPlanPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
+      : null}
+    {agent.id === 'jordan' && snapshot.scope.state === 'VERIFIED'
+      ? <JordanFollowUpPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
+      : null}
+    {agent.id === 'marcus' && snapshot.scope.state === 'VERIFIED'
+      ? <MarcusReviewPanel scope={{ organizationId: snapshot.scope.organizationId, schoolId: snapshot.scope.schoolId }} />
+      : null}
     <h4>Related school workflows</h4>
     <p className={styles.meta}>Conventional workflows you run yourself. Opening one does not ask {agent.name} to do anything.</p>
     <ul className={styles.links}>{agent.workflows.map((workflow) => <li key={workflow.href}><a href={workflow.href}>{workflow.label} →</a></li>)}</ul>
@@ -336,7 +354,8 @@ export function HonWorkspaceView(props: HonWorkspaceViewProps): React.ReactEleme
       <div className={styles.headerActions}>
         {verified ? <button type="button" onClick={props.onRefresh}>Refresh</button> : null}
         {props.expandHref ? <a href={props.expandHref}>Full workspace</a> : null}
-        {props.returnHref ? <a href={props.returnHref}>Back to dashboard</a> : null}
+        {/* Expanded from the corner pop-up on another page: the way back names that it returns there. */}
+        {props.returnHref ? <a href={props.returnHref}>{props.returnHref === '/staff/dashboard' ? 'Back to dashboard' : 'Back to your page'}</a> : null}
         {props.onClose ? <button type="button" onClick={props.onClose} aria-label="Close HON">Close</button> : null}
       </div>
     </header>

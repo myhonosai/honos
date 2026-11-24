@@ -11,12 +11,16 @@ import {
 import {
   validateReceivablesQuery,
   validateRecordTuitionPaymentInput,
+  validateSchoolInvoiceListQuery,
   validateVoidTuitionPaymentInput,
   verifyInvoicePayments,
+  verifySchoolInvoiceList,
   verifySchoolReceivables,
   verifyTuitionPaymentReceipt,
   type InvoicePayments,
   type ReceivablesQuery,
+  type SchoolInvoiceList,
+  type SchoolInvoiceListQuery,
   type SchoolReceivables,
   type TuitionPaymentReceipt,
 } from '@hon/contracts';
@@ -74,6 +78,17 @@ export class TuitionPaymentService {
       const result = await client.query<{ data: unknown }>('SELECT hon.read_school_receivables($1,$2::jsonb) AS data', [context.externalSubject, JSON.stringify(query)]);
       if (result.rows.length !== 1) throw new Error('Unverified receivables.');
       return verifySchoolReceivables(result.rows[0]!.data, query);
+    });
+  }
+
+  /** B-TUI-1b (0280): the school's invoices, every status or one, newest first. Same readers as receivables. */
+  async invoices(context: MembershipLifecycleContext, value: unknown): Promise<SchoolInvoiceList> {
+    this.assertHumanContext(context, 'TUITION_RECEIVABLES_FORBIDDEN', false);
+    const query: SchoolInvoiceListQuery = this.validated(() => validateSchoolInvoiceListQuery(value));
+    return this.read(context, 'TUITION_RECEIVABLES_FORBIDDEN', async client => {
+      const result = await client.query<{ data: unknown }>('SELECT hon.read_school_invoices($1,$2::jsonb) AS data', [context.externalSubject, JSON.stringify(query)]);
+      if (result.rows.length !== 1) throw new Error('Unverified invoice list.');
+      return verifySchoolInvoiceList(result.rows[0]!.data, query);
     });
   }
 

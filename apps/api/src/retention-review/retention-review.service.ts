@@ -24,6 +24,25 @@ function boundaryError(error: unknown): never {
   throw new ServiceUnavailableException({ code: 'RETENTION_REVIEW_UNAVAILABLE', detail: 'No verified Retention Review Signals result is available.' });
 }
 
+export type RetentionMemberRow = Readonly<{ membershipId: string; displayName: string; state: string; termEndsAt: string | null }>;
+const MEMBER_STATES = ['ACTIVE', 'FROZEN', 'CANCELLATION_PENDING', 'EXPIRED'];
+/** 0407 rows, closed and bounded: id, participant name, state and term end only. Anything else fails closed. */
+export function parseRetentionMembers(value: unknown): RetentionMemberRow[] {
+  const bad = (): never => { throw new ServiceUnavailableException({ code: 'RETENTION_REVIEW_UNAVAILABLE', detail: 'The member list could not be verified.' }); };
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join() !== 'items') bad();
+  const items = (value as { items: unknown }).items;
+  if (!Array.isArray(items) || items.length > 200) bad();
+  const rows = (items as unknown[]).map((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).sort().join() !== 'displayName,membershipId,state,termEndsAt') bad();
+    const r = row as Record<string, unknown>;
+    if (typeof r.membershipId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.membershipId) || typeof r.displayName !== 'string' || !r.displayName || r.displayName.length > 120
+      || typeof r.state !== 'string' || !MEMBER_STATES.includes(r.state) || !(r.termEndsAt === null || (typeof r.termEndsAt === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.termEndsAt)))) bad();
+    return { membershipId: (r.membershipId as string).toLowerCase(), displayName: r.displayName as string, state: r.state as string, termEndsAt: r.termEndsAt as string | null };
+  });
+  if (new Set(rows.map((r) => r.membershipId)).size !== rows.length) bad();
+  return rows;
+}
+
 @Injectable()
 export class RetentionReviewService {
   constructor(private readonly database: RuntimeDatabaseService) {}
@@ -31,6 +50,14 @@ export class RetentionReviewService {
   private attentionError(error: unknown): never {
     if (['40001','40P01','55P03'].includes((error as { code?: string }).code ?? '')) throw new ConflictException({ code: 'RETENTION_ATTENTION_CONFLICT', detail: 'Evidence, version or retry changed. No current alert state is shown. Reload verified evidence and alert state.' });
     return boundaryError(error);
+  }
+  /** Members of this school by name, so staff choose one instead of typing a membership UUID (0407). */
+  async memberships(context: RetentionReviewSignalsContext) {
+    human(context);
+    let value: unknown;
+    try { value = await this.database.listRetentionReviewMemberships(context); }
+    catch (error) { return boundaryError(error); }
+    return parseRetentionMembers(value);
   }
   async attentionAlerts(context: RetentionReviewSignalsContext, membershipId: string) {
     human(context); retentionReviewId(membershipId);

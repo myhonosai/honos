@@ -4,6 +4,9 @@
  */
 export const TUITION_PAYMENT_METHODS = ['CASH', 'CHECK', 'CARD_TERMINAL', 'BANK_TRANSFER', 'OTHER'] as const;
 export type TuitionPaymentMethod = (typeof TUITION_PAYMENT_METHODS)[number];
+/** Methods a recorded payment can carry: the manual ones staff enter, plus PROVIDER (0337), written only by an autopay charge. */
+export const TUITION_PAYMENT_RECORD_METHODS = [...TUITION_PAYMENT_METHODS, 'PROVIDER'] as const;
+export type TuitionPaymentRecordMethod = (typeof TUITION_PAYMENT_RECORD_METHODS)[number];
 export const RECEIVABLES_FILTERS = ['OPEN', 'OVERDUE'] as const;
 export type ReceivablesFilter = (typeof RECEIVABLES_FILTERS)[number];
 export const BALANCE_INVOICE_STATUSES = ['ISSUED', 'PAID', 'VOID', 'UNCOLLECTIBLE'] as const;
@@ -17,7 +20,7 @@ export interface VoidTuitionPaymentInput { expectedInvoiceVersion: number; reaso
 export interface ReceivablesQuery { filter: ReceivablesFilter; after?: string }
 
 export interface TuitionPayment {
-  paymentId: string; invoiceId: string; amountMinor: number; currency: string; receivedOn: string; method: TuitionPaymentMethod;
+  paymentId: string; invoiceId: string; amountMinor: number; currency: string; receivedOn: string; method: TuitionPaymentRecordMethod;
   reference: string | null; note: string | null; recordedAt: string; void: { voidedAt: string; reason: string } | null;
 }
 export interface InvoiceBalance {
@@ -96,7 +99,7 @@ export function verifyTuitionPayment(value: unknown, invoiceId?: string): Tuitio
   const row = record(value, ['paymentId', 'invoiceId', 'amountMinor', 'currency', 'receivedOn', 'method', 'reference', 'note', 'recordedAt', 'void']);
   const payment: TuitionPayment = {
     paymentId: uuid(row.paymentId), invoiceId: uuid(row.invoiceId), amountMinor: count(row.amountMinor, 1, MAX_MINOR), currency: currency(row.currency),
-    receivedOn: date(row.receivedOn), method: oneOf(row.method, TUITION_PAYMENT_METHODS), reference: nullable(row.reference, v => text(v, 120)),
+    receivedOn: date(row.receivedOn), method: oneOf(row.method, TUITION_PAYMENT_RECORD_METHODS), reference: nullable(row.reference, v => text(v, 120)),
     note: nullable(row.note, v => text(v)), recordedAt: instant(row.recordedAt),
     void: nullable(row.void, v => { const x = record(v, ['voidedAt', 'reason']); return { voidedAt: instant(x.voidedAt), reason: text(x.reason) }; }),
   };
@@ -149,4 +152,46 @@ export function verifySchoolReceivables(value: unknown, query: ReceivablesQuery)
     || (nextAfter !== null && (items.length !== 50 || nextAfter.toLowerCase() !== ids[49]))
     || new Set(totals.map(t => t.currency)).size !== totals.length) invalid();
   return { localToday: date(row.localToday), filter, canRecord: bool(row.canRecord), totals, items, nextAfter };
+}
+
+/** B-TUI-1b (0280): the current school's invoice list, every status or one, newest first, 50 per page. */
+export const SCHOOL_INVOICE_LIST_STATUSES = ['ALL', 'DRAFT', 'ISSUED', 'PAID', 'VOID', 'UNCOLLECTIBLE'] as const;
+export type SchoolInvoiceListStatus = (typeof SCHOOL_INVOICE_LIST_STATUSES)[number];
+export const LISTED_INVOICE_STATUSES = ['DRAFT', 'ISSUED', 'PAID', 'VOID', 'UNCOLLECTIBLE'] as const;
+export type ListedInvoiceStatus = (typeof LISTED_INVOICE_STATUSES)[number];
+export interface SchoolInvoiceListQuery { status: SchoolInvoiceListStatus; after?: string }
+export interface ListedInvoice extends Omit<InvoiceBalance, 'status'> { status: ListedInvoiceStatus; createdAt: string }
+export interface SchoolInvoiceList {
+  localToday: string; timezone: string; status: SchoolInvoiceListStatus; canIssue: boolean; canRecord: boolean; items: ListedInvoice[]; nextAfter: string | null;
+}
+
+export function validateSchoolInvoiceListQuery(value: unknown): SchoolInvoiceListQuery {
+  const row = record(value, ['status'], ['after']);
+  const query: SchoolInvoiceListQuery = { status: oneOf(row.status, SCHOOL_INVOICE_LIST_STATUSES) };
+  if ('after' in row) query.after = uuid(row.after).toLowerCase();
+  return query;
+}
+export function verifyListedInvoice(value: unknown): ListedInvoice {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const { createdAt, status, ...rest } = value as Record<string, unknown>;
+  const listed = oneOf(status, LISTED_INVOICE_STATUSES);
+  // A DRAFT has no payments and nothing owed yet; every other status reads exactly like a balance row.
+  const balance = verifyInvoiceBalance({ ...rest, status: listed === 'DRAFT' ? 'ISSUED' : listed });
+  if (listed === 'DRAFT' && (balance.paidMinor !== 0 || balance.overdue)) invalid();
+  return { ...balance, status: listed, createdAt: instant(createdAt) };
+}
+export function verifySchoolInvoiceList(value: unknown, query: SchoolInvoiceListQuery): SchoolInvoiceList {
+  const row = record(value, ['localToday', 'timezone', 'status', 'canIssue', 'canRecord', 'items', 'nextAfter']);
+  if (!Array.isArray(row.items) || row.items.length > 50) invalid();
+  const status = oneOf(row.status, SCHOOL_INVOICE_LIST_STATUSES);
+  const items = row.items.map(entry => verifyListedInvoice(entry));
+  const nextAfter = nullable(row.nextAfter, uuid);
+  const ids = items.map(i => i.invoiceId.toLowerCase());
+  // createdAt is shown to the millisecond while the server orders by the full timestamp, so equal values may come in any id order.
+  const newestFirst = items.every((item, n) => n === 0 || item.createdAt <= items[n - 1]!.createdAt);
+  if (status !== query.status || new Set(ids).size !== ids.length || !newestFirst
+    || (query.after !== undefined && ids.includes(query.after))
+    || (status !== 'ALL' && items.some(i => i.status !== status))
+    || (nextAfter !== null && (items.length !== 50 || nextAfter.toLowerCase() !== ids[49]))) invalid();
+  return { localToday: date(row.localToday), timezone: text(row.timezone, 100), status, canIssue: bool(row.canIssue), canRecord: bool(row.canRecord), items, nextAfter };
 }

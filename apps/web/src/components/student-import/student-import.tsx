@@ -1,10 +1,11 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { StudentImportMappingTarget } from '@hon/contracts';
+import { STUDENT_IMPORT_MAX_COLUMNS, type StudentImportMappingTarget } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
+import { parseCsv, keepColumns } from '../import-columns';
 import { ImportError, csvHeaders, csvTooLarge, guessMapping, keepForRetry, studentImportApi, type ImportErrorKind, type ImportScope, type StudentImportApi } from './http';
 import { StudentImportView, unsavedDecisions, type Choice, type DetailState, type ImportAction, type ImportOutcome, type ListState, type UploadState } from './view';
 
@@ -29,6 +30,7 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
   const [list, setList] = useState<ListState>({ state: 'LOADING' });
   const [detail, setDetail] = useState<DetailState>({ state: 'IDLE' });
   const [selected, setSelected] = useState<string | null>(null);
+  const [consent, setConsent] = useState(true);
   const [upload, setUpload] = useState<UploadState>({ phase: 'NONE' });
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [outcome, setOutcome] = useState<ImportOutcome>(null);
@@ -123,7 +125,10 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
     file.text().then((text) => {
       if (!mounted.current || current !== gen.current.file || shown !== privacy.current) return;
       if (csvTooLarge(text)) { setUpload({ phase: 'FILE_ERROR', problem: 'TOO_LARGE' }); return; }
-      const headers = csvHeaders(text);
+      // Exports from other software often have more columns than an import takes; those still load, and only the
+      // matched columns are staged (see onStage).
+      const rows = parseCsv(text), first = rows?.[0];
+      const headers = first && first.length > STUDENT_IMPORT_MAX_COLUMNS && new Set(first).size === first.length && first.every((h) => h.trim() && h.length <= 80) ? first : csvHeaders(text);
       if (!headers) { setUpload({ phase: 'FILE_ERROR', problem: 'UNREADABLE' }); return; }
       setUpload({ phase: 'MAPPING', fileName: file.name.slice(0, 120), csv: text, headers, mapping: guessMapping(headers) });
     }, () => { if (mounted.current && current === gen.current.file) setUpload({ phase: 'FILE_ERROR', problem: 'UNREADABLE' }); });
@@ -134,7 +139,10 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
   const onCancelUpload = useCallback(() => { if (lock === 'NONE') { gen.current.file++; setUpload({ phase: 'NONE' }); } }, [lock]);
   const onStage = useCallback(() => {
     if (upload.phase !== 'MAPPING') return;
-    start('stage', null, { csv: upload.csv, mapping: { ...upload.mapping } });
+    if (upload.headers.length <= STUDENT_IMPORT_MAX_COLUMNS) { start('stage', null, { csv: upload.csv, mapping: { ...upload.mapping } }); return; }
+    const kept = upload.headers.filter((h) => upload.mapping[h] !== 'ignore'), rows = parseCsv(upload.csv);
+    if (!rows || kept.length > STUDENT_IMPORT_MAX_COLUMNS) return;
+    start('stage', null, { csv: keepColumns(rows, kept), mapping: Object.fromEntries(kept.map((h) => [h, upload.mapping[h]!])) });
   }, [upload, start]);
 
   const onOpen = useCallback((batchId: string | null) => {
@@ -153,8 +161,8 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
   }, [ready, choices, start]);
   const onFinalize = useCallback(() => {
     if (!ready || ready.batch.status !== 'STAGED' || unsavedDecisions(ready, choices).length) return;
-    start('finalize', ready.batch.id, { expectedVersion: ready.batch.version, selectedIndices: ready.rows.filter((r) => r.choice === 'IMPORT').map((r) => r.index) });
-  }, [ready, choices, start]);
+    start('finalize', ready.batch.id, { expectedVersion: ready.batch.version, selectedIndices: ready.rows.filter((r) => r.choice === 'IMPORT').map((r) => r.index), ...(consent ? {} : { consentChannels: [] }) });
+  }, [ready, choices, consent, start]);
   const onRefresh = useCallback(() => setRefresh((n) => n + 1), []);
   const onTryAgain = useCallback(() => { void send(); }, [send]);
 
@@ -164,6 +172,6 @@ export function StudentImport({ api = studentImportApi }: { api?: StudentImportA
       hasSchool={!!schoolId} list={list} selected={selected} detail={detail} upload={upload} choices={choices} outcome={outcome}
       locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
       onRefresh={onRefresh} onOpen={onOpen} onFile={onFile} onMap={onMap} onCancelUpload={onCancelUpload} onStage={onStage}
-      onChoice={onChoice} onAll={onAll} onSave={onSave} onFinalize={onFinalize} onTryAgain={onTryAgain}/>
+      onChoice={onChoice} onAll={onAll} onSave={onSave} onFinalize={onFinalize} onTryAgain={onTryAgain} consent={consent} onConsent={setConsent}/>
   </div>;
 }

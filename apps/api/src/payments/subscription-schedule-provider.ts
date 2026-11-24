@@ -32,10 +32,10 @@ export interface ProviderScheduleRequirements {
   readonly offerId: string; readonly offerSetId: string; readonly offerSetVersion: number;
   readonly acceptedOfferDigest: string; readonly disclosureVersion: string; readonly disclosureText: string;
   readonly currency: 'USD'; readonly initialAmountMinor: number; readonly renewalAmountMinor: number;
-  readonly billingInterval: 'MONTHLY' | 'ANNUAL'; readonly introductoryPaidPeriods: number;
+  readonly billingInterval: 'MONTHLY' | 'ANNUAL' | 'ONE_TIME'; readonly introductoryPaidPeriods: number;
   readonly periodCountingRule: 'DISTINCT_VERIFIED_PAID_PERIODS';
   readonly refundTerms: { readonly termsReference: string; readonly windowDays: number };
-  readonly cancellationTerms: { readonly termsReference: string; readonly timing: 'END_OF_PAID_PERIOD' };
+  readonly cancellationTerms: { readonly termsReference: string; readonly timing: 'END_OF_PAID_PERIOD' | null };
 }
 export interface ProviderScheduleObservation {
   readonly identity: string; readonly mode: 'TEST'; readonly evidenceKind: 'DETERMINISTIC_FAKE';

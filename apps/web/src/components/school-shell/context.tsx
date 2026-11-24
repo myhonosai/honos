@@ -13,10 +13,12 @@ export type SchoolShellState = Readonly<{
   phase: EntryPhase; selection: OperationalSchoolScope | null; schoolName: string | null; mode: HonInterfaceTheme;
   /** The viewer's AI team art style on this device; presentation only. */
   artStyle: HonArtStyle; onArtStyle: (style: HonArtStyle) => void;
+  /** Change this viewer's view for this school (the same save the header switch makes). Resolves true once the server saved it. */
+  onMode: (mode: HonInterfaceTheme, via: 'ONBOARDING' | 'SETTINGS') => Promise<boolean>;
 }>;
 
 export const NO_SCHOOL_SHELL: SchoolShellState = { phase: 'IDLE', selection: null, schoolName: null, mode: DEFAULT_HON_INTERFACE_THEME,
-  artStyle: defaultArtStyle(DEFAULT_HON_INTERFACE_THEME), onArtStyle: () => {} };
+  artStyle: defaultArtStyle(DEFAULT_HON_INTERFACE_THEME), onArtStyle: () => {}, onMode: async () => false };
 const Context = createContext<SchoolShellState>(NO_SCHOOL_SHELL);
 
 export function SchoolShellProvider({ value, children }: { value: SchoolShellState; children?: ReactNode }): React.ReactElement {

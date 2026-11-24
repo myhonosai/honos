@@ -311,12 +311,15 @@ try {
   assert.equal(quotaPrepared.status, 'CONFIGURATION_REQUIRED');
   const quotaCorrelation = randomUUID();
   await admin.query("INSERT INTO hon.ai_usage_ledger(organization_id,school_id,provider_code,model_code,modality,customer_credits,correlation_id) VALUES($1,$2,'OPENROUTER','quota-fixture','TEXT',12000,$3)", [org, school, quotaCorrelation]);
+  // 0310: a paying organization has no organization budget; the operator override restores the former 12,000 here.
+  await admin.query("INSERT INTO hon.ai_org_agent_ceiling_overrides(organization_id,ceiling_units,reason) VALUES($1,12000,'Teaching proof operator backstop')", [org]);
   providerReadiness = 'READY';
   const quotaBlocked = await assistant.generate(context(), quotaPrepared.id);
   assert.equal(quotaBlocked.status, 'BLOCKED');
   assert.equal(quotaBlocked.reason, 'CUSTOMER_BUDGET_EXCEEDED');
   assert.equal(generated, 6, 'Quota failure must stop before fake generation.');
   await admin.query('DELETE FROM hon.ai_usage_ledger WHERE correlation_id=$1', [quotaCorrelation]);
+  await admin.query('DELETE FROM hon.ai_org_agent_ceiling_overrides WHERE organization_id=$1', [org]);
 
   providerMode = 'UNKNOWN';
   const unknown = await assistant.submit(context(), { curriculumId: curriculum, brief: 'An unknown provider outcome proof.' });

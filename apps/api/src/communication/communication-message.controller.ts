@@ -103,6 +103,27 @@ export class CommunicationMessageController {
     return { data, meta: { requestId, correlationId: requestId } };
   }
 
+  /** 0243: delivery status and receipts of one message (communication.message.read). */
+  @Get(':messageId/delivery')
+  async delivery(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('messageId', new ParseUUIDPipe()) messageId: string,
+    @Req() request: HonRequest,
+  ) {
+    const identity = request.honIdentity;
+    if (!identity) throw new ForbiddenException('HON identity context is missing.');
+    const scope = await this.database.resolveAuthorizedScope(identity.externalSubject, schoolId, 'communication.message.read');
+    if (!scope || scope.organizationId !== organizationId || scope.schoolId !== schoolId) {
+      throw new ForbiddenException('HON communication message read is not authorized for this school.');
+    }
+    const requestId = randomUUID();
+    const data = await this.messages.readDelivery({
+      organizationId: scope.organizationId, schoolId: scope.schoolId, principalId: scope.principalId, principalType: 'HUMAN_USER', requestId,
+    }, messageId);
+    return { data, meta: { requestId, correlationId: requestId } };
+  }
+
   private async commandContext(
     organizationId: string,
     schoolId: string,

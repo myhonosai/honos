@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 
-/** B-TUI-2 piece 9a (0269): the checkout settings read is a GET; the save is its own same-origin browser command. */
+/** Checkout pages (0402): the read is a GET; each save is its own same-origin browser command. */
 @Injectable()
 export class SchoolCheckoutReadHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_checkout.pages.read';
@@ -9,4 +9,17 @@ export class SchoolCheckoutReadHumanUiGuard extends MembershipActivationHumanUiG
 @Injectable()
 export class SchoolCheckoutSaveHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = 'school_checkout.page.save';
+}
+@Injectable()
+export class SchoolCheckoutSettingsSaveHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_checkout.settings.save';
+}
+@Injectable()
+export class SchoolCheckoutOrdersReadHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_checkout.orders.read';
+}
+/** 0620: issuing (and listing) the share links is its own browser command. */
+@Injectable()
+export class SchoolCheckoutLinksHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = 'school_checkout.links.issue';
 }

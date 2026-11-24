@@ -7,10 +7,19 @@ import { RevenuePlanningWorkbench,RevenueProjectionView,planningRequest } from '
 const org='11111111-1111-4111-8111-111111111111',school='22222222-2222-4222-8222-222222222222',plan='33333333-3333-4333-8333-333333333333';
 const base=`/api/v1/organizations/${org}/schools/${school}/planning/revenue`;
 const snapshot:RevenuePlanSnapshot={plan:{id:plan,version:1,algorithmVersion:'school-revenue-v1',input:{targetMonthlyMinor:100000,currency:'USD',targetFrom:'2026-11-01T00:00:00.000Z',targetTo:'2026-12-01T00:00:00.000Z',historyFrom:'2026-01-01T00:00:00.000Z',historyTo:'2026-01-31T00:00:00.000Z',baselineMethod:'CURRENT_MONTHLY_SCHEDULES',assumptions:{trialToMembership:0.5,activitiesPerLead:3}}},evidence:{currency:'USD',asOf:'2026-10-01T00:00:00.000Z',from:'2026-01-01T00:00:00.000Z',to:'2026-01-31T00:00:00.000Z',eligibleMonthlyMinor:50000,eligibleMemberships:5,activeMemberships:7,excludedMemberships:2,leads:40,bookedTrialLeads:20,completedTrialLeads:10,ambiguousTrialLeads:0},snapshotHash:'a'.repeat(64)};
+describe('revenue planning inside the school shell',()=>{
+ it('shows no school box, UUID fields or load button; the signed-in school is used',async()=>{
+  const { SchoolShellProvider, NO_SCHOOL_SHELL } = await import('../src/components/school-shell/context');
+  const fetcher=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<SchoolShellProvider value={{...NO_SCHOOL_SHELL,phase:'READY',selection:{organizationId:org,schoolId:school},schoolName:'Sunrise'}}><RevenuePlanningWorkbench/></SchoolShellProvider>);
+   for(const text of ['Authorized school context','Organization UUID','School UUID','Load authorized plans','Load authorized context first',school])expect(html).not.toContain(text);
+   for(const text of ['Saved plans','Refresh plans'])expect(html).toContain(text);
+  }finally{fetcher.mockRestore();}
+ });
+});
 describe('deterministic school revenue planning UI',()=>{
  it('loads no data or providers by default, keeps assumptions blank, and never promises financial or execution success',()=>{
   const fetcher=vi.spyOn(globalThis,'fetch');try{const html=renderToStaticMarkup(<RevenuePlanningWorkbench/>);expect(fetcher).not.toHaveBeenCalled();
-   for(const text of ['No verified school evidence loaded','no financial quantities or sample plans are substituted','planning.revenue.manage','Essential, Core and Complete','No AI/provider calls','financial advice or guarantees','Blank means unavailable','Save human plan and evidence only'])expect(html).toContain(text);
+   for(const text of ['No verified school evidence loaded','no financial quantities or sample plans are substituted','Set a revenue goal','Blank means unavailable','Save human plan and evidence only'])expect(html).toContain(text);
    expect(html).not.toContain('Revenue gap');expect(html).not.toContain('Human plan and immutable evidence saved');expect(html).not.toContain('aria-label="Revenue plan projection"');expect(html).toContain('<fieldset disabled=""');
   }finally{fetcher.mockRestore();}
  });

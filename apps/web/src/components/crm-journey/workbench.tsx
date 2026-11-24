@@ -12,6 +12,7 @@ import { readTrialRecovery, readTrialDetail, parseTrialConflict, type TrialRecov
 import { SchoolOperationsNavigation } from '../school-operations-navigation';
 import { formatInSchool, readSchoolClock, schoolLocalToInstant } from '../school-time';
 import { entryText } from '../school-entry/copy';
+import { useShellSchool } from '../school-shell/page-school';
 
 type Step = 'lead' | 'follow' | 'trial' | 'outcome' | 'close' | 'register' | 'history';
 const steps: Step[] = ['lead','follow','trial','outcome','close','register','history'];
@@ -19,9 +20,10 @@ type Notice = 'denied' | 'readError' | 'rejected' | 'unknown' | 'invalid' | 'res
 type CommandResult = Exclude<Kind, 'REGISTER'> | 'REGISTERED' | 'REVIEW' | '';
 const timeout = () => AbortSignal.timeout(20_000);
 const trialScopeKey = (s: Scope, lead: string) => [s.organizationId, s.schoolId, lead].map(v => v.toLowerCase()).join(':');
-export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '', clockReader = readSchoolClock }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string; clockReader?: typeof readSchoolClock }): React.ReactElement {
+export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = '', initialStep, clockReader = readSchoolClock }: { sessionSubject: string; initialScope?: Partial<Scope>; initialLeadId?: string; initialStep?: 'trial'; clockReader?: typeof readSchoolClock }): React.ReactElement {
   const locale = useLocale(), t = (k: JourneyKey) => journeyText(locale.preferences.language, k);
-  const [mode, setMode] = useState('modern'), [step, setStep] = useState<Step>('lead');
+  const shellSchool = useShellSchool();
+  const [mode, setMode] = useState('modern'), [step, setStep] = useState<Step>(initialStep === 'trial' ? 'trial' : 'lead');
   const [scope, setScope] = useState<Scope>({ organizationId: initialScope.organizationId ?? '', schoolId: initialScope.schoolId ?? '' });
   const [rows, setRows] = useState<LeadListItem[] | null>(null), [leadId, setLeadId] = useState(initialLeadId), [query, setQuery] = useState('');
   const [queue, setQueue] = useState<FollowUpQueue | null>(null), [registration, setRegistration] = useState<'NOT_REGISTERED' | 'EXISTING_RECORD' | 'UNAVAILABLE' | 'UNVERIFIED_PREPARED' | null>(null);
@@ -90,13 +92,15 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, invalidateSession); window.removeEventListener(HON_SCHOOL_CONTEXT_CHANGED_EVENT, conceal); };
   }, []);
   useEffect(() => { if (concealed) shieldHeading.current?.focus(); }, [concealed]);
+  // Inside the school shell the page opens on the signed-in school; the server still authorizes every read and command.
+  useEffect(() => { if (shellSchool) void load(false, shellSchool); }, [shellSchool?.organizationId, shellSchool?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   function error(e: unknown, isCommand = false): void {
     navigationVerified.current = false;
     if (e instanceof JourneyError && e.kind === 'SESSION') { invalidateSession(); return; }
     if (e instanceof JourneyError && e.kind === 'DENIED') { setRows(null); setQueue(null); setRegistration(null); setTrial(null); setTrialRecovery(null); setTrialVerified(false); setRetryReviewed(false); setReceipts([]); setNotice('denied'); return; }
     setNotice(e instanceof JourneyError && e.kind === 'REJECTED' ? 'rejected' : isCommand ? 'unknown' : 'readError');
   }
-  async function load(useCurrent = false): Promise<void> {
+  async function load(useCurrent = false, given?: Scope): Promise<void> {
     if (dead.current || readActive.current || commandBusy.current || (!shield.current && (pending.current || dirtyRef.current))) return;
     const restoring = shield.current, original = rowRef.current ?? (pending.current ? { id: pending.current.leadId, primaryPersonId: pending.current.contactId } : null);
     readActive.current = true; const epoch = ++readEpoch.current, controller = new AbortController(); readAbort.current?.abort(); readAbort.current = controller;
@@ -104,7 +108,7 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
     setTrialRecovery(null); setTrialVerified(false); setRetryReviewed(false);
     try {
       await verifyJourneySession(sessionSubject, signal); if (signal.aborted) return;
-      const next = useCurrent ? await readCurrentSchool(signal) : scopeRef.current;
+      const next = given ?? (useCurrent ? await readCurrentSchool(signal) : scopeRef.current);
       if (!next) throw new JourneyError('READ');
       const normalized = { organizationId: next.organizationId.toLowerCase(), schoolId: next.schoolId.toLowerCase() };
       const list = await readLeads(normalized, signal); if (signal.aborted) return;
@@ -309,10 +313,12 @@ export function CrmJourney({ sessionSubject, initialScope = {}, initialLeadId = 
       </>}
       <div className={styles.announce} data-testid="command-status" role="status" aria-live="polite" aria-atomic="true">{commandResult === 'REVIEW' ? t('review') : commandResult === 'REGISTERED' ? t('registered') : commandResult ? `${t(({FOLLOW_UP:'follow',SCHEDULE:'trial',OUTCOME:'outcome',CLOSE:'close'} as const)[commandResult])}: ${t('receipt')}` : trialVerified || trialRecovery ? t('trialReadComplete') : ''}</div>
       <p className={styles.limit}>{t('intro')}</p>
-      <section aria-label={t('school')}><h2>{t('school')}</h2><div className={styles.actions}><button data-testid="current-school" disabled={locked} onClick={() => void load(true)}>{t('currentSchool')}</button><button data-testid="load" disabled={locked || !scope.organizationId || !scope.schoolId} onClick={() => void load()}>{t('load')}</button></div>
+      {shellSchool ? <section aria-label={t('yourLeads')}><h2>{t('yourLeads')}</h2><div className={styles.actions}><button data-testid="load" disabled={locked} onClick={() => void load(false, shellSchool)}>{t('refreshList')}</button></div>
+        {rows ? <><label>{t('search')}<input data-testid="search" disabled={locked} value={query} onChange={e => setQuery(e.target.value)} /></label><label>{t('choose')}<select data-testid="lead-select" disabled={locked} value={leadId} onChange={e => { setLeadId(e.target.value); setTrialRecovery(null); setTrialVerified(false); setRetryReviewed(false); setQueue(null); setRegistration(null); setTrial(null); setReceipts([]); setReceiptConcealed(false); clearDraft(); }}><option value="">{t('choose')}</option>{rows.filter(r => r.id === leadId || `${r.givenName} ${r.familyName} ${r.email ?? ''}`.toLowerCase().includes(query.toLowerCase())).map(r => <option key={r.id} value={r.id}>{r.givenName} {r.familyName} · {statusLabel(r.status)}</option>)}</select></label></> : <p>{loading ? t('loading') : t('empty')}</p>}
+      </section> : <section aria-label={t('school')}><h2>{t('school')}</h2><div className={styles.actions}><button data-testid="current-school" disabled={locked} onClick={() => void load(true)}>{t('currentSchool')}</button><button data-testid="load" disabled={locked || !scope.organizationId || !scope.schoolId} onClick={() => void load()}>{t('load')}</button></div>
         <details><summary>{t('knownSchool')}</summary><p>{t('scopeHelp')}</p><fieldset disabled={locked} className={styles.fields}><label>{t('organization')}<input data-testid="organization" value={scope.organizationId} onChange={e => changeScope('organizationId', e.target.value)} /></label><label>{t('schoolId')}<input data-testid="school" value={scope.schoolId} onChange={e => changeScope('schoolId', e.target.value)} /></label></fieldset></details>
         {rows ? <><p>{t('limit')}</p><label>{t('search')}<input data-testid="search" disabled={locked} value={query} onChange={e => setQuery(e.target.value)} /></label><label>{t('choose')}<select data-testid="lead-select" disabled={locked} value={leadId} onChange={e => { setLeadId(e.target.value); setTrialRecovery(null); setTrialVerified(false); setRetryReviewed(false); setQueue(null); setRegistration(null); setTrial(null); setReceipts([]); setReceiptConcealed(false); clearDraft(); }}><option value="">{t('choose')}</option>{rows.filter(r => r.id === leadId || `${r.givenName} ${r.familyName} ${r.email ?? ''}`.toLowerCase().includes(query.toLowerCase())).map(r => <option key={r.id} value={r.id}>{r.givenName} {r.familyName} · {statusLabel(r.status)}</option>)}</select></label></> : <p>{t('empty')}</p>}
-      </section>
+      </section>}
       <div className={styles.layout}>
         <nav className={styles.steps} aria-label={t('steps')}>{steps.map((s,i) => <button data-testid={`step-${s}`} key={s} disabled={busy || loading} aria-current={s === step ? 'step' : undefined} onClick={() => navigate(s)}><span>{i + 1}</span>{t(s)}</button>)}<p>{t('stepHint')}</p></nav>
         <section className={styles.workspace} aria-busy={busy || loading}><h2 ref={heading} tabIndex={-1}>{t(step)}</h2>

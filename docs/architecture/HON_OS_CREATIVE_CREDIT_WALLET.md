@@ -108,7 +108,7 @@ Manus round-2 finding (P2): reservations and window opening took the time, the S
 
 Deterministic two-connection regressions (`P2-W*`): a holder transaction keeps school C's wallet lock; the API request is confirmed blocked on it with `pg_blocking_pids`; the condition changes by the server clock (`clock_timestamp()`), then the holder releases. Before: 3 of 6 failed (a role grant that expired during the wait still opened a window and still funded a reservation; an included window that ended during the wait still funded one). After: all pass, plus the entitlement-expiry, same-key retry (one reservation, the retry replays it) and pause-during-wait (serialized behind the waiting reservation) cases.
 
-## Free trial lots (0275)
+## Free trial lots (0663)
 
 A free trial grants its school one `TRIAL` lot (1,500 credits, about $15 of provider cost, expiring at the trial end)
 when the trial starts. A school whose organization a creatively funded trial owns is eligible for the trial window

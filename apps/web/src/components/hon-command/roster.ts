@@ -50,6 +50,7 @@ type Definition = Omit<HonCommandAgent, 'name' | 'title' | 'signal' | 'color' | 
 
 const PLANNED_APPROVAL = 'No AI work is available yet. When a governed contract exists, consequential work will still require a qualified human approval in Action Center.';
 const ANSWER_APPROVAL = 'Answers only: it reads this school’s own aggregate numbers and gives the recorded facts and a view. It never drafts, sends, schedules, charges or changes anything; any next step is yours to take.';
+const MAYA_APPROVAL = 'Answers only: she reads this school’s attendance, rank, billing and term signals with your own access and suggests a check-in message. She never sends, schedules, books, charges or changes anything; you decide whether to reach out.';
 const DRAFT_APPROVAL = 'Every draft becomes a CONFIRM proposal. A different qualified human must approve the exact payload in Action Center; approval never sends, publishes or delivers anything.';
 
 const DEFINITIONS: readonly Definition[] = [
@@ -59,7 +60,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Whole-school view and weekly priorities from verified facts (Ask HON → Alex)', state: 'AVAILABLE' },
-      { label: 'Coordinate and delegate work across the team', state: 'BACKEND_REQUIRED' },
+      { label: 'Turn a goal into tasks for your team (Plan with Alex, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'School Command Center', href: '/staff/command-center' },
@@ -91,17 +92,20 @@ const DEFINITIONS: readonly Definition[] = [
   {
     id: 'maya',
     purpose: 'Attendance, retention, student engagement, renewals and family success.',
-    availability: 'PLANNED',
+    availability: 'ANSWERS',
     capabilities: [
-      { label: 'Retention and attendance outreach drafts', state: 'BACKEND_REQUIRED' },
+      { label: 'At-risk students with reasons and one suggested next step (read only)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
+      { label: 'Explain one at-risk student and suggest a check-in message you can send yourself (Ask Maya)', state: 'AVAILABLE', href: '/staff/retention/at-risk' },
+      { label: 'Send, schedule or track outreach', state: 'BACKEND_REQUIRED' },
       { label: 'Renewal preparation', state: 'BACKEND_REQUIRED' },
     ],
     workflows: [
+      { label: 'At-risk students', href: '/staff/retention/at-risk' },
       { label: 'Retention review', href: '/staff/retention/review' },
       { label: 'Attendance', href: '/staff/attendance' },
       { label: 'Renewal reviews', href: '/staff/billing/renewals' },
     ],
-    approval: PLANNED_APPROVAL,
+    approval: MAYA_APPROVAL,
     workspace: null,
     draftWorkKey: null,
   },
@@ -112,7 +116,8 @@ const DEFINITIONS: readonly Definition[] = [
     capabilities: [
       { label: 'Draft content for an existing school campaign', state: 'AVAILABLE', href: '/staff/marketing/assistant' },
       { label: 'Publish, advertise or spend', state: 'BACKEND_REQUIRED' },
-      { label: 'Marketing performance analysis', state: 'BACKEND_REQUIRED' },
+      { label: 'Marketing performance review of leads, sources, campaigns and forms (Marketing review with Marcus, below)', state: 'AVAILABLE' },
+      { label: 'Merchandise ideas and store presentation review in the Shopify Merch Studio', state: 'AVAILABLE', href: '/staff/billing/shopify' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
@@ -128,7 +133,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Class schedule, capacity, instructor coverage and attendance analysis (Ask HON → Jordan)', state: 'AVAILABLE' },
-      { label: 'Operational task follow-through', state: 'BACKEND_REQUIRED' },
+      { label: 'Follow through on open and overdue team tasks (Follow through with Jordan, below)', state: 'AVAILABLE' },
     ],
     workflows: [
       { label: 'Class sessions', href: '/staff/schedule/sessions' },
@@ -163,7 +168,7 @@ const DEFINITIONS: readonly Definition[] = [
     availability: 'ANSWERS',
     capabilities: [
       { label: 'Campaign, plan catalog and Creative Studio analysis (Ask HON → Lena)', state: 'AVAILABLE' },
-      { label: 'Merchandise and commerce presentation drafts', state: 'BACKEND_REQUIRED' },
+      { label: 'Merchandise ideas and store presentation review (Marcus writes these in the Shopify Merch Studio)', state: 'AVAILABLE', href: '/staff/billing/shopify' },
     ],
     workflows: [
       { label: 'Campaigns', href: '/staff/marketing/campaigns' },
@@ -194,14 +199,14 @@ export function honAgent(id: string | null | undefined): HonCommandAgent | null 
 export const HON_DRAFT_WORK_SOURCES: Readonly<Record<AiDraftWorkAgentKey, { label: string; detail: string; destination: string; agentId: HonAiTeamId | null }>> = {
   chad: { label: 'Chad · Follow-up draft', detail: 'CRM follow-up content proposal', destination: '/staff/leads/assistant', agentId: 'chad' },
   marcus: { label: 'Marcus · Marketing draft', detail: 'Campaign content proposal', destination: '/staff/marketing/assistant', agentId: 'marcus' },
-  claire: { label: 'Teaching draft assistant (legacy)', detail: 'Curriculum teaching draft recorded under a legacy key; not Claire’s Business Performance work', destination: '/staff/teaching-assistant', agentId: null },
+  claire: { label: 'Teaching drafts', detail: 'Lesson drafts written from your curriculum', destination: '/staff/teaching-assistant', agentId: null },
 };
 
 /** Known Action Engine proposal codes from the existing governed draft slices. */
 export function approvalSourceLabel(actionCode: string): string {
   if (actionCode === 'crm.follow_up_draft.propose') return 'Chad · Follow-up draft';
   if (actionCode === 'marketing.draft.save') return 'Marcus · Marketing draft';
-  if (actionCode === 'teaching.draft.save') return 'Teaching draft assistant (legacy)';
+  if (actionCode === 'teaching.draft.save') return 'Teaching drafts';
   return 'School workflow';
 }
 
@@ -238,10 +243,10 @@ export const HON_TEACHING_AI = {
   boundary: 'Kai will never mark student proficiency, promotions, testing results or curriculum completion. Those stay instructor decisions recorded in the existing workflows.',
   tools: [
     { label: 'Teaching Studio', href: '/staff/teaching-studio' },
-    { label: 'Curriculum library', href: '/staff/curriculum/library' },
+    { label: 'Videos and links', href: '/staff/curriculum/library' },
     { label: 'Curriculum progress', href: '/staff/curriculum/progress' },
     { label: 'Scheduled classes', href: '/staff/schedule/sessions' },
-    { label: 'Teaching draft assistant (legacy)', href: '/staff/teaching-assistant' },
+    { label: 'Teaching drafts', href: '/staff/teaching-assistant' },
   ],
 } as const;
 

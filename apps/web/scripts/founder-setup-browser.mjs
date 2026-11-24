@@ -102,9 +102,11 @@ try {
         assert(await stageButton.evaluate(el => el === document.activeElement), 'Live feedback must not steal focus');
         assert.equal(await stageButton.getAttribute('aria-current'), 'step');
         const card = rootGuide.locator('section[aria-labelledby="founder-current-step"]');
-        const destinations = { 2: [['openRoles','/staff/roles']], 3: [['openLaunch','/staff/launch'],['openSchedule','/staff/schedule/sessions']], 4: [['openCrm','/staff/crm/leads'],['openPlans','/staff/billing/membership-plans'],['openImport','/staff/migration/leads']], 5: [['openHon','/staff/hon']], 6: [['openSubscription','/staff/subscription']] };
+        const destinations = { 2: [['openInvites','/staff/team/invitations'],['openFamilyAccess','/staff/family-access'],['openRoles','/staff/roles']], 3: [['openLaunch','/staff/launch'],['openSchedule','/staff/schedule/sessions']], 4: [['openCrm','/staff/crm/leads'],['openPlans','/staff/billing/membership-plans'],['openImport','/staff/migration/leads'],['openStudentImport','/staff/migration/students']], 5: [['openHon','/staff/hon']], 6: [['openSubscription','/staff/subscription']] };
         for (const [key, href] of destinations[stage] ?? []) assert.equal(await card.getByRole('link', { name: t(language, key) + ' →', exact: true }).getAttribute('href'), href);
-        if (stage === 1 || stage === 2) assert(await card.getByRole('button', { name: t(language, 'unsupported'), exact: true }).isDisabled());
+        if (stage === 1) assert(await card.getByRole('button', { name: t(language, 'unsupported'), exact: true }).isDisabled());
+        // Step 3 (staff and family access) now links to the real invitation and family access pages instead of a disabled button.
+        if (stage === 2) assert.equal(await card.getByRole('button', { name: t(language, 'unsupported'), exact: true }).count(), 0);
         if (stage === 6) assert(await card.getByText(t(language, 'reviewNote'), { exact: true }).isVisible());
         if (stage === 7) assert(await rootGuide.getByRole('button', { name: t(language, 'submit'), exact: true }).isDisabled());
         assert.equal(await rootGuide.locator('[data-founder-status]').getAttribute('role'), 'status');
@@ -209,10 +211,13 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('focus'))); assert.equal(state.hqReads, readsAfterHide);
   await hq.getByRole('button', { name: t('en','hqLoad'), exact: true }).click(); await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).waitFor();
   await hq.getByRole('button', { name: t('en','sample'), exact: true }).click(); await hq.getByText(t('en','sampleBanner'), { exact: true }).waitFor();
-  state.status = 401; await hq.getByRole('button', { name: t('en','hqLoad'), exact: true }).click(); await hq.getByText(t('en','signedout'), { exact: true }).waitFor();
-  assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0); assert.equal(await page.evaluate(() => window.__founderInvalidations), 1);
-  // A synthetic design example may remain labelled as such after a denied read; it can never substitute for directory facts or progress.
-  assert(await hq.getByText(t('en','hqGap'), { exact: true }).isVisible());
+  state.status = 401; await hq.getByRole('button', { name: t('en','hqLoad'), exact: true }).click();
+  // Since the HQ shell lifecycle fix (launch-readiness [18], #607) a confirmed session end retires the whole HQ page to the
+  // shell's sign-in state, so the guide (and any directory fact) is unmounted rather than left showing its signed-out notice.
+  await page.getByRole('link', { name: 'Sign in to HON', exact: true }).waitFor();
+  assert.equal(await page.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0); assert.equal(await page.evaluate(() => window.__founderInvalidations), 1);
+  // Nothing from the guide survives the session end: no directory facts, progress or synthetic example remains on the page.
+  assert.equal(await page.locator('[data-founder-plane=hq]').count(), 0);
   await context.close(); state.status = 200;
   report.checks.push('HQ: local 403 versus global 401, pending pagehide/late response rejection, no focus auto-read, explicit fresh restoration, unknown real progress');
   assert.equal(report.stageChecks.length, 216); assert.equal(report.focusChecks.length, 27); assert.equal(report.stageAnnouncements.length, 648); assert.equal(report.hqAffordances.length, 9);

@@ -18,7 +18,8 @@ function fixture(options={}) {
   if(sql.includes('FROM hon.idempotency_records'))return{rows:[{request_fingerprint:createHash('sha256').update(JSON.stringify({sessionId,...input})).digest('hex'),status:'COMPLETED',response_body:{id:'historical'}}],rowCount:1};
   if(sql.includes('hon.lock_class_booking_session')){if(options.lockError)throw Object.assign(new Error('SQL_SECRET'),{code:options.lockError});return{rows:options.missing?[]:[session],rowCount:options.missing?0:1};}
   if(sql.includes('FROM hon.student_profiles'))return{rows:[{id:studentProfileId}],rowCount:1};
-  if(sql.includes('FROM hon.class_bookings'))return sql.includes('count(*)')?{rows:[{count:'2'}],rowCount:1}:{rows:[],rowCount:0};
+  if(sql.includes('hon.read_class_session_seats_taken'))return{rows:[{count:options.seats===undefined?2:options.seats}],rowCount:1};
+  if(sql.includes('FROM hon.class_bookings'))return{rows:[],rowCount:0};
   if(sql.includes('INSERT INTO hon.class_bookings'))return{rows:[{id:randomUUID(),classSessionId:sessionId,studentProfileId,bookingKind:'REGULAR',status:args[5],source:'STAFF',bookedAt:'2026-10-16T00:00:00.000Z',version:1,createdAt:'2026-10-16T00:00:00.000Z',updatedAt:'2026-10-16T00:00:00.000Z'}],rowCount:1};
   return{rows:[],rowCount:1};
  }};
@@ -54,10 +55,28 @@ test('saved generic receipts still require live in-transaction session-lock auth
  assert(calls.findIndex(([s])=>s.includes('FROM hon.idempotency_records'))<calls.findIndex(([s])=>s.includes('FROM hon.lock_class_booking_session')));
  const revoked=fixture({replay:true,lockError:'42501'});await assert.rejects(()=>revoked.service.create(context(),sessionId,input),status(403));
 });
+test('launch-readiness P2: a COMPLETED session refuses a new booking with nothing written, while an exact replay into it still returns the stored receipt',async()=>{
+ const refused=fixture({sessionStatus:'COMPLETED'});
+ await assert.rejects(()=>refused.service.create(context(),sessionId,input),e=>e.getStatus?.()===409&&e.getResponse().code==='SESSION_COMPLETED');
+ assert(!refused.calls.some(([sql])=>sql.includes('INSERT INTO hon.class_bookings')||sql.includes('INSERT INTO hon.audit_events')||sql.includes('INSERT INTO hon.outbox_events')));
+ const replay=fixture({replay:true,sessionStatus:'COMPLETED'});
+ assert.deepEqual(await replay.service.create(context(),sessionId,input),{booking:{id:'historical'},created:false,replayed:true});
+ const cancelled=fixture({sessionStatus:'CANCELLED'});
+ await assert.rejects(()=>cancelled.service.create(context(),sessionId,input),e=>e.getResponse().code==='SESSION_CANCELLED');
+});
 test('generic controller supplies only the verified external subject and exact human authority',async()=>{
  const calls=[];const controller=new ClassBookingController({resolveAuthorizedScope:async(...args)=>{calls.push(args);return scope;}},{create:async(c,id,body)=>{assert.equal(c.externalSubject,'verified-subject');assert.equal(c.principalId,principalId);assert.equal(c.principalType,'HUMAN_USER');assert.equal(c.source,'HUMAN_UI');assert(!c.actionRequestId&&!c.delegatedByPrincipalId);assert.equal(id,sessionId);assert.deepEqual(body,input);return{booking:{id:'receipt'},created:true,replayed:false};}});
  const request={honIdentity:{externalSubject:'verified-subject'},headers:{'external-subject':'forged'},query:{principalId:randomUUID()}};const response={status:n=>assert.equal(n,201)};
  assert.equal((await controller.create(organizationId,schoolId,sessionId,'key',input,request,response)).data.id,'receipt');
  assert.deepEqual(calls[0],['verified-subject',schoolId,'schedule.booking.manage']);
  await assert.rejects(()=>controller.create(randomUUID(),schoolId,sessionId,'key',input,request,response),status(403));
+});
+test('0538 seat count comes from the scoped kiosk-aware read and fails closed when it answers null',async()=>{
+ {const {service,calls}=fixture({policy:'REQUIRED_BOOKING',seats:0});const result=await service.create(context(),sessionId,input);
+  assert.equal(result.booking.status,'BOOKED');
+  assert(calls.some(([sql,args])=>sql.includes('SELECT hon.read_class_session_seats_taken($1::uuid)')&&args[0]===sessionId));
+  assert(!calls.some(([sql])=>sql.includes('count(*)')));}
+ {const {service}=fixture({policy:'REQUIRED_BOOKING',seats:1});const result=await service.create(context(),sessionId,input);assert.equal(result.booking.status,'WAITLISTED');}
+ for(const seats of [null,-1,1.5,'1']){const {service,calls}=fixture({policy:'REQUIRED_BOOKING',seats});
+  await assert.rejects(()=>service.create(context(),sessionId,input),status(404));assert(!calls.some(([sql])=>sql.includes('INSERT INTO hon.class_bookings')));}
 });

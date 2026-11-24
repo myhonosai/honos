@@ -25,9 +25,12 @@ export const HON_ANALYST_AGENT = 'claire' as const;
  * 0260: the read-only analysis specialists. Claire (Business Performance), Alex (general management), Jordan (operations)
  * and Lena (creative & commerce) all answer in text from the school's own aggregate facts; none drafts or changes anything.
  */
-export const HON_ANALYST_AGENTS = ['claire', 'alex', 'jordan', 'lena'] as const;
+export const HON_ANALYST_AGENTS = ['claire', 'alex', 'jordan', 'lena', 'maya'] as const;
 export type HonAnalystAgentKey = typeof HON_ANALYST_AGENTS[number];
 export const isHonAnalystAgent = (v: unknown): v is HonAnalystAgentKey => (HON_ANALYST_AGENTS as readonly unknown[]).includes(v);
+/** K2c: who a HON answer may suggest (closed set; capability-filtered by the server): the delegates, and Claire. */
+export const HON_SUGGESTED_AGENTS = ['marcus', 'kai', 'chad', HON_ANALYST_AGENT] as const;
+export type HonSuggestedAgentKey = typeof HON_SUGGESTED_AGENTS[number];
 /** At most this many specialists HON may suggest for one answer. A suggestion is never run without the human confirming it. */
 export const HON_REPLY_MAX_SUGGESTIONS = 3;
 /**
@@ -66,7 +69,9 @@ export type HonDelegation =
   | { agentKey: 'marcus'; campaignId: string }
   | { agentKey: 'kai'; curriculumId: string }
   /** An analysis specialist's question is the turn's text (at most HON_REPLY_LIMITS.questionCharacters); no target. */
-  | { agentKey: HonAnalystAgentKey }
+  | { agentKey: Exclude<HonAnalystAgentKey, 'maya'> }
+  /** 0284: Maya answers about one at-risk membership of this school (the 0259 list); no other target. */
+  | { agentKey: 'maya'; membershipId: string }
   | { agentKey: 'chad'; leadId: string; expectedLeadVersion: number; purpose: FollowUpDraftPurpose };
 /**
  * HON reply modes (owner decision 2026-11-06 16:10Z). The human chooses the mode; the server never upgrades one. Both
@@ -104,7 +109,7 @@ export const HON_REPLY_ROLE = 'hon' as const;
 /** How a HON reply was produced. truncated: cut off at the output limit (shown as incomplete, never as complete). */
 export interface HonReplyDetail { mode: HonReplyMode; step: number; maxSteps: number; truncated: boolean; canContinue: boolean; continuesTurnId: string | null;
   /** Specialists HON suggests for this answer: only READY delegates this reader may use, never for a cut-off or concealed answer. Suggestions do nothing until confirmed as a delegation turn. */
-  suggestions: HonDelegateAgentKey[];
+  suggestions: HonSuggestedAgentKey[];
   /** 0254: up to three follow-up questions for a whole, shown, completed answer (else empty). Tapping one runs nothing. */
   followUps: string[];
   /** 0254: up to five fact areas this answer was based on, only areas the server sent with it (else empty). */
@@ -143,6 +148,7 @@ const fail = (code: string) => (): never => { throw new Error(code); };
 const invalid = fail('INVALID_HON_CONVERSATION_INPUT');
 const drift = fail('INVALID_HON_CONVERSATION_RESPONSE');
 const isAgent = (v: unknown): v is HonDelegateAgentKey => (HON_DELEGATE_AGENTS as readonly unknown[]).includes(v);
+const isSuggested = (v: unknown): v is HonSuggestedAgentKey => (HON_SUGGESTED_AGENTS as readonly unknown[]).includes(v);
 const isReply = (v: unknown): v is string => typeof v === 'string' && v.trim().length >= 1 && v.length <= HON_REPLY_LIMITS.replyCharacters;
 const isReplyDetail = (v: unknown, completed: boolean): boolean => {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return false;
@@ -150,7 +156,7 @@ const isReplyDetail = (v: unknown, completed: boolean): boolean => {
   const keys = Object.keys(d).sort().join(',');
   const sug = d.suggestions, ask = d.followUps, src = d.sources;
   return keys === 'canContinue,continuesTurnId,followUps,maxSteps,mode,sources,step,suggestions,truncated'
-    && Array.isArray(sug) && sug.length <= HON_REPLY_MAX_SUGGESTIONS && sug.every(isAgent) && new Set(sug).size === sug.length
+    && Array.isArray(sug) && sug.length <= HON_REPLY_MAX_SUGGESTIONS && sug.every(isSuggested) && new Set(sug).size === sug.length
     && Array.isArray(ask) && ask.length <= HON_REPLY_MAX_FOLLOW_UPS && ask.every(isHonReplyFollowUp) && distinctFollowUps(ask)
     && Array.isArray(src) && src.length <= HON_REPLY_MAX_SOURCES && src.every(isHonReplySourceKey) && new Set(src).size === src.length
     // Only a completed, whole answer can carry suggestions, follow-ups or sources.
@@ -197,10 +203,15 @@ export function validateHonTurnRequest(value: unknown): HonTurnRequest {
   const from = 'fromSuggestionTurnId' in r ? { fromSuggestionTurnId: r.fromSuggestionTurnId as string } : {};
   const d = record(r.delegation, invalid);
   if (isHonAnalystAgent(d.agentKey)) {
-    // An analysis specialist is never confirmed from a HON suggestion in this slice, and its question needs text.
-    exactKeys(d, ['agentKey'], invalid);
-    if ('fromSuggestionTurnId' in r || !marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
-    return { text: r.text as string, delegation: { agentKey: d.agentKey } };
+    // An analysis specialist's question needs text. K2c: only Claire may confirm HON's suggestion (fromSuggestionTurnId);
+    // the other specialists are not in HON's suggestion set. 0284: Maya names one membership.
+    exactKeys(d, d.agentKey === 'maya' ? ['agentKey', 'membershipId'] : ['agentKey'], invalid);
+    if ((d.agentKey !== HON_ANALYST_AGENT && 'fromSuggestionTurnId' in r) || !marketingSafeText(r.text, HON_REPLY_LIMITS.questionCharacters) || (r.text as string).trim().length === 0) invalid();
+    if (d.agentKey === 'maya') {
+      if (!isUuid(d.membershipId)) invalid();
+      return { text: r.text as string, delegation: { agentKey: 'maya', membershipId: (d.membershipId as string).toLowerCase() } };
+    }
+    return { text: r.text as string, delegation: { agentKey: d.agentKey }, ...(d.agentKey === HON_ANALYST_AGENT ? from : {}) };
   }
   if (!isAgent(d.agentKey) || !marketingSafeText(r.text, HON_TURN_TEXT_LIMITS[d.agentKey])) invalid();
   const text = r.text as string;
@@ -290,7 +301,7 @@ export function composeHonConversationReadiness(team: {
  */
 export const HON_ORCHESTRATION_STATUSES = ['PENDING', 'PARTIAL', 'COMPLETED', 'NEEDS_REVIEW', 'FAILED', 'UNKNOWN'] as const;
 export type HonOrchestrationStatus = typeof HON_ORCHESTRATION_STATUSES[number];
-export interface HonOrchestrationMember { agentKey: HonDelegateAgentKey; turnId: string; status: HonTurnStatus }
+export interface HonOrchestrationMember { agentKey: HonSuggestedAgentKey; turnId: string; status: HonTurnStatus }
 export interface HonOrchestration { sourceTurnId: string; status: HonOrchestrationStatus; members: HonOrchestrationMember[] }
 export interface HonOrchestrationList { items: HonOrchestration[] }
 
@@ -314,7 +325,7 @@ export function validateHonOrchestrationList(value: unknown): HonOrchestrationLi
     const agents = new Set<unknown>();
     for (const m of o.members as unknown[]) {
       const k = record(m, drift); exactKeys(k, ['agentKey', 'turnId', 'status'], drift);
-      if (!isAgent(k.agentKey) || agents.has(k.agentKey) || !isUuid(k.turnId) || turns.has(k.turnId) || k.turnId === o.sourceTurnId || !isStatus(k.status)) drift();
+      if (!isSuggested(k.agentKey) || agents.has(k.agentKey) || !isUuid(k.turnId) || turns.has(k.turnId) || k.turnId === o.sourceTurnId || !isStatus(k.status)) drift();
       agents.add(k.agentKey); turns.add(k.turnId);
     }
     // The server's derived status must match the members it reports.

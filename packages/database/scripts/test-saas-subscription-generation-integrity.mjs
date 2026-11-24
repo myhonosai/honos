@@ -83,7 +83,7 @@ try{
  // Snapshot all pre-existing business tables; excludes only explicit synthetic offer/evidence/IAM rows.
  const excluded=[...tables,'saas_offer_sets','saas_offer_set_offers','saas_offer_sales_stops','saas_requests','saas_audit','saas_outbox','users','principals','hq_operator_grants','principal_role_grants'];
  const domainTables=(await admin.query("SELECT tablename FROM pg_tables WHERE schemaname='hon' AND NOT(tablename=ANY($1::text[])) ORDER BY tablename",[excluded])).rows.map(r=>r.tablename);
- async function snapshot(){const result={};for(const t of domainTables){assert(/^[a-z_]+$/.test(t));result[t]=createHash('sha256').update(JSON.stringify((await admin.query('SELECT to_jsonb(t)::text data FROM hon.'+t+' t ORDER BY 1')).rows)).digest('hex');}return result;}
+ async function snapshot(){const result={};for(const t of domainTables){assert(/^[a-z][a-z0-9_]*$/.test(t));result[t]=createHash('sha256').update(JSON.stringify((await admin.query('SELECT to_jsonb(t)::text data FROM hon.'+t+' t ORDER BY 1')).rows)).digest('hex');}return result;}
  const before=await snapshot();
  async function publish(offers=pricingOffers()){
   const d=await billing.createOfferSetDraft(H('hq'),{basedOnSetId:null,termsReference:'SYNTHETIC_A2_TERMS_V1',founderTotalLimit:50,offers},K());
@@ -97,11 +97,12 @@ try{
   return (await accept(await preview(schedule,who),K(),who)).acceptance;
  }
  for(const kind of c.SAAS_SCHEDULED_OFFER_KINDS){
-  const s=(await record(offers[kind],offers[kind.endsWith('MONTHLY')?'REGULAR_MONTHLY':'REGULAR_ANNUAL'])).schedule;versions[kind]=s.version;
-  assert.deepEqual(s.terms,c.proposedHonOsLaunchPriceSchedule(kind));
-  if(kind.startsWith('FOUNDER_')){const p=await preview(s);assert(p.blockers.includes('FOUNDER_ALLOCATION_CONTRACT_UNAVAILABLE'));await nothing(()=>accept(p),422,'SAAS_PRICE_ACCEPTANCE_BLOCKED');}
+  const s=(await record(offers[kind],offers[kind])).schedule;versions[kind]=s.version;
+  assert.deepEqual(s.terms,c.honOsLaunchScheduleTerms(kind));
+  // 0279: founder terms are locked while subscribed; a spot is counted only at the first verified payment, never here.
+  if(kind.startsWith('FOUNDER_')){const p=await preview(s);assert.deepEqual(p.blockers,[]);assert.equal(s.terms.schemaVersion,2);}
  }
- passed('all four immutable pricing schedules preserved; founder acknowledgement blocked pending C');
+ passed('all four immutable pricing schedules preserved; founder terms locked while subscribed (no spot counted by a preview)');
  const accepted=await fresh(),key=K(),g=(await generation(accepted,key)).generation;
  assert.deepEqual(g.acceptance,accepted);assert.equal(g.organizationId,org.id);assert.equal(g.schoolId,org.school);
  assert.equal(g.provider.identity,'UNCONFIGURED');assert.equal(g.provider.generationReference,g.generationId);

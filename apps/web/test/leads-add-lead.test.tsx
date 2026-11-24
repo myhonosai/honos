@@ -61,6 +61,7 @@ it('turns the typed form into the closed lead-create input, or names the field t
   expect(buildLeadInput({ givenName: ' Riley ', familyName: 'Park', email: '', phone: '' }, choice)).toEqual({ ok: true, input: { pipelineId: id(61), pipelineStageId: id(71), primaryContact: { givenName: 'Riley', familyName: 'Park' } } });
   expect(buildLeadInput({ givenName: 'Riley', familyName: 'Park', email: ' r@example.invalid ', phone: '(555) 555-0100' }, choice))
     .toMatchObject({ ok: true, input: { primaryContact: { email: 'r@example.invalid', phoneE164: '+15555550100' } } });
+  expect(buildLeadInput({ givenName: 'Riley', familyName: 'Park', email: '', phone: '' }, choice, false)).toEqual({ ok: true, input: { pipelineId: id(61), pipelineStageId: id(71), primaryContact: { givenName: 'Riley', familyName: 'Park' }, consentChannels: [] } });
   expect(buildLeadInput({ givenName: '', familyName: 'Park', email: '', phone: '' }, choice)).toEqual({ ok: false, problem: 'nameMissing' });
   expect(buildLeadInput({ givenName: 'Riley', familyName: 'Park', email: 'nope', phone: '' }, choice)).toEqual({ ok: false, problem: 'emailInvalid' });
   expect(buildLeadInput({ givenName: 'Riley', familyName: 'Park', email: '', phone: '123' }, choice)).toEqual({ ok: false, problem: 'phoneInvalid' });
@@ -128,4 +129,10 @@ it('review P3: a definite starter refusal drops the key; only an unknown outcome
   expect(starterKeyAfter(new LeadsError('UNAVAILABLE'))).toBe('keep');
   vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network'); }));
   expect(starterKeyAfter(await addLeadApi.setUpStarter(scope, id(99)).catch((e: unknown) => e))).toBe('keep');
+});
+
+it('IC1: the add-lead form shows a consent box ticked by default that staff can untick', () => {
+  const open = render({ open: true });
+  expect(open).toContain('Record email and text consent'); expect(open).toMatch(/name="record-consent"[^>]*checked=""|checked=""[^>]*name="record-consent"/);
+  expect(render({ open: true, consent: false })).not.toMatch(/name="record-consent"[^>]*checked=""|checked=""[^>]*name="record-consent"/);
 });

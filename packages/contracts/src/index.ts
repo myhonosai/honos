@@ -32,6 +32,7 @@ export * from './crm-lead-create.js';
 export * from './crm-lead-registration.js';
 export * from './crm-lead-registration-recovery.js';
 export * from './school-membership-plans.js';
+export * from './school-membership-plan-setup.js';
 export * from './crm-guardian-child-enrollment.js';
 export * from './membership-activation.js';
 export * from './crm-lead-memberships.js';
@@ -43,6 +44,12 @@ export type HonTier = (typeof HON_TIERS)[number];
 
 export const HON_INTERFACE_THEME_IDS = ['big-button', 'modern', 'classic'] as const;
 export type HonInterfaceTheme = (typeof HON_INTERFACE_THEME_IDS)[number];
+/** 0460: each person picks one of three free browser voices per AI teammate (presentation only; 1 = the original voice). */
+export const HON_VOICE_AGENT_KEYS = ['hon', 'claire', 'alex', 'jordan', 'lena', 'marcus', 'chad', 'maya', 'kai'] as const;
+export type HonVoiceAgentKey = (typeof HON_VOICE_AGENT_KEYS)[number];
+export const HON_AGENT_VOICE_CHOICES = [1, 2, 3] as const;
+export type HonAgentVoiceChoice = (typeof HON_AGENT_VOICE_CHOICES)[number];
+export type HonAgentVoiceChoices = Record<HonVoiceAgentKey, HonAgentVoiceChoice>;
 
 export const PRINCIPAL_TYPES = [
   'HUMAN_USER',
@@ -133,6 +140,14 @@ export interface DomainEvent<TPayload extends Record<string, unknown> = Record<s
   payload: TPayload;
 }
 
+/** IC1 (0634) automatic intake consent: the channels staff leave ticked on an add or import. */
+export type IntakeConsentChannel = 'EMAIL' | 'SMS';
+export const INTAKE_CONSENT_CHANNELS: readonly IntakeConsentChannel[] = ['EMAIL', 'SMS'];
+/** Exactly a duplicate-free subset of EMAIL and SMS. */
+export function isIntakeConsentChannels(value: unknown): value is IntakeConsentChannel[] {
+  return Array.isArray(value) && value.length <= 2 && value.every((v) => v === 'EMAIL' || v === 'SMS') && new Set(value).size === value.length;
+}
+
 export interface CreateLeadInput {
   pipelineId: string;
   pipelineStageId: string;
@@ -148,6 +163,8 @@ export interface CreateLeadInput {
   campaignId?: string;
   campaignCode?: string;
   attribution?: Record<string, string>;
+  /** IC1 (0634): consent channels staff left ticked when adding the lead; omitted means both (the default). */
+  consentChannels?: IntakeConsentChannel[];
 }
 
 export interface LeadSummary {
@@ -218,6 +235,8 @@ export interface CreatePersonInput {
   familyName: string;
   email?: string | undefined;
   phoneE164?: string | undefined;
+  /** IC1 (0634): consent channels staff left ticked; omitted means both (the default). */
+  consentChannels?: IntakeConsentChannel[] | undefined;
 }
 
 export interface PersonSummary {
@@ -871,7 +890,8 @@ export const COMMUNICATION_CONSENT_STATUSES = ['OPTED_IN', 'OPTED_OUT'] as const
 export type CommunicationConsentStatus = (typeof COMMUNICATION_CONSENT_STATUSES)[number];
 
 /** Provenance is evidence metadata, distinct from CommandContext.source. */
-export const COMMUNICATION_CONSENT_SOURCES = ['STAFF', 'PARENT', 'IMPORT'] as const;
+/** RECIPIENT (0243): the person opted out themselves (email unsubscribe, spam report, STOP reply). */
+export const COMMUNICATION_CONSENT_SOURCES = ['STAFF', 'PARENT', 'IMPORT', 'RECIPIENT'] as const;
 export type CommunicationConsentSource = (typeof COMMUNICATION_CONSENT_SOURCES)[number];
 
 /**
@@ -887,6 +907,10 @@ export interface RecordCommunicationConsentInput {
 }
 
 /** Narrow representation: no contact address, tenant metadata, or staff identity. */
+/** IC1 (0634): how an automatically recorded consent was captured. PRIOR_OPT_OUT: an opt-out on another record won. */
+export const INTAKE_CONSENT_METHODS = ['LEAD_FORM', 'WALK_IN_KIOSK', 'FACEBOOK_LEAD_FORM', 'INBOUND_TEXT', 'STAFF_ADD', 'LEAD_IMPORT', 'STUDENT_IMPORT', 'PRIOR_OPT_OUT'] as const;
+export type IntakeConsentMethod = (typeof INTAKE_CONSENT_METHODS)[number];
+
 export interface CommunicationConsentSummary {
   channel: CommunicationConsentChannel;
   status: CommunicationConsentStatus;
@@ -894,6 +918,8 @@ export interface CommunicationConsentSummary {
   capturedAt: string;
   version: number;
   updatedAt: string;
+  /** Set only while the current version is the automatically captured one (a later staff record, STOP or unsubscribe clears it). */
+  captureMethod: IntakeConsentMethod | null;
 }
 
 /** Provider-neutral channels for a consent-gated outbound message queue. */
@@ -910,7 +936,11 @@ export interface CreateCommunicationMessageInput {
   channel: CommunicationMessageChannel;
   content: string;
   scheduledAt?: string | undefined;
+  /** EMAIL only (TE1): the subject the email is sent with; without it the adapter uses the school's standard subject. */
+  emailSubject?: string | undefined;
 }
+/** The longest staff email subject (0423 column check). */
+export const COMMUNICATION_EMAIL_SUBJECT_MAX = 150;
 
 /** Queueing is a separate human confirmation against the current consent record. */
 export interface QueueCommunicationMessageInput {
@@ -927,9 +957,41 @@ export interface CommunicationMessageSummary {
   scheduledAt?: string | undefined;
   createdByPrincipalId: string;
   queuedByPrincipalId?: string | undefined;
+  emailSubject?: string | undefined;
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 0243 delivery of a QUEUED message. NOT_STARTED: queued, no delivery record yet. */
+export const COMMUNICATION_DELIVERY_STATUSES = ['NOT_STARTED', 'PENDING', 'SENDING', 'ACCEPTED', 'DELIVERED', 'BOUNCED', 'FAILED', 'SUPPRESSED', 'UNKNOWN'] as const;
+export type CommunicationDeliveryStatus = (typeof COMMUNICATION_DELIVERY_STATUSES)[number];
+export const COMMUNICATION_DELIVERY_HOLD_REASONS = ['SCHEDULED', 'QUIET_HOURS', 'SCHOOL_INACTIVE', 'RETRY_WAIT', 'SENDER_NOT_READY'] as const;
+export type CommunicationDeliveryHoldReason = (typeof COMMUNICATION_DELIVERY_HOLD_REASONS)[number];
+export const COMMUNICATION_DELIVERY_FAILURE_CODES = [
+  'CONSENT_MISSING', 'ADDRESS_MISSING', 'LEASE_EXPIRED', 'PROVIDER_UNKNOWN', 'PROVIDER_REJECTED', 'INVALID_ADDRESS',
+  'RETRIES_EXHAUSTED', 'BOUNCED', 'DROPPED', 'UNDELIVERED', 'PROVIDER_FAILED',
+] as const;
+export type CommunicationDeliveryFailureCode = (typeof COMMUNICATION_DELIVERY_FAILURE_CODES)[number];
+export const COMMUNICATION_DELIVERY_EVENT_TYPES = ['SENT', 'DELIVERED', 'DEFERRED', 'BOUNCED', 'DROPPED', 'UNDELIVERED', 'FAILED', 'UNSUBSCRIBED', 'SPAM_REPORT'] as const;
+export type CommunicationDeliveryEventType = (typeof COMMUNICATION_DELIVERY_EVENT_TYPES)[number];
+export type CommunicationSentAs = 'EMAIL' | 'SMS' | 'MMS';
+
+/** School delivery read: no address, provider IDs or cost. */
+export interface CommunicationDeliveryView {
+  messageId: string;
+  channel: CommunicationMessageChannel;
+  status: CommunicationDeliveryStatus;
+  holdReason?: CommunicationDeliveryHoldReason | undefined;
+  nextAttemptAt?: string | undefined;
+  attempts: number;
+  sentAs?: CommunicationSentAs | undefined;
+  segments?: number | undefined;
+  failureCode?: CommunicationDeliveryFailureCode | undefined;
+  acceptedAt?: string | undefined;
+  finalAt?: string | undefined;
+  updatedAt?: string | undefined;
+  receipts: Array<{ type: CommunicationDeliveryEventType; occurredAt: string }>;
 }
 
 export interface RegisteredAction {
@@ -1016,6 +1078,8 @@ export * from './saas-invoicing.js';
 export * from './saas-credits.js';
 export * from './saas-creative-wallet.js';
 export * from './creative-studio.js';
+export * from './creative-studio-avatars.js';
+export * from './creative-provider-jobs.js';
 export * from './saas-refunds-rewards.js';
 export * from './saas-payments.js';
 export * from './saas-school-billing.js';
@@ -1029,11 +1093,14 @@ export * from './language-preferences.js';
 export * from './saas-trials.js';
 
 export * from './saas-price-acceptance.js';
+export * from './saas-founder-allocation.js';
 export * from './saas-subscription-generation.js';
 
 export * from './school-owner-invitations.js';
 export * from './school-ownership.js';
 export * from './ai-spend-pause.js';
+export * from './ai-school-cost-limit.js';
+export * from './ai-exception-allowance.js';
 export * from './ai-unknown-resolution.js';
 export * from './ai-school-usage.js';
 export * from './ai-team-readiness.js';
@@ -1048,12 +1115,93 @@ export * from './membership-pauses.js';
 export * from './saas-schedule-billing.js';
 export * from './saas-paid-review.js';
 export * from './hq-support.js';
+export * from './hq-business-numbers.js';
+export * from './hq-communications.js';
 export * from './hq-marketing.js';
+export * from './hq-plan-promotions.js';
+export * from './hq-prospects.js';
 export * from './hq-creative.js';
 export * from './student-imports.js';
+export * from './history-imports.js';
+export * from './paper-imports.js';
+export * from './person-photos.js';
+export * from './attendance-cards.js';
 export * from './class-series.js';
+export * from './calendar-cards.js';
+export * from './calendar-settings.js';
 export * from './school-events.js';
 export * from './tuition-payments.js';
+export * from './simple-invoices.js';
 export * from './school-payments.js';
 export * from './school-checkout.js';
+export * from './school-pay-methods.js';
 export * from './maya-at-risk.js';
+export * from './text-pieces.js';
+export * from './hq-hon.js';
+export * from './school-branding.js';
+export * from './school-location.js';
+export * from './school-demo-data.js';
+export * from './crm-pipeline-board.js';
+export * from './school-booking-types.js';
+export * from './parent-class-booking.js';
+export * from './parent-family-picker.js';
+export * from './parent-school-bookings.js';
+export * from './family-messages.js';
+export * from './school-conversations.js';
+export * from './conversation-ai.js';
+export * from './contact-message-history.js';
+export * from './school-message-history.js';
+export * from './school-message-templates.js';
+export * from './school-pay-autopay.js';
+export * from './hq-school-health.js';
+export * from './school-reports.js';
+export * from './school-onboarding.js';
+export * from './school-support.js';
+export * from './automation-workflows.js';
+export * from './billing-imports.js';
+export * from './custom-tools.js';
+export * from './school-social.js';
+export * from './school-social-posts.js';
+export * from './school-number-orders.js';
+export * from './school-a2p-registrations.js';
+export * from './school-social-inbox.js';
+export * from './school-website.js';
+export * from './school-website-templates.js';
+export * from './pos.js';
+export * from './school-website-ai.js';
+export * from './school-contacts.js';
+export * from './school-contact-card.js';
+export * from './school-contact-admin.js';
+export * from './school-pay-charges.js';
+export * from './school-pay-once.js';
+export * from './shopify.js';
+export * from './shopify-merch-ai.js';
+export * from './shopify-commerce-review.js';
+export * from './alex-delegation.js';
+export * from './jordan-follow-through.js';
+export * from './marcus-marketing-review.js';
+export * from './walk-in-kiosk.js';
+export * from './face-checkin.js';
+export * from './membership-agreement.js';
+export * from './school-social-ads.js';
+export * from './staff-shifts.js';
+export * from './staff-time-clock.js';
+export * from './school-blasts.js';
+export * from './school-media.js';
+export * from './eian.js';
+export * from './eian-speech.js';
+export * from './parent-invoice-pay.js';
+export * from './parent-app-curriculum.js';
+export * from './rank-setup.js';
+export * from './rank-chart-draft.js';
+export * from './school-announcements.js';
+export * from './parent-push.js';
+export * from './parent-pro-shop.js';
+export * from './family-referrals.js';
+export * from './family-checkout.js';
+export * from './public-checkout.js';
+export * from './parent-attendance-streaks.js';
+export * from './journey-recommendations.js';
+export * from './person-membership-start.js';
+export * from './creative-designs.js';
+export * from './staff-school-choice.js';

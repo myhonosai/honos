@@ -32,6 +32,7 @@ const en = {
   deniedCommand: 'Your HQ access does not allow this. Nothing was saved.', invalidCommand: 'The request was not accepted as sent. Nothing was saved.',
   goneCommand: 'That campaign was not found. Nothing was saved.',
   creativeTitle: 'Creative Studio', creativeNext: 'Images and short videos for HQ campaigns, paid from HQ’s own monthly credit budget, separate from school credits.', creativeOpen: 'Open HQ Creative Studio',
+  promotionsTitle: 'Plan promotions', promotionsNext: 'Show school owners a published monthly, annual or lifetime offer inside the app. In-app only, no email or text.', promotionsOpen: 'Open plan promotions',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
@@ -67,6 +68,7 @@ const ko: Record<Key, string> = {
   deniedCommand: 'HQ 권한으로 이 작업을 할 수 없습니다. 아무것도 저장되지 않았습니다.', invalidCommand: '요청이 전송된 그대로 수락되지 않았습니다. 아무것도 저장되지 않았습니다.',
   goneCommand: '해당 캠페인을 찾을 수 없습니다. 아무것도 저장되지 않았습니다.',
   creativeTitle: '크리에이티브 스튜디오', creativeNext: '학교 크레딧과 분리된 HQ 자체 월간 크레딧 예산으로 HQ 캠페인용 이미지와 짧은 동영상을 만듭니다.', creativeOpen: 'HQ 크리에이티브 스튜디오 열기',
+  promotionsTitle: '요금제 프로모션', promotionsNext: '게시된 월간, 연간 또는 평생 혜택을 앱 안에서 학교 운영자에게 보여 줍니다. 앱 안에서만 표시되며 이메일이나 문자는 보내지 않습니다.', promotionsOpen: '요금제 프로모션 열기',
 };
 const es: Record<Key, string> = {
   title: 'Marketing y creatividad', refresh: 'Actualizar',
@@ -101,6 +103,7 @@ const es: Record<Key, string> = {
   deniedCommand: 'Tu acceso de HQ no permite esto. No se guardó nada.', invalidCommand: 'La solicitud no se aceptó tal como se envió. No se guardó nada.',
   goneCommand: 'No se encontró esa campaña. No se guardó nada.',
   creativeTitle: 'Estudio creativo', creativeNext: 'Imágenes y videos cortos para campañas de HQ, pagados con el presupuesto mensual de créditos de HQ, separado de los créditos de las escuelas.', creativeOpen: 'Abrir el Estudio creativo de HQ',
+  promotionsTitle: 'Promociones de planes', promotionsNext: 'Muestra a los dueños de escuelas una oferta mensual, anual o de por vida ya publicada, dentro de la app. Solo en la app, sin correo ni mensajes de texto.', promotionsOpen: 'Abrir promociones de planes',
 };
 export type MarketingKey = Key;
 export function marketingText(language: string, key: Key, vars: Record<string, string> = {}): string {

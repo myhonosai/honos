@@ -13,7 +13,10 @@ Build settings:
 | Variable | Default | Meaning |
 |---|---|---|
 | `HON_WEBSITE_APP_URL` | `http://localhost:3000` | Origin of the HON OS app. "Start a new school" goes to `<origin>/account/start`, "Sign in" to `<origin>/auth/login`. Only a plain http(s) origin is accepted. |
+| `HON_WEBSITE_ORIGIN` | `https://myhonos.com` | This site's public address, used for canonical links, language alternates, share cards, robots.txt and sitemap.xml. |
 | `HON_WEBSITE_INDEXABLE` | unset | Set to `1` only once David approves the site going live. Otherwise every build is `noindex, nofollow`. |
+
+Blog: posts are `src/blog/posts/<slug>/{en,ko,es}.md`; see SPEC.md.
 
 Languages: English is `src/index.html`; Korean and Spanish are built into `dist/ko/` and `dist/es/` from `src/i18n/*.json`. After changing English text, add the new phrase to both dictionaries (the test lists any missing or stale ones). Fonts are self-hosted in `src/fonts` (SIL OFL, see `OFL.txt`).
 

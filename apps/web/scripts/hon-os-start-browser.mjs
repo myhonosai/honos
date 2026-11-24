@@ -8,7 +8,7 @@ import {spawn} from 'node:child_process';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {issueSession,verifySession,cookieValue,HON_SESSION_COOKIE} from '@hon/auth';
-import {SIGNUP_HUMAN_COMMAND,TRIAL_HUMAN_COMMAND,validateSignupInput,validateTrialStartInput,validateSignupStatus,validateTrialStatus,validateSignupRegistration,validateHonOsTrial} from '@hon/contracts';
+import {SIGNUP_HUMAN_COMMAND,TRIAL_HUMAN_COMMAND,validateSignupInput,validateTrialStartInput,validateSignupStatus,validateTrialStatus,validateSignupRegistration,validateSignupResult,validateHonOsTrial} from '@hon/contracts';
 assert(process.env.GITHUB_ACTIONS==='true'||process.env.HON_P0_BROWSER_LOCAL==='1');
 for(const k of ['DATABASE_URL','HON_RUNTIME_DATABASE_URL','ZERNIO_API_KEY','STRIPE_SECRET_KEY','OPENAI_API_KEY'])assert(!process.env[k]);
 const root=resolve('.'),req=createRequire(join(root,'package.json')),tools=createRequire(join(process.env.HON_HQ_BROWSER_TOOLS,'runner.cjs'));
@@ -37,9 +37,12 @@ const api=createServer(async(r,s)=>{
   if(signup){const input=validateSignupInput(JSON.parse(body));assert.equal(input.termsVersionId,ids.termsVersionId);
    if(state.signup!=='TEST_MODE'){send(409,{code:'SIGNUP_CLOSED',outcome:'NOT_SUBMITTED'});return;}
    state.registration??=validateSignupRegistration({registrationId:ids.registrationId,organizationId:ids.organizationId,schoolId:ids.schoolId,schoolName:input.schoolName,timezone:input.timezone,registeredAt:new Date().toISOString(),lifecycle:'REGISTERED',accessGranted:false,billingActivated:false,aiCreditsGranted:false});
+   // 0392: the address is part of sign-up; the answer carries the recorded address and the notice for it.
+   assert.deepEqual(input.location,{country:'US',region:'IL',city:'Chicago',postalCode:null,addressLine1:null,addressLine2:null});
+   state.signed??=validateSignupResult({registration:state.registration,location:{...input.location,version:1,updatedAt:'2026-11-16T10:00:00.000Z'},faceCheckInNotice:{profile:'US_IL_BIPA',status:'AVAILABLE_WITH_CONSENT',laws:['Illinois Biometric Information Privacy Act (740 ILCS 14)'],addOns:['WRITTEN_RELEASE','PUBLIC_RETENTION_SCHEDULE','PRIVATE_RIGHT_OF_ACTION'],reviewStatus:'TEST_ONLY_DRAFT',rulesVersion:1}});
    // A lost response after commit: the browser must keep the exact request and the replay returns the same receipt.
    if(state.dropNext){state.dropNext=false;s.destroy();return;}
-   send(200,{data:state.registration});return;}
+   send(200,{data:state.signed});return;}
   const input=validateTrialStartInput(JSON.parse(body));assert.deepEqual({schoolId:input.schoolId,campaignId:input.campaignId},{schoolId:ids.schoolId,campaignId:ids.campaignId});
   const start=new Date(),ms=86400000;
   state.enrollment??=validateHonOsTrial({enrollmentId:ids.enrollmentId,organizationId:ids.organizationId,schoolId:ids.schoolId,campaignId:ids.campaignId,durationDays:14,startsAt:start.toISOString(),endsAt:new Date(+start+14*ms).toISOString(),status:'TRIAL_ACTIVE',automaticCharge:false,paymentMethodRequired:false,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiresAt:new Date(+start+7*ms).toISOString(),used:0},creativeCreditsIncluded:false,creativeCredits:null});
@@ -69,12 +72,14 @@ try{
   assert.equal(await page.getByRole('textbox').count(),0);assert.equal(await page.getByRole('button',{name:'Create my school account'}).count(),0);await capture(page,size+'-closed');
   // Sign-up open (test mode only in this fixture): the owner creates their school; a lost response is retried with the same key and body.
   state.signup='TEST_MODE';await check(page);await page.getByLabel('Your name').fill('Synthetic Owner');await page.getByLabel('School name').fill('Synthetic Dojo');await page.getByLabel('Legal business name').fill('Synthetic Dojo LLC');
+  await page.getByLabel('Country',{exact:true}).selectOption('US');await page.getByLabel('State',{exact:true}).selectOption('IL');await page.getByLabel('City',{exact:true}).fill('Chicago');
   // The zone picker defaults to the browser's zone (never UTC); the owner can choose another.
   assert.equal(await page.getByLabel('School time zone').inputValue(),'America/Chicago');await page.getByLabel('School time zone').selectOption('America/New_York');assert(await page.getByRole('button',{name:'Create my school account'}).isDisabled());await page.getByRole('checkbox').check();
   await capture(page,size+'-sign-up-form');
   state.dropNext=true;await page.getByRole('button',{name:'Create my school account'}).click();await page.getByText('The outcome is unknown.',{exact:false}).waitFor();
   await page.waitForTimeout(150);assert.equal(state.posts.length,posts+1,'never resent automatically');
   await page.getByRole('button',{name:'Retry exact request'}).click();await page.getByText('Your school account is created.',{exact:false}).waitFor();
+  await page.getByText('Illinois Biometric Information Privacy Act',{exact:false}).waitFor();await page.getByText('a lawyer has not reviewed',{exact:false}).waitFor();
   assert.equal(state.posts[posts].body,state.posts[posts+1].body);assert.equal(state.posts[posts].key,state.posts[posts+1].key);
   // Trials still CLOSED: the account is kept and the owner is told to come back.
   await page.getByText('Free trials are not open yet.',{exact:false}).waitFor();assert.equal(await page.getByRole('button',{name:'Start free trial'}).count(),0);await capture(page,size+'-registered-trial-closed');

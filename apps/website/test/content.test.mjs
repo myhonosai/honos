@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -46,14 +46,21 @@ test('makes no claim the owner has not approved yet', () => {
   }
 });
 
-test('marks unfinished AI specialists coming soon and the rest as launching', () => {
-  for (const name of ['maya', 'alex', 'jordan', 'lena']) {
-    assert.match(agentCard(name), /coming soon/i, `${name} is coming soon`);
-  }
-  for (const name of ['chad', 'marcus', 'claire', 'kai']) {
+test('marks every AI specialist as launching, since all eight answer in the app', () => {
+  for (const name of ['chad', 'marcus', 'claire', 'kai', 'maya', 'alex', 'jordan', 'lena']) {
+    assert.match(agentCard(name), /data-status="launch"/, `${name} is shown at launch`);
     assert.match(agentCard(name), /at launch/i, `${name} is shown at launch, not as live`);
+    assert.doesNotMatch(agentCard(name), /coming soon|class="card mate later"/i, `${name} is no longer coming soon`);
   }
+  // Only claim what the specialists do today: no staffing or merchandise work exists.
+  assert.doesNotMatch(agentCard('jordan'), /staffing/i);
+  assert.doesNotMatch(agentCard('lena'), /merchandise/i);
   assert.match(agentCard('hon'), /launching with hon os/i);
+});
+
+test('orders the AI team with HON first and Kai last', () => {
+  const order = [...html.matchAll(/<article[^>]*data-agent="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ['hon', 'chad', 'marcus', 'alex', 'maya', 'jordan', 'claire', 'lena', 'kai']);
 });
 
 test('marks features that are not built as coming soon', () => {
@@ -92,7 +99,7 @@ test('every in-page anchor points at an element that exists', () => {
 
 test('every image exists and has alt text', () => {
   const imgs = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
-  assert.ok(imgs.length >= 5);
+  assert.ok(imgs.length >= 4);
   for (const img of imgs) {
     const srcAttr = img.match(/src="([^"]+)"/)?.[1];
     assert.ok(srcAttr && !srcAttr.startsWith('data:'), 'image is a file, not inline data');
@@ -110,10 +117,10 @@ test('has the basics a public page needs', () => {
   assert.match(html, /<meta name="description" content="[^"]{40,}"/);
   assert.match(html, /<meta name="robots" content="\{\{ROBOTS\}\}"/);
   for (const file of ['/fonts/geist-latin-400-normal.woff2']) assert.ok(existsSync(join(src, file)), `${file} exists`);
-  for (const face of readFileSync(join(src, 'styles.css'), 'utf8').matchAll(/url\("\/(fonts\/[^"]+)"\)/g)) {
+  for (const face of (readFileSync(join(src, 'styles.css'), 'utf8') + readFileSync(join(src, 'story.css'), 'utf8')).matchAll(/url\("\/(fonts\/[^"]+)"\)/g)) {
     assert.ok(existsSync(join(src, face[1])), `${face[1]} exists`);
   }
-  for (const file of ['styles.css', 'site.js', 'flow.js', 'favicon.svg']) {
+  for (const file of ['styles.css', 'story.css', 'boot.js', 'loader.js', 'story.js', 'site.js', 'favicon.svg']) {
     assert.ok(html.includes(file), `${file} is referenced`);
     assert.ok(existsSync(join(src, file)), `${file} exists`);
   }
@@ -161,4 +168,57 @@ test('texting is unlimited and shown as coming soon; nothing else is called unli
 test('Champions Club rewards use the general wording only', () => {
   assert.match(html, /<li class="later">Earn rewards for every school you refer, details coming soon<em>soon<\/em><\/li>/);
   assert.doesNotMatch(text, /\$100|free month|welcome credit/i);
+});
+
+test('photos are small WebP files with phone-sized copies', () => {
+  const imgs = [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
+  assert.ok(imgs.length >= 4);
+  for (const img of imgs) {
+    const srcAttr = img.match(/\ssrc="([^"]+)"/)[1];
+    assert.match(srcAttr, /^\/assets\/[a-z0-9-]+-\d+\.webp$/, `${srcAttr} is WebP`);
+    const set = img.match(/\ssrcset="([^"]+)"/)?.[1];
+    assert.ok(set, `${srcAttr} has a srcset`);
+    const entries = set.split(',').map((e) => e.trim().split(/\s+/));
+    assert.ok(entries.length >= 2, `${srcAttr} offers more than one size`);
+    for (const [file, w] of entries) {
+      assert.match(w, /^\d+w$/);
+      assert.match(file, /\.webp$/);
+      const path = join(src, file.replace(/^\//, ''));
+      assert.ok(existsSync(path), `${file} exists`);
+      assert.ok(statSync(path).size <= 90 * 1024, `${file} is at most 90 KB`);
+    }
+    assert.ok(entries.some(([, w]) => parseInt(w, 10) <= 800), `${srcAttr} has a phone-sized copy`);
+    assert.match(img, /\ssizes="[^"]+"/, `${srcAttr} tells the browser its display size`);
+  }
+  // The link-preview card is a JPEG on purpose (every share preview reads it); no photo is.
+  const jpgs = readdirSync(join(src, 'assets')).filter((f) => /\.jpe?g$/i.test(f) && f !== 'og-hon-os-1200.jpg');
+  assert.deepEqual(jpgs, [], 'no full-size JPEGs left in the site');
+});
+
+test('the headline font is preloaded and no unused font is declared', () => {
+  const css = readFileSync(join(src, 'styles.css'), 'utf8');
+  const preloads = [...html.matchAll(/<link rel="preload" href="([^"]+)" as="font"/g)].map((m) => m[1]);
+  assert.ok(preloads.includes('/fonts/instrument-serif-latin-400-italic.woff2'), 'headline serif preloaded');
+  for (const href of preloads) assert.ok(css.includes(`url("${href}")`), `${href} is a font the CSS uses`);
+  assert.doesNotMatch(css, /geist-latin-700/, 'unused Geist bold is not declared');
+});
+
+test('the scroll story keeps to the site rules: no inline script, no blob media, works without motion', () => {
+  const boot = readFileSync(join(src, 'boot.js'), 'utf8');
+  const loader = readFileSync(join(src, 'loader.js'), 'utf8');
+  const story = readFileSync(join(src, 'story.js'), 'utf8');
+  const css = readFileSync(join(src, 'story.css'), 'utf8');
+  assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)[^>]*>/, 'every script is a file (CSP script-src self)');
+  assert.match(html, /<head>[\s\S]*<script src="\/boot\.js"><\/script>[\s\S]*<\/head>/, 'boot.js runs before first paint');
+  assert.doesNotMatch(loader + story, /createObjectURL|blob:/, 'no blob: media (CSP media falls back to self)');
+  assert.match(boot, /prefers-reduced-motion: reduce/, 'reduced motion shows every scene finished');
+  assert.match(boot, /setTimeout\([\s\S]*remove\('loading'\)/, 'page is never left covered if loader.js fails');
+  assert.match(loader, /12000/, 'loading screen lifts within 12 seconds');
+  assert.match(story, /classList\.contains\('story'\)/, 'scenes animate only when boot.js allowed motion');
+  assert.match(css, /#loader\{[^}]*display:none/, 'loading screen is hidden without JavaScript');
+  assert.match(css, /html\.story \.scene\{height:var\(--len/, 'scenes are tall only in story mode');
+  for (const v of ['story-door-1280.mp4', 'story-door-720.mp4']) {
+    assert.ok(html.includes(`/assets/${v}`), `${v} is used`);
+    assert.ok(statSync(join(src, 'assets', v)).size <= 4 * 1024 * 1024, `${v} is at most 4 MB`);
+  }
 });

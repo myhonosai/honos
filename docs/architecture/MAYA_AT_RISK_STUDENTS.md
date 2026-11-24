@@ -52,3 +52,26 @@ no DML. 010 grants and an 011 exact-verification section pin the three function 
 `apps/api/test/maya-at-risk.test.cjs`, web test `apps/web/test/maya-at-risk-ui.test.tsx`.
 
 Screen: `/staff/retention/at-risk`, in the AI team menu as "Maya: students at risk".
+
+## Part 2 (0284): Maya explains a risk and suggests a check-in message
+
+Each at-risk row has an "Ask Maya" button. It opens one Ask HON conversation ("Maya: student check-in") and sends one
+turn with delegation `{ agentKey: 'maya', membershipId }`. Maya is the fifth 0260 analysis specialist (Complete only,
+`retention.review.read`, task class ANALYZE, DETAILED single step, HQ pause, budget lock and UNKNOWN handling unchanged).
+
+- `begin_hon_turn` refuses a membership that is not in the signed-in school (`INVALID_HON_TURN`).
+- `read_specialist_school_facts` (new 5-argument form; the 4-argument form is a wrapper) gives Maya only that
+  membership's row from `read_maya_at_risk_students`: state, score, level, factors and the suggested step, or
+  `onAtRiskList: false`. **No name, contact detail, family, note or amount reaches the provider.** Tuition factors are
+  included only when the asker is a tuition reader, and the reply is concealed from a reader who lost either permission
+  (`source_permissions`).
+- The prompt asks for why the student is flagged, what to do, and a short message that starts "Hi [First name],".
+  The browser fills the placeholder for the staff member who already sees the name. The reply never states the score,
+  level or flag.
+- Maya never sends anything. Staff copy the message and send it themselves; no message, record or campaign is created.
+- Provider: the same HON reply runtime as the other analysts. On main it is not configured, so Maya shows as not
+  available; tests use the fake provider only.
+
+Evidence: AI-0 invariant INV-37 in `test-ai-spend-authority-baseline.mjs` (facts, no-name check, foreign membership
+refusal, concealment, lapse BLOCKED, readiness), API test `hon-conversation.test.cjs` (0284 Maya), web test
+`apps/web/test/maya-ask-ui.test.tsx`.

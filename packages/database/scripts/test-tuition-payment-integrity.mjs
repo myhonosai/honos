@@ -372,6 +372,40 @@ try {
   const paidC = await success(() => record(RECORDER, inv.C, goodC), 'record on C after access is restored');
   ok(paidC.data.invoice.balanceMinor === 600 && paidC.data.payment.currency === 'EUR', 'C partially paid in EUR');
 
+  // 7b. 0630 invoice INSERT status guard (launch-readiness P2): the restricted runtime, which keeps INSERT on hon.invoices for
+  // human drafting, can create an invoice only as DRAFT; an INSERT as PAID (no payment records, zero balance shown), ISSUED,
+  // VOID or UNCOLLECTIBLE is refused in scope, and nothing is written. Trusted owner writes (fixtures, definer paths) are unchanged.
+  {
+    const draftRow = (await sql('SELECT school_id, billing_account_id, currency::text AS currency FROM hon.invoices WHERE id=$1', [inv.draft])).rows[0];
+    const before = (await sql('SELECT count(*)::integer AS n FROM hon.invoices WHERE organization_id=$1', [ids.organization])).rows[0].n;
+    const runtimeInsert = async (status) => {
+      await runtime.query('BEGIN');
+      try {
+        await runtime.query("SELECT set_config('app.hon_organization_id',$1,true), set_config('app.hon_school_id',$2,true)", [ids.organization, draftRow.school_id]);
+        await runtime.query('SELECT hon.require_tenant_context()');
+        await runtime.query(`INSERT INTO hon.invoices(organization_id,school_id,billing_account_id,status,currency,subtotal_minor,total_minor)
+          VALUES($1,$2,$3,$4::hon.invoice_status,$5::char(3),900,900)`, [ids.organization, draftRow.school_id, draftRow.billing_account_id, status, draftRow.currency]);
+        return 'inserted';
+      } catch (error) {
+        return error.message;
+      } finally {
+        await runtime.query('ROLLBACK');
+      }
+    };
+    for (const status of ['PAID', 'ISSUED', 'VOID', 'UNCOLLECTIBLE']) {
+      const outcome = await runtimeInsert(status);
+      ok(/INVOICE_INSERT_STATUS_GUARD/.test(outcome), `runtime INSERT of an in-scope ${status} invoice is refused (${outcome})`);
+    }
+    ok(await runtimeInsert('DRAFT') === 'inserted', 'runtime INSERT of an in-scope DRAFT invoice is still allowed (rolled back)');
+    const after = (await sql('SELECT count(*)::integer AS n FROM hon.invoices WHERE organization_id=$1', [ids.organization])).rows[0].n;
+    ok(after === before, 'refused runtime invoice INSERTs wrote nothing');
+    const verify = await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+    const section = verify.split('-- Invoice INSERT status guard exact verification (0630')[1]?.split('-- End invoice INSERT status guard exact verification.')[0];
+    ok(section, 'the 0630 011 section exists');
+    await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE));
+    ok(true, 'the 0630 011 section passes against this fixture');
+  }
+
   // 8. Settings-free triggers: no owner write can mark paid, reopen, rewrite or delete outside the commands.
   await sql('BEGIN');
   await rejectsSql(() => sql("UPDATE hon.invoices SET status='PAID' WHERE id=$1", [inv.C]), /INVOICE_PAYMENT_STATUS_GUARD/, 'PAID without covering records');
@@ -423,7 +457,57 @@ try {
     ok(section, start);
     await sql(section.replace(/^[^\n]*\n[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
-  console.log(`PASS: tuition payment records (0240): ${checks} checks.`);
+  // 11. 0280 invoice list: every status of the current school only, newest first, 50 per page; same readers; no DML.
+  {
+    const invoices = (actor, query = '', options = {}) => call(actor, 'GET', `invoices${query ? `?${query}` : ''}`, options);
+    const beforeList = await untouched();
+    const all = (await success(() => invoices(OWN), 'owner lists every invoice')).data;
+    const listed = all.items.map((i) => i.invoiceId);
+    for (const id of [inv.A, inv.B, inv.C, inv.draft, inv.voided, inv.legacyPaid]) ok(listed.includes(id), `school A invoice ${id.slice(0, 8)} is listed`);
+    ok(!listed.includes(inv.schoolB) && !listed.includes(inv.otherOrg), 'no other school or organization invoice is listed');
+    ok(all.status === 'ALL' && all.timezone === LA && all.canIssue && all.canRecord && all.nextAfter === null, 'owner may issue and record; one page');
+    const draftRow = all.items.find((i) => i.invoiceId === inv.draft);
+    ok(draftRow.status === 'DRAFT' && draftRow.paidMinor === 0 && draftRow.overdue === false && draftRow.payerName === 'Avery Tuition', 'a DRAFT is never overdue and names its payer');
+    const created = (await sql('SELECT id, created_at FROM hon.invoices WHERE school_id=$1 ORDER BY created_at DESC, id DESC', [ids.schoolA])).rows.map((r) => r.id);
+    ok(JSON.stringify(created) === JSON.stringify(listed), 'newest first, then by id');
+    const drafts = (await success(() => invoices(OWN, 'status=DRAFT'), 'DRAFT only')).data;
+    ok(drafts.items.length >= 1 && drafts.items.every((i) => i.status === 'DRAFT'), 'status filter returns only that status');
+    ok((await success(() => invoices(CREATOR), 'creator lists')).data.canIssue === false, 'a creator may list but not issue');
+    const issuer = (await success(() => invoices(ISSUER), 'issuer lists')).data;
+    ok(issuer.canIssue === true && issuer.canRecord === false, 'an issuer may issue but not record');
+    await refused(() => invoices(NONE), 403, undefined, 'no invoice permission');
+    await refused(() => invoices(OTHER_ORG, '', { organization: ids.organization, school: ids.schoolA }), 403, undefined, 'another organization at school A');
+    await refused(() => invoices(OWN, 'status=OPEN'), 400, 'VALIDATION_FAILED', 'unknown status');
+    await refused(() => invoices(OWN, 'limit=5'), 400, 'VALIDATION_FAILED', 'unknown query key');
+    await refused(() => invoices(OWN, `after=${inv.schoolB}`), 400, 'VALIDATION_FAILED', 'a cursor from another school is refused, not disclosed');
+    await refused(() => invoices(OWN, `after=${randomUUID()}`), 400, 'VALIDATION_FAILED', 'an unknown cursor');
+    await refused(() => invoices(OWN, '', { headers: { 'Idempotency-Key': randomUUID() } }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'a read takes no key');
+    const schoolB = (await success(() => invoices(OTHER_SCHOOL), 'school B staff')).data.items.map((i) => i.invoiceId);
+    ok(schoolB.length === 1 && schoolB[0] === inv.schoolB, 'school B staff see only school B');
+    // Paging: 52 more drafts give a full first page and a cursor that continues exactly where it stopped.
+    const extra = await account(ids.schoolA, 'Pager');
+    for (let n = 0; n < 52; n += 1) await invoice(ids.schoolA, extra, { status: 'DRAFT', total: 100 + n });
+    const first = (await success(() => invoices(OWN), 'page 1')).data;
+    ok(first.items.length === 50 && first.nextAfter === first.items[49].invoiceId, 'page 1 holds 50 and a cursor');
+    const second = (await success(() => invoices(OWN, `after=${first.nextAfter}`), 'page 2')).data;
+    const everyId = [...first.items, ...second.items].map((i) => i.invoiceId);
+    const expected = (await sql('SELECT id FROM hon.invoices WHERE school_id=$1 ORDER BY created_at DESC, id DESC', [ids.schoolA])).rows.map((r) => r.id);
+    ok(JSON.stringify(everyId) === JSON.stringify(expected) && second.nextAfter === null, 'two pages cover every invoice once, in order');
+    await assert.rejects(service.invoices(OWN.read({ principalType: 'SERVICE' }), { status: 'ALL' }), (error) => error?.status === 403 || error?.response?.code === 'HUMAN_COMMAND_REQUIRED'); checks += 1;
+    const afterList = await untouched();
+    ok(afterList.attempts === beforeList.attempts && afterList.refunds === beforeList.refunds, 'the list writes nothing');
+    const fn = (await sql(`SELECT has_function_privilege($1,'hon.read_school_invoices(text,jsonb)','EXECUTE') runtime, p.prosecdef,
+      EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee=0) public FROM pg_proc p WHERE p.oid='hon.read_school_invoices(text,jsonb)'::regprocedure`,
+      [CRM_CLOSE_RUNTIME_ROLE])).rows[0];
+    ok(fn.runtime && fn.prosecdef && !fn.public, 'runtime may execute the definer invoice list; PUBLIC may not');
+    { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
+      const start = '-- School invoice list exact verification (B-TUI-1b 0280)', end = '-- End school invoice list exact verification.';
+      const section = verify.split(start)[1]?.split(end)[0];
+      ok(section, start);
+      await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
+  }
+
+  console.log(`PASS: tuition payment records (0240, 0280 invoice list): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

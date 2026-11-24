@@ -23,7 +23,7 @@ export type CreativeStudioProviderState = typeof CREATIVE_STUDIO_PROVIDER_STATES
 
 export interface CreativeGenerationInput { operationCode: string; units: number; format: CreativeGenerationFormat; prompt: string }
 export interface CreativeGenerationAsset {
-  assetId: string; ordinal: number; mediaType: CreativeAssetMediaType; width: number; height: number; durationSeconds: number | null; origin: 'SYNTHETIC';
+  assetId: string; ordinal: number; mediaType: CreativeAssetMediaType; width: number; height: number; durationSeconds: number | null; origin: 'SYNTHETIC' | 'PROVIDER';
 }
 export interface CreativeGeneration {
   generationId: string; schoolId: string; operationCode: string; mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
@@ -45,7 +45,8 @@ export function isCreativePrompt(value: unknown): value is string {
 // ---------- input (closed: clients never choose a provider, model, price or school) ----------
 export function validateCreativeGenerationInput(value: unknown): CreativeGenerationInput {
   const input = record(value, invalid); exactKeys(input, ['operationCode', 'units', 'format', 'prompt'], invalid);
-  if (typeof input.operationCode !== 'string' || !OPERATION.test(input.operationCode) || !isInt(input.units, 1, CREATIVE_GENERATION_LIMITS.maxUnits)
+  // avatar.* operations are reserved for the avatar routes (0276), which record the avatar with its generation.
+  if (typeof input.operationCode !== 'string' || !OPERATION.test(input.operationCode) || input.operationCode.startsWith('avatar.') || !isInt(input.units, 1, CREATIVE_GENERATION_LIMITS.maxUnits)
     || !has(CREATIVE_GENERATION_FORMATS, input.format) || !isCreativePrompt(input.prompt)) invalid();
   return { operationCode: input.operationCode as string, units: input.units as number, format: input.format as CreativeGenerationFormat, prompt: input.prompt as string };
 }
@@ -54,7 +55,7 @@ export function validateCreativeGenerationInput(value: unknown): CreativeGenerat
 function validateAsset(value: unknown, mediaKind: SaasCreativeMediaKind, ordinal: number): void {
   const a = record(value, drift); exactKeys(a, ['assetId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'origin'], drift);
   if (!isUuid(a.assetId) || a.ordinal !== ordinal || !has(CREATIVE_ASSET_MEDIA_TYPES[mediaKind], a.mediaType) || !isInt(a.width, 1, 8192) || !isInt(a.height, 1, 8192)
-    || a.origin !== 'SYNTHETIC' || (mediaKind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
+    || (a.origin !== 'SYNTHETIC' && a.origin !== 'PROVIDER') || (mediaKind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
 }
 export function validateCreativeGeneration(value: unknown): CreativeGeneration {
   const g = record(value, drift);

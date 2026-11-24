@@ -5,7 +5,7 @@ import type { HonAnalystAgentKey, HonConversationThread, HonConversationTurn, Ho
 import {
   HON_CONVERSATION_API, HON_CONVERSATION_COMMAND, HonConversationError, honConversationBase, prepareConversation, prepareTurn, verifyHonPage, verifyHonReadiness,
 } from '../src/components/hon-command/hon-conversation-http';
-import { FollowUps, HonConversationView, composerTurnRequest, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
+import { FollowUps, HonConversationView, composerAskFromQuery, composerTurnRequest, honAskHref, offeredAnalysts, type HonConversationViewProps } from '../src/components/hon-command/hon-conversation-panel';
 import { HonWorkspaceView } from '../src/components/hon-command/hon-workspace-view';
 import { initialHonCommandSnapshot } from '../src/components/hon-command/hon-command-data';
 import { honTargetPath } from '../src/components/hon-command/hon-conversation-http';
@@ -246,7 +246,7 @@ describe('Ask HON suggestion targets (C3a)', () => {
 });
 
 describe('Ask HON suggestion cards (C3a)', () => {
-  const answer = (suggestions: Array<'marcus' | 'kai' | 'chad'>, over: Partial<HonConversationTurn> = {}) => thread([human(6, 'How do I fill Saturday trials?'), reply(6, over, { suggestions })]);
+  const answer = (suggestions: Array<'marcus' | 'kai' | 'chad' | 'claire'>, over: Partial<HonConversationTurn> = {}) => thread([human(6, 'How do I fill Saturday trials?'), reply(6, over, { suggestions })]);
   const all = { ...readiness(), availableAgentKeys: ['marcus' as const, 'kai' as const, 'chad' as const] };
   it('offers one card per suggested specialist that only opens a confirmation; nothing runs from the card', () => {
     const html = render({ readiness: all, thread: answer(['marcus', 'chad']), threadPhase: 'READY' });
@@ -285,6 +285,23 @@ describe('Ask HON suggestion cards (C3a)', () => {
     expect(render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', confirm: { ...base, agent: 'marcus', targets: 'LOADING' } })).toContain('Loading campaign choices for Marcus');
     const failed = render({ readiness: all, thread: answer(['marcus']), threadPhase: 'READY', confirm: { ...base, agent: 'marcus', targets: 'UNAVAILABLE' } });
     expect(failed).toContain('could not be verified right now'); expect(failed).not.toContain('Send to Marcus');
+  });
+  it('K2c: offers Claire when HON suggests her and readiness allows; her confirmation is a question only, never a draft', () => {
+    const withClaire = { ...all, businessPerformance: true };
+    const t = thread([human(6, 'How are we doing?'), reply(6, {}, { suggestions: ['claire', 'marcus'] })]);
+    const card = render({ readiness: withClaire, thread: t, threadPhase: 'READY' });
+    expect(card).toContain('>Ask Claire</button>'); expect(card).toContain('Business Performance'); expect(card).toContain('She never drafts, sends or changes anything');
+    expect(render({ readiness: all, thread: t, threadPhase: 'READY' })).toContain('Claire isn’t available for your role');
+    const base: SuggestionConfirm = { seq: 1, sourceTurnId: id(6), agent: 'claire', targetId: '', purpose: null, text: '', targets: [] };
+    const open = render({ readiness: withClaire, thread: t, threadPhase: 'READY', confirm: base });
+    expect(open).toContain('aria-label="Ask Claire"'); expect(open).toContain('What should Claire look at?'); expect(open).not.toContain('Choose a');
+    expect(open).toContain('2,000 characters left'); expect(open).toMatch(/<button type="submit" disabled="">Send to Claire/);
+    expect(open.slice(open.indexOf('data-confirm="claire"'), open.indexOf('</form>', open.indexOf('data-confirm="claire"')))).not.toMatch(/Action Center|draft for/);
+    expect(render({ readiness: withClaire, thread: t, threadPhase: 'READY', confirm: { ...base, text: 'Trial conversion?' } })).toMatch(/<button type="submit">Send to Claire/);
+    expect(suggestionDelegation('claire', null, null)).toEqual({ agentKey: 'claire' });
+    const g = group('COMPLETED', [{ agentKey: 'claire', turnId: id(7), status: 'COMPLETED' }]);
+    const done = render({ readiness: withClaire, thread: t, threadPhase: 'READY', groups: orchestrationsBySource({ items: [g] }) });
+    expect(done).toMatch(/<span>Claire<\/span>/); expect(done).not.toContain('>Ask Claire</button>'); expect(done).toContain('>Ask Marcus</button>');
   });
   it('explains a specialist’s recorded refusal without inventing a draft', () => {
     const chad: HonConversationTurn = { turnId: id(7), role: 'chad', text: null, createdAt: AT, status: 'FAILED', reason: 'AGENT_TARGET_NOT_FOUND',
@@ -420,5 +437,36 @@ describe('Ask next and Based on (0254)', () => {
     expect([picked, sent]).toEqual([['How many trials are booked?'], []]);
     const lockedEl = FollowUps({ turn, locked: true, onPick: () => {} });
     expect(renderToStaticMarkup(<>{lockedEl}</>)).toMatch(/disabled=""/);
+  });
+});
+
+describe('Ask HON preselected specialist (?ask=)', () => {
+  it('accepts only the four Ask HON specialists; anything else asks HON', () => {
+    for (const key of ['claire', 'alex', 'jordan', 'lena'] as const) expect(composerAskFromQuery(key)).toBe(key);
+    for (const bad of [undefined, '', 'hon', 'maya', 'marcus', 'ALEX', 'alex ', 'x'.repeat(200)]) expect(composerAskFromQuery(bad)).toBe('hon');
+  });
+  it('builds the link the AI Team menu uses', () => {
+    expect(honAskHref('jordan')).toBe('/staff/hon?ask=jordan');
+  });
+});
+
+describe('HON corner chat presentation (owner 2026-11-22, docked like a chat window)', () => {
+  it('shows the chat first: past conversations folded away, a New chat button, and the Enter-to-send hint', () => {
+    const html = render({ presentation: 'dock', thread: thread([human(11, 'How many trials?'), reply(12)]), threadPhase: 'READY' });
+    expect(html).toContain('data-presentation="dock"');
+    expect(html).toMatch(/<details[^>]*data-dock-history=""[^>]*><summary>Past conversations \(1\)<\/summary>/);
+    expect(html).toContain('data-dock-new=""');
+    expect(html).toContain('Enter to send · Shift+Enter for a new line.');
+    expect(html).toContain('data-dock-intro=""');
+    expect(html).toContain('You have 3 trial leads waiting for follow-up.');
+    // The same composer, privacy warning and character limit as everywhere else.
+    expect(html).toContain('Don’t include passwords, card numbers or medical details.');
+  });
+  it('keeps the side panel and full workspace unchanged', () => {
+    for (const presentation of ['panel', 'full'] as const) {
+      const html = render({ presentation });
+      expect(html).not.toContain('data-dock-history'); expect(html).not.toContain('data-dock-new'); expect(html).not.toContain('Enter to send');
+      expect(html).toContain('>New conversation<');
+    }
   });
 });

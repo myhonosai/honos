@@ -31,7 +31,7 @@
 .status[data-tone="ready"] { background: #10392f; color: #8ff0c9; box-shadow: inset 0 0 0 1px #2b7a63; }
 .form { display: grid; gap: 8px; min-width: 0; }
 .form label { font-size: 13px; font-weight: 700; }
-.form select, .form input[type="number"], .form textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #3b5269; border-radius: 10px; background: #0a1625; color: #eef6fc; font: inherit; }
+.form select, .form input[type="number"], .form input[type="text"], .form textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #3b5269; border-radius: 10px; background: #0a1625; color: #eef6fc; font: inherit; }
 .form textarea { resize: vertical; }
 .form select:focus-visible, .form input:focus-visible, .form textarea:focus-visible, .form button:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
 .form select:disabled, .form input:disabled, .form textarea:disabled { color: #8ea3b9; cursor: not-allowed; }

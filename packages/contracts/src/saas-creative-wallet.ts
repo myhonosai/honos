@@ -10,7 +10,7 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { saasUuid } from './saas-billing.js';
 
-/** TRIAL (0275): a free trial's own creative credits, granted at trial start and expiring when the trial ends. */
+/** TRIAL (0663): a free trial's own creative credits, granted at trial start and expiring when the trial ends. */
 export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP' | 'TRIAL';
 export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO';
 export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
@@ -134,6 +134,8 @@ export interface SaasCreativeSchoolWallet extends WalletBase {
 }
 export interface SaasCreativeProviderExpense {
   actualProviderCostMicrounits: number; finalizedProviderCostMicrounits: number; failedOrNotChargedProviderCostMicrounits: number; consumedCredits: number;
+  /** 0637 (review [22]): the part of the recorded provider cost that is only HON's own estimate. Absent before 0637. */
+  estimatedProviderCostMicrounits?: number;
   unknownCostGenerations: number; pendingCostGenerations: number; spendClass: 'CREATIVE_MEDIA';
   generations: { finalized: number; released: number; reserved: number; outcomeUnknown: number };
 }
@@ -256,7 +258,7 @@ export function validateSaasCreativeBalance(value: unknown): void { validateBala
 function validateBalance(value: unknown): void {
   const b = record(value, drift); exactKeys(b, ['availableCredits','heldCredits','byKind'], drift);
   if (!count(b.availableCredits) || !count(b.heldCredits) || !Array.isArray(b.byKind) || (b.byKind.length !== 4 && b.byKind.length !== 5)) drift();
-  // TRIAL is listed only for a school that has a trial lot (0275), in consumption order after included credits.
+  // TRIAL is listed only for a school that has a trial lot (0663), in consumption order after included credits.
   const order = b.byKind.length === 5 ? ['INCLUDED_MONTHLY','TRIAL','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'] : ['INCLUDED_MONTHLY','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'];
   let available = 0, held = 0;
   (b.byKind as unknown[]).forEach((value, i) => {
@@ -380,8 +382,10 @@ export function validateSaasCreativeHqWallet(value: unknown): SaasCreativeHqWall
   if ((w.reservations as SaasCreativeReservationInternal[]).some(r => r.schoolId !== w.schoolId || r.organizationId !== w.organizationId)) drift();
   if ((w.purchases as SaasCreativePurchase[]).some(p => p.schoolId !== w.schoolId)) drift();
   const e = record(w.providerExpense, drift);
+  const estimated = Object.hasOwn(e, 'estimatedProviderCostMicrounits');
   exactKeys(e, ['actualProviderCostMicrounits','finalizedProviderCostMicrounits','failedOrNotChargedProviderCostMicrounits','consumedCredits',
-    'unknownCostGenerations','pendingCostGenerations','spendClass','generations'], drift);
+    'unknownCostGenerations','pendingCostGenerations','spendClass','generations', ...(estimated ? ['estimatedProviderCostMicrounits'] : [])], drift);
+  if (estimated && (!count(e.estimatedProviderCostMicrounits) || (e.estimatedProviderCostMicrounits as number) > (e.actualProviderCostMicrounits as number))) drift();
   if (!count(e.actualProviderCostMicrounits) || !count(e.finalizedProviderCostMicrounits) || !count(e.failedOrNotChargedProviderCostMicrounits) || !count(e.consumedCredits)
     || !count(e.unknownCostGenerations) || !count(e.pendingCostGenerations) || e.spendClass !== 'CREATIVE_MEDIA'
     || (e.finalizedProviderCostMicrounits as number) + (e.failedOrNotChargedProviderCostMicrounits as number) !== e.actualProviderCostMicrounits) drift();

@@ -3,12 +3,12 @@
 import React, { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { DEFAULT_HON_INTERFACE_THEME, type HonInterfaceTheme } from '@hon/design-system';
 import { HonCommandController, initialHonCommandSnapshot, type HonCommandApi, type HonCommandSnapshot, type HonScope } from './hon-command-data';
-import { HonConversation } from './hon-conversation-panel';
+import { HonConversation, composerAskFromQuery, type HonConversationPresentation } from './hon-conversation-panel';
 import { HonSchoolNotes } from './hon-school-notes';
 import { HonSchoolTone } from './hon-school-tone';
 import { HonWeeklyBriefing } from './hon-weekly-briefing';
 import { HON_COMMAND_ROSTER, honAgent, safeHonReturnPath } from './roster';
-import { AgentPortrait, AvailabilityBadge, HonMark, HonWorkspaceView, type HonTab } from './hon-workspace-view';
+import { AgentPortrait, AvailabilityBadge, availabilityLabel, HonMark, HonWorkspaceView, type HonTab } from './hon-workspace-view';
 import styles from './hon-command.module.css';
 
 const SERVER_SNAPSHOT = initialHonCommandSnapshot();
@@ -42,20 +42,22 @@ interface HonPanelProps {
   initialAgentId?: string | null;
   returnPath: string;
   api?: HonCommandApi | undefined;
+  /** `corner`: a floating pop-up above the corner HON button, the page staying visible behind it. */
+  placement?: 'side' | 'corner';
 }
 
 /** The live Ask HON conversation, only for a server-verified school; a school change remounts it. */
-function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: 'panel' | 'full'): React.ReactNode {
+function verifiedConversation(scope: HonCommandSnapshot['scope'], presentation: HonConversationPresentation, ask?: string): React.ReactNode {
   if (scope.state !== 'VERIFIED') return null;
   const key = `${scope.organizationId}/${scope.schoolId}`, school = { organizationId: scope.organizationId, schoolId: scope.schoolId };
-  const conversation = <HonConversation key={key} school={school} presentation={presentation} />;
+  const conversation = <HonConversation key={key} school={school} presentation={presentation} initialAsk={composerAskFromQuery(ask)} />;
   // 0255: the full workspace also shows what HON remembers about this school.
   // 0256: and how HON talks at this school.
   return presentation === 'full' ? <>{conversation}<HonSchoolNotes key={`${key}/notes`} school={school} /><HonSchoolTone key={`${key}/tone`} school={school} /><HonWeeklyBriefing key={`${key}/briefing`} school={school} /></> : conversation;
 }
 
 /** Expandable HON panel: a modal side sheet that keeps the page underneath intact. */
-export function HonPanel({ open, onClose, scope = null, variant = null, initialAgentId = null, returnPath, api }: HonPanelProps): React.ReactElement | null {
+export function HonPanel({ open, onClose, scope = null, variant = null, initialAgentId = null, returnPath, api, placement = 'side' }: HonPanelProps): React.ReactElement | null {
   const { controller, snapshot } = useHonController(api);
   const [tab, setTab] = useState<HonTab>('team');
   const [agentId, setAgentId] = useState<string | null>(initialAgentId);
@@ -95,9 +97,9 @@ export function HonPanel({ open, onClose, scope = null, variant = null, initialA
 
   if (!open) return null;
   const resolvedVariant = variant ?? snapshot.theme ?? DEFAULT_HON_INTERFACE_THEME;
-  return <div className={styles.overlay} data-variant={resolvedVariant}>
+  return <div className={styles.overlay} data-variant={resolvedVariant} data-placement={placement}>
     <button type="button" className={styles.scrim} aria-label="Close HON" tabIndex={-1} onClick={onClose} />
-    <div ref={dialog} className={styles.panel} role="dialog" aria-modal="true" aria-labelledby={headingId} data-variant={resolvedVariant}>
+    <div ref={dialog} className={styles.panel} role="dialog" aria-modal="true" aria-labelledby={headingId} data-variant={resolvedVariant} data-placement={placement}>
       <HonWorkspaceView
         snapshot={snapshot}
         variant={resolvedVariant}
@@ -114,6 +116,62 @@ export function HonPanel({ open, onClose, scope = null, variant = null, initialA
       />
     </div>
   </div>;
+}
+
+/** Small line icons for the dock header; decorative, the buttons carry the names. */
+function DockIcon({ name }: { name: 'expand' | 'minimize' | 'close' }): React.ReactElement {
+  const path = name === 'expand' ? 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7' : name === 'minimize' ? 'M5 12h14' : 'M6 6l12 12M18 6L6 18';
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>;
+}
+
+interface HonCornerDockProps {
+  /** Minimized: kept mounted (a half-typed message survives) but hidden until the corner orb is tapped again. */
+  hidden?: boolean;
+  /** Playing the shrink-back-into-the-corner animation before it hides. */
+  closing?: boolean;
+  onMinimize: () => void;
+  onClose: () => void;
+  returnPath: string;
+  api?: HonCommandApi | undefined;
+}
+
+/**
+ * The corner HON chat (owner 2026-11-22, "like Manus CRM"): it grows out of the corner orb as a chat window docked in
+ * that same corner, and minimizes or closes back into it. Not modal: the page stays visible and usable beside it.
+ * The school comes only from the signed-in session when it opens; the conversation is the same as the full workspace's.
+ */
+export function HonCornerDock({ hidden = false, closing = false, onMinimize, onClose, returnPath, api }: HonCornerDockProps): React.ReactElement {
+  const { controller, snapshot } = useHonController(api);
+  const headingId = useId().replace(/:/g, '');
+  const dock = useRef<HTMLElement>(null);
+  const started = useRef(false);
+  useEffect(() => { if (started.current) return; started.current = true; void controller.open(null, { loadTheme: true }); }, [controller]);
+  useEffect(() => { if (!hidden) dock.current?.querySelector<HTMLElement>('h2')?.focus(); }, [hidden]);
+  const variant = snapshot.theme ?? DEFAULT_HON_INTERFACE_THEME;
+  const scope = snapshot.scope;
+  return <section ref={dock} className={styles.dock} role="dialog" aria-modal="false" aria-labelledby={headingId} data-variant={variant} data-hon-dock=""
+    data-closing={closing ? 'true' : undefined} hidden={hidden}
+    onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onMinimize(); } }}>
+    <header className={styles.dockHead}>
+      <HonMark size="sm" />
+      <div className={styles.dockTitle}>
+        <h2 id={headingId} tabIndex={-1}>HON</h2>
+        <p>Your AI team · ask anything</p>
+      </div>
+      <div className={styles.dockActions}>
+        <a href={honExpandHref(returnPath, null)} aria-label="Full workspace" title="Open the full HON workspace"><DockIcon name="expand" /></a>
+        <button type="button" onClick={onMinimize} aria-label="Minimize HON" title="Minimize to the corner"><DockIcon name="minimize" /></button>
+        <button type="button" onClick={onClose} aria-label="Close HON" title="Close"><DockIcon name="close" /></button>
+      </div>
+    </header>
+    <div className={styles.dockBody}>
+      {scope.state === 'VERIFIED' ? verifiedConversation(scope, 'dock')
+        : <div className={styles.state} role={scope.state === 'ERROR' ? 'alert' : 'status'} data-state={scope.state === 'RESOLVING' || scope.state === 'IDLE' ? 'LOADING' : scope.state}>
+          <p>{scope.message}</p>
+          {scope.state === 'RESOLVING' || scope.state === 'IDLE' ? null : <a className={styles.inlineLink} href="/staff/dashboard">Open the operations dashboard →</a>}
+        </div>}
+    </div>
+  </section>;
 }
 
 /**
@@ -156,7 +214,7 @@ export function HonTeamBand({ scope, variant, api }: { scope: HonScope; variant:
     </div>
     <ul className={styles.bandTeam} aria-label="AI employees">
       {HON_COMMAND_ROSTER.map((agent) => <li key={agent.id}>
-        <button type="button" className={styles.bandAgent} style={{ '--agent': agent.color } as React.CSSProperties} aria-haspopup="dialog" onClick={(event) => launch(event, agent.id)} aria-label={`${agent.name}, ${agent.title}. ${agent.availability === 'GOVERNED_DRAFTS' ? 'Governed drafts available with approval' : 'Planned, not yet available'}`}>
+        <button type="button" className={styles.bandAgent} style={{ '--agent': agent.color } as React.CSSProperties} aria-haspopup="dialog" onClick={(event) => launch(event, agent.id)} aria-label={`${agent.name}, ${agent.title}. ${availabilityLabel(agent)}`}>
           <AgentPortrait agent={agent} size={variant === 'classic' ? 'sm' : 'md'} />
           <span><strong>{agent.name}</strong><small>{agent.title}</small></span>
           <AvailabilityBadge agent={agent} compact={variant === 'classic'} />
@@ -168,7 +226,7 @@ export function HonTeamBand({ scope, variant, api }: { scope: HonScope; variant:
 }
 
 /** `/staff/hon` full workspace. URL values select presentation only. */
-export function HonFullWorkspace({ returnPath, agentId: initialAgent, api }: { returnPath?: string | undefined; agentId?: string | undefined; api?: HonCommandApi | undefined }): React.ReactElement {
+export function HonFullWorkspace({ returnPath, agentId: initialAgent, ask, api }: { returnPath?: string | undefined; agentId?: string | undefined; ask?: string | undefined; api?: HonCommandApi | undefined }): React.ReactElement {
   const { controller, snapshot } = useHonController(api);
   const [tab, setTab] = useState<HonTab>('team');
   const [agentId, setAgentId] = useState<string | null>(honAgent(initialAgent)?.id ?? null);
@@ -187,7 +245,7 @@ export function HonFullWorkspace({ returnPath, agentId: initialAgent, api }: { r
       onSelectAgent={(id) => { setAgentId(id); setTab('team'); }}
       onRefresh={() => void controller.refresh()}
       returnHref={safeHonReturnPath(returnPath)}
-      conversation={verifiedConversation(snapshot.scope, 'full')}
+      conversation={verifiedConversation(snapshot.scope, 'full', ask)}
     />
   </main>;
 }

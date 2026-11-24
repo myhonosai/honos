@@ -1,4 +1,4 @@
-import type { CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
+import type { CreativeAvatar, CreativeAvatarVideo, CreativeGeneration, CreativeStudioProviderState, SaasCreativeSchoolWallet } from '@hon/contracts';
 
 /**
  * What Creative Studio shows from the school's own creative wallet read. School views carry no provider
@@ -44,3 +44,12 @@ export type CreateOutcome =
   | Readonly<{ kind: 'RETRY_BLOCKED'; cause: 'DENIED' | 'NOT_CONNECTED' | 'REFUSED' | 'INVALID'; code: string | null }>;
 /** Whether this tab holds a create whose outcome is not known. Survives concealment; never shows the request itself. */
 export type CreateLock = 'NONE' | 'SENDING' | 'UNRESOLVED';
+
+/** A1 (0276): the school's avatars, each made by one avatar.create generation. */
+export type AvatarsState =
+  | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
+  | Readonly<{ state: 'READY'; provider: CreativeStudioProviderState; items: readonly CreativeAvatar[] }>;
+/** A2 (0277): the school's avatar videos, each made by one avatar.video generation. */
+export type VideosState =
+  | Readonly<{ state: 'LOADING' }> | Readonly<{ state: 'DENIED' }> | Readonly<{ state: 'UNAVAILABLE' }>
+  | Readonly<{ state: 'READY'; items: readonly CreativeAvatarVideo[] }>;

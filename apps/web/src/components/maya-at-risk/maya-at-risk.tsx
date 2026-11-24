@@ -6,12 +6,14 @@ import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/pri
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { MayaError, mayaApi, type MayaApi } from './http';
 import { MayaAtRiskView, type MayaListState } from './view';
+import { MayaAsk } from './maya-ask';
+import type { HonConversationApi } from '../hon-command/hon-conversation-http';
 
 /**
  * Maya, students at risk (M1, 0259). Reads the verified school's at-risk list; blur, a hidden tab, a school change or a
  * session end hide it at once and retire every read. Nothing here sends a message or changes a record.
  */
-export function MayaAtRisk({ api = mayaApi }: { api?: MayaApi }): React.ReactElement {
+export function MayaAtRisk({ api = mayaApi, honApi }: { api?: MayaApi; honApi?: HonConversationApi }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -59,5 +61,7 @@ export function MayaAtRisk({ api = mayaApi }: { api?: MayaApi }): React.ReactEle
   }, [api, list, orgId, schoolId]);
 
   return <MayaAtRiskView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} hasSchool={Boolean(orgId && schoolId)}
-    list={list} onRefresh={() => setRefresh((n) => n + 1)} onMore={onMore} />;
+    list={list} onRefresh={() => setRefresh((n) => n + 1)} onMore={onMore}
+    renderAsk={orgId && schoolId ? (s) => <MayaAsk key={`${refresh}:${s.membershipId}`} school={{ organizationId: orgId, schoolId }} membershipId={s.membershipId} givenName={s.givenName}
+      {...(honApi ? { api: honApi } : {})} /> : undefined} />;
 }

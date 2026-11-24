@@ -33,6 +33,8 @@ const { HonExceptionFilter } = await load('observability/http-telemetry.js');
 const { SchoolPaymentController } = await load('school-payments/school-payment.controller.js');
 const { SchoolPaymentService } = await load('school-payments/school-payment.service.js');
 const { SCHOOL_PAYMENT_ADAPTERS, SimulatedStripeConnectAdapter, SimulatedSquareAdapter } = await load('school-payments/school-payment-adapter.js');
+// 0320: the simulated Square hands back synthetic tokens, which the service seals in the vault (proved in the vault proof).
+const { SCHOOL_PAYMENT_VAULT, SchoolPaymentVault } = await load('school-payments/school-payment-vault.js');
 
 const admin = new pg.Client(targets.owner);
 await admin.connect();
@@ -69,7 +71,7 @@ async function startApp() {
   const module = await Test.createTestingModule({
     controllers: [SchoolPaymentController],
     providers: [HonIdentityGuard, HonIdentityService, SchoolPaymentService, { provide: RuntimeDatabaseService, useValue: database },
-      { provide: SCHOOL_PAYMENT_ADAPTERS, useValue: adapters }],
+      { provide: SCHOOL_PAYMENT_ADAPTERS, useValue: adapters }, { provide: SCHOOL_PAYMENT_VAULT, useValue: new SchoolPaymentVault(randomBytes(32), 'proof-0258') }],
   }).compile();
   app = module.createNestApplication({ logger: false });
   app.setGlobalPrefix('v1');
@@ -334,8 +336,11 @@ try {
   // 10. Disconnect: reason required; provider revoked; ended rows never change; a fresh connection can start.
   await refused(() => disconnect(OWN, s.connectionId, 5, ''), 400, 'VALIDATION_FAILED', 'empty reason');
   const gone = await success(() => disconnect(OWN, s.connectionId, 5, 'Switching processors'), 'disconnect Stripe');
-  ok(gone.data.connection.state === 'DISCONNECTED' && gone.data.connection.endReason === 'Switching processors' && gone.meta.providerRevoked === true
-    && stripe.revoked.has(sf.accountRef), 'disconnected and access revoked at the provider');
+  // 0320: school B still uses the same organization account, so HON does not revoke it (a revoke is per account).
+  ok(gone.data.connection.state === 'DISCONNECTED' && gone.data.connection.endReason === 'Switching processors' && gone.meta.providerRevoked === false
+    && !stripe.revoked.has(sf.accountRef), 'disconnected; the account stays authorized while school B still uses it');
+  const goneB = await success(() => disconnect(OWN_B, b.connectionId, 3, 'School B done'), 'disconnect school B');
+  ok(goneB.meta.providerRevoked === true && stripe.revoked.has(sf.accountRef), 'the last connection on the account revokes access at the provider');
   await refused(() => refresh(OWN, s.connectionId, 6), 409, 'SCHOOL_PAY_CONNECTION_STATE', 'refresh after disconnect');
   await refused(() => disconnect(OWN, s.connectionId, 6, 'again'), 409, 'SCHOOL_PAY_CONNECTION_STATE', 'second disconnect');
   const abandoned = await success(() => disconnect(OTHER_ORG, other.connectionId, 1, 'Not now'), 'abandon an unfinished connection');

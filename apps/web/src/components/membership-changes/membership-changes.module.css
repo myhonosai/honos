@@ -39,3 +39,8 @@
 .primary:disabled, .secondary:disabled, .tab:disabled { opacity: .55; cursor: not-allowed; }
 .primary:focus-visible, .secondary:focus-visible, .tab:focus-visible, .field select:focus-visible, .field input:focus-visible, .field textarea:focus-visible, .check input:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
 @media (max-width: 820px) { .page { padding: 14px; } }
+/* Destructive buttons (event booking cancel, class series end): light text on the dark red fill, never browser-default dark text. */
+button.danger { display: inline-flex; align-items: center; justify-content: center; min-height: var(--hon-target, 44px); padding: 8px 14px; border: 1px solid #c97a8f; border-radius: 10px; background: #2a1520; color: #ffe1e8; font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+button.danger:hover:not(:disabled) { background: #3a1c2b; }
+button.danger:disabled { opacity: 0.6; cursor: not-allowed; }
+button.danger:focus-visible { outline: 3px solid #ffb3c4; outline-offset: 2px; }

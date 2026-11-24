@@ -1,7 +1,7 @@
 import {
   SAAS_COMMANDS, saasUuid, validateSaasCheckoutReceipt, validateSaasSchoolCheckoutInput,
-  validateSaasSchoolCredits, validateSaasSchoolPlanOptions,
-  type SaasCheckoutReceipt, type SaasPlanOffer, type SaasSchoolCredits, type SaasSchoolPlanOptions,
+  validateSaasSchoolCredits, validateSaasSchoolPlanOptions, validateSaasHonOsSchoolOfferView, validateSaasFounderSchoolAvailability,
+  type SaasHonOsSchoolOfferView, type SaasFounderSchoolAvailability, type SaasCheckoutReceipt, type SaasPlanOffer, type SaasSchoolCredits, type SaasSchoolPlanOptions,
 } from '@hon/contracts';
 import { verifyCurrentStaffReportingSchool } from '../current-staff-reporting-school-http';
 
@@ -104,4 +104,20 @@ export async function startSchoolCheckout(account: SchoolAccount, offer: SaasPla
   if ((c.status === 'OPEN') !== (value.providerCall !== 'NOT_OPENABLE')) invalid();
   hostedCheckoutUrl(c);
   return { ...receipt, providerCall: value.providerCall as CheckoutResult['providerCall'] };
+}
+
+/** The four HON OS schedule prices as the server returns them now, plus founder spot availability. Read only. */
+export type HonOsPriceReads = { offers: SaasHonOsSchoolOfferView | null; founder: SaasFounderSchoolAvailability | null };
+export async function loadHonOsPrices(account: SchoolAccount, signal?: AbortSignal): Promise<HonOsPriceReads> {
+  const { schoolId, organizationId } = account.context;
+  const [offers, founder] = await Promise.allSettled([
+    read(`/api/v1/schools/${schoolId}/hon-os-offers`, signal).then((v) => canonical(validateSaasHonOsSchoolOfferView, v)),
+    read(`/api/v1/schools/${schoolId}/hon-os-founder-availability`, signal).then((v) => canonical(validateSaasFounderSchoolAvailability, v)),
+  ]);
+  for (const r of [offers, founder]) if (r.status === 'rejected' && r.reason instanceof Error && r.reason.name === 'AbortError') throw r.reason;
+  const o = offers.status === 'fulfilled' ? offers.value : null, f = founder.status === 'fulfilled' ? founder.value : null;
+  // A response for another school or organization is never shown.
+  if (o && o.schoolId !== schoolId) invalid();
+  if (f && (f.schoolId !== schoolId || f.organizationId !== organizationId)) invalid();
+  return { offers: o, founder: f };
 }

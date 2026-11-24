@@ -3,7 +3,7 @@ import type { StaffSearchKind, StaffSearchResult } from '@hon/contracts';
 export const SEARCH_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const KIND_LABEL: Record<StaffSearchKind, string> = { STUDENT: 'Students', LEAD: 'Leads', CLASS_SESSION: 'Class sessions', PROGRAM: 'Programs', CURRICULUM: 'Curricula' };
 export function searchApiPath(org: string, school: string): string {
-  if (!SEARCH_UUID.test(org) || !SEARCH_UUID.test(school)) throw new Error('Enter your already-known organization and school UUIDs.');
+  if (!SEARCH_UUID.test(org) || !SEARCH_UUID.test(school)) throw new Error('Choose your school at the top of the page to search it.');
   return `/api/v1/organizations/${org.toLowerCase()}/schools/${school.toLowerCase()}/search`;
 }
 export function safeSearchCard(value: unknown, org: string, school: string): StaffSearchResult {
@@ -27,9 +27,18 @@ export function safeSearchResults(value: unknown, org: string, school: string): 
   return cards;
 }
 export function searchFailure(status: number): string {
-  if (status === 401) return 'Sign in with a verified staff session, then search again.';
-  if (status === 403) return 'Search is not authorized for this school. Ask your administrator about search.global access; no plan upgrade is needed.';
-  if (status === 400) return 'Enter 1–120 characters and select known result types.';
-  if (status === 404) return 'This scoped record is no longer available.';
-  return 'Search is temporarily unavailable. No changes were made; try again.';
+  if (status === 401) return 'Your session ended. Sign in again, then search.';
+  if (status === 403) return 'Your role does not include search at this school. Ask a school owner to add it (no plan upgrade is needed).';
+  if (status === 400) return 'Type up to 120 characters and keep at least one type ticked.';
+  if (status === 404) return 'This record is no longer available.';
+  return 'Search is not available right now. Nothing was changed; try again in a moment.';
+}
+/** The staff search read for the palette: the exact school, the given kinds, validated against that school. */
+export async function staffSearchRecords(org: string, school: string, q: string, types: readonly StaffSearchKind[], signal: AbortSignal): Promise<StaffSearchResult[]> {
+  const path = searchApiPath(org, school);
+  const params = new URLSearchParams({ q, types: STAFF_SEARCH_KINDS.filter(kind => types.includes(kind)).join(',') });
+  const response = await fetch(`${path}?${params}`, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', signal, referrerPolicy: 'no-referrer' });
+  if (!response.ok) throw new Error(searchFailure(response.status));
+  const payload = await response.json() as { data?: { search?: unknown } };
+  return safeSearchResults(payload.data?.search, org, school);
 }

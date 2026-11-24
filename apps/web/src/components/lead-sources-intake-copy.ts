@@ -88,7 +88,7 @@ const copy: Record<Language, LeadIntakeCopy> = {
     formStatus: { DRAFT: 'Draft', PUBLISHED: 'Published', DISABLED: 'Disabled' }
   },
   ko: {
-    navCore: '학교 대시보드', navForms: '리드 양식', navLeads: 'CRM 리드', navCampaigns: '캠페인 계획', navImports: '중복 검토', navChad: 'Chad 초안',
+    navCore: '도장 대시보드', navForms: '리드 양식', navLeads: 'CRM 리드', navCampaigns: '캠페인 계획', navImports: '중복 검토', navChad: 'Chad 초안',
     staffNavigation: '직원 탐색', signIn: '로그인', currentSchoolRead: '현재 학교 / 명시적 조회', presentationOnly: '표시 전용', verifiedRead: '확인된 조회', awaitingRead: '조회 대기', notConnected: '연결되지 않음', unavailableLabel: '사용 불가', websiteResponseBacked: '웹사이트 유입 / 응답 기반', governedNextSteps: '통제된 다음 단계', noInferredFunnel: '추정 전환 없음', humanReview: '사람 검토', governedDraftsOnly: '통제된 초안만',
     eyebrow: '학교 성장 / 확인된 양식 유입', title: '리드 소스 및 유입 모니터',
     introduction: '의도적인 읽기 전용 유입 화면입니다. 현재 권한이 확인된 양식 정보를 불러온 뒤, 각 다음 단계를 담당하는 업무 화면으로 이동하세요.',

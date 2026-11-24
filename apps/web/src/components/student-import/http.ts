@@ -119,12 +119,14 @@ export function csvHeaders(text: string): string[] | null {
   return cells;
 }
 
+// Common column names in student and family exports from school management software and spreadsheets.
+const PARENT = '(parent|guardian|mother|father|mom|dad|primary[ _-]*contact|contact|account[ _-]*holder|payer|responsible[ _-]*party)([ _-]*1)?';
 const GUESSES: ReadonlyArray<readonly [RegExp, StudentImportMappingTarget]> = [
-  [/^(parent|guardian|mother|father|mom|dad)[ _-]*(first|given)/i, 'guardianGivenName'], [/^(parent|guardian|mother|father|mom|dad)[ _-]*(last|family|sur)/i, 'guardianFamilyName'],
-  [/^(parent|guardian|mother|father|mom|dad)[ _-]*e-?mail/i, 'guardianEmail'], [/^(parent|guardian|mother|father|mom|dad)[ _-]*(phone|mobile|cell)/i, 'guardianMobile'],
-  [/^(student[ _-]*)?(first|given)[ _-]*name$|^first$/i, 'studentGivenName'], [/^(student[ _-]*)?(last|family|sur)[ _-]*name$|^last$/i, 'studentFamilyName'],
-  [/^(birth[ _-]*date|date[ _-]*of[ _-]*birth|dob|birthday)$/i, 'birthDate'], [/^(student[ _-]*)?e-?mail$/i, 'studentEmail'],
-  [/^(student[ _-]*)?(phone|mobile|cell)$/i, 'studentMobile'], [/^(family|household)([ _-]*(id|key|name|code))?$/i, 'familyKey'],
+  [new RegExp(`^${PARENT}[ _-]*(first|given)([ _-]*name)?$`, 'i'), 'guardianGivenName'], [new RegExp(`^${PARENT}[ _-]*(last|family|sur)([ _-]*name)?$`, 'i'), 'guardianFamilyName'],
+  [new RegExp(`^${PARENT}[ _-]*e-?mail([ _-]*address)?$`, 'i'), 'guardianEmail'], [new RegExp(`^${PARENT}[ _-]*(phone|mobile|cell)([ _-]*(phone|number))?$`, 'i'), 'guardianMobile'],
+  [/^((student|member|child|athlete)[ _-]*)?(first|given)[ _-]*name$|^first(name)?$/i, 'studentGivenName'], [/^((student|member|child|athlete)[ _-]*)?(last|family|sur)[ _-]*name$|^last(name)?$|^surname$/i, 'studentFamilyName'],
+  [/^((student|member)[ _-]*)?(birth[ _-]*date|date[ _-]*of[ _-]*birth|dob|birthday|birthdate)$/i, 'birthDate'], [/^((student|member)[ _-]*)?e-?mail([ _-]*address)?$/i, 'studentEmail'],
+  [/^((student|member)[ _-]*)?(phone|mobile|cell)([ _-]*(phone|number))?$/i, 'studentMobile'], [/^(family|household|account)([ _-]*(id|key|name|code|number))?$/i, 'familyKey'],
 ];
 /** A suggested mapping from familiar header names; anything unknown, or a field already taken, is ignored. Staff review it before staging. */
 export function guessMapping(headers: readonly string[]): Record<string, StudentImportMappingTarget> {
@@ -137,8 +139,10 @@ export function guessMapping(headers: readonly string[]): Record<string, Student
   return out;
 }
 /** A mapping the server will accept: every column once, known fields at most once, student names present, guardian names together. */
-export function mappingProblem(mapping: Readonly<Record<string, StudentImportMappingTarget>>): 'STUDENT_NAMES' | 'DUPLICATE' | 'GUARDIAN_NAMES' | 'GUARDIAN_CONTACT' | null {
+export function mappingProblem(mapping: Readonly<Record<string, StudentImportMappingTarget>>): 'STUDENT_NAMES' | 'DUPLICATE' | 'GUARDIAN_NAMES' | 'GUARDIAN_CONTACT' | 'TOO_MANY_COLUMNS' | null {
   const used = Object.values(mapping).filter((v) => v !== 'ignore');
+  // A wide export stages only its matched columns, so only those count toward the column limit.
+  if (Object.keys(mapping).length > STUDENT_IMPORT_MAX_COLUMNS && used.length > STUDENT_IMPORT_MAX_COLUMNS) return 'TOO_MANY_COLUMNS';
   if (used.some((v) => !(STUDENT_IMPORT_FIELDS as readonly string[]).includes(v))) return 'DUPLICATE';
   if (new Set(used).size !== used.length) return 'DUPLICATE';
   if (!used.includes('studentGivenName') || !used.includes('studentFamilyName')) return 'STUDENT_NAMES';

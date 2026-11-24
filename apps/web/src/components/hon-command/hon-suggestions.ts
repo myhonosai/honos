@@ -1,7 +1,7 @@
 import {
-  CAMPAIGN_STATUSES, FOLLOW_UP_DRAFT_PURPOSES, HON_TURN_TEXT_LIMITS, validateHonOrchestrationList, validateTeachingCurriculumOptions,
-  type FollowUpDraftPurpose, type HonDelegateAgentKey, type HonDelegation, type HonOrchestration, type HonOrchestrationList,
-  type HonOrchestrationStatus,
+  CAMPAIGN_STATUSES, FOLLOW_UP_DRAFT_PURPOSES, HON_REPLY_LIMITS, HON_TURN_TEXT_LIMITS, validateHonOrchestrationList, validateTeachingCurriculumOptions,
+  type FollowUpDraftPurpose, type HonDelegation, type HonOrchestration, type HonOrchestrationList,
+  type HonOrchestrationStatus, type HonSuggestedAgentKey,
 } from '@hon/contracts';
 import { verifyCrmLeadList } from '../crm-leads-http';
 
@@ -13,13 +13,16 @@ import { verifyCrmLeadList } from '../crm-leads-http';
  */
 export type HonDelegateTarget = Readonly<{ id: string; label: string; detail: string | null; version: number | null }>;
 
-export const SUGGESTION_AGENT: Readonly<Record<HonDelegateAgentKey, { name: string; role: string; does: string; target: string; empty: string }>> = {
+export const SUGGESTION_AGENT: Readonly<Record<HonSuggestedAgentKey, { name: string; role: string; does: string; target: string; empty: string }>> = {
   marcus: { name: 'Marcus', role: 'Marketing', does: 'Drafts content for one of your campaigns. The draft waits for approval in Action Center; nothing is published.',
     target: 'Campaign', empty: 'No open campaigns at this school yet. Create one in Campaigns first.' },
   kai: { name: 'Kai', role: 'Teaching & Curriculum', does: 'Drafts teaching material for one published curriculum. The draft waits for approval; no student record changes.',
     target: 'Curriculum', empty: 'No published curricula at this school yet.' },
   chad: { name: 'Chad', role: 'Lead follow-up', does: 'Drafts a follow-up message for one open lead. Nothing is sent to the family; the draft waits for approval in Action Center.',
     target: 'Lead', empty: 'No open leads at this school right now.' },
+  // K2c: Claire takes a question, not a target. Her answer is text: the recorded facts, then her view.
+  claire: { name: 'Claire', role: 'Business Performance', does: 'Reads this school’s performance numbers and answers with the recorded facts, then her view. She never drafts, sends or changes anything.',
+    target: '', empty: '' },
 };
 
 export const PURPOSE_LABEL: Readonly<Record<FollowUpDraftPurpose, string>> = {
@@ -36,7 +39,7 @@ export const ORCHESTRATION_PRESENTATION: Readonly<Record<HonOrchestrationStatus,
   UNKNOWN: { label: 'Not confirmed', tone: 'planned', detail: 'At least one outcome could not be confirmed. HON HQ reviews it; nothing is sent twice.' },
 };
 
-export const textLimit = (agent: HonDelegateAgentKey) => HON_TURN_TEXT_LIMITS[agent];
+export const textLimit = (agent: HonSuggestedAgentKey) => agent === 'claire' ? HON_REPLY_LIMITS.questionCharacters : HON_TURN_TEXT_LIMITS[agent];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export class HonTargetDrift extends Error { constructor() { super('The specialist target list could not be verified. Nothing is shown in its place.'); } }
@@ -80,8 +83,10 @@ export function verifyOrchestrations(envelope: unknown): HonOrchestrationList {
   try { return validateHonOrchestrationList(root(envelope, ['data']).data); } catch { return drift(); }
 }
 
-/** The delegation for one confirmed suggestion; a lead target must carry its version and a follow-up purpose. */
-export function suggestionDelegation(agent: HonDelegateAgentKey, target: HonDelegateTarget, purpose: FollowUpDraftPurpose | null): HonDelegation {
+/** The delegation for one confirmed suggestion; Claire takes none, a lead target must carry its version and a follow-up purpose. */
+export function suggestionDelegation(agent: HonSuggestedAgentKey, target: HonDelegateTarget | null, purpose: FollowUpDraftPurpose | null): HonDelegation {
+  if (agent === 'claire') return { agentKey: 'claire' };
+  if (target === null) throw new HonTargetDrift();
   if (agent === 'marcus') return { agentKey: 'marcus', campaignId: target.id };
   if (agent === 'kai') return { agentKey: 'kai', curriculumId: target.id };
   if (target.version === null || purpose === null) throw new HonTargetDrift();

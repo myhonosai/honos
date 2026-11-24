@@ -6,7 +6,8 @@ export const pricingOffers=(patch={})=>[
 ].map(([kind,price])=>({offerCode:kind,offerKind:kind,displayName:kind,priceMinor:price,
  salesOpensAt:new Date(Date.now()-3600_000).toISOString(),salesClosesAt:null,
  eligibility:kind.startsWith('FOUNDER_')?'NEW_ORGANIZATIONS_ONLY':'ANY_ACTIVE_ORGANIZATION',saleLimit:null,
- priceLock:'NONE',priceLockMonths:null,annualRenewal:kind.endsWith('ANNUAL')?(kind.startsWith('FOUNDER_')?'AUTO_RENEW_AT_CURRENT_PRICE':'AUTO_RENEW_AT_LOCKED_PRICE'):null,
+ // 0279: founder offers are locked while subscribed and renew at their own (locked) price.
+ priceLock:kind.startsWith('FOUNDER_')?'WHILE_CONTINUOUSLY_SUBSCRIBED':'NONE',priceLockMonths:null,annualRenewal:kind.endsWith('ANNUAL')?'AUTO_RENEW_AT_LOCKED_PRICE':null,
  plannedMonthlyPremiumCredits:12000,aiFairUseReference:'SYNTHETIC_PLANNING_ONLY',refundWindowDays:30,cancellationTiming:'END_OF_PAID_PERIOD',...patch[kind]}));
 export const scheduleInput=(offer,renewal,expectedVersion=0)=>({offerId:offer.offerId,renewalOfferId:renewal.offerId,
  expectedOfferSetRevision:1,expectedVersion,disclosureVersion:'HON_OS_PRICING_EN_V1',confirmation:'RECORD_IMMUTABLE_PRICING_SCHEDULE_ONLY',reason:pricingReason});

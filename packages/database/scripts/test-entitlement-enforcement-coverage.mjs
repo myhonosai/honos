@@ -37,6 +37,7 @@ function args(f,k,target=k){
 }
 // Reviewed: open to a suspended school on purpose. B6A keeps billing recovery and settings available.
 const OPEN_BY_DESIGN={
+ 'hon.read_parent_family_choices(text)':'account identity (0471 family picker): a signed-in parent lists only the families their own live grants link them to, with the school name, so they can choose or switch; read only, grants nothing, and every portal read still enforces its own school entitlement',
  'hon.read_hon_os_registration(text)':'account identity (B-ID-5 0241): the signed-in owner sees the sign-up program, current terms and their own REGISTERED school before any access exists; read only, grants nothing',
  'hon.read_hon_os_trial(text)':'account identity (D11-B 0246): the registered owner sees the trial program, the public trial they may start and their own trial before any access exists; read only, grants nothing',
  'hon.read_school_ownership(text,uuid)':'account identity (B-ID-4 0223): a school owner sees co-owners, the primary owner and ownership notices, read only, even while the school is suspended or not yet paid',
@@ -44,18 +45,31 @@ const OPEN_BY_DESIGN={
  'hon.read_saas_school_access_standing(text,uuid)':'billing recovery: the owner sees the payment issue, grace end, owner CRM read-only window or CRM lock (read only)',
  'hon.read_saas_school_plan_options(text,uuid)':'billing recovery: plan selection and checkout for the first or a renewed payment',
  'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers and the server eligibility decision for this school (read only)',
+ 'hon.read_school_plan_promotions(text,uuid)':'billing recovery (0308): HQ plan promotions shown only where the HON OS offer read already lists the promoted offer as ELIGIBLE for this school (read only)',
+ 'hon.read_saas_founder_availability_for_school(text,uuid)':'billing recovery: founder spot availability for this organization, so a suspended school sees the prices it can resubscribe at (read only, reserves nothing)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
+ 'hon.read_my_hq_contact(text)':'personal HQ-texts setting (0282): the signed-in person sees only their own phone and HQ texting choice, no school data; must stay reachable so a suspended school\'s owner can turn HQ texts off or remove the number',
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
  'hon.submit_kiosk_handoff(text,text)':'public kiosk route; B6B decides suspended-school behaviour',
  'hon.book_public_school_event(text,jsonb,text)':'public event booking link (0261), same rule as submit_public_form; B6B decides suspended-school intake',
  'hon.cancel_public_school_event_booking(text,jsonb)':'family cancels their own event booking (0261); must keep working for a suspended school',
+ 'hon.book_public_school_booking_type(text,jsonb,text)':'public booking-type link (0286): answers INVALID for a suspended school or lapsed entitlement and never books; returns no booking data',
+ 'hon.cancel_public_school_booking_type_booking(text,jsonb)':'family cancel by code (0286): answers INVALID for a suspended school or lapsed entitlement and changes nothing; returns no booking data',
+ 'hon.submit_family_referral(text,jsonb,text)':'public family referral link (0604): calls the unchanged submit_public_form; answers INVALID (records nothing) unless the program is ON and its form is readable by read_published_form, which needs a live school entitlement',
+ 'hon.sign_membership_agreement_link(text,jsonb,uuid)':'public agreement signing link (0499): the token is the only key; answers GONE (signs nothing, returns no data) for an unknown token, a suspended organization, school or family, a lapsed entitlement or a recipient no longer a guardian',
+ 'hon.submit_walkin_visit(text,jsonb,text)':'walk-in tablet (0414): answers CLOSED for a suspended school, lapsed entitlement or unknown device and writes nothing; returns no people data',
+ 'hon.open_walkin_card_payment(text,text)':'walk-in tablet card payment (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device (the 0414 tablet hold) and opens nothing; returns no people data',
+ 'hon.settle_walkin_card_payment(text,text)':'walk-in tablet card payment state (0533): answers CLOSED for a suspended school, lapsed entitlement or unknown device and changes nothing; returns no people data',
+ 'hon.open_public_checkout_order(text,jsonb,text,boolean)':'public checkout page link sign-up (0627): answers INVALID for a suspended school or organization, a lapsed entitlement or a page taken down (the 0620 page rule) and writes nothing; returns no order data',
+ 'hon.read_public_checkout_order(text,text)':'public checkout order by link and buyer key (0627): an order already placed stays reachable so the buyer can check or cancel it while the school is suspended; returns only that order, and the API hands out no processor page to pay on unless the page still opens',
  'hon.chad_follow_up_draft_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.crm_lead_target_is_current(uuid,uuid)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.marketing_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.teaching_action_is_current(uuid,jsonb)':'boolean predicate over ids; returns no data and grants nothing',
  'hon.principal_has_school_permission(uuid,uuid,uuid,text)':'boolean permission predicate; grants nothing by itself',
  'hon.human_action_reviewer()':'returns the fixed reviewer identity; no school data',
+ 'hon.demo_data_removal_allows(text,jsonb)':'0459 boolean guard predicate: true only for a registered demo row in a set the calling transaction is removing; returns no data and grants nothing',
 };
 // Reviewed gaps: none open. The six staff scope resolvers recorded here before (achievements, staff reporting,
 // follow-ups, human work queue, teaching studio, testing registration review) are gated in 0172 and are now in
@@ -71,7 +85,9 @@ const MUST_ENFORCE=['hon.issue_champions_referral_code(text,uuid,uuid,uuid,uuid)
  'hon.resolve_teaching_assistant_scope(text)','hon.resolve_testing_certificate_scope(text,uuid)','hon.resolve_testing_scorecard_scope(text,uuid)',
  // Formerly recorded gaps, gated in 0172.
  'hon.resolve_achievement_scope(text,uuid)','hon.resolve_current_staff_reporting_scope(text)','hon.resolve_follow_up_scope(text)',
- 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)'];
+ 'hon.resolve_human_work_scope(text)','hon.resolve_teaching_studio_scope(text,uuid)','hon.resolve_testing_registration_review_scopes(text)',
+ // 0249: school missed-call list (caller numbers) for staff with communication.message.read.
+ 'hon.read_school_missed_calls(text,uuid,integer)'];
 
 async function call(f,k,target=k){
  const a=args(f,k,target);
