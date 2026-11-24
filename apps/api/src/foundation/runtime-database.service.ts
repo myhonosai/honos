@@ -5,6 +5,7 @@ import { emitTelemetry, summarizeError } from '../observability/telemetry.js';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { HqEntitlementTransitionInput, HqEntitlementTransitionReceipt } from '@hon/contracts';
+import type { HqSchoolLifecycleInput, HqSchoolLifecycleReceipt, HqSchoolArchiveDates } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 export interface ResolvedStaffReportingScope {
   organizationId: string;
@@ -1149,6 +1150,39 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     } finally {
       client.release();
     }
+  }
+
+  /** HQ school lifecycle (0675): authority, typed name, status and idempotency are decided in the database. */
+  async transitionSchoolLifecycleFromHq(externalSubject: string, schoolId: string, input: HqSchoolLifecycleInput,
+    key: string, requestId: string, correlationId: string): Promise<HqSchoolLifecycleReceipt> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: HqSchoolLifecycleReceipt }>(
+        'SELECT hon.transition_school_lifecycle_from_hq($1,$2::uuid,$3,$4,$5,$6::uuid,$7::uuid,$8::uuid) AS data',
+        [externalSubject, schoolId, input.action, input.expectedStatus, input.confirmName ?? null, key, requestId, correlationId]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_SCHOOL_LIFECYCLE_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** Archived schools with their erase dates; read only, same HQ viewers as the directory. */
+  async readHqSchoolArchiveDates(externalSubject: string): Promise<HqSchoolArchiveDates> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: HqSchoolArchiveDates }>('SELECT hon.read_hq_school_archive_dates($1) AS data', [externalSubject]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_SCHOOLS_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   /** Minimal subject-only choices; no tenant GUC, table read, or command effect. */
