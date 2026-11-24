@@ -507,8 +507,8 @@ the same tables. Owner check still open: the autopay defaults listed in section 
 
 ## 21. Checkout pages as built (0402, CP1 + CP2): many named pages, modeled on the owner's current CRM
 
-Status: source only, not deployed. Staff only: families cannot open these pages yet (the family page, its public link and
-promo codes are CP3 and CP4). Nothing here takes a payment, and HON adds no fee.
+Status: source only, not deployed. At first staff only; the HON Family app page came with §24 and each page's family share
+link with §25. Promo codes are CP4. Nothing here takes a payment, and HON adds no fee.
 
 - **Database (0402):** `school_checkouts` (many pages per school: a fixed address `slug`, a group, `DRAFT`, `PUBLISHED` or
   `ARCHIVED`, closed content, optimistic version; up to 200 pages), the append-only `school_checkout_versions`, and
@@ -688,3 +688,44 @@ codes (CP4) and public links for people without an account.
 API: `GET /v1/parent/checkout-pages`, `POST /v1/parent/checkout-pages/orders` (Idempotency-Key required),
 `POST .../orders/:orderId/start`, `.../confirm` and `.../cancel`; staff `GET /v1/organizations/:org/schools/:school/payments/checkout-pages/orders`.
 App: More > Sign up & pay. Proof: `test-family-checkout-integrity.mjs`.
+
+## 25. Checkout page share links as built (0620): a link families open without an account
+
+Owner ask (2026-11-21, testing the live app): "checkout page how do i get link to show the page". Read only: nothing is
+bought, booked, stored or sent from the link, and HON adds no fee. Signing up and paying from the link for people without
+an account came next: see §26 (0627), which also adds the questions, waiver and thank-you text to what the page shows.
+
+| Topic | Rule |
+| --- | --- |
+| The link | One per checkout page, `/checkout/<48 hex>` on the app's own address: 24 random bytes, issued once, never changed, moved or deleted. |
+| Issuing | Staff with `school_checkout.manage` call `POST /v1/organizations/:org/schools/:school/payments/checkout-pages/links` (browser command `school_checkout.links.issue`, no body, no Idempotency-Key). It issues a link for every page of the school that has none (at most 200) and returns all of them; again issues nothing new. One `school_checkout.link_issued` audit row per issued link; no outbox event. |
+| What opens | Only a PUBLISHED page of an ACTIVE school and organization with a live ESSENTIAL, CORE or COMPLETE entitlement (the 0261 public event rule). Draft, archived, unknown or malformed links read as not found. Putting a page in draft stops its link; going live again reopens the same link. |
+| What it shows | `GET /v1/public/checkout-pages/:publicId` (no cookie, session or tenant id): school name, title, description and text blocks in the page's languages, currency, participants per order, the options still available on the school's today (price, or monthly amount, months and down payment; extra-participant fee; most popular; places left from §24's count; whether the HON Family app sells it), add-ons and whether there is a waiver. Never the questions, receipt or thank-you text, collection method, plan, capacity number, ids, orders or staff names. A public read writes nothing. |
+| Transport | One GET path, no query string, no body, `no-store` and `no-referrer`; the per-client read limit shared with the other public links (`public-client-limit.ts`) and a process cap. |
+| Staff screen | Each Live card shows the link with Copy link and Open page (new tab); a draft card says the link opens once the page is live. |
+| Family page | `/checkout/:publicId`, noindex, English, Korean or Spanish by the browser's language with English fallback. It says how to sign up: in the HON Family app (More, Sign up & pay) when an option is sold there, otherwise by contacting the school. |
+| Storage | `hon.school_checkout_links`: forced RLS, no runtime table privilege, insert-only guard (a link belongs to a page of its own school), no truncate. Runtime entry points `issue_school_checkout_links(text)` and `read_public_school_checkout(text)`; helpers `public_school_checkout(text)` and `guard_school_checkout_link()` stay private. |
+
+Proof: `test-checkout-links-integrity.mjs`; `apps/api/test/checkout-links.test.cjs`; `apps/web/test/checkout-links-ui.test.tsx`;
+010/011; verify-rls; staging pin 0620.
+
+## 26. Signing up from a share link as built (0627): no account, test-mode payment only
+
+Owner ask (2026-11-21), second slice of §25: a person who opens a page's link can sign up and pay without a HON account.
+The payment is the shared one-time payment (0529) on the school's own processor page (HOSTED), TEST mode only, with no
+HON fee. Nothing here takes live money, creates a person, family, membership or account, or sends a message.
+
+| Topic | Rule |
+| --- | --- |
+| What can be bought | A ONE_TIME option the page sells online (`inFamilyApp`) with places left, on a page the link shows (§25). Monthly options stay with the school. A priced order needs a processor that can show a hosted page and the app's public address (`HON_PUBLIC_ORIGIN`); otherwise the database refuses it (`NOT_AVAILABLE`) and only free options appear on the form. |
+| The order | `POST /v1/public/checkout-pages/:publicId/orders` with `{ key, order }`: a random key the browser made (32 to 100 base64url characters) and the buyer's name, email and optional mobile (E.164), 1 to `maxPerOrder` participants by name with exactly the page's questions, add-on keys, the waiver box and an empty hidden `website` field. The page version must match (`CHANGED`). The database prices it (first participant, each further one at the extra-participant fee or the price, required add-ons always), holds the places (`FULL`, counted with §24's family orders), keeps a hash of the waiver text and opens the payment with the buyer's email for 30 minutes. A free order is PAID at once with no payment. |
+| Same key | The same key and the same order return the same order (a lost answer is safe to send again); another order under that key is refused. A key belongs to one link only; the database keeps only its hash. |
+| Pay, status, cancel | `.../orders/pay`, `.../orders/status`, `.../orders/cancel` with `{ key }`. Pay confirms the payment first and only opens a processor page while it is still OPEN; it returns to `/checkout/:publicId` (no order, key or payment in the address). Status asks the processor and records its answer; cancel closes an OPEN payment (the processor may answer SUCCEEDED). The payment id never leaves the API. The order settles from the payment: PAID, CANCELED, or REVIEW when a payment succeeds for an order that already ended. |
+| Suspended school | The order call answers INVALID for a page the link no longer shows (taken down, or a suspended school, organization or entitlement) and writes nothing. An order already placed stays reachable through its link to check or cancel, but pay hands out no processor page while the page does not open. Both entry points are reviewed into the B6A open-by-design list (`test-entitlement-enforcement-coverage.mjs`). |
+| Limits | Per page: 300 well-formed new order attempts and 1,200 unknown-key lookups an hour, and 500 placed orders a day; 5 placed orders an hour per email per page. A known key is always answered and a replay is not counted, so guessed keys or spam can never stop a buyer paying for, checking or cancelling their own order. A free option's places are taken at once (no payment to wait for), so someone could fill a free option with made-up emails up to these limits; the school sees every sign-up under From the page link and can raise capacity or take the page down. The per-client limits shared with the other public links (book for order and pay, read for status, cancel for cancel), a process cap, JSON bodies of at most 8 KiB, no query string, `no-store`. Refusals carry no detail. |
+| Family page | The form appears under Sign up: option, participants and their questions, add-ons, the buyer's details, the waiver text and box, and the total (the server prices it again). After sign-up it shows where the order stands: waiting for payment (Pay now, Check again, Cancel), processing, signed up with the thank-you text, school review, or ended (start again). Only the order key is kept in the browser (`localStorage`, per link). |
+| Staff | Checkout orders shows a second list, From the page link: the latest 200 sign-ups with what the buyer typed, participants and answers, add-ons, waiver and status (`GET .../payments/checkout-pages/public-orders`, `school_checkout.manage`, no key, no query). |
+| Storage | `hon.public_checkout_orders` (forced RLS, no runtime table privilege, insert OPEN or free PAID only, the page must belong to the order's school, settled once, never changed otherwise or deleted, no truncate) and `hon.public_checkout_rates` (fixed windows). Runtime entry points `open_public_checkout_order(text,jsonb,text,boolean)`, `read_public_checkout_order(text,text)` and `read_school_public_checkout_orders(text)`; the settle trigger on `school_pay_once` and the helpers stay private. |
+
+Proof: `test-public-checkout-orders-integrity.mjs`; `apps/api/test/checkout-links.test.cjs`; `apps/web/test/checkout-links-ui.test.tsx`;
+`apps/web/test/checkout-orders-http.test.ts`; 010/011; verify-rls; staging pin 0627.

@@ -12,7 +12,6 @@ test('every hon.ai_text_kinds usage_agent in the migrations is a contracts AI us
     }
   }
   assert.ok(found.some(([f]) => f.startsWith('0641_')), 'the Marcus review kind is covered');
-  // Pre-existing on main, reported separately (0594 paper import): fixing it means adding the value to AI_USAGE_AGENTS.
-  const knownGap = new Set(['0594_paper_import_ai_reader.sql:PAPER_READING']);
-  for (const [file, agent] of found) if (!knownGap.has(`${file}:${agent}`)) assert.ok(AI_USAGE_AGENTS.includes(agent), `${file}: ${agent}`);
+  assert.ok(found.some(([f, a]) => f.startsWith('0594_') && a === 'PAPER_READING'), 'the paper import kind is covered');
+  for (const [file, agent] of found) assert.ok(AI_USAGE_AGENTS.includes(agent), `${file}: ${agent}`);
 });

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import {
   validateSaveCheckoutPageInput, validateSaveCheckoutSettingsInput, verifyCheckoutPageReceipt, verifyCheckoutSettingsReceipt, verifySchoolCheckoutPages,
-  verifySchoolCheckoutOrders, type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SchoolCheckoutOrders, type SchoolCheckoutPages,
+  verifySchoolCheckoutOrders, verifySchoolPublicCheckoutOrders, type SchoolPublicCheckoutOrders, verifySchoolCheckoutLinks, type SchoolCheckoutLinks, type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SchoolCheckoutOrders, type SchoolCheckoutPages,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -71,6 +71,37 @@ export class SchoolCheckoutService {
         const result = await client.query<{ data: unknown }>('SELECT hon.read_school_checkout_orders($1) AS data', [context.externalSubject]);
         if (result.rows.length !== 1) throw new Error('Unverified checkout orders.');
         return verifySchoolCheckoutOrders(result.rows[0]!.data);
+      });
+    } catch (error) { return translate(error); }
+  }
+
+  /** 0627: the school's latest 200 share link orders (buyer, participants, answers, state). Read only; nothing is sent to anyone. */
+  async publicOrders(context: MembershipLifecycleContext): Promise<SchoolPublicCheckoutOrders> {
+    this.assertHumanContext(context, false);
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async (client: PoolClient) => {
+        await client.query(READ_LIMITS);
+        await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        const result = await client.query<{ data: unknown }>('SELECT hon.read_school_public_checkout_orders($1) AS data', [context.externalSubject]);
+        if (result.rows.length !== 1) throw new Error('Unverified share link orders.');
+        return verifySchoolPublicCheckoutOrders(result.rows[0]!.data);
+      });
+    } catch (error) { return translate(error); }
+  }
+
+  /**
+   * 0620: every page's share link, issuing the missing ones (an unguessable id per page). Re-running it issues nothing new,
+   * so it takes no Idempotency-Key. Whether a link opens is decided by the page's own status on every public read.
+   */
+  async links(context: MembershipLifecycleContext): Promise<SchoolCheckoutLinks> {
+    this.assertHumanContext(context, false);
+    try {
+      return await this.database.withTenantTransaction(context, async (client: PoolClient) => {
+        await client.query(WRITE_LIMITS);
+        await client.query(HUMAN_SETTINGS, [context.externalSubject]);
+        const result = await client.query<{ data: unknown }>('SELECT hon.issue_school_checkout_links($1) AS data', [context.externalSubject]);
+        if (result.rows.length !== 1) throw new Error('Unverified checkout links.');
+        return verifySchoolCheckoutLinks(result.rows[0]!.data);
       });
     } catch (error) { return translate(error); }
   }

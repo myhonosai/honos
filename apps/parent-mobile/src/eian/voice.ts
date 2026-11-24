@@ -15,7 +15,8 @@ export type EianVoice = {
   /** False when this phone has no speech service, so the microphone button is not shown. */
   canListen(): boolean;
   /** Hears one question. `stop` ends it and delivers what was heard; `cancel` ends it and delivers nothing. */
-  listen(on: { partial(text: string): void; end(result: HeardResult): void }, hints?: readonly string[]): { stop(): void; cancel(): void };
+  listen(on: { partial(text: string): void; end(result: HeardResult): void }, hints?: readonly string[]): { stop(): void; cancel(): void };  /** True when answers can be read by Eian's own voice made by HON's speech service (see natural-voice.ts); the screen says so. */
+  speechService?: boolean;
 };
 
 export const EianVoiceContext = createContext<EianVoice | null>(null);
@@ -42,3 +43,7 @@ export const VOICE_NOTE: Record<Exclude<HeardResult['kind'], 'heard'>, string> =
   denied: "The microphone is off for HON Family. You can turn it on in your phone's settings, or type your question.",
   unavailable: "Voice isn't available on this phone right now. You can type your question.",
 };
+
+/** Shown under Eian when reading aloud may use Eian's own voice instead of the phone's. */
+export const SPEECH_SERVICE_NOTE = "Reading aloud uses Eian's voice when your school has it on. Eian's voice is made by a speech service: the words of the answer, which can include your children's names, are sent to it. No recording of you is sent. Otherwise your phone's own voice reads the answer.";
+export const PHONE_VOICE_NOTE = "Reading aloud uses your phone's own voice.";

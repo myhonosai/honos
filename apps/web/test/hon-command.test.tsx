@@ -103,7 +103,7 @@ describe('HON command roster', () => {
     expect(HON_TEACHING_AI.portrait).toBe('/ai/kai.webp');
     expect(existsSync(join('public', HON_TEACHING_AI.portrait))).toBe(true);
     expect(HON_AI_TEAM.map((member) => member.portrait)).not.toContain(HON_TEACHING_AI.portrait);
-    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Curriculum library', 'Curriculum progress', 'Scheduled classes', 'Teaching drafts']);
+    expect(HON_TEACHING_AI.tools.map((tool) => tool.label)).toEqual(['Teaching Studio', 'Videos and links', 'Curriculum progress', 'Scheduled classes', 'Teaching drafts']);
   });
 
   it('maps only server-reported conversation states and keeps the composer off without full readiness', () => {

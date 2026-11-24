@@ -21,7 +21,7 @@ Source: launch-readiness review pinned to main `0d476427`, P2 finding [16] (CRM 
   - the owner clears it on a school change or the end of a session, as it already does for every other retained command.
 
   A capsule made for another school is never shown or sent.
-- **RC4** `FamilyProvider` owns a `BookingCustody`, which holds the command keys and the one unconfirmed action. The provider is keyed by session, so signing out drops it. A remounted booking screen opens on the unconfirmed action, with its same-key **Try again**.
+- **RC4** `FamilyProvider` owns a `BookingCustody`, which holds the command keys and the one unconfirmed action. The provider is keyed by session, so signing out drops it. A remounted booking screen opens on the unconfirmed action, with its same-key **Try again**. It holds one unconfirmed action at a time: if a second booking action also loses its answer, the reminder shows the newer one, while the earlier action's command key stays in `keys`, so a retry of that same action still replays its original key and can never book twice.
 - **RC5** In the parent app, the action card, and a "not confirmed yet" line with **Check again**, render even while the class list is loading or unavailable. **Close** only hides the action. The action settles only in two cases:
   - a confirmed answer: directly, through a same-key replay, or through a re-read that shows it;
   - a definite refusal.

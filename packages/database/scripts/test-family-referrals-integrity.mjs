@@ -276,7 +276,7 @@ try {
 
   // 5. A friend signs up: a CRM lead through the 0075 intake, recorded as this family's referral (first touch).
   const leadsBefore = (await sql('SELECT count(*)::int n FROM hon.crm_leads WHERE school_id=$1', [ids.school])).rows[0].n;
-  const firstKey = randomUUID(), first = friend({ ageBand: 'CHILD' });
+  const firstKey = randomUUID(), first = friend({ ageBand: 'CHILD', mobile: '+15550100601', textOptIn: true });
   const accepted = await publicSubmit(code, first, firstKey);
   ok(accepted.status === 202 && accepted.body.result === 'accepted', 'friend accepted');
   let rows = await referralRows();
@@ -290,6 +290,13 @@ try {
   ok((await publicSubmit(code, { ...friend(), name: '' })).status === 400, 'invalid body refused');
   ok((await publicSubmit(code, friend(), 'short')).status === 400, 'idempotency key required');
   ok((await sql("SELECT count(*)::int n FROM hon.audit_events WHERE school_id=$1 AND action_code='crm.referral.record'", [ids.school])).rows[0].n === 1, 'referral audited');
+  // IC1 (0634): the referral page submits the school's lead form, so the friend gets lead-form consent: email always, texts only with the tick.
+  const consentOf = async (leadId) => (await sql(`SELECT k.channel::text ch,k.status::text st,c.method,c.evidence->>'wording' wording FROM hon.crm_leads l
+    JOIN hon.communication_consents k ON k.person_id=l.primary_person_id JOIN hon.communication_consent_captures c ON c.consent_id=k.id
+    WHERE l.id=$1 ORDER BY 1`, [leadId])).rows;
+  const ticked = await consentOf(rows[0].lead_id);
+  ok(ticked.length === 2 && ticked.every(c => c.st === 'OPTED_IN' && c.method === 'LEAD_FORM' && c.wording === 'IC1-2026-11-19') && ticked.map(c => c.ch).join() === 'EMAIL,SMS',
+    'IC1: a ticked referral with a mobile records EMAIL and SMS as LEAD_FORM with the wording version');
 
   // 6. What the family sees: counts and status, never the friend.
   let fam = (await success(() => parentRead(GUARDIAN), 'parent after one')).data;
@@ -302,8 +309,10 @@ try {
   ok((await publicSubmit(code, friend({ email: 'Kim.Parent@example.test' }))).status === 202, 'self submission accepted as a lead');
   const existingPerson = randomUUID();
   await sql("INSERT INTO hon.people(id,organization_id,school_id,given_name,family_name,email) VALUES($1,$2,$3,'Known','Person','known@example.test')", [existingPerson, ids.organization, ids.school]);
-  ok((await publicSubmit(code, friend({ email: 'known@example.test' }))).status === 202, 'known contact accepted as a lead');
+  ok((await publicSubmit(code, friend({ email: 'known@example.test', mobile: '+15550100602' }))).status === 202, 'known contact accepted as a lead');
   rows = await referralRows();
+  const unticked = await consentOf(rows[2].lead_id);
+  ok(unticked.length === 1 && unticked[0].ch === 'EMAIL' && unticked[0].st === 'OPTED_IN' && unticked[0].method === 'LEAD_FORM', 'IC1: a referral with a mobile but no tick records EMAIL only');
   ok(rows.length === 3 && rows[1].self_referral && !rows[1].existing_contact && !rows[2].self_referral && rows[2].existing_contact, 'SELF and EXISTING_CONTACT flags');
   fam = (await success(() => parentRead(GUARDIAN), 'parent after flags')).data;
   ok(fam.counts.referred === 2 && fam.referrals.length === 2, 'SELF referral not counted or shown for the family');

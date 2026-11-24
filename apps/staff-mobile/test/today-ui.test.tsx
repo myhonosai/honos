@@ -21,6 +21,10 @@ function fakeApi(patch: Partial<StaffApi> = {}): StaffApi {
     clock: jest.fn(async () => ({ ok: true as const, data: verifyMyTimeClock(clock(null).data) })),
     punch: jest.fn(async () => ({ ok: true as const, data: verifyMyTimeClock(clock(entry()).data).open! })),
     findStudents: jest.fn(async () => ({ ok: true as const, data: verifyStudentSearch(FOUND) })),
+    myAgents: jest.fn(async () => ({ ok: false as const, state: 'no-staff-access' as const })),
+    startConversation: jest.fn(),
+    ask: jest.fn(),
+    findContacts: jest.fn(), contactCard: jest.fn(), inbox: jest.fn(), conversation: jest.fn(), markRead: jest.fn(), reply: jest.fn(),
     ...patch,
   };
 }

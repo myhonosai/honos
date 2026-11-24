@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest';
 import { familyAccessApi, familyCommand } from '../src/components/family-access/http';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 const id=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -7,7 +7,7 @@ const invitation={invitationId:id(4),schoolId:scope.schoolId,familyId:family.id,
 const token='a'.repeat(43),input={schoolId:scope.schoolId,familyId:family.id,email:invitation.email,accessLevel:'PRIMARY_GUARDIAN',ttlHours:24,token};
 const signal=()=>new AbortController().signal;
 const reply=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'private, no-store'}});
-let invalidations:ReturnType<typeof vi.fn>;
+let invalidations:Mock<() => void>;
 beforeEach(()=>{const w=new EventTarget();invalidations=vi.fn();w.addEventListener(HON_SESSION_INVALIDATED_EVENT,invalidations);vi.stubGlobal('window',w);});
 afterEach(()=>{vi.restoreAllMocks();vi.unstubAllGlobals();});
 it('loads actual bounded FamilySummary shape before the final dedicated school authorization read',async()=>{

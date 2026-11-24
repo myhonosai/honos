@@ -2,27 +2,37 @@ import { accountUuid, validateSchoolContactArchiveInput, validateSchoolContactMe
   verifySchoolContactArchiveState, verifySchoolContactCard, verifySchoolContactList, verifySchoolContactMergePreview, verifySchoolContactMergeReceipt,
   SCHOOL_CONTACT_ARCHIVE_BLOCKERS, SCHOOL_CONTACT_MERGE_BLOCKERS, SCHOOL_CONTACT_RESTORE_BLOCKERS,
   type SchoolContactArchiveReceipt, type SchoolContactArchiveState, type SchoolContactCard, type SchoolContactList, type SchoolContactMergePreview,
-  type SchoolContactMergeReceipt, type SchoolContactQuery, type SchoolContactSegment } from '@hon/contracts';
+  type SchoolContactMergeReceipt, type SchoolContactMembershipFilter, type SchoolContactQuery, type SchoolContactSegment, type SchoolContactSort } from '@hon/contracts';
 import { PersonRecordError, codeOf, exchange, personErrorFor, type PeopleScope } from './http';
 
 /**
  * C1 (0521): the contacts list for the school the shell verified. One same-origin GET with no key and no command header;
  * the server re-proves people.read and signs the page cursor to this school and these filters.
  */
-export type ContactFilters = Readonly<{ segment: SchoolContactSegment; query: string; rankId: string; programId: string; planId: string; endsWithinDays: '' | '7' | '30' | '60' | '90' }>;
-export const NO_CONTACT_FILTERS: ContactFilters = { segment: 'ALL', query: '', rankId: '', programId: '', planId: '', endsWithinDays: '' };
+export type ContactFilters = Readonly<{ segment: SchoolContactSegment; query: string; rankId: string; programId: string; planId: string; endsWithinDays: '' | '7' | '30' | '60' | '90';
+  // C4 (0623): order and the added filters, as form strings ('' = not set). rankId 'NONE' means "no belt yet".
+  sort: SchoolContactSort; membership: '' | SchoolContactMembershipFilter; endsFrom: string; endsTo: string; ageMin: string; ageMax: string; tag: string }>;
+export const NO_CONTACT_FILTERS: ContactFilters = { segment: 'ALL', query: '', rankId: '', programId: '', planId: '', endsWithinDays: '',
+  sort: 'NAME', membership: '', endsFrom: '', endsTo: '', ageMin: '', ageMax: '', tag: '' };
 export const CONTACT_QUERY_MAX = 100;
+export const NO_BELT = 'NONE';
 
-/** The closed query the server accepts; empty filters are left out. */
+/** The closed query the server accepts; empty filters and the default order are left out. Throws on an impossible combination. */
 export function contactQuery(filters: ContactFilters, options: boolean): SchoolContactQuery {
   const q = filters.query.trim().slice(0, CONTACT_QUERY_MAX);
+  const f = filters;
   return validateSchoolContactQuery({
-    ...(filters.segment !== 'ALL' ? { segment: filters.segment } : {}), ...(q ? { query: q } : {}),
-    ...(filters.rankId ? { rankId: filters.rankId } : {}), ...(filters.programId ? { programId: filters.programId } : {}),
-    ...(filters.planId ? { planId: filters.planId } : {}), ...(filters.endsWithinDays ? { endsWithinDays: filters.endsWithinDays } : {}),
+    ...(f.segment !== 'ALL' ? { segment: f.segment } : {}), ...(q ? { query: q } : {}),
+    ...(f.rankId === NO_BELT ? { noBelt: true } : f.rankId ? { rankId: f.rankId } : {}), ...(f.programId ? { programId: f.programId } : {}),
+    ...(f.planId ? { planId: f.planId } : {}), ...(f.endsWithinDays ? { endsWithinDays: f.endsWithinDays } : {}),
+    ...(f.sort !== 'NAME' ? { sort: f.sort } : {}), ...(f.membership ? { membership: f.membership } : {}),
+    ...(f.endsFrom ? { endsFrom: f.endsFrom } : {}), ...(f.endsTo ? { endsTo: f.endsTo } : {}),
+    ...(f.ageMin !== '' ? { ageMin: f.ageMin } : {}), ...(f.ageMax !== '' ? { ageMax: f.ageMax } : {}), ...(f.tag ? { tag: f.tag } : {}),
     ...(options ? { options: true } : {}),
   });
 }
+/** True when the server would accept these filters (the form keeps the last good set otherwise). */
+export function contactFiltersOk(filters: ContactFilters): boolean { try { contactQuery(filters, false); return true; } catch { return false; } }
 
 export const contactsApi = {
   async list(scope: PeopleScope, filters: ContactFilters, cursor: string | null, options: boolean, signal: AbortSignal): Promise<SchoolContactList> {
