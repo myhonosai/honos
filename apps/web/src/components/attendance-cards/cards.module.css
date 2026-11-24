@@ -1,0 +1,88 @@
+/* Attendance cards and scan check-in. Uses the HON workspace tokens (--hon-*) with legible fallbacks. */
+.page { display: grid; gap: 14px; min-width: 0; max-width: 1080px; margin: 0 auto; padding: 20px; border-radius: var(--hon-radius, 16px); background: #08121f; color: #eaf4fb; }
+.page h1 { margin: 0 0 4px; font-size: 24px; }
+.intro { max-width: 64ch; margin: 0; color: #b6c8da; font-size: 15px; line-height: 1.5; }
+.panel { display: grid; align-content: start; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: linear-gradient(160deg, #10263b, #0b1828); }
+.panel h2 { margin: 0; font-size: 17px; }
+.meta { margin: 0; color: var(--hon-muted, #9fb4c8); font-size: 13px; line-height: 1.5; }
+.form { display: grid; gap: 10px; min-width: 0; }
+.form fieldset { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; border: 0; }
+.form legend, .form > label, .field label { margin-bottom: 4px; font-size: 13px; font-weight: 700; }
+.choice { display: inline-flex; align-items: center; gap: 6px; min-height: var(--hon-target, 44px); font-size: 14px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field select, .field input { width: 100%; min-width: 0; box-sizing: border-box; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #3b5269; border-radius: 10px; background: #0a1625; color: #eef6fc; font: inherit; color-scheme: dark; }
+.scanInput { font-size: 20px !important; letter-spacing: 0.06em; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.primary, .secondary { min-height: var(--hon-target, 44px); padding: 8px 14px; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+.primary { border: 0; background: var(--hon-accent, #8de3d8); color: #06131f; }
+.secondary { border: 1px solid #3b5269; background: #0d1d2e; color: #eef6fc; }
+.primary:disabled, .secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+.primary:focus-visible, .secondary:focus-visible, .field select:focus-visible, .field input:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { padding: 8px; border-bottom: 1px solid #1d3349; text-align: left; vertical-align: middle; }
+.table th { color: var(--hon-muted, #9fb4c8); font-size: 12px; font-weight: 700; }
+.outcome { display: grid; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid #35506d; background: #10243a; font-size: 14px; }
+.outcome p { margin: 0; }
+.outcome[data-tone="ok"] { border-color: #2b7a63; background: #0f3029; }
+.outcome[data-tone="blocked"] { border-color: #8a4b4b; background: #2d1717; }
+.result { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 14px; border: 2px solid #35506d; background: #10243a; font-size: 18px; }
+.result[data-tone="ok"] { border-color: #2fae86; background: #0f3029; }
+.result[data-tone="blocked"] { border-color: #c45c5c; background: #2d1717; }
+.result p { margin: 0; }
+.avatar { flex: 0 0 auto; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 12px; overflow: hidden; background: #1a3048; font-weight: 800; font-size: 22px; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.video { width: 100%; max-width: 420px; border-radius: 12px; background: #000; }
+
+/* Printed sheet: Avery 8371 / 5371 / 8859 business cards. US Letter, 2 across x 5 down, each card 3.5 x 2 in,
+   0.5 in top/bottom and 0.75 in side margins, no gutters. Card content keeps a 0.16 in safe margin so a printer
+   that feeds a little off still lands everything inside the perforation. */
+.preview { overflow: auto; max-width: 100%; padding: 12px; border-radius: 12px; background: #3a4654; }
+.sheets { display: grid; justify-content: center; gap: 16px; }
+.averyPage { display: grid; grid-template-columns: repeat(2, 3.5in); grid-template-rows: repeat(5, 2in); box-sizing: border-box;
+  width: 8.5in; height: 11in; padding: 0.5in 0.75in; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+.averyCell { box-sizing: border-box; width: 3.5in; height: 2in; overflow: hidden; outline: 1px dashed #c3ccd6; outline-offset: -0.5px; }
+.averyCell[data-empty="true"] { background: repeating-linear-gradient(135deg, #f6f8fa 0 6px, #eef1f4 6px 12px); }
+
+.face { --card-accent: #0f5d8c; position: relative; display: flex; gap: 0.14in; box-sizing: border-box; width: 3.5in; height: 2in; padding: 0.16in 0.18in;
+  background: #fff; color: #0b1622; font-family: Inter, "Helvetica Neue", Arial, system-ui, sans-serif; overflow: hidden;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.faceMain { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: space-between; gap: 0.06in; min-width: 0; }
+.faceHead { flex: 0 0 auto; display: flex; align-items: center; gap: 0.08in; min-width: 0; height: 0.42in; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; color: #22313f; line-height: 1.15; }
+.faceHead img { flex: 0 0 auto; height: 0.42in; max-width: 0.9in; object-fit: contain; }
+.faceHead span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.faceCode { flex: 0 0 auto; display: grid; justify-items: start; gap: 0.02in; min-width: 0; }
+.faceBar { display: block; width: 100%; height: 0.44in; }
+.faceQr { display: block; width: 0.8in; height: 0.8in; }
+.faceCode[data-kind="qr"] { grid-template-columns: auto 1fr; align-items: end; column-gap: 0.06in; }
+.faceDigits { display: block; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 5.6pt; line-height: 1.25; letter-spacing: 0.02em; color: #44525f; overflow-wrap: anywhere; }
+.faceName { flex: 0 1 auto; min-height: 0; margin: 0; font-size: 10.5pt; font-weight: 800; line-height: 1.15; color: #0b1622;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.facePhoto { flex: 0 0 1.3in; display: grid; place-items: center; align-self: stretch; overflow: hidden; border-radius: 0.06in;
+  background: #e6edf4; color: #3d5266; font-size: 22pt; font-weight: 800; letter-spacing: 0.02em; }
+.facePhoto img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 25%; }
+.faceSideCode { flex: 0 0 1.3in; display: grid; place-items: center; }
+.faceSideCode .faceQr { width: 1.3in; height: 1.3in; }
+
+.face[data-code-type="QR"][data-photo="true"] .faceHead, .face[data-code-type="QR"][data-photo="true"] .faceHead img { height: 0.36in; }
+
+/* Styles: Classic draws an accent rule under the logo row; Bold adds an accent bar and accent name; Minimal stays plain. */
+.face[data-design="CLASSIC"] .faceHead { padding-bottom: 0.04in; border-bottom: 0.02in solid var(--card-accent); }
+.face[data-design="BOLD"] { padding-left: 0.3in; }
+.face[data-design="BOLD"]::before { content: ""; position: absolute; left: 0.16in; top: 0.16in; bottom: 0.16in; width: 0.06in; border-radius: 0.03in; background: var(--card-accent); }
+.face[data-design="BOLD"] .faceName { color: var(--card-accent); }
+.face[data-design="BOLD"] .facePhoto { box-shadow: inset 0 0 0 0.03in var(--card-accent); }
+
+/* The print copy lives straight under <body>; it is hidden on screen and is the only thing on paper. */
+.printRoot { display: none; }
+@media print {
+  :global(body):has(> .printRoot) > :not(.printRoot) { display: none !important; }
+  :global(html):has(.printRoot), :global(body):has(> .printRoot) { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .printRoot { display: block; }
+  .printRoot .sheets { display: block; }
+  .printRoot .averyPage { box-shadow: none; break-after: page; page-break-after: always; overflow: hidden; }
+  .printRoot .averyPage:last-child { break-after: auto; page-break-after: auto; }
+  .printRoot .averyCell { outline: 0; }
+  .printRoot .averyCell[data-empty="true"] { background: none; }
+}
+@media (max-width: 640px) { .page { padding: 14px; } }

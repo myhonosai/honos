@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, type ExecutionContext } from '@nestjs/common';
-import { CRM_LEAD_CREATE_UUID } from '@hon/contracts';
+import { CRM_LEAD_CREATE_UUID, validateCrmPipelineTemplateInput } from '@hon/contracts';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { CurriculumHumanUiGuard } from '../curriculum/curriculum-human-ui.guard.js';
 import { assertDirectHumanLeadCreateRequest } from './lead-create-human-ui.guard.js';
@@ -7,7 +7,7 @@ import { assertDirectHumanLeadCreateRequest } from './lead-create-human-ui.guard
 /** First-lead setup is a direct same-origin human command with an empty body: the starter funnel is server defined. */
 @Injectable()
 export class StarterPipelineHumanUiGuard extends CurriculumHumanUiGuard {
-  protected override readonly command = 'crm-pipeline-starter';
+  protected override readonly command: string = 'crm-pipeline-starter';
   override canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<HonRequest>();
     context.switchToHttp().getResponse().setHeader('Cache-Control', 'private, no-store');
@@ -22,8 +22,19 @@ export class StarterPipelineHumanUiGuard extends CurriculumHumanUiGuard {
     super.canActivate(context);
     const key = req.headers['idempotency-key'];
     if (typeof key !== 'string' || !CRM_LEAD_CREATE_UUID.test(key)) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
-    const body: unknown = req.body;
-    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) throw new BadRequestException({ code: 'STARTER_PIPELINE_TAKES_NO_INPUT' });
+    this.checkBody(req.body);
     return true;
+  }
+  protected checkBody(body: unknown): void {
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) throw new BadRequestException({ code: 'STARTER_PIPELINE_TAKES_NO_INPUT' });
+  }
+}
+
+/** Adding a school pipeline template: the same direct same-origin human command, whose whole body is one known template code. */
+@Injectable()
+export class TemplatePipelineHumanUiGuard extends StarterPipelineHumanUiGuard {
+  protected override readonly command: string = 'crm-pipeline-template';
+  protected override checkBody(body: unknown): void {
+    try { validateCrmPipelineTemplateInput(body); } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
   }
 }

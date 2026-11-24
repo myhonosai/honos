@@ -62,7 +62,7 @@ describe('operational pricing controller, explicit commands and independent read
     await s.c.load();await s.c.open(old.setId);const original=s.api.send,wait=deferred<PricingReceipt>();s.api.send=vi.fn(async req=>{await original(req);return wait.promise;});
     const command=s.c.stop(offer.offerId,'TERMS_REVIEW');const request=s.c.snapshot().pending!;await s.c.stop(offer.offerId,'TERMS_REVIEW');expect(s.api.send).toHaveBeenCalledTimes(1);
     s.c.conceal();wait.reject(new PricingError('UNKNOWN',0,true));await command;expect(s.c.snapshot().pending).toBe(request);expect(s.c.snapshot().busy).toBe(false);
-    s.fixture.advanceTime(24*3600_000);await s.c.load(true);expect(s.c.canStop(offer.offerId)).toBe(false);s.api.send=vi.fn(original);expect(s.api.send).not.toHaveBeenCalled();await s.c.retry();
+    s.fixture.advanceTime(24*3600_000);await s.c.load(true);expect(s.c.canStop(offer.offerId)).toBe(false);s.api.send=vi.fn((...args: Parameters<typeof original>) => original(...args));expect(s.api.send).not.toHaveBeenCalled();await s.c.retry();
     expect(s.api.send).toHaveBeenCalledWith(request,true);expect(s.c.snapshot().receipt!.data.replayed).toBe(true);expect(s.fixture.mutations).toBe(2);
   });
   it('settles an in-flight command behind the shield without a read epoch unlocking or stranding it',async()=>{

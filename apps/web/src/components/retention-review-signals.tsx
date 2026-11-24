@@ -3,10 +3,11 @@
 import React, { type FormEvent, useState, useRef, useEffect } from 'react';
 import type { RetentionReviewSignals, RetentionReviewAcknowledgementEvidence, RetentionReviewAcknowledgement } from '@hon/contracts';
 import { RETENTION_ATTENTION_RESOLUTION_REASONS, type RetentionAttentionEvidence, type RetentionAttentionAlerts, type RetentionAttentionAlert, type RetentionAttentionCode, type RetentionAttentionResolutionReason } from '@hon/contracts';
-import { loadRetentionReviewSignals, loadRetentionReviewAcknowledgementEvidence, acknowledgeRetentionReviewEvidence, RetentionReviewUiError } from './retention-review-signals-http';
+import { loadRetentionReviewSignals, loadRetentionReviewAcknowledgementEvidence, acknowledgeRetentionReviewEvidence, RetentionReviewUiError , loadRetentionMembers, memberLabel, type RetentionMember } from './retention-review-signals-http';
 import { loadRetentionAttentionAlerts, loadRetentionAttentionEvidence, recordRetentionAttentionAlert, resolveRetentionAttentionAlert } from './retention-attention-http';
 import styles from './billing-renewals-workbench.module.css';
 import { ManualSchoolFields, useShellSchoolInto } from './school-shell/page-school';
+import { IdFields } from './school-pickers/pickers';
 
 function utc(value: string | null) { return value ? `${value.replace('T', ' ').replace('.000Z', ' UTC')}` : 'Not recorded'; }
 function unavailable(value: string | null) { return value ? value.replaceAll('_', ' ').toLowerCase() : 'No limitation recorded.'; }
@@ -17,6 +18,15 @@ export function RetentionReviewSignalsWorkbench() {
   const [schoolId, setSchoolId] = useState('');
   useShellSchoolInto(school => { setSchoolId(school.schoolId); });
   const [membershipId, setMembershipId] = useState('');
+  // Members of the signed-in school by name (0407); choosing one opens its signals. The server re-checks every read.
+  const [members, setMembers] = useState<readonly RetentionMember[] | 'denied' | 'failed' | null>(null);
+  useEffect(() => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(schoolId.trim())) { setMembers(null); return; }
+    let live = true; setMembers(null);
+    loadRetentionMembers(schoolId.trim()).then(list => { if (live) setMembers(list); }, failure => { if (live) setMembers(failure instanceof RetentionReviewUiError && failure.status === 403 ? 'denied' : 'failed'); });
+    return () => { live = false; };
+  }, [schoolId]);
+  const memberName = Array.isArray(members) ? members.find(m => m.membershipId === membershipId.trim().toLowerCase())?.displayName : undefined;
   const [signals, setSignals] = useState<RetentionReviewSignals | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,10 +57,10 @@ export function RetentionReviewSignalsWorkbench() {
     document.addEventListener('visibilitychange', invalidate);
     return () => { generation.current++; window.removeEventListener('focus', invalidate); window.removeEventListener('pageshow', invalidate); document.removeEventListener('visibilitychange', invalidate); };
   }, []);
-  async function submit(event: FormEvent) {
-    event.preventDefault(); clear(); setLoading(true);
+  async function submit(event: FormEvent | null, chosen = membershipId) {
+    event?.preventDefault(); clear(); setLoading(true);
     const current = generation.current;
-    try { const result = await loadRetentionReviewSignals(schoolId.trim(), membershipId.trim()); if (current === generation.current) setSignals(result); }
+    try { const result = await loadRetentionReviewSignals(schoolId.trim(), chosen.trim()); if (current === generation.current) setSignals(result); }
     catch (failure) { if (current === generation.current) { clear(); setError(failure instanceof RetentionReviewUiError ? failure.message : 'No verified Retention Review Signals result is shown. Check known IDs and retry the read.'); } }
     finally { if (current === generation.current || current + 1 === generation.current) setLoading(false); }
   }
@@ -109,12 +119,12 @@ export function RetentionReviewSignalsWorkbench() {
   }
   return <main className={styles.page}>
     <header><p className={styles.eyebrow}>RETENTION REVIEW SIGNALS</p><h1>Retention Review Signals</h1><p>Human-controlled, read-only observed facts for one known membership. This is evidence only: no score, prediction, readiness claim, financial recommendation, or automatic action.</p></header>
-    <section className={styles.notice}><strong>Known-ID review only</strong><p>Enter an already-known current-school membership UUID. This page is not a student, family, membership, or staff directory; selectors never grant authority. Big-Button, Modern, and Classic modes only change presentation.</p></section>
-    <form onSubmit={submit}><fieldset disabled={loading}><legend>Current school scope</legend><ManualSchoolFields current={schoolId}><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={event => { setSchoolId(event.target.value); clear(); }} /></label></ManualSchoolFields><label>Known membership UUID<input required autoComplete="off" spellCheck={false} value={membershipId} onChange={event => { setMembershipId(event.target.value); clear(); }} /></label><div className={styles.actions}><button type="submit">{loading ? 'Loading observed facts…' : 'Load Retention Review Signals'}</button></div></fieldset></form>
-    {!signals && !loading && !error && <p className={styles.notice} role="status">No verified school and membership are selected. No Retention Review Signals data is shown.</p>}
-    {loading && <p className={styles.notice} role="status">Verifying direct human staff access and loading bounded observed facts…</p>}
+    <section className={styles.notice}><strong>Choose a member to see their recorded facts.</strong></section>
+    <form onSubmit={submit}><fieldset disabled={loading}><legend>Current school scope</legend><ManualSchoolFields current={schoolId}><label>School UUID<input required autoComplete="off" spellCheck={false} value={schoolId} onChange={event => { setSchoolId(event.target.value); clear(); }} /></label></ManualSchoolFields>{Array.isArray(members) && (members.length ? <label>Member<select value={memberName ? membershipId.trim().toLowerCase() : ''} onChange={event => { setMembershipId(event.target.value); if (event.target.value) void submit(null, event.target.value); else clear(); }}><option value="">Choose a member</option>{members.map(m => <option key={m.membershipId} value={m.membershipId}>{memberLabel(m)}</option>)}</select></label> : <p>No current members at this school.</p>)}{members === 'denied' && <p role="status">Your role does not include retention reviews at this school.</p>}{members === 'failed' && <p role="status">The member list could not be loaded. Reload the page to try again.</p>}<IdFields manual={!Array.isArray(members)}><label>Membership record ID<input required autoComplete="off" spellCheck={false} value={membershipId} onChange={event => { setMembershipId(event.target.value); clear(); }} /></label><div className={styles.actions}><button type="submit">{loading ? 'Loading…' : 'Open'}</button></div></IdFields></fieldset></form>
+    {!signals && !loading && !error && <p className={styles.notice} role="status">No member chosen yet.</p>}
+    {loading && <p className={styles.notice} role="status">Loading…</p>}
     {error && <p className={styles.error} role="alert">{error}</p>}
-    {signals && <><section className={styles.notice} role="status"><strong>Verified evidence-only read</strong><p>Observed at {utc(signals.observedAt)}. Human-only: yes. Read-only: yes. Prediction or automatic action: no.</p><p>Membership <code>{signals.membershipId}</code></p></section>
+    {signals && <><section className={styles.notice} role="status"><strong>Verified evidence-only read</strong><p>Observed at {utc(signals.observedAt)}. Human-only: yes. Read-only: yes. Prediction or automatic action: no.</p><p>{memberName ?? 'Chosen member'}</p></section>
       <section><h2>Membership term facts</h2><p><Status value={signals.membershipTerm.status} /> · current recorded state: <strong>{signals.membershipTerm.membershipState.replaceAll('_', ' ')}</strong></p><ul><li>Term started: {utc(signals.membershipTerm.termStartedAt)}</li><li>Term ends: {utc(signals.membershipTerm.termEndsAt)}</li><li>Observed term position: {signals.membershipTerm.endingObservation.replaceAll('_', ' ').toLowerCase()}</li></ul>{signals.membershipTerm.reason && <p>Missing data: {unavailable(signals.membershipTerm.reason)}</p>}</section>
       <section><h2>Explicit human renewal review</h2><p><Status value={signals.renewalReview.status} /></p>{signals.renewalReview.status === 'AVAILABLE' ? <ul><li>Latest explicit review state: {signals.renewalReview.latestReviewState}</li><li>Recorded at: {utc(signals.renewalReview.recordedAt)}</li></ul> : <p>Unavailable: {unavailable(signals.renewalReview.reason)}. Missing review records are not treated as failure.</p>}</section>
       <section><h2>Follow-up lifecycle</h2><p><Status value={signals.followUp.status} /> — {unavailable(signals.followUp.reason)}. HON does not infer a membership-to-CRM-follow-up relationship.</p></section>

@@ -47,6 +47,7 @@ export const HQ_AI = [
   { path: '/hq/creative-credits', title: 'Creative Credits', icon: 'chart' },
   { path: '/hq/creative-limits', title: 'Creative Spend Limits', icon: 'settings' },
   { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
+  { path: '/hq/conversation-ai', title: 'Conversation AI', icon: 'settings' },
   { path: '/hq/ai-providers', title: 'AI Providers', icon: 'settings' },
 ] as const;
 /** Top-level HQ entries. A grouped entry's path is a route inside that group; grouped children keep their existing URLs. */

@@ -47,8 +47,8 @@ export function PlannedAbsenceReviewWorkbench(): React.ReactElement {
   }
   return <main className={styles.page}>
     <nav aria-label="Staff navigation"><a href="/staff/attendance">Attendance workbench</a><a href="/staff/dashboard">School dashboard</a><a href="/auth/login">Sign in</a></nav>
-    <header><p>DIRECT HUMAN STAFF / PLANNED ABSENCE REVIEW</p><h1>Planned absence review</h1><p>One current server-authorized school, with <code>schedule.planned_absence.review</code> and active entitlement. At most 50 currently SUBMITTED requests, oldest submitted first. There is no directory, history, count, export or school selector.</p></header>
-    <aside className={styles.warning}><strong>Decision record only.</strong><p>Approval or decline does not change attendance, booking, makeup, messages, provider, payment, AI, Action Engine or automation state. Parent history remains its redacted recorded status and timestamp view; neither reviewer identity nor private review note is sent to parents.</p></aside>
+    <header><p>Attendance</p><h1>Planned absences</h1><p>Approve or decline absence requests that families have sent, oldest first.</p></header>
+    <aside className={styles.warning} data-plain-note=""><strong>Approving or declining records your decision. It does not change attendance, bookings or makeups.</strong></aside>
     {error && <p role="alert" className={styles.error}>{error}</p>}{notice && <p role="status" className={styles.notice}>{notice}</p>}
     <section><h2>Prepare a human decision</h2><p>Review the facts before deciding. Changing either draft input clears queue, detail and retry; explicitly reload and select the request again. No decision is submitted by loading or selecting.</p>
       <label>Decision<select disabled={busy} value={decision} onChange={event => { clear(); setDecision(event.target.value as PlannedAbsenceReviewDecision); }}><option value="APPROVED">Approve</option><option value="DECLINED">Decline</option></select></label>

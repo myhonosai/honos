@@ -216,8 +216,8 @@ test school, watched end to end, with David's explicit OK.
 | C0 | This design doc | none |
 | C1 | Async provider jobs: submit/poll runtime interface, job records with a worker lease, 30-minute UNKNOWN timeout, daily per-school caps, HQ platform daily provider spend guard | 0354 |
 | C2 | Higgsfield and HeyGen adapters with fake HTTP servers in tests, readiness switches, HeyGen webhook receipt (hint only) | none |
-| C3 | Private media storage: download and verify, Supabase Storage bucket, signed reads, delete | 0355 |
-| C4 | Moderation (blocklist) and human approval of assets | 0356 |
+| C3 | Private media storage: download and verify, Supabase Storage bucket, signed reads, delete | 0671 |
+| C4 | Moderation (blocklist) and human approval of assets | 0672 |
 | C5 | Attach approved media to social posts and ads; AI team creative briefs | 0357 (merges after 0348, #341) |
 | C6 | Creative Studio screens: review queue, approved library, attach to post; EN/KO/ES, desktop and phone | none |
 
@@ -271,7 +271,7 @@ the HeyGen webhook endpoint, and moderation coverage.
   environment fake (tests inject fakes directly), and `avatar.photo.video` (needs A3, #294).
 - Tests: `apps/api/test/creative-provider-adapters.test.cjs` (9) against fake HTTP providers on 127.0.0.1.
 
-## 12. C3 as built (HON media storage, migration 0355)
+## 12. C3 as built (HON media storage, migration 0671)
 
 - **Where files live:** one private Supabase Storage bucket (`SupabaseCreativeMediaStore`). READY only with
   `HON_CREATIVE_MEDIA_STORAGE_APPROVED` exactly `true`, an https project origin in `HON_CREATIVE_MEDIA_STORAGE_URL`,
@@ -305,7 +305,7 @@ the HeyGen webhook endpoint, and moderation coverage.
   and the school gallery screens (C6).
 - Tests: `apps/api/test/creative-media.test.cjs` (7) and DB proofs J14 to J16 in `test-creative-provider-jobs.mjs`.
 
-## 13. C4 as built (prompt check and human approval, migration 0356)
+## 13. C4 as built (prompt check and human approval, migration 0672)
 
 - **Prompt check** (`packages/contracts/src/creative-prompt-policy.ts`, free and deterministic): runs in the API on the
   generation prompt, the avatar name and description, and the avatar-video script, **before anything is reserved**. A
@@ -330,7 +330,7 @@ the HeyGen webhook endpoint, and moderation coverage.
 - **Viewing:** while an asset is not `APPROVED`, only its requester and the school's reviewers get a signed read. Anyone
   else gets 404, as if it were not listed. Once `APPROVED`, the school's creative staff can view it. Generation reads
   now carry `review` on each asset.
-- **Delete:** only the asset's requester or a reviewer may delete it (0355 allowed any creative actor).
+- **Delete:** only the asset's requester or a reviewer may delete it (0671 allowed any creative actor).
 - **Review queue:** `GET .../assets/review-queue?limit=1..50` (reviewers only) lists the school's stored, undeleted,
   unreviewed assets, oldest first (ordered by the millisecond the answer shows, then the id). It carries no prompt and no storage key.
 - **Only stored provider media can be reviewed.** Synthetic CS1 results have no stored file, so they stay

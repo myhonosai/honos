@@ -232,6 +232,9 @@ const SAAS_BILLING_CALLS = {
   commandAiSchoolCostLimit: { sql: 'SELECT hon.command_ai_school_cost_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAiExceptionAllowances: { sql: 'SELECT hon.read_ai_exception_school_allowances_from_hq($1) AS data', arity: 1, readOnly: true },
   commandAiExceptionAllowance: { sql: 'SELECT hon.command_ai_exception_school_allowance($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  // CA2a (0420): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
+  readConversationAiProgram: { sql: 'SELECT hon.read_conversation_ai_program_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandConversationAiProgram: { sql: 'SELECT hon.command_conversation_ai_program($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -254,6 +257,9 @@ const SAAS_BILLING_CALLS = {
   // T2c (0358): the HQ owner records what the school's Twilio subaccount shows for an unsettled order. Calls no provider.
   settleSchoolNumberOrder: { sql: 'SELECT hon.settle_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   decideSchoolNumberOrder: { sql: 'SELECT hon.decide_school_number_order_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
+  // T3a (0553): HQ reads every school's A2P registrations; a human HQ owner approves or rejects one submission. Calls no provider.
+  readHqSchoolA2pRegistrations: { sql: 'SELECT hon.read_hq_school_a2p_registrations($1,$2) AS data', arity: 2, readOnly: true },
+  decideSchoolA2pRegistration: { sql: 'SELECT hon.decide_school_a2p_registration_from_hq($1,$2::uuid,$3,$4,$5::integer) AS data', arity: 5, readOnly: false },
   setSchoolTextSender: { sql: 'SELECT hon.set_school_text_sender_from_hq($1,$2::uuid,$3,$4,$5,$6::boolean,$7::integer) AS data', arity: 7, readOnly: false },
   // 0249: the HQ owner sets the school's forwarding phone and the missed-call text-back switch.
   setSchoolMissedCallSettings: { sql: 'SELECT hon.set_school_missed_call_settings_from_hq($1,$2::uuid,$3,$4::boolean,$5::integer) AS data', arity: 5, readOnly: false },
@@ -339,6 +345,10 @@ export type LanguageOperation = keyof typeof LANGUAGE_CALLS;
 
 export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 
+export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
+  |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance'
+  |'storefront'|'saveStorefront'|'beginStorefront'|'rotateStorefront'|'finishStorefront';
+
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
   private pool: Pool | undefined;
@@ -404,6 +414,28 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     } catch {
       await client.query('ROLLBACK');
       throw new Error('KIOSK_UNAVAILABLE');
+    } finally { client.release(); }
+  }
+
+  /**
+   * 0655: records one native app hand-off code as used. True the first time (app, jti) is seen, false for a replay.
+   * A refused code (22023) is false; any other database failure rejects, so the caller issues no session and the app may try again.
+   */
+  async redeemMobileHandoff(app: 'family' | 'staff', jti: string, expiresAt: Date): Promise<boolean> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ fresh: boolean }>('SELECT hon.redeem_mobile_handoff($1,$2,$3) AS fresh', [app, jti, expiresAt.toISOString()]);
+      await client.query('COMMIT');
+      return result.rows[0]?.fresh === true;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      // 22023: the database refused the code itself (for example it expired in its last second): a definite "no",
+      // not an outage, so the app is told to sign in again rather than to retry.
+      if ((error as { code?: unknown } | null)?.code === '22023') return false;
+      throw error;
     } finally { client.release(); }
   }
 
@@ -612,6 +644,29 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     await this.assertRuntimePosture();
     return (await this.getPool().query<{ data: import('@hon/contracts').PublishedLeadForm | null }>('SELECT hon.read_published_form($1) data', [publicId])).rows[0]!.data;
   }
+  /** WB2 (0361): the published copy of one school website, or null. One fixed call, no tenant settings. */
+  async readPublishedSchoolWebsite(slug: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_published_school_website($1) data', [slug])).rows[0]!.data;
+  }
+  /** 0499: what one membership agreement signing link shows, or null. One fixed call, no tenant settings. */
+  async readMembershipAgreementLink(token: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    return (await this.getPool().query<{ data: unknown }>('SELECT hon.read_membership_agreement_link($1) data', [token])).rows[0]!.data;
+  }
+  /** 0499: sign through one link (SIGNED, ALREADY_SIGNED, CHANGED, INVALID or GONE). One short transaction, no tenant settings. */
+  async signMembershipAgreementLink(token: string, input: object, requestId: string): Promise<string> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ result: string }>('SELECT hon.sign_membership_agreement_link($1,$2::jsonb,$3::uuid) result', [token, JSON.stringify(input), requestId]);
+      await client.query('COMMIT');
+      return result.rows[0]!.result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
   async submitPublishedLeadForm(publicId: string, input: object, key: string): Promise<string> {
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -625,7 +680,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     finally { client.release(); }
   }
 
-  /** B-SCH-3 (0261): the three fixed public event calls, one short transaction each, no tenant settings. */
+  /** B-SCH-3 (0261), 0286 and the 0414 walk-in kiosk tablet: the fixed public calls, one short transaction each, no tenant settings. */
   async runPublicEventCall(statement: string, values: unknown[]): Promise<unknown> {
     if (![
       'SELECT hon.read_public_school_event($1) AS data',
@@ -634,6 +689,18 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.read_public_school_booking_type($1) AS data',
       'SELECT hon.book_public_school_booking_type($1,$2::jsonb,$3) AS data',
       'SELECT hon.cancel_public_school_booking_type_booking($1,$2::jsonb) AS data',
+      'SELECT hon.read_walkin_kiosk_terminal($1) AS data',
+      'SELECT hon.submit_walkin_visit($1,$2::jsonb,$3) AS data',
+      'SELECT hon.read_walkin_card_provider($1) AS data',
+      'SELECT hon.open_walkin_card_payment($1,$2) AS data',
+      'SELECT hon.settle_walkin_card_payment($1,$2) AS data',
+      'SELECT hon.read_public_share_calendar($1) AS data',
+      'SELECT hon.read_public_referral($1) AS data',
+      'SELECT hon.submit_family_referral($1,$2::jsonb,$3) AS data',
+      'SELECT hon.read_public_school_checkout($1) AS data',
+      'SELECT hon.open_public_checkout_order($1,$2::jsonb,$3,$4::boolean) AS data',
+      'SELECT hon.read_public_checkout_order($1,$2) AS data',
+      'SELECT hon.resolve_school_media_link($1) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -643,6 +710,70 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: unknown }>(statement, values);
       await client.query('COMMIT');
       if (result.rows.length !== 1) throw new Error('Unverified public event call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /**
+   * B-TUI-2 0529 shared one-time payment: the API's four fixed calls (read, start, record, list due), one short
+   * transaction each, no tenant settings. The payment id is the only scope; opening a payment is never a runtime call.
+   */
+  async runSchoolPayOnceCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_school_pay_once($1::uuid) AS data',
+      'SELECT hon.start_school_pay_once($1::uuid,$2::jsonb) AS data',
+      'SELECT hon.record_school_pay_once($1::uuid,$2::jsonb) AS data',
+      'SELECT hon.list_due_school_pay_once($1::integer) AS data',
+    ].includes(statement)) throw new Error('Unknown school one-time payment call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified school one-time payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0530: the parent invoice payment entry points, a fixed allow-list (the subject comes only from the verified session). */
+  async runParentInvoicePayCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_invoice_payments($1::text) AS data',
+      'SELECT hon.read_parent_invoice_payment($1::text,$2::uuid) AS data',
+      'SELECT hon.open_parent_invoice_payment($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent invoice payment call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent invoice payment call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0598: the four fixed family checkout calls, each in its own short transaction (no tenant settings; the definer re-proves scope). */
+  async runParentCheckoutCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.read_parent_checkout_pages($1::text) AS data',
+      'SELECT hon.open_parent_checkout_order($1::text,$2::jsonb,$3::text) AS data',
+      'SELECT hon.read_parent_checkout_order($1::text,$2::uuid) AS data',
+    ].includes(statement)) throw new Error('Unknown parent checkout call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified parent checkout call.');
       return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }
@@ -834,6 +965,10 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return readOnly
       ? this.withTenantReadOnlyTransaction(context, scopedWork)
       : this.withTenantTransaction(context, scopedWork);
+  }
+  /** 0407: current-school memberships by participant name for the retention page's member list. */
+  async listRetentionReviewMemberships(context: RetentionReviewSignalsContext): Promise<unknown> {
+    return this.retentionAttentionTransaction(context, true, async client => (await client.query("SELECT hon.list_retention_review_members($1) AS data", [context.externalSubject])).rows[0]?.data);
   }
   async readRetentionAttentionAlerts(context: RetentionReviewSignalsContext, membershipId: string): Promise<unknown> {
     return this.retentionAttentionTransaction(context, true, async client => (await client.query('SELECT hon.read_retention_attention_alerts($1,$2::uuid) AS data', [context.externalSubject, membershipId])).rows[0]?.data);
@@ -1032,6 +1167,37 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       if (!result.rows[0]) throw new Error('HON parent absence context unavailable.');
       await client.query('COMMIT');
       return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0471: the families this parent is linked to now. Subject only; no tenant setting, read-only. */
+  async readParentFamilyChoices(externalSubject: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>('SELECT hon.read_parent_family_choices($1) AS data', [externalSubject]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choices unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** 0471: choose one of the parent's live families. The database re-proves the choice after its lock and write. */
+  async selectParentFamily(externalSubject: string, input: { schoolId: string; familyId: string }, requestId: string): Promise<unknown> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0");
+      await client.query("SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)", [externalSubject]);
+      const result = await client.query<{ data: unknown }>('SELECT hon.select_parent_family($1,$2::jsonb,$3::uuid) AS data', [externalSubject, JSON.stringify(input), requestId]);
+      if (result.rows.length !== 1) throw new Error('HON parent family choice unavailable.');
+      await client.query('COMMIT');
+      return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }
   }
@@ -1372,7 +1538,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
 
   async callHonOsSignup(operation: 'register'|'read', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
-      register: {sql: 'SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
+      // 0392: sign-up records the school address in the same transaction (wraps the unchanged 0241 function).
+      register: {sql: 'SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data',arity:4,readOnly:false},
       read: {sql: 'SELECT hon.read_hon_os_registration($1) data',arity:1,readOnly:true},
     } as const;
     const call=calls[operation];
@@ -1425,6 +1592,77 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('PERSON_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'PERSON_UNAVAILABLE');
+  }
+
+  /** 0612 Point of Sale: fixed definer functions; the subject comes only from the signed HON session. */
+  async callSchoolPos(operation: 'read'|'sales'|'sale'|'settings'|'item'|'stock'|'record'|'refund'|'shopifyStockBegin'|'shopifyStockRotate'|'shopifyStockFinish'|'shopifyOrderBegin'|'shopifyOrderFinish', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_pos($1,$2::uuid) data',arity:2,readOnly:true},
+      sales: {sql: 'SELECT hon.read_pos_sales($1,$2::uuid,$3::date,$4::date) data',arity:4,readOnly:true},
+      sale: {sql: 'SELECT hon.read_pos_sale($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      settings: {sql: 'SELECT hon.save_pos_settings($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      item: {sql: 'SELECT hon.save_pos_item($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      stock: {sql: 'SELECT hon.adjust_pos_stock($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      record: {sql: 'SELECT hon.record_pos_sale($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      refund: {sql: 'SELECT hon.refund_pos_sale($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      // 0613: the Shopify stock changes a sale or refund owes the school's store.
+      shopifyStockBegin: {sql: 'SELECT hon.begin_pos_shopify_stock($1,$2::jsonb) data',arity:2,readOnly:false},
+      shopifyStockRotate: {sql: 'SELECT hon.rotate_pos_shopify_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      shopifyStockFinish: {sql: 'SELECT hon.finish_pos_shopify_stock($1,$2::jsonb) data',arity:2,readOnly:false},
+      shopifyOrderBegin: {sql: 'SELECT hon.begin_pos_shopify_order($1,$2::jsonb) data',arity:2,readOnly:false},
+      shopifyOrderFinish: {sql: 'SELECT hon.finish_pos_shopify_order($1,$2::jsonb) data',arity:2,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('POS_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'POS_UNAVAILABLE');
+  }
+
+  /** 0390 contact photos: three fixed definer functions; the subject comes only from the signed HON session. */
+  async callSchoolPersonPhoto(operation: 'read'|'set'|'remove', params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_person_photo($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      set: {sql: 'SELECT hon.set_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+      remove: {sql: 'SELECT hon.remove_person_photo($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('PERSON_PHOTO_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'PERSON_PHOTO_UNAVAILABLE');
+  }
+
+  /** 0405 Shopify: eleven fixed definer functions, and six more for 0496 product changes; the subject comes only from the signed HON session. */
+  async callShopify(operation: ShopifyOperation, params: readonly (string|null)[]): Promise<unknown> {
+    const calls = {
+      read: {sql: 'SELECT hon.read_shopify($1,$2::uuid) data',arity:2,readOnly:true},
+      catalog: {sql: 'SELECT hon.read_shopify_catalog($1,$2::uuid) data',arity:2,readOnly:true},
+      orders: {sql: 'SELECT hon.read_shopify_orders($1,$2::uuid) data',arity:2,readOnly:true},
+      start: {sql: 'SELECT hon.start_shopify_connect($1,$2::jsonb,$3) data',arity:3,readOnly:false},
+      claim: {sql: 'SELECT hon.claim_shopify_connect($1,$2::jsonb) data',arity:2,readOnly:false},
+      record: {sql: 'SELECT hon.record_shopify_connection($1,$2::jsonb) data',arity:2,readOnly:false},
+      beginSync: {sql: 'SELECT hon.begin_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotate: {sql: 'SELECT hon.rotate_shopify_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      page: {sql: 'SELECT hon.record_shopify_sync_page($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishSync: {sql: 'SELECT hon.finish_shopify_sync($1,$2::jsonb) data',arity:2,readOnly:false},
+      disconnect: {sql: 'SELECT hon.disconnect_shopify($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0496 product changes with owner approval (SH4a).
+      changes: {sql: 'SELECT hon.read_shopify_product_changes($1,$2::uuid) data',arity:2,readOnly:true},
+      propose: {sql: 'SELECT hon.propose_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      cancelChange: {sql: 'SELECT hon.cancel_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      approveChange: {sql: 'SELECT hon.approve_shopify_product_change($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateChange: {sql: 'SELECT hon.rotate_shopify_change_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      recordChange: {sql: 'SELECT hon.record_shopify_product_change_result($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0597 SH-F1 Shopify Payments snapshot.
+      finance: {sql: 'SELECT hon.read_shopify_finance($1,$2::uuid) data',arity:2,readOnly:true},
+      recordFinance: {sql: 'SELECT hon.record_shopify_finance($1,$2::jsonb) data',arity:2,readOnly:false},
+      // 0609 TB2 storefront blocks (HON writes only its own app-data metafield; no theme access).
+      storefront: {sql: 'SELECT hon.read_shopify_storefront($1,$2::uuid) data',arity:2,readOnly:true},
+      saveStorefront: {sql: 'SELECT hon.save_shopify_storefront($1,$2::jsonb) data',arity:2,readOnly:false},
+      beginStorefront: {sql: 'SELECT hon.begin_shopify_storefront_publish($1,$2::jsonb) data',arity:2,readOnly:false},
+      rotateStorefront: {sql: 'SELECT hon.rotate_shopify_storefront_credential($1,$2::jsonb) data',arity:2,readOnly:false},
+      finishStorefront: {sql: 'SELECT hon.finish_shopify_storefront_publish($1,$2::jsonb) data',arity:2,readOnly:false},
+    } as const;
+    const call=calls[operation];
+    if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call,params,'SHOPIFY_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

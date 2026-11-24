@@ -1,7 +1,7 @@
 // C4: the deterministic, free prompt check that runs before any creative credit is reserved
 // (docs/architecture/CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md §6). Martial arts schools market to families with children,
 // so the bar is high. This is ONE reviewed list (English, Korean, Spanish). It cannot see a picture: human approval of
-// every asset (0356) is what enforces the rules; this check only reduces what reaches review.
+// every asset (0672) is what enforces the rules; this check only reduces what reaches review.
 //
 // Matching: the prompt is NFKC-normalised and lower-cased. Latin terms match whole words (with simple plural/verb
 // endings); Korean terms match as substrings. Martial arts words (kick, punch, spar, fight, belt, nunchaku, bo staff,

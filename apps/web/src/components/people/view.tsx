@@ -1,8 +1,12 @@
-import React, { useId } from 'react';
-import type { PersonRecord } from '@hon/contracts';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import type { PersonRecord, SchoolContactCard, SchoolContactOptions } from '@hon/contracts';
 import { accountValue } from '../account-status/copy';
 import { peopleText, type PeopleKey } from './copy';
-import { PEOPLE_LIST_LIMIT, PEOPLE_QUERY_MAX } from './http';
+import { ContactsList } from './contacts-list';
+import { ContactCard as ContactCardTabs, type CardSlots, type CardState, type CardTab, type AgreementSlot, type MembershipSlot, type MembershipToolsSlot } from './contact-card';
+import type { CardMode } from './card-panel';
+import { panelText, type PanelKey } from './panel-copy';
+import type { ContactFilters } from './contacts-http';
 import { localToday, type CommandKind, type ListState, type RecordState, type SaveOutcome } from './model';
 import styles from './people.module.css';
 
@@ -14,7 +18,20 @@ export type PeopleViewProps = Readonly<{
   list: ListState; record: RecordState; selectedId: string | null; outcome: SaveOutcome;
   /** True while a save from this tab is sending, or kept for "Try again": both forms stay locked. */
   locked: boolean; canRetry: boolean;
-  onSearch?: ((query: string) => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
+  /** The contacts list filters (C1, 0521) and the rank, program and plan choices read with the first page. */
+  filters: ContactFilters; options: SchoolContactOptions | null;
+  /** The open person's contact card (C2, 0522), read beside the editable record. */
+  card?: CardState | undefined;
+  /** The tab the card opens on (a People link can ask for one), and the actions under each membership. */
+  cardTab?: CardTab | undefined; membershipSlot?: MembershipSlot | undefined; membershipTools?: MembershipToolsSlot | undefined; agreementSlot?: AgreementSlot | undefined;
+  /** Owner (2026-11-16): the open card slides out beside the list (SIDE) or over it (FULL); Close (or Escape) puts it away. */
+  cardMode?: CardMode | undefined; onCardMode?: ((mode: CardMode) => void) | undefined; onClose?: (() => void) | undefined;
+  onCardTab?: ((tab: CardTab) => void) | undefined;
+  /** Each family's app access and this person's messages, placed inside the card. */
+  familySlot?: CardSlots['familySlot']; messagesSlot?: CardSlots['messagesSlot'];
+  /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
+  actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
+  onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
   onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
   /** The contact consent card for the open person (its own reads and commands); without it the saved summary is shown. */
@@ -45,49 +62,96 @@ export function outcomeText(language: string, outcome: SaveOutcome): Readonly<{ 
 
 /** Pure view. Every name, address and date comes from the school's people reads; nothing is shown before the shell verifies the school. */
 export function PeopleView(props: PeopleViewProps): React.ReactElement {
-  const { language, waiting, concealed, hasSchool, list, record, selectedId, onSearch, onOpen, onReload } = props;
+  const { language, waiting, concealed, hasSchool, list, selectedId, onOpen, onReload } = props;
   const t: T = (key, vars) => peopleText(language, key, vars);
-  const searchId = useId();
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool') : null;
   const visible = notice === null;
+  // Edit profile pop-up (owner, 2026-11-21) lives in the panel: the record forms open from the button beside the name.
   return <section className={styles.people} aria-labelledby="people-title" data-hon-native="">
     <header className={styles.head}>
       <div><h1 id="people-title">{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
+      {/* The shared inboxes stay for working through unanswered messages across every contact. */}
+      <nav className={styles.inboxes} aria-label={panelText(language, 'inboxes')}>
+        <a className={styles.secondary} href="/staff/texts">{panelText(language, 'textsInbox')}</a>
+        <a className={styles.secondary} href="/staff/family-messages">{panelText(language, 'familyInbox')}</a>
+      </nav>
     </header>
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
-    {visible ? <div className={styles.layout}>
-      <article className={styles.card} aria-labelledby="people-list-title">
+    {visible ? <div className={styles.layout} data-card-mode={selectedId ? props.cardMode ?? 'SIDE' : 'CLOSED'}>
+      <article className={styles.card} aria-labelledby="people-list-title" data-testid="people-list" hidden={Boolean(selectedId) && props.cardMode === 'FULL'}>
         <h2 id="people-list-title">{t('listTitle')}</h2>
-        <form className={styles.search} role="search" onSubmit={e => { e.preventDefault(); onSearch?.(String(new FormData(e.currentTarget).get('query') ?? '')); }}>
-          <label htmlFor={searchId}>{t('searchLabel')}</label>
-          <div className={styles.searchRow}>
-            <input id={searchId} name="query" type="search" maxLength={PEOPLE_QUERY_MAX} autoComplete="off" defaultValue={list.state === 'READY' ? list.query : ''}/>
-            <button type="submit" className={styles.secondary} disabled={list.state === 'LOADING'}>{t('searchButton')}</button>
-          </div>
-        </form>
-        <PeopleList list={list} selectedId={selectedId} onOpen={onOpen} t={t}/>
+        <ContactsList language={language} list={list} filters={props.filters} options={props.options} selectedId={selectedId} pt={t}
+          onOpen={onOpen} onFilters={props.onFilters} onMore={props.onMore}/>
       </article>
-      <div className={styles.detail}>
-        <RecordPanel {...props} t={t} onReload={onReload}/>
-      </div>
+      {selectedId ? <ContactPanel key={selectedId} {...props} t={t}/> : null}
     </div> : null}
   </section>;
 }
 
-function PeopleList({ list, selectedId, onOpen, t }: { list: ListState; selectedId: string | null; onOpen?: ((id: string) => void) | undefined; t: T }) {
-  if (list.state === 'LOADING') return <p className={styles.meta} role="status">{t('listLoading')}</p>;
-  if (list.state === 'DENIED') return <p className={styles.meta} role="status">{t('listDenied')}</p>;
-  if (list.state === 'UNAVAILABLE') return <p className={styles.meta} role="status">{t('listUnavailable')}</p>;
-  if (!list.items.length) return <p className={styles.meta}>{t('listNone')}</p>;
-  return <>
-    <ul className={styles.list} data-testid="people-list">{list.items.map(p => <li key={p.personId}>
-      <button type="button" className={styles.person} aria-current={p.personId === selectedId ? 'true' : undefined} onClick={() => onOpen?.(p.personId)}>
-        <strong>{p.givenName} {p.familyName}</strong>
-        <small>{p.email ?? t('noEmail')} · {p.phoneE164 ?? t('noPhone')}</small>
-      </button>
-    </li>)}</ul>
-    {list.items.length >= PEOPLE_LIST_LIMIT ? <p className={styles.meta}>{t('listCapped', { n: String(PEOPLE_LIST_LIMIT) })}</p> : null}
-  </>;
+/** A modal pop-up over the People page. Escape, the close button or a click outside closes it; focus returns to Edit profile. */
+function ProfileDialog({ t, onClose, children }: { t: T; onClose: () => void; children: React.ReactNode }): React.ReactElement {
+  const title = useId(), close = useRef<HTMLButtonElement>(null), box = useRef<HTMLDivElement>(null), latest = useRef(onClose);
+  latest.current = onClose;
+  // Runs once per opening: a re-render while staff type never moves focus. Tab and Shift+Tab stay inside the pop-up.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    close.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { latest.current(); return; }
+      if (e.key !== 'Tab' || !box.current) return;
+      const items = [...box.current.querySelectorAll<HTMLElement>('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+        .filter(el => !el.hasAttribute('disabled') && el.getClientRects().length > 0);
+      const first = items[0], last = items[items.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && (document.activeElement === first || !box.current.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !box.current.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); opener?.focus(); };
+  }, []);
+  return <div className={styles.backdrop} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div ref={box} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby={title} data-testid="contact-profile-dialog">
+      <header className={styles.dialogHead}>
+        <div><h2 id={title}>{t('profileTitle')}</h2><p className={styles.meta}>{t('profileIntro')}</p></div>
+        <button ref={close} type="button" className={styles.dialogClose} aria-label={t('profileClose')} onClick={onClose}>×</button>
+      </header>
+      {children}
+    </div>
+  </div>;
+}
+
+const EDITING = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+/**
+ * The slide-out card: mode and close buttons, the last delete/merge notice, the card (Edit profile beside the name opens
+ * the record forms in a pop-up), then delete/restore/merge. Without a readable card the forms stay inline.
+ */
+function ContactPanel(props: PeopleViewProps & { t: T }): React.ReactElement {
+  const { language, t, onReload } = props;
+  const p = (key: PanelKey) => panelText(language, key);
+  const mode = props.cardMode ?? 'SIDE';
+  const panel = useRef<HTMLElement | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  // Opening a card moves focus into it, so keyboard and screen-reader users land on the person they chose.
+  useEffect(() => { panel.current?.focus({ preventScroll: true }); }, []);
+  const card = props.card ?? { state: 'NONE' as const };
+  const cardReady = card.state === 'READY', cardLoading = card.state === 'LOADING';
+  const canOpenProfile = cardReady && props.record.state !== 'NONE';
+  const recordPanel = <RecordPanel {...props} t={t} onReload={onReload}/>;
+  return <aside ref={panel} className={styles.panel} data-testid="contact-panel" aria-label={p('panelLabel')} tabIndex={-1}
+    onKeyDown={event => { if (event.key === 'Escape' && !profileOpen && props.onClose && !EDITING.has((event.target as HTMLElement).tagName)) { event.stopPropagation(); props.onClose(); } }}>
+    <div className={styles.panelBar}>
+      <button type="button" className={`${styles.secondary} ${styles.modeToggle}`} data-testid="card-mode" aria-pressed={mode === 'FULL'}
+        onClick={() => props.onCardMode?.(mode === 'SIDE' ? 'FULL' : 'SIDE')}>{p(mode === 'SIDE' ? 'fullScreen' : 'keepSide')}</button>
+      <button type="button" className={styles.secondary} data-testid="card-close" onClick={() => props.onClose?.()}>{p('close')}</button>
+    </div>
+    {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
+    <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
+      membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} agreementSlot={props.agreementSlot} familySlot={props.familySlot} messagesSlot={props.messagesSlot}
+      onEditProfile={canOpenProfile ? () => setProfileOpen(true) : undefined}/>
+    {cardReady && props.actionsSlot ? props.actionsSlot(card.card) : null}
+    {props.record.state === 'NONE' || (!cardReady && !cardLoading) ? <div data-testid="person-details">{recordPanel}</div> : null}
+    {profileOpen && cardReady ? <ProfileDialog t={t} onClose={() => setProfileOpen(false)}><div data-testid="person-details">{recordPanel}</div></ProfileDialog> : null}
+  </aside>;
 }
 
 function RecordPanel(props: PeopleViewProps & { t: T }) {

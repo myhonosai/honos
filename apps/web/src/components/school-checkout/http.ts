@@ -1,11 +1,11 @@
 import {
-  validateSaveCheckoutPageInput, verifyCheckoutPageReceipt, verifySchoolCheckoutPages,
-  type CheckoutPageReceipt, type SaveCheckoutPageInput, type SchoolCheckoutPages,
+  validateSaveCheckoutPageInput, validateSaveCheckoutSettingsInput, verifyCheckoutPageReceipt, verifyCheckoutSettingsReceipt, verifySchoolCheckoutLinks, verifySchoolCheckoutPages,
+  type SchoolCheckoutLinks, type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SaveCheckoutPageInput, type SaveCheckoutSettingsInput, type SchoolCheckoutPages,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
 /**
- * The school's checkout page settings (B-TUI-2 piece 9b over 0269). The read sends no Idempotency-Key; the save sends its own
+ * The school's checkout pages (checkout CP2 over 0402). The read sends no Idempotency-Key; each save sends its own
  * X-HON-Human-Command and an Idempotency-Key. The server decides the permission, the plans and the version again. Nothing
  * here charges anyone or talks to a payment provider, and HON adds no fee.
  */
@@ -14,7 +14,12 @@ export type CheckoutErrorKind =
   /** Not allowed for this staff member at this school. Nothing changed. */ | 'DENIED'
   /** Someone saved this page since it was read. Nothing changed. */ | 'CHANGED'
   /** A chosen plan is not an available plan of this school. Nothing changed. */ | 'PLAN_UNAVAILABLE'
-  /** A published enrollment page needs at least one plan. Nothing changed. */ | 'PLANS_REQUIRED'
+  /** A published page needs at least one pricing option. Nothing changed. */ | 'OPTIONS_REQUIRED'
+  /** The page address is used by another page of this school. Nothing changed. */ | 'SLUG_TAKEN'
+  /** The page group no longer exists. Nothing changed. */ | 'GROUP_UNKNOWN'
+  /** A group still used by a page cannot be removed. Nothing changed. */ | 'GROUP_IN_USE'
+  /** The page is not a page of this school (or the address changed). Nothing changed. */ | 'NOT_FOUND'
+  /** The school already has the most pages allowed. Nothing changed. */ | 'LIMIT'
   /** The request was not accepted as sent. Nothing changed. */ | 'INVALID'
   /** Too many requests. Nothing changed; the same request may be sent again later. */ | 'RATE'
   /** Busy, or the outcome is not known. Only the identical request (same key) may be sent again. */ | 'UNKNOWN';
@@ -22,6 +27,8 @@ export class CheckoutError extends Error { constructor(readonly kind: CheckoutEr
 export type Owned = () => boolean;
 export type CheckoutScope = Readonly<{ organizationId: string; schoolId: string }>;
 export const CHECKOUT_SAVE_COMMAND = 'school_checkout.page.save';
+export const CHECKOUT_SETTINGS_COMMAND = 'school_checkout.settings.save';
+export const CHECKOUT_LINKS_COMMAND = 'school_checkout.links.issue';
 
 const RESPONSE_MAX = 1_000_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
@@ -36,10 +43,10 @@ function envelope(value: unknown): { data: unknown; meta: Record<string, unknown
 function id(value: string): string { if (!UUID.test(value)) throw new CheckoutError('INVALID'); return value.toLowerCase(); }
 function path(scope: CheckoutScope): string { return `/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/payments/checkout-pages`; }
 
-async function exchange(url: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ body: string; key: string }>): Promise<{ status: number; value: unknown }> {
+async function exchange(url: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ body: string; key: string | null; name: string }>): Promise<{ status: number; value: unknown }> {
   const r = await fetch(url, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: 'no-referrer', signal,
-    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': CHECKOUT_SAVE_COMMAND, 'Idempotency-Key': command.key } : {}) },
+    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': command.name, ...(command.key === null ? {} : { 'Idempotency-Key': command.key }) } : {}) },
     ...(command ? { body: command.body } : {}) });
   // A retired request (aborted, or no longer the one shown) never ends a newer session.
   signal.throwIfAborted();
@@ -56,15 +63,28 @@ export function checkoutErrorFor(status: number, code: string | null): CheckoutE
   if (status === 400) return new CheckoutError('INVALID', code);
   if (status === 429) return new CheckoutError('RATE', code);
   if (status === 422 && code === 'CHECKOUT_PLAN_UNAVAILABLE') return new CheckoutError('PLAN_UNAVAILABLE', code);
-  if (status === 422 && code === 'CHECKOUT_PLANS_REQUIRED') return new CheckoutError('PLANS_REQUIRED', code);
+  if (status === 422) {
+    const kind = ({ CHECKOUT_OPTIONS_REQUIRED: 'OPTIONS_REQUIRED', CHECKOUT_SLUG_TAKEN: 'SLUG_TAKEN', CHECKOUT_SLUG_FIXED: 'NOT_FOUND', CHECKOUT_NOT_FOUND: 'NOT_FOUND',
+      CHECKOUT_GROUP_UNKNOWN: 'GROUP_UNKNOWN', CHECKOUT_GROUP_IN_USE: 'GROUP_IN_USE', CHECKOUT_LIMIT_REACHED: 'LIMIT' } as const)[code ?? ''];
+    if (kind) return new CheckoutError(kind as CheckoutErrorKind, code);
+  }
   if (status === 409 && code === 'VERSION_CONFLICT') return new CheckoutError('CHANGED', code);
   if (status === 409 && code === 'IDEMPOTENCY_KEY_REUSED') return new CheckoutError('INVALID', code);
   // SCHOOL_CHECKOUT_CONFLICT (a lock wait), IDEMPOTENCY_IN_PROGRESS, 5xx: the same request may be sent again.
   return new CheckoutError('UNKNOWN', code);
 }
 
+async function command<T>(url: string, name: string, body: unknown, key: string, signal: AbortSignal, owned: Owned, verify: (data: unknown) => T): Promise<T> {
+  if (typeof key !== 'string' || !UUID.test(key)) throw new CheckoutError('INVALID');
+  let answer: { status: number; value: unknown };
+  try { answer = await exchange(url, signal, owned, { body: JSON.stringify(body), key, name }); }
+  catch (error) { if (error instanceof CheckoutError) throw error; throw new CheckoutError('UNKNOWN'); }
+  if (answer.status !== 200) throw checkoutErrorFor(answer.status, codeOf(answer.value));
+  try { return verify(envelope(answer.value).data); } catch { throw new CheckoutError('UNKNOWN'); }
+}
+
 export const checkoutApi = {
-  /** Both checkout pages of this school (or null where none was saved yet) and the plans that may be shown. */
+  /** The school's groups and staff order, every checkout page in that order, and the plans an option may name. */
   async pages(scope: CheckoutScope, signal: AbortSignal, owned: Owned): Promise<SchoolCheckoutPages> {
     const url = path(scope);
     let answer: { status: number; value: unknown };
@@ -73,21 +93,33 @@ export const checkoutApi = {
     if (answer.status !== 200) throw checkoutErrorFor(answer.status, codeOf(answer.value));
     try { return verifySchoolCheckoutPages(envelope(answer.value).data); } catch { throw new CheckoutError('UNKNOWN'); }
   },
-  /** Save one page as a draft or published. The receipt must be the next version of that same kind. */
+  /**
+   * 0620: every page's share link (the server issues missing ones). No Idempotency-Key: sending it again changes nothing.
+   * A link opens for families only while its page is Live; the server decides that on every public read.
+   */
+  async links(scope: CheckoutScope, signal: AbortSignal, owned: Owned): Promise<SchoolCheckoutLinks> {
+    let answer: { status: number; value: unknown };
+    try { answer = await exchange(`${path(scope)}/links`, signal, owned, { body: '{}', key: null, name: CHECKOUT_LINKS_COMMAND }); }
+    catch (error) { if (error instanceof CheckoutError || signal.aborted) throw error; throw new CheckoutError('UNKNOWN'); }
+    if (answer.status !== 200) throw checkoutErrorFor(answer.status, codeOf(answer.value));
+    try { return verifySchoolCheckoutLinks(envelope(answer.value).data); } catch { throw new CheckoutError('UNKNOWN'); }
+  },
+  /** Create (no page id, version 0) or replace one page. The receipt must be the next version of that page, with the status sent. */
   async save(scope: CheckoutScope, input: SaveCheckoutPageInput, key: string, signal: AbortSignal, owned: Owned): Promise<CheckoutPageReceipt> {
-    const url = path(scope);
-    if (typeof key !== 'string' || !UUID.test(key)) throw new CheckoutError('INVALID');
     let body: SaveCheckoutPageInput;
     try { body = validateSaveCheckoutPageInput(input); } catch { throw new CheckoutError('INVALID'); }
-    let answer: { status: number; value: unknown };
-    try { answer = await exchange(url, signal, owned, { body: JSON.stringify(body), key }); }
-    catch (error) { if (error instanceof CheckoutError) throw error; throw new CheckoutError('UNKNOWN'); }
-    if (answer.status !== 200) throw checkoutErrorFor(answer.status, codeOf(answer.value));
-    try {
-      const receipt = verifyCheckoutPageReceipt(envelope(answer.value).data, { kind: body.kind, version: body.expectedVersion + 1 });
-      if (receipt.page.status !== body.status) throw new Error('status');
+    return command(path(scope), CHECKOUT_SAVE_COMMAND, body, key, signal, owned, (data) => {
+      const receipt = verifyCheckoutPageReceipt(data, { pageId: body.pageId, slug: body.slug, version: body.expectedVersion + 1 });
+      if (receipt.page.status !== body.status || receipt.page.groupKey !== body.groupKey) throw new Error('drift');
       return receipt;
-    } catch { throw new CheckoutError('UNKNOWN'); }
+    });
+  },
+  /** Save the groups and the staff order of the page grid. */
+  async saveSettings(scope: CheckoutScope, input: SaveCheckoutSettingsInput, key: string, signal: AbortSignal, owned: Owned): Promise<CheckoutSettingsReceipt> {
+    let body: SaveCheckoutSettingsInput;
+    try { body = validateSaveCheckoutSettingsInput(input); } catch { throw new CheckoutError('INVALID'); }
+    return command(`${path(scope)}/settings`, CHECKOUT_SETTINGS_COMMAND, body, key, signal, owned,
+      (data) => verifyCheckoutSettingsReceipt(data, { version: body.expectedVersion + 1 }));
   },
 };
 export type CheckoutApi = typeof checkoutApi;
