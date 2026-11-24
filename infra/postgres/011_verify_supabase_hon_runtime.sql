@@ -6243,6 +6243,14 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unexpected owner-launch first booking overload'; END IF;
 END $$;
 -- End owner-launch first booking lifecycle exact verification.
+-- Class session minimum duration exact verification (0645, launch-readiness [25]): one validated check of at least a minute.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.class_sessions'::regclass AND conname='class_sessions_minimum_duration'
+      AND contype='c' AND convalidated
+      AND pg_get_constraintdef(oid)=$def$CHECK (((ends_at - starts_at) >= '00:01:00'::interval))$def$) THEN
+    RAISE EXCEPTION 'Missing or altered class session minimum duration'; END IF;
+END $$;
+-- End class session minimum duration exact verification.
 
 -- Checkout page share links exact verification (0620): the link guard, the public page selector, two runtime entry points
 -- (the public read's hash is the 0627 body, which adds the sign-up form fields)
