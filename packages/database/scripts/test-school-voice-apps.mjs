@@ -69,6 +69,12 @@ try {
 
   await q("UPDATE hon.hon_os_signup_program SET status='TEST_MODE',recorded_at=clock_timestamp() WHERE program_id=1");
   terms = (await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;
+  // Earlier proofs on this shared fixture register schools too and can use up the global hourly signup limit. Give this
+  // proof signup headroom with a fixture-only limit version (trial limits unchanged), as the trial runtime proof does.
+  { const l = (await q('SELECT version v,signups_per_hour sh,signups_per_day sd,trials_per_hour h,trials_per_day d FROM hon.hon_os_admission_limit_versions ORDER BY version DESC LIMIT 1'))[0];
+    const used = (await q("SELECT count(*) FILTER (WHERE registered_at>clock_timestamp()-interval '1 hour') hr,count(*) FILTER (WHERE registered_at>clock_timestamp()-interval '1 day') dy FROM hon.hon_os_school_registrations"))[0];
+    const sh = Math.max(l.sh, Number(used.hr) + 20), sd = Math.max(l.sd, Number(used.dy) + 20, sh);
+    if (sh > l.sh || sd > l.sd) await q('INSERT INTO hon.hon_os_admission_limit_versions(version,signups_per_hour,signups_per_day,trials_per_hour,trials_per_day) VALUES($1,$2,$3,$4,$5)', [l.v + 1, sh, sd, l.h, l.d]); }
   const a = await register('alpha'), b = await register('beta'), parentSchool = await register('parent');
   const accountA = await subaccount(a, rnd()); await subaccount(b, rnd());
   await q("INSERT INTO hon.school_text_senders(organization_id,school_id,phone_e164,messaging_service_sid,status,mms_converter_confirmed,set_by_principal_id) VALUES($1,$2,$3,$4,'ACTIVE',true,$5)",
