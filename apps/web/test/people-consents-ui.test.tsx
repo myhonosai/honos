@@ -17,7 +17,7 @@ const stub = (response: Response) => { const f = vi.fn(async () => response); vi
 const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as ConsentError; } throw new Error('expected a failure'); };
 const row = (over: Record<string, unknown> = {}) => ({ channel: 'EMAIL', status: 'OPTED_IN', source: 'STAFF', capturedAt: '2026-11-01T10:00:00.000Z', version: 2,
-  updatedAt: '2026-11-01T10:00:01.000Z', ...over });
+  updatedAt: '2026-11-01T10:00:01.000Z', captureMethod: null, ...over });
 const base = `/api/v1/organizations/${org}/schools/${school}/people/${person}/communication-consents`;
 const NOW = '2026-11-09T02:40:00.000Z';
 
@@ -28,7 +28,7 @@ it('reads consent as a plain same-origin GET and refuses drifted answers', async
   expect(path).toBe(base);
   expect(init).toMatchObject({ method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', headers: { Accept: 'application/json' } });
   expect(Object.keys(init.headers as object).some((k) => /^x-hon|idempotency/i.test(k))).toBe(false);
-  for (const bad of [{ data: [row(), row()], meta }, { data: [row({ status: 'MAYBE' })], meta }, { data: [row({ address: 'a@b.c' })], meta }, { data: [] }]) {
+  for (const bad of [{ data: [row(), row()], meta }, { data: [row({ status: 'MAYBE' })], meta }, { data: [row({ address: 'a@b.c' })], meta }, { data: [row({ captureMethod: 'GUESSED' })], meta }, { data: [{ ...row(), captureMethod: undefined }], meta }, { data: [] }]) {
     stub(json(bad));
     expect((await fails(consentApi.list(scope, person, signal(), () => true))).kind).toBe('UNKNOWN');
   }
@@ -98,6 +98,7 @@ it('offers opt-out for an agreed channel and agreement for the rest, with an att
   const optOut = card({ form: { channel: 'EMAIL', status: 'OPTED_OUT' } });
   expect(optOut).toContain('Record that Sam Lee no longer wants email'); expect(optOut).not.toContain('type="checkbox"');
   expect(card({ canEdit: false })).not.toContain('Record opt-out');
+  expect(card({ read: { state: 'READY', rows: [row({ source: 'RECIPIENT', captureMethod: 'LEAD_FORM' }) as never] } })).toContain('from the website form');
 });
 
 it('falls back to the saved summary, read only, when the consent read is refused', () => {

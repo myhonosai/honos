@@ -104,7 +104,8 @@ export function normalizePhone(value: string): string | null {
   return null;
 }
 
-export function buildLeadInput(form: LeadForm, choice: StageChoice | null): { ok: true; input: CreateHumanCrmLeadInput } | { ok: false; problem: LeadFormProblem } {
+/** IC1: consent is recorded by default; an unticked box sends no channels so nothing is recorded. */
+export function buildLeadInput(form: LeadForm, choice: StageChoice | null, consent = true): { ok: true; input: CreateHumanCrmLeadInput } | { ok: false; problem: LeadFormProblem } {
   const givenName = form.givenName.trim(), familyName = form.familyName.trim(), email = form.email.trim(), phone = form.phone.trim();
   if (!givenName || !familyName || givenName.length > 120 || familyName.length > 120) return { ok: false, problem: 'nameMissing' };
   if (email && (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return { ok: false, problem: 'emailInvalid' };
@@ -112,7 +113,7 @@ export function buildLeadInput(form: LeadForm, choice: StageChoice | null): { ok
   if (phone && !phoneE164) return { ok: false, problem: 'phoneInvalid' };
   if (!choice) return { ok: false, problem: 'stageMissing' };
   const input: CreateHumanCrmLeadInput = { pipelineId: choice.pipelineId, pipelineStageId: choice.stageId,
-    primaryContact: { givenName, familyName, ...(email ? { email } : {}), ...(phoneE164 ? { phoneE164 } : {}) } };
+    primaryContact: { givenName, familyName, ...(email ? { email } : {}), ...(phoneE164 ? { phoneE164 } : {}) }, ...(consent ? {} : { consentChannels: [] }) };
   try { validateCreateHumanCrmLeadInput(input); } catch { return { ok: false, problem: 'nameMissing' }; }
   return { ok: true, input };
 }
