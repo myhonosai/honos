@@ -1,0 +1,7 @@
+# HON storefront blocks (TB2). A theme app extension: Shopify hosts these files and the store owner adds the blocks in the
+# theme editor. HON never reads or writes theme files. The blocks show only what HON wrote to its own app-data metafield
+# (namespace hon_storefront, key settings) on the store's HON app installation.
+name = "HON storefront"
+handle = "hon-storefront"
+type = "theme"
+uid = "90ceadd2-b272-b8bc-bdc1-e15e5f8f7d32c2099bd6"

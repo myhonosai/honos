@@ -66,7 +66,7 @@ try{
  const excluded=['users','principals','principal_role_grants','school_owner_invitations','school_account_requests','school_account_events',
   'school_primary_owners','school_ownership_notices','school_ownership_requests']; // 0223: owner-identity evidence
  const tables=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' AND NOT(tablename=ANY($1)) ORDER BY tablename",[excluded])).map(r=>r.tablename);
- const snapshot=async()=>{const out={};for(const t of tables){assert.match(t,/^[a-z_]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
+ const snapshot=async()=>{const out={};for(const t of tables){assert.match(t,/^[a-z][a-z0-9_]*$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};const baseline=await snapshot();
  const module=await Test.createTestingModule({controllers:[SchoolOwnerInvitationController,HqController],providers:[SchoolOwnerInvitationService,SchoolAccountHumanGuard,HonIdentityService,HqOverviewService,HqSchoolDirectoryService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  const productionDirectory=receipt(await send('hq/schools',{method:'GET'})).directory;

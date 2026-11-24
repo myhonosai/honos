@@ -7,7 +7,7 @@ import {ParentCurriculumLibraryPage} from '../src/components/parent-curriculum-l
 import {loadParentLibrary,loadStaffLibrary,createLibraryReference} from '../src/components/curriculum-library-http';
 const school='22222222-2222-4222-8222-222222222222',id='33333333-3333-4333-8333-333333333333';
 const parentData={resources:[{title:'Basics',description:'Optional approved reference.',kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',curriculumName:'Main',rankName:'White',childDisplayName:'Child Safe'}]};
-const record={id,curriculumId:id,rankId:null,kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',title:'Basics',description:'Optional approved reference.',audience:'PARENT',status:'ACTIVE',version:1};
+const record={id,curriculumId:id,rankId:null,cycleId:null,kind:'VIDEO',url:'https://www.youtube.com/watch?v=approved',title:'Basics',description:'Optional approved reference.',audience:'PARENT',status:'ACTIVE',version:1};
 const response=(data:unknown,parent=true)=>({ok:true,headers:new Headers({'content-type':'application/json'}),json:async()=>({data,meta:{requestId:id,correlationId:id,...(parent?{}:{replayed:false})}})} as Response);
 describe('curriculum library inside the school shell',()=>{
  it('shows no school UUID box; the signed-in school is used',async()=>{
@@ -18,8 +18,9 @@ describe('curriculum library inside the school shell',()=>{
  });
 });
 describe('metadata curriculum library',()=>{
- it('starts empty and explains scope, no preview/player and presentation-only modes',()=>{
-  const fetch=vi.spyOn(globalThis,'fetch');try{for(const component of [<StaffCurriculumLibraryWorkbench/>,<ParentCurriculumLibraryPage/>]){const html=renderToStaticMarkup(component);expect(html).toContain('Metadata references only');expect(html).toContain('Big-Button');expect(html).toContain('Modern');expect(html).toContain('Classic');expect(html).not.toMatch(/<iframe|<video|<audio|<img|target="_blank"/);}expect(fetch).not.toHaveBeenCalled();}finally{fetch.mockRestore();}
+ it('starts empty: the staff page asks for the school menu, the parent page explains no preview/player',()=>{
+  const fetch=vi.spyOn(globalThis,'fetch');try{{const html=renderToStaticMarkup(<ParentCurriculumLibraryPage/>);expect(html).toContain('Metadata references only');expect(html).toContain('Big-Button');expect(html).toContain('Modern');expect(html).toContain('Classic');expect(html).not.toMatch(/<iframe|<video|<audio|<img|target="_blank"/);}
+   {const html=renderToStaticMarkup(<StaffCurriculumLibraryWorkbench/>);expect(html).toContain('Videos and links');expect(html).toContain('Open this page from your school');expect(html).not.toMatch(/<iframe|<video|<audio|<img|target="_blank"|UUID|Metadata/);}expect(fetch).not.toHaveBeenCalled();}finally{fetch.mockRestore();}
  });
  it('uses fixed same-origin parent read, no selectors and strict whitelist before returning links',async()=>{
   const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(response(parentData));try{

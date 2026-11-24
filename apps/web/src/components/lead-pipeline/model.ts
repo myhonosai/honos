@@ -90,6 +90,15 @@ export function cardLine(lead: CrmBoardLead): CardLine {
   return { kind: 'NONE' };
 }
 
+const E164 = /^\+[1-9]\d{6,14}$/;
+const PLAIN_EMAIL = /^[A-Za-z0-9._+-]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,63}$/;
+/** A tel: link for a strict E.164 number only, so nothing else can ride along in the link. */
+export function callHref(phone: string | null): string | null { return phone && E164.test(phone) ? `tel:${phone}` : null; }
+/** An sms: link that opens the staff member's own texting app. HON sends nothing. */
+export function textHref(phone: string | null): string | null { return phone && E164.test(phone) ? `sms:${phone}` : null; }
+/** A mailto: link for a plain address only: no cc, bcc, subject or body can be added through it. */
+export function emailHref(email: string | null): string | null { return email && email.length <= 254 && PLAIN_EMAIL.test(email) ? `mailto:${email}` : null; }
+
 /** A code such as WEBSITE_FORM or kids_karate shown as words. */
 export function codeLabel(code: string): string {
   const words = code.replace(/[_-]+/g, ' ').trim().toLowerCase();
@@ -124,6 +133,13 @@ export function moveDraftStage(draft: Draft, index: number, delta: -1 | 1): Draf
   const stages = [...draft.stages]; const [item] = stages.splice(index, 1); stages.splice(to, 0, item!);
   return { ...draft, stages };
 }
+/** Drag and drop in the stage editor: take the stage at `from` and put it at `to`. */
+export function moveDraftStageTo(draft: Draft, from: number, to: number): Draft {
+  const n = draft.stages.length;
+  if (from === to || from < 0 || to < 0 || from >= n || to >= n) return draft;
+  const stages = [...draft.stages]; const [item] = stages.splice(from, 1); stages.splice(to, 0, item!);
+  return { ...draft, stages };
+}
 /** Stages that will hide while still holding open leads: each needs a visible existing stage to receive them. */
 export function stagesNeedingMove(draft: Draft): DraftStage[] { return draft.stages.filter((s) => s.id !== null && s.hidden && s.openCount > 0); }
 export function moveChoices(draft: Draft): DraftStage[] { return draft.stages.filter((s) => s.id !== null && !s.hidden); }
@@ -145,4 +161,9 @@ export function draftInput(draft: Draft, expectedVersion: number): SaveCrmPipeli
     stages: draft.stages.map((s) => ({ id: s.id, name: s.name, color: s.color, hidden: s.hidden })),
     moves: stagesNeedingMove(draft).map((s) => ({ fromStageId: s.id!, toStageId: draft.moves[s.id!]! })),
   };
+}
+
+/** After stages are set up from the board, the editor opens only once the board shows the pipeline that setup made. */
+export function starterEditReady(board: { pipeline: { id: string } | null }, pendingPipelineId: string | null): boolean {
+  return pendingPipelineId !== null && board.pipeline !== null && board.pipeline.id.toLowerCase() === pendingPipelineId.toLowerCase();
 }

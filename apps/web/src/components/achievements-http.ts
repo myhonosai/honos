@@ -5,8 +5,8 @@ const base = '/api/v1/staff/students/achievements';
 async function request(url: string, body?: unknown, key?: string): Promise<unknown> {
   const r = await fetch(url, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
     headers: body ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': 'student-achievements', 'Idempotency-Key': key! } : {}, ...(body ? { body: JSON.stringify(body) } : {}) });
-  if (!r.ok) throw new (r.status === 401 || r.status === 403 ? AchievementAccessError : Error)(r.status === 401 || r.status === 403 ? 'Current school or child access unavailable. Content cleared.' : r.status === 409 ? 'Version conflict. Reload; retry unchanged uncertain requests only.' : r.status === 404 ? 'Known student or definition unavailable.' : 'No verified result; no save assumed.');
-  const e: unknown = await r.json(); if (!e || typeof e !== 'object' || !Object.hasOwn(e, 'data')) throw new Error('Unverified response'); return (e as { data: unknown }).data;
+  if (!r.ok) throw new (r.status === 401 || r.status === 403 ? AchievementAccessError : Error)(r.status === 401 || r.status === 403 ? 'Your session ended or your access changed. Sign in again to continue.' : r.status === 409 ? 'Someone else changed this a moment ago. Refresh, then try again.' : r.status === 404 ? 'That student or achievement is no longer here. Refresh to see the latest.' : 'That did not confirm. It may or may not have been saved. Refresh to check.');
+  const e: unknown = await r.json(); if (!e || typeof e !== 'object' || !Object.hasOwn(e, 'data')) throw new Error('The answer from the server could not be checked. Refresh and try again.'); return (e as { data: unknown }).data;
 }
 function url(school: string, path: string, q: Record<string, string> = {}) { communityUuid(school); return `${base}${path}?${new URLSearchParams({ schoolId: school, ...q })}`; }
 export async function loadAchievementAccess(school: string) { return verifyAchievementAccess(await request(url(school, '/access'))); }

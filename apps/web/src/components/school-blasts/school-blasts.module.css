@@ -1,0 +1,18 @@
+/* Marketing > Blasts. Page chrome comes from membership-changes.module.css. */
+.layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 960px) { .layout { grid-template-columns: minmax(260px, 1fr) minmax(0, 2fr); align-items: start; } }
+.item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.item[aria-current="true"] { outline: 2px solid var(--hon-accent, #8de3d8); outline-offset: 4px; border-radius: 6px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.small { min-height: 32px; padding: 2px 10px; border: 1px solid #35506d; border-radius: 8px; background: transparent; color: #eaf4fb; font: inherit; font-size: 12px; cursor: pointer; }
+.small:disabled { opacity: .55; cursor: not-allowed; }
+.small:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.counter { margin: 0; color: var(--hon-muted, #9fb4c8); font-size: 12px; text-align: right; }
+.counter[data-over="true"] { color: #ffb3c1; font-weight: 800; }
+.problems { margin: 0; padding-left: 18px; color: #ffe4a8; font-size: 13px; }
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 0; }
+.counts div { padding: 8px; border: 1px solid #24405a; border-radius: 10px; }
+.counts dt { color: var(--hon-muted, #9fb4c8); font-size: 12px; }
+.counts dd { margin: 0; font-size: 18px; font-weight: 800; }
+.sample { display: grid; gap: 6px; padding: 12px; border: 1px dashed #35506d; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.sample strong { white-space: normal; }

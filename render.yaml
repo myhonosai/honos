@@ -76,7 +76,9 @@ services:
         sync: false
       - fromGroup: hon-session
 
-  # Web: the only public service. Health check needs no database or provider traffic.
+  # Web: the only public service. Its health check (review [24]) is ready only when sign-in is configured AND the
+  # private API answers /v1/health/ready over the private network (a verified runtime-database connection). One
+  # bounded probe (2.5 s timeout, answers reused for 2 s); no provider traffic.
   - type: web
     name: hon-web
     runtime: node
@@ -91,7 +93,7 @@ services:
       pnpm prepare:workspace &&
       pnpm --filter @hon/web build
     startCommand: pnpm --filter @hon/web start
-    healthCheckPath: /api/identity/readiness
+    healthCheckPath: /api/readiness
     maxShutdownDelaySeconds: 30
     envVars:
       - key: NODE_VERSION
@@ -135,4 +137,9 @@ services:
       # Its return address <HON_PUBLIC_ORIGIN>/ must be an allowed logout URL at the provider.
       - key: HON_OIDC_END_SESSION_ENDPOINT
         sync: false
+      # Walk-in kiosk card form (WK3b), TEST MODE ONLY: Stripe's test *publishable* key, which is public by design and read
+      # at web build time. The web app accepts only pk_test_; it charges nothing by itself (the API's test secret key
+      # creates every payment). Owner-provided 2026-11-19. Changing it is a reviewed change; a live key is never allowed.
+      - key: NEXT_PUBLIC_HON_TUITION_STRIPE_TEST_PUBLISHABLE_KEY
+        value: pk_test_51UQeh84RRTaqPcXmmo01Sm2bguhOeMPRPYzUntdqWMZkhL4LTY5QFrpHa2zXQwDKMmnzAI1EO4M7cJsJmPs2OlOt000FWU59LN
       - fromGroup: hon-session

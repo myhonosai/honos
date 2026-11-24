@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { PublicFormWorkbench } from '../src/components/public-form-workbench';
-import { PublishedLeadFormView } from '../src/components/published-lead-form';
+import { PublishedLeadFormView, emailConsentWording, textConsentWording } from '../src/components/published-lead-form';
 import { IdFields } from '../src/components/school-pickers/pickers';
 import { formStaffRequest, loadPublicLeadForm, sendPublicLeadForm } from '../src/components/public-form-client';
 
@@ -34,7 +34,7 @@ vi.mock('../src/components/campaign-workbench', () => ({ campaignRequest: () => 
 const id = '11111111-1111-4111-8111-111111111111', other = '22222222-2222-4222-8222-222222222222', publicId = 'a'.repeat(48), base = '/api/v1/marketing/forms';
 const config = { expectedVersion:0, title:'Enquiries', description:'Enquiry only', pipelineId:id, pipelineStageId:other, campaignId:null, optionalFields:['ageBand'] };
 const form = { id, publicId, version:1, status:'DRAFT', title:'Enquiries', description:'Enquiry only', pipelineId:id, pipelineStageId:other, campaignId:null, optionalFields:['ageBand'], acceptedCount:0, updatedAt:'2026-10-01T00:00:00.000Z' };
-const projection = {publicId,title:'Enquiries',description:'Enquiry only',optionalFields:['ageBand']};
+const projection = {publicId,title:'Enquiries',description:'Enquiry only',optionalFields:['ageBand'],schoolName:'Example Dojo'};
 const body = {name:'PRIVATE_NAME',email:'private@example.test',mobile:'',interest:'',source:'',website:'',acknowledged:false};
 const response = (value: unknown, status = 200, headers: HeadersInit = {}) => new Response(JSON.stringify(value), {status, headers:{'Content-Type':'application/json',...headers}});
 function render(component: (props?: any) => any, props?: any) { hooks.cursor = 0; return component(props); }
@@ -152,10 +152,17 @@ describe('staff UI uses the signed-in school',()=>{
 
 describe('public UI lifecycle and non-consent facts',()=>{
   it('renders only verified escaped content/choices and retains retries without sending consent or authority fields',async()=>{
-    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:{...projection,title:'<script>unsafe</script>'}}));let tree=render(PublishedLeadFormView,{publicId});await effect();tree=render(PublishedLeadFormView,{publicId});expect(renderToStaticMarkup(tree)).toContain('&lt;script&gt;unsafe&lt;/script&gt;');expect(text(tree)).toContain('not consent to marketing messages');expect(field(tree,'Website').props.tabIndex).toBe(-1);
+    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:{...projection,title:'<script>unsafe</script>'}}));let tree=render(PublishedLeadFormView,{publicId});await effect();tree=render(PublishedLeadFormView,{publicId});expect(renderToStaticMarkup(tree)).toContain('&lt;script&gt;unsafe&lt;/script&gt;');expect(text(tree)).toContain(emailConsentWording('Example Dojo'));expect(text(tree)).toContain(textConsentWording('Example Dojo'));expect(all(tree).find(n=>n.props?.name==='text-opt-in')?.props.checked).toBe(false);expect(field(tree,'Website').props.tabIndex).toBe(-1);
     field(tree,'Name').props.onChange({target:{value:'PRIVATE_NAME'}});tree=render(PublishedLeadFormView,{publicId});field(tree,'Email').props.onChange({target:{value:'private@example.test'}});tree=render(PublishedLeadFormView,{publicId});
     mock.mockRejectedValueOnce(Error('network'));all(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await settle();tree=render(PublishedLeadFormView,{publicId});expect(text(tree)).toContain('Acceptance is not confirmed');const first=mock.mock.calls[1];
-    mock.mockResolvedValueOnce(response({result:'accepted'},202));all(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await settle();tree=render(PublishedLeadFormView,{publicId});expect(mock.mock.calls[2]?.[1]?.body).toBe(first?.[1]?.body);expect(mock.mock.calls[2]?.[1]?.headers).toEqual(first?.[1]?.headers);expect(JSON.parse(String(first?.[1]?.body))).toEqual({...body,acknowledged:false});expect(text(tree)).toContain('No message or marketing subscription');
+    mock.mockResolvedValueOnce(response({result:'accepted'},202));all(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await settle();tree=render(PublishedLeadFormView,{publicId});expect(mock.mock.calls[2]?.[1]?.body).toBe(first?.[1]?.body);expect(mock.mock.calls[2]?.[1]?.headers).toEqual(first?.[1]?.headers);expect(JSON.parse(String(first?.[1]?.body))).toEqual({...body,acknowledged:false});expect(text(tree)).toContain('The school will be in touch.');
+  });
+  it('IC1: sends textOptIn only when the lead ticks the Text me box',async()=>{
+    const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:projection}));render(PublishedLeadFormView,{publicId});await effect();let tree=render(PublishedLeadFormView,{publicId});
+    field(tree,'Name').props.onChange({target:{value:'PRIVATE_NAME'}});tree=render(PublishedLeadFormView,{publicId});field(tree,'Email').props.onChange({target:{value:'private@example.test'}});tree=render(PublishedLeadFormView,{publicId});field(tree,'Mobile').props.onChange({target:{value:'+15555550100'}});tree=render(PublishedLeadFormView,{publicId});
+    all(tree).find(n=>n.props?.name==='text-opt-in').props.onChange({target:{checked:true}});tree=render(PublishedLeadFormView,{publicId});
+    mock.mockResolvedValueOnce(response({result:'accepted'},202));all(tree).find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await settle();
+    expect(JSON.parse(String(mock.mock.calls[1]?.[1]?.body)).textOptIn).toBe(true);
   });
   it('unknown/inactive forms show no contact form and route changes hide stale form immediately',async()=>{
     const mock=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(response({data:projection}));render(PublishedLeadFormView,{publicId});await effect();let tree=render(PublishedLeadFormView,{publicId});expect(all(tree).some(n=>n.type==='form')).toBe(true);

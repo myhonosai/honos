@@ -1,28 +1,34 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { Text } from '../ui/text';
 import type { ParentClassBookingChoices, ParentClassSessionChoice } from '@hon/contracts/parent-class-booking';
 import type { ParentRead } from '../api/client';
 import { useFamily } from '../family/family-data';
 import { formatClassTime } from '../home/model';
 import { Body, Button, Card, Loading, Pill, Section } from '../ui/parts';
+import { Celebration } from '../ui/Celebration';
 import { space, type, useColors } from '../ui/theme';
-import { bookAction, cancelAction, createCommandKeys, describeOutcome, sessionAction } from './booking-model';
+import { bookAction, cancelAction, describeOutcome, sessionAction, type UnconfirmedBooking } from './booking-model';
 
-type Pending = { kind: 'book' | 'cancel'; childId: string; childName: string; session: ParentClassSessionChoice };
+type Pending = UnconfirmedBooking;
 type Status = { phase: 'confirm' } | { phase: 'sending' } | { phase: 'checking' } | { phase: 'unknown' } | { phase: 'result'; tone: 'good' | 'bad'; message: string };
 
 /**
  * Book and cancel from the app (0329). Every row comes from the server's choices read; the app sends only the
  * server's own ids back, one confirmed action at a time, and re-reads after every answer. A network failure is
- * "not confirmed yet", never success: the app re-reads, and a retry reuses the same Idempotency-Key.
+ * "not confirmed yet", never success: the app re-reads, and a retry reuses the same Idempotency-Key. The keys and the
+ * unconfirmed action live with the family (above this screen), so a refresh, a tab switch or a failed re-read never
+ * drops them, and the retry stays on screen even when the class list cannot be read.
  */
 export function BookClasses() {
-  const { api, newKey, now, refresh, state } = useFamily();
+  const { api, now, refresh, state, booking } = useFamily();
   const c = useColors();
-  const keys = useMemo(() => createCommandKeys(newKey), [newKey]);
+  const keys = booking.keys;
   const [read, setRead] = useState<ParentRead<ParentClassBookingChoices> | null>(null);
-  const [pending, setPending] = useState<Pending | null>(null);
-  const [status, setStatus] = useState<Status | null>(null);
+  // Mounted again after a lost answer: open on that same action, with its same-key retry.
+  const [pending, setPending] = useState<Pending | null>(() => booking.unconfirmed);
+  const [status, setStatus] = useState<Status | null>(() => booking.unconfirmed ? { phase: 'unknown' } : null);
+  const [party, setParty] = useState<{ detail: string } | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -33,8 +39,12 @@ export function BookClasses() {
   }, [api]);
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load]);
 
+  const partyDetail = (p: Pending) => `${p.childName} · ${p.session.name}, ${formatClassTime(p.session.startsAt, read?.ok ? read.data.timezone : null).text}`;
   const start = (p: Pending) => { setPending(p); setStatus({ phase: 'confirm' }); };
+  // Closing an unconfirmed action only hides it: it stays held, and the "not confirmed yet" line brings it back.
   const close = () => { setPending(null); setStatus(null); };
+  const reopen = () => { if (booking.unconfirmed) { setPending(booking.unconfirmed); setStatus({ phase: 'unknown' }); } };
+  const settled = (p: Pending) => { if (booking.unconfirmed === p) booking.unconfirmed = null; };
 
   const send = async (p: Pending) => {
     const action = p.kind === 'book' ? bookAction(p.childId, p.session.sessionId) : cancelAction(p.session.booking!.bookingId, p.session.booking!.version);
@@ -51,42 +61,43 @@ export function BookClasses() {
       const row = again.ok ? again.data.children.find(ch => ch.studentProfileId === p.childId)?.sessions.find(s => s.sessionId === p.session.sessionId) : undefined;
       const landed = p.kind === 'book' ? !!row?.booking : !!row && !row.booking;
       if (landed) {
-        keys.settle(action);
+        keys.settle(action); settled(p);
+        if (p.kind === 'book' && row!.booking!.status !== 'WAITLISTED') setParty({ detail: partyDetail(p) });
         setStatus({ phase: 'result', tone: 'good', message: p.kind === 'book'
           ? (row!.booking!.status === 'WAITLISTED' ? 'Added to the waitlist. This is not a confirmed spot yet.' : 'Booked.') : 'Booking cancelled.' });
         refresh();
         return;
       }
+      booking.unconfirmed = p;
       setStatus({ phase: 'unknown' });
       return;
     }
-    keys.settle(action);
+    keys.settle(action); settled(p);
     if (outcome.kind === 'session') { close(); refresh(); return; }
     setStatus({ phase: 'result', tone: outcome.kind === 'done' ? 'good' : 'bad', message: outcome.message });
+    if (outcome.kind === 'done' && outcome.confirmedBooking) setParty({ detail: partyDetail(p) });
     await load();
     if (outcome.kind === 'done') refresh();
   };
 
   if (state.status !== 'ready') return null;
-  if (!read) return <Loading label="Loading classes you can book" />;
-  if (!read.ok) {
-    return <Card style={{ marginTop: space.lg }}><Body muted>Booking from the app is not available right now. Your classes above are still current.</Body></Card>;
-  }
-  const choices = read.data;
-  const nowMs = now().getTime();
-  // The booking read is its own response with its own child list; the journey chip selection is not mapped onto it.
-  const children = choices.children;
-
-  return (
-    <View>
-      <Section>Book a class</Section>
-      {!choices.canBook ? <Body muted>Your family access lets you see classes but not book them. Ask your school if you need booking access.</Body> : null}
+  const timezone = read?.ok ? read.data.timezone : null;
+  // The action card and the "not confirmed yet" line never depend on the class list being readable.
+  const held = !pending && booking.unconfirmed ? booking.unconfirmed : null;
+  const custody = (
+    <>
+      {held ? (
+        <Card style={{ borderColor: c.accent }} label="Booking not confirmed yet">
+          <Body>{held.kind === 'book' ? 'Booking' : 'Cancelling'} {held.session.name} for {held.childName} is not confirmed yet.</Body>
+          <View style={{ marginTop: space.md }}><Button label="Check again" onPress={reopen} /></View>
+        </Card>
+      ) : null}
       {pending && status ? (
         <Card style={{ borderColor: c.accent }} label="Booking action">
           <Text style={{ color: c.text, fontSize: type.title, fontWeight: '700' }}>
             {pending.kind === 'book' ? 'Book' : 'Cancel'} {pending.session.name} for {pending.childName}?
           </Text>
-          <Body muted>{formatClassTime(pending.session.startsAt, choices.timezone).text}{pending.session.roomName ? ` · ${pending.session.roomName}` : ''}</Body>
+          <Body muted>{formatClassTime(pending.session.startsAt, timezone).text}{pending.session.roomName ? ` · ${pending.session.roomName}` : ''}</Body>
           {status.phase === 'confirm' ? (
             <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
               <Button label={pending.kind === 'book' ? 'Confirm booking' : 'Confirm cancel'} onPress={() => void send(pending)} />
@@ -110,6 +121,29 @@ export function BookClasses() {
           )}
         </Card>
       ) : null}
+    </>
+  );
+  if (!read || !read.ok) {
+    return (
+      <View>
+        <Section>Book a class</Section>
+        {custody}
+        {!read ? <Loading label="Loading classes you can book" />
+          : <Card style={{ marginTop: space.lg }}><Body muted>Booking from the app is not available right now. Your classes above are still current.</Body></Card>}
+      </View>
+    );
+  }
+  const choices = read.data;
+  const nowMs = now().getTime();
+  // The booking read is its own response with its own child list; the journey chip selection is not mapped onto it.
+  const children = choices.children;
+
+  return (
+    <View>
+      <Celebration visible={!!party} title="You're booked!" detail={party?.detail ?? ''} onClose={() => setParty(null)} />
+      <Section>Book a class</Section>
+      {!choices.canBook ? <Body muted>Your family access lets you see classes but not book them. Ask your school if you need booking access.</Body> : null}
+      {custody}
       {children.map(child => (
         <View key={child.studentProfileId}>
           <Text style={{ color: c.muted, fontWeight: '700', marginTop: space.md, marginBottom: space.sm }}>{child.displayName}</Text>

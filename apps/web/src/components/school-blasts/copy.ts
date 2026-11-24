@@ -1,0 +1,153 @@
+import type { SchoolBlastAudienceGroup, SchoolBlastChannel, SchoolBlastDeliveryState, SchoolBlastMergeField, SchoolBlastOutcome, SchoolBlastStatus } from '@hon/contracts';
+import type { BlastErrorKind } from './http';
+import type { BlastProblem } from './format';
+
+/** Marketing > Blasts copy (en, ko, es). ko and es are typed against en, so a missing key fails `pnpm check`. */
+export type BlastOutcomeKind = 'SAVING' | 'SAVED' | 'SENT' | 'SCHEDULED' | 'CANCELLED' | BlastErrorKind;
+export interface BlastCopy {
+  pageTitle: string; intro: string; checking: string; hidden: string; chooseSchool: string; reading: string;
+  denied: string; unavailable: string; refresh: string; tryAgain: string;
+  listTitle: string; empty: string; newEmail: string; newText: string; open: string;
+  recipients: (n: number) => string; scheduledFor: (when: string) => string; sentAt: (when: string) => string; edited: (when: string) => string;
+  channels: Record<SchoolBlastChannel, string>; statuses: Record<SchoolBlastStatus, string>;
+  composeNew: (channel: string) => string; composeEdit: string; fieldName: string; nameHint: string; fieldSubject: string; fieldBody: string;
+  characters: (used: number, max: number) => string; insertTag: string; mergeFields: Record<SchoolBlastMergeField, string>; mergeHint: string;
+  audienceTitle: string; groups: Record<SchoolBlastAudienceGroup, string>; fieldTags: string; tagsHint: string;
+  consentNote: string; smsNote: string;
+  saveDraft: string; close: string; problems: Record<BlastProblem, string>;
+  previewTitle: string; preview: string; matched: (n: number) => string; outcomes: Record<SchoolBlastOutcome, string>; sample: (name: string) => string; nobody: string;
+  savedFirst: string; sendTitle: string; sendNow: string; schedule: string; scheduleAt: string; scheduleHint: string; scheduleBad: string;
+  confirmSend: (n: number) => string; confirm: string; back: string; cancelBlast: string; cancelHint: string;
+  deliveryTitle: string; deliveries: Record<SchoolBlastDeliveryState, string>; workerNote: string;
+  outcomes2: Record<BlastOutcomeKind, string>;
+  permissionsHint: string; limitsNote: string;
+}
+
+const en: BlastCopy = {
+  pageTitle: 'Blasts',
+  intro: 'Send one email or text to a group of students, families and prospects. Merge tags fill in each person’s name.',
+  checking: 'Checking your school…', hidden: 'Hidden while you were away.', chooseSchool: 'Choose a school first.', reading: 'Reading…',
+  denied: 'You can’t use blasts at this school. Ask the owner to give your role “See blasts” or “Send blasts” in Roles & permissions.',
+  unavailable: 'Blasts could not be read right now. Refresh to try again.', refresh: 'Refresh', tryAgain: 'Try again',
+  listTitle: 'Your blasts', empty: 'No blasts yet. Start an email or a text.', newEmail: 'New email', newText: 'New text', open: 'Open',
+  recipients: (n) => `${n.toLocaleString('en')} ${n === 1 ? 'recipient' : 'recipients'}`, scheduledFor: (w) => `Scheduled for ${w}`, sentAt: (w) => `Sent ${w}`, edited: (w) => `Edited ${w}`,
+  channels: { EMAIL: 'Email', SMS: 'Text' }, statuses: { DRAFT: 'Draft', QUEUED: 'Sent', CANCELLED: 'Cancelled' },
+  composeNew: (ch) => `New ${ch.toLowerCase()}`, composeEdit: 'Edit draft', fieldName: 'Name', nameHint: 'Only your team sees this.', fieldSubject: 'Subject', fieldBody: 'Message',
+  characters: (u, m) => `${u.toLocaleString('en')} of ${m.toLocaleString('en')} characters`, insertTag: 'Insert', mergeHint: 'Insert puts the tag where your cursor is. An empty first name becomes “there”.',
+  mergeFields: { first_name: 'First name', last_name: 'Last name', school_name: 'School name', staff_name: 'Your name' },
+  audienceTitle: 'Who gets it',
+  groups: { ACTIVE_STUDENTS: 'Active students', PROSPECTS: 'Prospects (open leads)', TRIAL: 'Trial students', FORMER_STUDENTS: 'Former students', ALL_CONTACTS: 'Everyone' },
+  fieldTags: 'Only people with these tags (optional)', tagsHint: 'Separate tags with commas. Up to 10.',
+  consentNote: 'Only people who agreed to hear from you on this channel get it. A child’s message goes to their guardians, and each address gets it once.',
+  smsNote: 'Texts go out as plain text. Pictures and video are coming later.',
+  saveDraft: 'Save draft', close: 'Close',
+  problems: { name: 'Give the blast a name (up to 100 characters, one line).', subject: 'Add a subject (up to 150 characters, one line).', body: 'Write a message.',
+    bodyLength: 'The message is too long.', mergeTag: 'Use only the merge tags from the Insert buttons.', groups: 'Pick at least one group.', tags: 'Tags use letters, numbers, spaces, - and _. Up to 10, no repeats.' },
+  previewTitle: 'Before you send', preview: 'Check audience', matched: (n) => `${n.toLocaleString('en')} people match`,
+  outcomes: { QUEUED: 'Will get it', NO_CONSENT: 'Haven’t agreed to this channel', NO_ADDRESS: 'No address', DUPLICATE_ADDRESS: 'Same address as someone else' },
+  sample: (name) => `How it looks for ${name || 'someone with no first name'}`, nobody: 'Nobody in this audience can receive it yet.',
+  savedFirst: 'Save your changes before you send.', sendTitle: 'Send', sendNow: 'Send now', schedule: 'Schedule', scheduleAt: 'Send at (your device’s time)',
+  scheduleHint: 'Up to 60 days ahead. You can cancel until then.', scheduleBad: 'Pick a time more than a minute from now and within 60 days.',
+  confirmSend: (n) => `Send to ${n.toLocaleString('en')} ${n === 1 ? 'person' : 'people'}? This can’t be undone once it goes out.`, confirm: 'Yes, send', back: 'Back',
+  cancelBlast: 'Cancel this blast', cancelHint: 'Nothing has gone out yet.',
+  deliveryTitle: 'Delivery',
+  deliveries: { WAITING: 'Waiting', PENDING: 'Pending', SENDING: 'Sending', ACCEPTED: 'Accepted', DELIVERED: 'Delivered', BOUNCED: 'Bounced', FAILED: 'Failed',
+    SUPPRESSED: 'Suppressed', UNKNOWN: 'Unknown', CANCELLED: 'Cancelled' },
+  workerNote: 'Messages go out once your school’s email and text sending is set up. Until then they wait here as “Waiting”.',
+  outcomes2: { SAVING: 'Working…', SAVED: 'Draft saved.', SENT: 'Sent. Messages are on their way.', SCHEDULED: 'Scheduled.', CANCELLED: 'Cancelled. Nothing went out.',
+    SESSION: 'Your session ended. Sign in again.', DENIED: 'You can’t do that at this school. Nothing changed.', CHANGED: 'Someone changed this blast. It was reloaded; nothing changed.',
+    NOT_DRAFT: 'This blast was already sent or cancelled.', NOT_CANCELLABLE: 'Only a scheduled blast can be cancelled, before its time.',
+    NO_RECIPIENTS: 'Nobody in this audience can receive it. Nothing was sent.', TOO_LARGE: 'More than 2,000 people would get it. Narrow the audience.',
+    DAILY_LIMIT: 'This school already sent 10 blasts in the last 24 hours. Try again later.', TOO_LONG: 'A filled-in message is too long. Shorten the text.',
+    GONE: 'This blast is gone.', INVALID: 'That wasn’t accepted. Check the form and try again.', RATE: 'Too many requests. Wait a moment and try again.',
+    UNKNOWN: 'We couldn’t confirm that. Try again: it won’t be sent twice.' },
+  permissionsHint: 'Owners can do this by default. Give other roles “See blasts” or “Send blasts” in Roles & permissions.',
+  limitsNote: 'Up to 2,000 recipients a blast and 10 blasts a day per school.',
+};
+
+const ko: BlastCopy = {
+  pageTitle: '단체 발송',
+  intro: '학생, 가족, 잠재 고객 그룹에게 이메일이나 문자 한 통을 보냅니다. 병합 태그가 각자의 이름을 채웁니다.',
+  checking: '도장을 확인하는 중…', hidden: '자리를 비운 동안 숨겼습니다.', chooseSchool: '먼저 도장을 선택하세요.', reading: '읽는 중…',
+  denied: '이 도장에서는 단체 발송을 사용할 수 없습니다. 소유자에게 역할 및 권한에서 “단체 발송 보기” 또는 “단체 발송 보내기”를 요청하세요.',
+  unavailable: '지금은 단체 발송을 읽을 수 없습니다. 새로 고침하세요.', refresh: '새로 고침', tryAgain: '다시 시도',
+  listTitle: '단체 발송 목록', empty: '아직 단체 발송이 없습니다. 이메일이나 문자를 시작하세요.', newEmail: '새 이메일', newText: '새 문자', open: '열기',
+  recipients: (n) => `수신자 ${n.toLocaleString('ko')}명`, scheduledFor: (w) => `${w} 발송 예약`, sentAt: (w) => `${w} 발송`, edited: (w) => `${w} 수정`,
+  channels: { EMAIL: '이메일', SMS: '문자' }, statuses: { DRAFT: '임시 저장', QUEUED: '발송됨', CANCELLED: '취소됨' },
+  composeNew: (ch) => `새 ${ch}`, composeEdit: '임시 저장 편집', fieldName: '이름', nameHint: '팀만 볼 수 있습니다.', fieldSubject: '제목', fieldBody: '메시지',
+  characters: (u, m) => `${m.toLocaleString('ko')}자 중 ${u.toLocaleString('ko')}자`, insertTag: '넣기', mergeHint: '넣기를 누르면 커서 위치에 태그가 들어갑니다. 이름이 비어 있으면 “there”가 됩니다.',
+  mergeFields: { first_name: '이름', last_name: '성', school_name: '도장 이름', staff_name: '내 이름' },
+  audienceTitle: '받는 사람',
+  groups: { ACTIVE_STUDENTS: '재학생', PROSPECTS: '잠재 고객(진행 중 문의)', TRIAL: '체험 수업 학생', FORMER_STUDENTS: '이전 학생', ALL_CONTACTS: '모두' },
+  fieldTags: '이 태그가 있는 사람만(선택)', tagsHint: '쉼표로 구분합니다. 최대 10개.',
+  consentNote: '이 채널 수신에 동의한 사람만 받습니다. 어린이 메시지는 보호자에게 가고, 같은 주소로는 한 번만 갑니다.',
+  smsNote: '문자는 일반 텍스트로 갑니다. 사진과 동영상은 나중에 지원됩니다.',
+  saveDraft: '임시 저장', close: '닫기',
+  problems: { name: '이름을 입력하세요(100자 이내, 한 줄).', subject: '제목을 입력하세요(150자 이내, 한 줄).', body: '메시지를 입력하세요.',
+    bodyLength: '메시지가 너무 깁니다.', mergeTag: '넣기 버튼의 병합 태그만 사용하세요.', groups: '그룹을 하나 이상 선택하세요.', tags: '태그는 문자, 숫자, 공백, -, _만 사용합니다. 최대 10개, 중복 없이.' },
+  previewTitle: '보내기 전에', preview: '받는 사람 확인', matched: (n) => `${n.toLocaleString('ko')}명 해당`,
+  outcomes: { QUEUED: '받음', NO_CONSENT: '이 채널에 동의하지 않음', NO_ADDRESS: '주소 없음', DUPLICATE_ADDRESS: '다른 사람과 같은 주소' },
+  sample: (name) => `${name || '이름 없는 사람'}에게 보이는 모습`, nobody: '이 대상에서는 아직 받을 수 있는 사람이 없습니다.',
+  savedFirst: '보내기 전에 변경 내용을 저장하세요.', sendTitle: '보내기', sendNow: '지금 보내기', schedule: '예약', scheduleAt: '보낼 시간(이 기기 시간)',
+  scheduleHint: '최대 60일 후까지. 그때까지 취소할 수 있습니다.', scheduleBad: '1분 이후, 60일 이내의 시간을 고르세요.',
+  confirmSend: (n) => `${n.toLocaleString('ko')}명에게 보낼까요? 발송되면 되돌릴 수 없습니다.`, confirm: '네, 보내기', back: '뒤로',
+  cancelBlast: '이 발송 취소', cancelHint: '아직 아무것도 발송되지 않았습니다.',
+  deliveryTitle: '전달 상태',
+  deliveries: { WAITING: '대기', PENDING: '보류', SENDING: '보내는 중', ACCEPTED: '접수됨', DELIVERED: '전달됨', BOUNCED: '반송', FAILED: '실패',
+    SUPPRESSED: '차단됨', UNKNOWN: '알 수 없음', CANCELLED: '취소됨' },
+  workerNote: '도장의 이메일과 문자 발송이 설정되면 메시지가 나갑니다. 그 전까지는 “대기”로 남습니다.',
+  outcomes2: { SAVING: '처리 중…', SAVED: '임시 저장했습니다.', SENT: '발송했습니다. 메시지가 가는 중입니다.', SCHEDULED: '예약했습니다.', CANCELLED: '취소했습니다. 발송된 것은 없습니다.',
+    SESSION: '세션이 끝났습니다. 다시 로그인하세요.', DENIED: '이 도장에서는 할 수 없습니다. 바뀐 것은 없습니다.', CHANGED: '다른 사람이 이 발송을 바꿨습니다. 다시 불러왔고 바뀐 것은 없습니다.',
+    NOT_DRAFT: '이 발송은 이미 보냈거나 취소되었습니다.', NOT_CANCELLABLE: '예약된 발송만 그 시간 전에 취소할 수 있습니다.',
+    NO_RECIPIENTS: '이 대상에서는 받을 수 있는 사람이 없습니다. 발송되지 않았습니다.', TOO_LARGE: '2,000명 넘게 받게 됩니다. 대상을 줄이세요.',
+    DAILY_LIMIT: '이 도장은 지난 24시간 동안 이미 10번 발송했습니다. 나중에 다시 시도하세요.', TOO_LONG: '채워진 메시지가 너무 깁니다. 줄이세요.',
+    GONE: '이 발송이 없어졌습니다.', INVALID: '받아들여지지 않았습니다. 양식을 확인하고 다시 시도하세요.', RATE: '요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+    UNKNOWN: '확인하지 못했습니다. 다시 시도하세요: 두 번 발송되지 않습니다.' },
+  permissionsHint: '소유자는 기본으로 할 수 있습니다. 다른 역할에는 역할 및 권한에서 “단체 발송 보기” 또는 “단체 발송 보내기”를 주세요.',
+  limitsNote: '발송당 최대 2,000명, 도장당 하루 10번까지.',
+};
+
+const es: BlastCopy = {
+  pageTitle: 'Envíos masivos',
+  intro: 'Envía un correo o un texto a un grupo de alumnos, familias y prospectos. Las etiquetas de combinación ponen el nombre de cada persona.',
+  checking: 'Revisando tu escuela…', hidden: 'Oculto mientras no estabas.', chooseSchool: 'Primero elige una escuela.', reading: 'Leyendo…',
+  denied: 'No puedes usar envíos masivos en esta escuela. Pide al propietario que dé a tu rol “Ver envíos masivos” o “Enviar envíos masivos” en Roles y permisos.',
+  unavailable: 'No se pudieron leer los envíos ahora. Actualiza para intentarlo de nuevo.', refresh: 'Actualizar', tryAgain: 'Intentar de nuevo',
+  listTitle: 'Tus envíos', empty: 'Aún no hay envíos. Empieza un correo o un texto.', newEmail: 'Nuevo correo', newText: 'Nuevo texto', open: 'Abrir',
+  recipients: (n) => `${n.toLocaleString('es')} ${n === 1 ? 'destinatario' : 'destinatarios'}`, scheduledFor: (w) => `Programado para ${w}`, sentAt: (w) => `Enviado ${w}`, edited: (w) => `Editado ${w}`,
+  channels: { EMAIL: 'Correo', SMS: 'Texto' }, statuses: { DRAFT: 'Borrador', QUEUED: 'Enviado', CANCELLED: 'Cancelado' },
+  composeNew: (ch) => `Nuevo ${ch.toLowerCase()}`, composeEdit: 'Editar borrador', fieldName: 'Nombre', nameHint: 'Solo tu equipo lo ve.', fieldSubject: 'Asunto', fieldBody: 'Mensaje',
+  characters: (u, m) => `${u.toLocaleString('es')} de ${m.toLocaleString('es')} caracteres`, insertTag: 'Insertar', mergeHint: 'Insertar pone la etiqueta donde está el cursor. Un nombre vacío se convierte en “there”.',
+  mergeFields: { first_name: 'Nombre', last_name: 'Apellido', school_name: 'Nombre de la escuela', staff_name: 'Tu nombre' },
+  audienceTitle: 'Quién lo recibe',
+  groups: { ACTIVE_STUDENTS: 'Alumnos activos', PROSPECTS: 'Prospectos (contactos abiertos)', TRIAL: 'Alumnos de prueba', FORMER_STUDENTS: 'Exalumnos', ALL_CONTACTS: 'Todos' },
+  fieldTags: 'Solo personas con estas etiquetas (opcional)', tagsHint: 'Separa las etiquetas con comas. Hasta 10.',
+  consentNote: 'Solo lo reciben quienes aceptaron este canal. El mensaje de un niño va a sus tutores, y cada dirección lo recibe una vez.',
+  smsNote: 'Los textos van como texto simple. Las fotos y videos llegarán más adelante.',
+  saveDraft: 'Guardar borrador', close: 'Cerrar',
+  problems: { name: 'Ponle un nombre (hasta 100 caracteres, una línea).', subject: 'Agrega un asunto (hasta 150 caracteres, una línea).', body: 'Escribe un mensaje.',
+    bodyLength: 'El mensaje es demasiado largo.', mergeTag: 'Usa solo las etiquetas de los botones Insertar.', groups: 'Elige al menos un grupo.', tags: 'Las etiquetas usan letras, números, espacios, - y _. Hasta 10, sin repetir.' },
+  previewTitle: 'Antes de enviar', preview: 'Revisar destinatarios', matched: (n) => `${n.toLocaleString('es')} personas coinciden`,
+  outcomes: { QUEUED: 'Lo recibirán', NO_CONSENT: 'No aceptaron este canal', NO_ADDRESS: 'Sin dirección', DUPLICATE_ADDRESS: 'Misma dirección que otra persona' },
+  sample: (name) => `Cómo lo ve ${name || 'alguien sin nombre'}`, nobody: 'Nadie en este grupo puede recibirlo todavía.',
+  savedFirst: 'Guarda tus cambios antes de enviar.', sendTitle: 'Enviar', sendNow: 'Enviar ahora', schedule: 'Programar', scheduleAt: 'Enviar a las (hora de tu dispositivo)',
+  scheduleHint: 'Hasta 60 días. Puedes cancelarlo hasta entonces.', scheduleBad: 'Elige una hora a más de un minuto de ahora y dentro de 60 días.',
+  confirmSend: (n) => `¿Enviar a ${n.toLocaleString('es')} ${n === 1 ? 'persona' : 'personas'}? No se puede deshacer una vez enviado.`, confirm: 'Sí, enviar', back: 'Volver',
+  cancelBlast: 'Cancelar este envío', cancelHint: 'Todavía no se envió nada.',
+  deliveryTitle: 'Entrega',
+  deliveries: { WAITING: 'En espera', PENDING: 'Pendiente', SENDING: 'Enviando', ACCEPTED: 'Aceptado', DELIVERED: 'Entregado', BOUNCED: 'Rebotado', FAILED: 'Falló',
+    SUPPRESSED: 'Suprimido', UNKNOWN: 'Desconocido', CANCELLED: 'Cancelado' },
+  workerNote: 'Los mensajes salen cuando el envío de correo y texto de tu escuela esté configurado. Hasta entonces quedan “En espera”.',
+  outcomes2: { SAVING: 'Procesando…', SAVED: 'Borrador guardado.', SENT: 'Enviado. Los mensajes van en camino.', SCHEDULED: 'Programado.', CANCELLED: 'Cancelado. No salió nada.',
+    SESSION: 'Tu sesión terminó. Vuelve a iniciar sesión.', DENIED: 'No puedes hacer eso en esta escuela. No cambió nada.', CHANGED: 'Alguien cambió este envío. Se recargó; no cambió nada.',
+    NOT_DRAFT: 'Este envío ya se envió o se canceló.', NOT_CANCELLABLE: 'Solo un envío programado se puede cancelar, antes de su hora.',
+    NO_RECIPIENTS: 'Nadie en este grupo puede recibirlo. No se envió nada.', TOO_LARGE: 'Más de 2,000 personas lo recibirían. Reduce el grupo.',
+    DAILY_LIMIT: 'Esta escuela ya hizo 10 envíos en las últimas 24 horas. Inténtalo más tarde.', TOO_LONG: 'Un mensaje con los datos es demasiado largo. Acórtalo.',
+    GONE: 'Este envío ya no existe.', INVALID: 'No se aceptó. Revisa el formulario e inténtalo de nuevo.', RATE: 'Demasiadas solicitudes. Espera un momento.',
+    UNKNOWN: 'No pudimos confirmarlo. Inténtalo de nuevo: no se enviará dos veces.' },
+  permissionsHint: 'Los propietarios pueden hacerlo por defecto. Da a otros roles “Ver envíos masivos” o “Enviar envíos masivos” en Roles y permisos.',
+  limitsNote: 'Hasta 2,000 destinatarios por envío y 10 envíos al día por escuela.',
+};
+
+export const BLAST_COPY: Readonly<Record<'en' | 'ko' | 'es', BlastCopy>> = { en, ko, es };
+export function blastCopy(language: string): BlastCopy { return language === 'ko' ? ko : language === 'es' ? es : en; }

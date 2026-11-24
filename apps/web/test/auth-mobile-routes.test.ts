@@ -60,7 +60,7 @@ describe('/auth/mobile/finish', () => {
     const location = new URL(response.headers.get('location')!);
     expect(`${location.protocol}//${location.host}${location.pathname}`).toBe('honparent://auth');
     const code = location.searchParams.get('code')!;
-    const session = exchangeMobileHandoff(code, verifier, sessionConfig());
+    const session = await exchangeMobileHandoff(code, verifier, async () => true, sessionConfig());
     expect(verifyMobileSession(session.token, sessionConfig())).toEqual(identity);
     expect(setCookie(response, MOBILE_START_COOKIE)).toMatch(/Max-Age=0/);
   });

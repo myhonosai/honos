@@ -156,7 +156,7 @@ describe('Meta unconfigured health is honest and has no external side effects', 
 
   it('runs previews without fetching providers or starting timers/workers', () => {
     const fetch = vi.fn(() => { throw new Error('external provider forbidden'); });
-    const timer = vi.spyOn(globalThis, 'setTimeout');
+    const timer = vi.spyOn(globalThis as unknown as { setTimeout: (...args: unknown[]) => unknown }, 'setTimeout');
     vi.stubGlobal('fetch', fetch);
     try { previewMetaConnectionIntent(intent(), school); metaFoundationHealth();
       expect(fetch).not.toHaveBeenCalled(); expect(timer).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 import {
-  validateSaveCheckoutPageInput, validateSaveCheckoutSettingsInput, verifyCheckoutPageReceipt, verifyCheckoutSettingsReceipt, verifySchoolCheckoutPages,
-  type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SaveCheckoutPageInput, type SaveCheckoutSettingsInput, type SchoolCheckoutPages,
+  validateSaveCheckoutPageInput, validateSaveCheckoutSettingsInput, verifyCheckoutPageReceipt, verifyCheckoutSettingsReceipt, verifySchoolCheckoutLinks, verifySchoolCheckoutPages,
+  type SchoolCheckoutLinks, type CheckoutPageReceipt, type CheckoutSettingsReceipt, type SaveCheckoutPageInput, type SaveCheckoutSettingsInput, type SchoolCheckoutPages,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -28,6 +28,7 @@ export type Owned = () => boolean;
 export type CheckoutScope = Readonly<{ organizationId: string; schoolId: string }>;
 export const CHECKOUT_SAVE_COMMAND = 'school_checkout.page.save';
 export const CHECKOUT_SETTINGS_COMMAND = 'school_checkout.settings.save';
+export const CHECKOUT_LINKS_COMMAND = 'school_checkout.links.issue';
 
 const RESPONSE_MAX = 1_000_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
@@ -42,10 +43,10 @@ function envelope(value: unknown): { data: unknown; meta: Record<string, unknown
 function id(value: string): string { if (!UUID.test(value)) throw new CheckoutError('INVALID'); return value.toLowerCase(); }
 function path(scope: CheckoutScope): string { return `/api/v1/organizations/${id(scope.organizationId)}/schools/${id(scope.schoolId)}/payments/checkout-pages`; }
 
-async function exchange(url: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ body: string; key: string; name: string }>): Promise<{ status: number; value: unknown }> {
+async function exchange(url: string, signal: AbortSignal, owned: Owned, command?: Readonly<{ body: string; key: string | null; name: string }>): Promise<{ status: number; value: unknown }> {
   const r = await fetch(url, { method: command ? 'POST' : 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
     referrerPolicy: 'no-referrer', signal,
-    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': command.name, 'Idempotency-Key': command.key } : {}) },
+    headers: { Accept: 'application/json', ...(command ? { 'Content-Type': 'application/json', 'X-HON-Human-Command': command.name, ...(command.key === null ? {} : { 'Idempotency-Key': command.key }) } : {}) },
     ...(command ? { body: command.body } : {}) });
   // A retired request (aborted, or no longer the one shown) never ends a newer session.
   signal.throwIfAborted();
@@ -91,6 +92,17 @@ export const checkoutApi = {
     catch (error) { if (error instanceof CheckoutError || signal.aborted) throw error; throw new CheckoutError('UNKNOWN'); }
     if (answer.status !== 200) throw checkoutErrorFor(answer.status, codeOf(answer.value));
     try { return verifySchoolCheckoutPages(envelope(answer.value).data); } catch { throw new CheckoutError('UNKNOWN'); }
+  },
+  /**
+   * 0620: every page's share link (the server issues missing ones). No Idempotency-Key: sending it again changes nothing.
+   * A link opens for families only while its page is Live; the server decides that on every public read.
+   */
+  async links(scope: CheckoutScope, signal: AbortSignal, owned: Owned): Promise<SchoolCheckoutLinks> {
+    let answer: { status: number; value: unknown };
+    try { answer = await exchange(`${path(scope)}/links`, signal, owned, { body: '{}', key: null, name: CHECKOUT_LINKS_COMMAND }); }
+    catch (error) { if (error instanceof CheckoutError || signal.aborted) throw error; throw new CheckoutError('UNKNOWN'); }
+    if (answer.status !== 200) throw checkoutErrorFor(answer.status, codeOf(answer.value));
+    try { return verifySchoolCheckoutLinks(envelope(answer.value).data); } catch { throw new CheckoutError('UNKNOWN'); }
   },
   /** Create (no page id, version 0) or replace one page. The receipt must be the next version of that page, with the status sent. */
   async save(scope: CheckoutScope, input: SaveCheckoutPageInput, key: string, signal: AbortSignal, owned: Owned): Promise<CheckoutPageReceipt> {

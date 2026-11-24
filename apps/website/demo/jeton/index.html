@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HON OS Demo A</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preload" href="../shared/fonts/geist-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:"Geist";src:url("../shared/fonts/geist-latin-400-normal.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"Geist";src:url("../shared/fonts/geist-latin-500-normal.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Geist";src:url("../shared/fonts/geist-latin-600-normal.woff2") format("woff2");font-weight:600;font-display:swap}
+/* Demo A: Jeton-inspired. Bold single-colour full-bleed sections, big tight headlines,
+   floating pill navigation, product shots in browser frames, photo cards that move on scroll.
+   Colours are HON's own: brand blue on white, with the app's night navy for depth. */
+:root{
+  --blue:#2563eb; --blue-2:#1d4fd8; --blue-ink:#0b2a7a; --sky:#dbe7ff;
+  --ink:#0b1020; --night:#07101f; --paper:#ffffff; --mist:#f3f6fc; --muted:#5b6478; --line:#e4e8f1;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p{margin:0}
+h1,h2{font-weight:500;letter-spacing:-.045em;line-height:.98;text-wrap:balance}
+.wrap{max-width:1240px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left))}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;border:1px solid currentColor;border-radius:999px;padding:3px 12px;line-height:1.4}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:12px 20px;font-size:15px;font-weight:500;border:1px solid transparent;transition:transform .2s,background .2s;cursor:pointer;font-family:inherit}
+.btn:hover{transform:translateY(-1px)}
+.btn.white{background:#fff;color:var(--blue)}
+.btn.ghost{border-color:rgba(255,255,255,.55);color:#fff}
+.btn.ghost:hover{background:rgba(255,255,255,.12)}
+.btn.blue{background:var(--blue);color:#fff}
+.btn.blue:hover{background:var(--blue-2)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+.hero a:focus-visible,.blue-sec a:focus-visible{outline-color:#fff}
+
+/* Header sits on the hero */
+.top{position:absolute;inset:0 0 auto;z-index:20}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;height:84px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:22px;letter-spacing:-.03em;color:#fff}
+.logo svg{width:30px;height:30px}
+.top-right{display:flex;gap:10px;align-items:center}
+.lang{font-size:14px;color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:9px 12px}
+
+/* Floating pill navigation */
+.pillnav{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:2px;background:var(--blue);color:#fff;border-radius:999px;padding:5px;box-shadow:0 10px 30px rgba(11,42,122,.35),inset 0 0 0 1px rgba(255,255,255,.18)}
+.pillnav a{font-size:14px;padding:8px 14px;border-radius:999px;white-space:nowrap;transition:background .2s}
+.pillnav a:hover{background:rgba(255,255,255,.14)}
+.pillnav a.on{background:rgba(255,255,255,.22)}
+.pillnav .home{display:grid;place-items:center;width:36px;height:36px;padding:0;background:rgba(255,255,255,.16)}
+.pillnav .home svg{width:16px;height:16px}
+
+/* Hero */
+.hero{position:relative;min-height:max(680px,100svh);background:var(--blue);color:#fff;overflow:hidden;display:flex;align-items:flex-end}
+.hero::before{content:"";position:absolute;inset:auto -10% -40% 30%;height:80%;background:radial-gradient(closest-side,rgba(255,255,255,.18),transparent);pointer-events:none}
+.hero .wrap{position:relative;width:100%;display:grid;grid-template-columns:1.5fr 1fr;align-items:end;gap:40px;padding-bottom:120px}
+.hero h1{font-size:clamp(56px,9.6vw,148px)}
+.hero-side p{font-size:19px;line-height:1.4;margin-bottom:22px;max-width:30ch}
+.hero-side .row{display:flex;gap:10px;flex-wrap:wrap}
+.hero-side small{display:block;margin-top:14px;font-size:13px;opacity:.8}
+.hero-photo{position:absolute;right:max(16px,calc((100vw - 1240px)/2 + 16px));top:120px;width:min(250px,22vw);aspect-ratio:1/1.05;object-fit:cover;border-radius:4px;animation:float 8s ease-in-out infinite}
+.scroll{position:absolute;left:max(16px,calc((100vw - 1240px)/2 + 16px));bottom:34px;font-size:12px;background:rgba(255,255,255,.14);border-radius:999px;padding:4px 10px;display:flex;align-items:center;gap:6px}
+.scroll::before{content:"";width:6px;height:6px;border-radius:50%;background:#fff;animation:pulse 1.6s infinite}
+@keyframes float{50%{transform:translateY(-12px)}}
+@keyframes pulse{50%{opacity:.3}}
+
+/* Product intro */
+.intro{padding:130px 0 40px;text-align:center}
+.intro .chip{color:var(--blue)}
+.intro h2{font-size:clamp(44px,6.4vw,92px);margin:20px auto 22px;max-width:14ch;color:var(--ink)}
+.intro p.lede{max-width:52ch;margin:0 auto;color:var(--muted);font-size:19px}
+.intro .row{display:flex;gap:10px;justify-content:center;margin-top:28px;flex-wrap:wrap}
+.browser{--p:1;margin:64px auto 0;max-width:1120px;border-radius:16px;background:#0e1730;padding:0;box-shadow:0 40px 80px rgba(11,42,122,.25);overflow:hidden;transform:perspective(1400px) rotateX(calc((1 - var(--p)) * 18deg)) scale(calc(.9 + var(--p) * .1));transform-origin:50% 0;transition:transform .1s linear}
+.browser .bar{display:flex;align-items:center;gap:7px;height:38px;padding:0 14px;background:#151f3d}
+.browser .bar i{width:11px;height:11px;border-radius:50%;background:#3a4669}
+.browser .bar span{margin-left:14px;flex:0 1 340px;height:22px;border-radius:7px;background:#0e1730;color:#7f8bb0;font-size:12px;display:flex;align-items:center;justify-content:center}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;max-width:1120px;margin:56px auto 0;padding:0 16px}
+.stat b{display:block;font-size:clamp(34px,4vw,54px);font-weight:500;letter-spacing:-.04em;color:var(--blue);line-height:1}
+.stat span{display:block;margin-top:8px;font-size:15px;color:var(--muted)}
+
+/* Stacked photo cards */
+.stack{padding:120px 0 80px;overflow:hidden}
+.stack-stage{--p:0;position:relative;height:min(78vw,560px);max-width:900px;margin:0 auto}
+.stack-stage figure{position:absolute;inset:8% 14%;margin:0;border-radius:6px;overflow:hidden;box-shadow:0 20px 50px rgba(7,16,31,.25);transition:transform .15s linear}
+.stack-stage figure img{width:100%;height:100%;object-fit:cover}
+.stack-stage figure:nth-child(1){transform:translateX(calc(-24% * var(--p))) rotate(calc(-11deg * var(--p)))}
+.stack-stage figure:nth-child(2){transform:translateX(calc(24% * var(--p))) rotate(calc(9deg * var(--p)))}
+.stack-stage figure:nth-child(3){transform:rotate(calc(-2deg * var(--p)))}
+.stack-copy{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;z-index:2;pointer-events:none;padding:0 16px}
+.stack-copy h2{font-size:clamp(40px,7vw,88px);text-shadow:0 4px 30px rgba(0,0,0,.45)}
+.stack-copy p{margin-top:12px;font-size:18px;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+
+/* Feature: headline + full-bleed photo with product inset */
+.feature{padding:100px 0 0}
+.feature .chip{color:var(--blue)}
+.feature h2{color:var(--blue);font-size:clamp(44px,6vw,84px);max-width:13ch;margin:20px 0 22px}
+.feature p.lede{max-width:46ch;color:var(--blue-ink);font-size:19px}
+.scene{position:relative;margin-top:64px;height:clamp(420px,62vw,760px);overflow:hidden}
+.scene>img{width:100%;height:100%;object-fit:cover;filter:saturate(.9)}
+.scene::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,16,31,0) 30%,rgba(7,16,31,.55))}
+.scene .browser{position:absolute;left:50%;bottom:-2%;width:min(78%,900px);margin:0;transform:translateX(-50%) translateY(calc((1 - var(--p)) * 80px));z-index:2}
+
+/* Big three-line statement */
+.statement{padding:130px 0 40px;text-align:center}
+.statement h2{color:var(--blue);font-size:clamp(34px,5vw,64px);line-height:1.08}
+.statement h2 span{display:block}
+.stage-card{position:relative;margin:56px auto 0;max-width:1000px;border-radius:24px;overflow:hidden;background:radial-gradient(120% 90% at 20% 10%,#5b8cff,var(--blue) 45%,var(--blue-ink));height:clamp(420px,52vw,560px);display:grid;place-items:center}
+.stage-card .orb{position:absolute;width:56%;max-width:520px;opacity:.55;mix-blend-mode:screen;left:-8%;top:-12%}
+.phone{position:relative;width:min(250px,48vw);aspect-ratio:390/844;border-radius:38px;padding:9px;background:#0b1020;box-shadow:0 40px 80px rgba(0,0,0,.45),inset 0 0 0 2px #2b3555;transform:translateY(calc((1 - var(--p)) * 60px)) rotate(calc((1 - var(--p)) * -6deg))}
+.phone img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:30px}
+.stage-card .label{position:absolute;right:24px;bottom:24px;color:#fff;font-size:14px;background:rgba(255,255,255,.14);border-radius:999px;padding:6px 14px;backdrop-filter:blur(6px)}
+
+/* Blue full-bleed AI team */
+.blue-sec{background:var(--blue);color:#fff;padding:120px 0 110px;margin-top:120px;overflow:hidden}
+.blue-sec .head{display:grid;grid-template-columns:1.3fr 1fr;gap:40px;align-items:end}
+.blue-sec h2{font-size:clamp(48px,7vw,104px)}
+.blue-sec .head p{font-size:19px;line-height:1.45;max-width:36ch}
+.blue-sec .chip{margin-bottom:22px}
+.team{display:grid;grid-template-columns:repeat(8,1fr);gap:14px;margin-top:64px}
+.mate{border-radius:14px;overflow:hidden;background:rgba(255,255,255,.1);opacity:0;transform:translateY(40px);transition:opacity .7s,transform .7s}
+.team.in .mate{opacity:1;transform:none}
+.team.in .mate:nth-child(2){transition-delay:.06s}.team.in .mate:nth-child(3){transition-delay:.12s}.team.in .mate:nth-child(4){transition-delay:.18s}
+.team.in .mate:nth-child(5){transition-delay:.24s}.team.in .mate:nth-child(6){transition-delay:.3s}.team.in .mate:nth-child(7){transition-delay:.36s}.team.in .mate:nth-child(8){transition-delay:.42s}
+.mate img{aspect-ratio:4/5;object-fit:cover;width:100%}
+.mate div{padding:10px 12px 12px}
+.mate b{display:block;font-weight:600;font-size:16px}
+.mate span{font-size:13px;opacity:.85;line-height:1.3;display:block}
+.team-note{margin-top:26px;font-size:14px;opacity:.85}
+.screens{display:grid;grid-template-columns:1fr;margin-top:56px}
+.screens .browser{margin:0;max-width:none;transform:none}
+
+/* Pricing (content from PR #510) */
+.pricing{padding:130px 0 110px;background:var(--mist)}
+.pricing .top-copy{text-align:center}
+.pricing .chip{color:var(--blue)}
+.pricing h2{font-size:clamp(44px,6vw,84px);margin:20px auto 18px;max-width:14ch}
+.pricing .lede{color:var(--muted);max-width:50ch;margin:0 auto;font-size:18px}
+.seg{display:inline-flex;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px;margin-top:34px}
+.seg button{border:0;background:transparent;font:inherit;font-size:15px;font-weight:500;padding:9px 22px;border-radius:999px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--blue);color:#fff}
+.save{margin-top:12px;font-size:15px;color:var(--muted)}
+.save b{color:var(--blue)}
+.offer{display:flex;gap:14px;align-items:center;max-width:860px;margin:30px auto 0;background:var(--sky);color:var(--blue-ink);border-radius:16px;padding:16px 20px;font-size:15px;text-align:left}
+.offer svg{flex:none;color:var(--blue)}
+.plans{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:860px;margin:22px auto 0}
+.plan{background:#fff;border:1px solid var(--line);border-radius:22px;padding:28px}
+.plan.hot{background:var(--ink);color:#fff;border-color:var(--ink)}
+.plan-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.plan h3{font-size:22px;font-weight:600;letter-spacing:-.02em;margin-right:4px}
+.pill{font-size:12px;font-weight:600;border-radius:999px;padding:3px 9px;background:var(--sky);color:var(--blue-2)}
+.plan.hot .pill{background:var(--blue);color:#fff}
+.pill.best{background:#fff;color:var(--ink)}
+.for{margin-top:8px;font-size:14px;color:var(--muted);min-height:42px}
+.plan.hot .for{color:#a9b3cc}
+.price{margin-top:18px}
+.was{color:var(--muted);font-size:16px}
+.was.none{display:block;height:24px}
+.plan.hot .was{color:#8d97b3}
+.now{display:flex;align-items:flex-end;gap:10px;margin-top:2px}
+.amt{font-size:52px;font-weight:500;letter-spacing:-.04em;line-height:1}
+.per{display:flex;flex-direction:column;font-size:13px;color:var(--muted);line-height:1.25;padding-bottom:5px}
+.plan.hot .per{color:#a9b3cc}
+.price p{font-size:13px;color:var(--muted);margin-top:8px}
+.plan.hot .price p{color:#a9b3cc}
+.plans[data-period="y"] [data-show="m"],.plans[data-period="m"] [data-show="y"]{display:none}
+.plan .cta{width:100%;margin-top:22px;padding:15px 20px;border-radius:14px;font-size:16px}
+.plan .cta.light{background:var(--ink);color:#fff}
+.checks{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:10px;font-size:15px}
+.checks li{display:flex;gap:10px;align-items:flex-start}
+.checks li::before{content:"";flex:none;width:18px;height:18px;margin-top:2px;border-radius:50%;background:var(--blue) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12.5l4 4 8-9'/%3E%3C/svg%3E") center/12px no-repeat}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.topups{text-align:center;margin-top:20px;font-size:14px;color:var(--muted)}
+.guarantee{max-width:860px;margin:20px auto 0;background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 24px;font-size:15px;color:var(--muted)}
+.guarantee b{color:var(--ink);display:block;margin-bottom:4px}
+
+/* Closing CTA */
+.close{position:relative;background:var(--blue);color:#fff;min-height:88svh;display:flex;align-items:flex-end;overflow:hidden}
+.close .wrap{width:100%;display:grid;grid-template-columns:1.5fr 1fr;gap:40px;align-items:end;padding-bottom:130px;position:relative}
+.close h2{font-size:clamp(56px,9vw,140px)}
+.close p{font-size:19px;margin-bottom:22px;max-width:30ch}
+.close .photo{position:absolute;top:110px;right:max(16px,calc((100vw - 1240px)/2 + 16px));width:min(300px,30vw);border-radius:4px;aspect-ratio:4/3;object-fit:cover}
+footer{background:var(--night);color:#9aa6c4;padding:56px 0 110px;font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
+footer .logo{font-size:18px}
+footer nav{display:flex;gap:20px;flex-wrap:wrap}
+footer .demo{width:100%;margin-top:24px;font-size:12px;opacity:.7}
+
+/* Reveal */
+[data-reveal]{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s ease}
+[data-reveal].in{opacity:1;transform:none}
+
+@media (max-width:860px){
+  body{font-size:16px}
+  .lang,.top-right .btn.ghost{display:none}
+  .hero .wrap,.close .wrap,.blue-sec .head{grid-template-columns:1fr;gap:26px}
+  .hero .wrap{padding-bottom:110px}
+  .hero-photo{width:150px;top:96px}
+  .stats{grid-template-columns:1fr 1fr;gap:28px 16px}
+  .intro{padding-top:96px}
+  .browser .bar{height:28px}.browser .bar span{display:none}
+  .team{grid-template-columns:repeat(4,1fr);gap:10px}
+  .mate span{display:none}
+  .plans{grid-template-columns:1fr}
+  .for{min-height:0}
+  .pillnav a:not(.home):not(.keep){display:none}
+  .close .photo{width:150px;top:96px}
+  .stack-stage figure{inset:10% 6%}
+  .scene .browser{width:92%}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 32 32">
+    <rect width="32" height="32" rx="9" fill="#fff"/>
+    <path d="M5 13.2h22v4.4H5z" fill="#2563eb"/>
+    <rect x="12.6" y="10.6" width="6.8" height="9.6" rx="1.6" fill="#2563eb" stroke="#fff" stroke-width="1.4"/>
+    <path d="M14 20.2l-3.2 6.2M18 20.2l3.2 6.2" stroke="#2563eb" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="logo" href="#top" aria-label="HON OS home"><svg><use href="#mark"/></svg>HON OS</a>
+    <div class="top-right">
+      <span class="lang">EN · 한국어 · ES</span>
+      <a class="btn ghost" href="#pricing">Sign in</a>
+      <a class="btn white" href="#pricing">Start a new school</a>
+    </div>
+  </div>
+</header>
+
+<nav class="pillnav" aria-label="Sections" data-nav>
+  <a class="home" href="#top" aria-label="Top"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></a>
+  <a href="#product">Product</a>
+  <a href="#leads">Leads</a>
+  <a href="#team" class="keep">AI team</a>
+  <a href="#pricing" class="keep">Pricing</a>
+</nav>
+
+<main>
+<section class="hero" id="top">
+  <img class="hero-photo" src="../shared/assets/kids-class-1168.webp" width="1168" height="880" alt="An instructor corrects a child's stance in a kids class">
+  <div class="wrap">
+    <h1>One app for your whole school</h1>
+    <div class="hero-side">
+      <p>Leads, classes, belts, tuition and marketing. Your AI team comes with the subscription.</p>
+      <div class="row"><a class="btn white" href="#pricing">Start a new school</a><a class="btn ghost" href="#pricing">See pricing</a></div>
+      <small>14-day free trial, no automatic charge. Sign-up opens at launch.</small>
+    </div>
+  </div>
+  <span class="scroll">Scroll</span>
+</section>
+
+<section class="intro" id="product">
+  <div class="wrap">
+    <span class="chip" data-reveal>Product</span>
+    <h2 data-reveal>Your school, on one screen</h2>
+    <p class="lede" data-reveal>Every lead, class, belt test and payment in one place, with HON and your AI team ready on the home screen. It works in English, Korean and Spanish.</p>
+    <div class="row" data-reveal><a class="btn blue" href="#pricing">Start a new school</a></div>
+  </div>
+  <div class="wrap">
+    <div class="browser" data-progress>
+      <div class="bar"><i></i><i></i><i></i><span>app.myhonos.com</span></div>
+      <img src="../shared/assets/app-dashboard.webp" width="1440" height="930" alt="HON OS home screen with HON and the AI team">
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat" data-reveal><b>8</b><span>AI teammates in every plan</span></div>
+    <div class="stat" data-reveal><b>12,000</b><span>Creative Studio credits a month</span></div>
+    <div class="stat" data-reveal><b>$0</b><span>HON fee on tuition</span></div>
+    <div class="stat" data-reveal><b>3</b><span>languages: English, 한국어, Español</span></div>
+  </div>
+</section>
+
+<section class="stack">
+  <div class="stack-stage" data-progress>
+    <figure><img src="../shared/assets/front-desk-1168.webp" width="1168" height="880" alt="" loading="lazy"></figure>
+    <figure><img src="../shared/assets/jiu-jitsu-mat-1000.webp" width="1000" height="750" alt="" loading="lazy"></figure>
+    <figure><img src="../shared/assets/karate-instructor-1200.webp" width="1200" height="900" alt="A karate instructor leads a class" loading="lazy"></figure>
+    <div class="stack-copy"><h2>On the mat or at the front desk</h2><p>HON OS has your school covered.</p></div>
+  </div>
+</section>
+
+<section class="feature" id="leads">
+  <div class="wrap">
+    <span class="chip" data-reveal>Leads and trials</span>
+    <h2 data-reveal>No lead slips off the mat.</h2>
+    <p class="lede" data-reveal>Leads from your website, social pages and walk-ins land on one board. Drag a lead from new to trial booked, and HON reminds you who needs a call today.</p>
+  </div>
+  <div class="scene" data-progress>
+    <img src="../shared/assets/jiu-jitsu-mat-1000.webp" width="1000" height="750" alt="Students training jiu-jitsu on the mat" loading="lazy">
+    <div class="browser">
+      <div class="bar"><i></i><i></i><i></i><span>Leads</span></div>
+      <img src="../shared/assets/app-pipeline.webp" width="1440" height="900" alt="HON OS lead board with new, contacted, trial booked and trial done columns" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section class="statement">
+  <div class="wrap">
+    <h2 data-reveal><span>New lead? On the board.</span><span>Trial booked? On the calendar.</span><span>Belt test? On the ready list.</span></h2>
+    <div class="stage-card" data-progress>
+      <img class="orb" src="../shared/assets/hon-core.webp" width="480" height="480" alt="">
+      <div class="phone"><img src="../shared/assets/app-phone.webp" width="390" height="844" alt="HON OS lead board on a phone in Big Button mode" loading="lazy"></div>
+      <span class="label">Big Button mode on a phone</span>
+    </div>
+  </div>
+</section>
+
+<section class="blue-sec" id="team">
+  <div class="wrap">
+    <div class="head">
+      <div><span class="chip">AI team</span><h2>Meet the team that never misses a class</h2></div>
+      <p>HON is your assistant, with seven specialists beside it. They draft follow-ups, plan campaigns and explain your numbers, and nothing is sent without your OK.</p>
+    </div>
+    <div class="team" data-reveal>
+      <div class="mate"><img src="../shared/assets/ai-kai.webp" width="360" height="450" alt="" loading="lazy"><div><b>Kai</b><span>Curriculum and lessons</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-chad.webp" width="360" height="450" alt="" loading="lazy"><div><b>Chad</b><span>Follow-ups for every lead</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-marcus.webp" width="360" height="450" alt="" loading="lazy"><div><b>Marcus</b><span>Campaigns and social posts</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-alex.webp" width="360" height="450" alt="" loading="lazy"><div><b>Alex</b><span>Whole-school priorities</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-maya.webp" width="360" height="450" alt="" loading="lazy"><div><b>Maya</b><span>Spots students who may leave</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-jordan.webp" width="360" height="450" alt="" loading="lazy"><div><b>Jordan</b><span>Schedule and attendance</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-claire.webp" width="360" height="450" alt="" loading="lazy"><div><b>Claire</b><span>Explains your numbers</span></div></div>
+      <div class="mate"><img src="../shared/assets/ai-lena.webp" width="360" height="450" alt="" loading="lazy"><div><b>Lena</b><span>Creative ideas and plans</span></div></div>
+    </div>
+    <p class="team-note">The AI team launches with HON OS and is included in the subscription, with no per-message charges.</p>
+  </div>
+</section>
+
+<section class="pricing" id="pricing" data-billing>
+  <div class="wrap">
+    <div class="top-copy">
+      <span class="chip">Pricing</span>
+      <h2>One plan. Everything in it.</h2>
+      <p class="lede">Try the full AI team and Creative Studio free for 14 days. No automatic charge when the trial ends.</p>
+      <div class="seg" role="group" aria-label="Billing period">
+        <button type="button" data-period="y" aria-pressed="true">Yearly</button>
+        <button type="button" data-period="m" aria-pressed="false">Monthly</button>
+      </div>
+      <p class="save"><b>Save up to 37%</b> on a yearly subscription</p>
+    </div>
+    <div class="offer" role="note">
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5l2.3 1.7 2.8-.2 1 2.6 2.4 1.5-.6 2.8 1 2.6-2 2 .1 2.9-2.7.7-1.6 2.3-2.7-.9L12 21.5l-2.3-1.7-2.7.9-1.6-2.3-2.7-.7.1-2.9-2-2 1-2.6-.6-2.8 2.4-1.5 1-2.6 2.8.2z"/><path d="M9 15l6-6"/><circle cx="9.3" cy="9.3" r=".9" fill="currentColor"/><circle cx="14.7" cy="14.7" r=".9" fill="currentColor"/></svg>
+      <p><b>Founder 50 pricing:</b> the first 50 schools get 20% off HON OS for as long as they stay subscribed. If you cancel, you come back at the standard price.</p>
+    </div>
+    <div class="plans" data-period="y">
+      <article class="plan hot">
+        <div class="plan-head"><h3>Founder 50</h3><span class="pill" data-show="y">-50%</span><span class="pill" data-show="m">-20%</span><span class="pill best">Best value</span></div>
+        <p class="for">For the first 50 schools, kept while you stay subscribed</p>
+        <div class="price" data-show="y"><s class="was"><span class="sr">Standard monthly price</span> $249</s><div class="now"><span class="amt">$124.50</span><span class="per"><span>per month</span><span>billed yearly</span></span></div><p>$1,494 billed once a year</p></div>
+        <div class="price" data-show="m"><s class="was"><span class="sr">Standard monthly price</span> $249</s><div class="now"><span class="amt">$199.20</span><span class="per"><span>per month</span><span>billed monthly</span></span></div><p>or $1,494 a year, about 37% less than paying monthly</p></div>
+        <a class="btn blue cta" href="#pricing">Start a new school</a>
+        <ul class="checks"><li>Leads, memberships and classes</li><li>Belt testing and attendance</li><li>Payments and marketing tools</li><li>HON and the AI team, with no per-message charges</li><li>12,000 Creative Studio credits every month</li><li>No HON fee on tuition</li><li>14-day free trial, no automatic charge</li><li>30-day money-back guarantee</li></ul>
+      </article>
+      <article class="plan">
+        <div class="plan-head"><h3>HON OS</h3><span class="pill" data-show="y">-29%</span></div>
+        <p class="for">The standard price once the 50 founder spots are taken.</p>
+        <div class="price" data-show="y"><s class="was"><span class="sr">Standard monthly price</span> $249</s><div class="now"><span class="amt">$174.75</span><span class="per"><span>per month</span><span>billed yearly</span></span></div><p>$2,097 billed once a year</p></div>
+        <div class="price" data-show="m"><span class="was none" aria-hidden="true"></span><div class="now"><span class="amt">$249</span><span class="per"><span>per month</span><span>billed monthly</span></span></div><p>or $2,097 a year, about 30% less than paying monthly</p></div>
+        <a class="btn cta light" href="#pricing">Start a new school</a>
+        <ul class="checks"><li>Leads, memberships and classes</li><li>Belt testing and attendance</li><li>Payments and marketing tools</li><li>HON and the AI team, with no per-message charges</li><li>12,000 Creative Studio credits every month</li><li>No HON fee on tuition</li><li>14-day free trial, no automatic charge</li><li>30-day money-back guarantee</li></ul>
+      </article>
+    </div>
+    <p class="topups">Need more studio credits? Top-ups are $30, $60 or $120.</p>
+    <div class="guarantee"><b>30-day money-back guarantee</b>If HON OS isn't right for you, ask within 30 days of your first payment, monthly or yearly, and we'll refund that payment in full. Your access ends when the refund is made, and a founder spot isn't returned.</div>
+  </div>
+</section>
+
+<section class="close">
+  <img class="photo" src="../shared/assets/front-desk-1168.webp" width="1168" height="880" alt="The front desk of a martial arts school" loading="lazy">
+  <div class="wrap">
+    <h2>Ready for your next class?</h2>
+    <div>
+      <p>Start with a 14-day free trial. No automatic charge when it ends.</p>
+      <a class="btn white" href="#pricing">Start a new school</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="logo" href="#top"><svg><use href="#mark"/></svg>HON OS</a>
+    <nav><a href="#product">Product</a><a href="#team">AI team</a><a href="#pricing">Pricing</a><a href="#top">Blog</a><a href="#top">Privacy</a><a href="#top">Terms</a></nav>
+    <p class="demo">Design preview A (inspired by Jeton's layout). Not the live site. Photos are placeholders until real school photos are ready.</p>
+  </div>
+</footer>
+<script src="../shared/demo.js"></script>
+</body>
+</html>

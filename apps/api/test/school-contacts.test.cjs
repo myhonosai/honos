@@ -18,7 +18,7 @@ const context = { organizationId: ORG, schoolId: SCHOOL, principalId: 'p', princ
 const page = (segment = 'ALL', hasMore = true) => ({
   generatedAt: '2026-11-15T10:00:00.000Z', segment, counts: { ALL: 3, STUDENT: 1, TRIAL: 0, PROSPECT: 1, INACTIVE: 0, ARCHIVED: 0 }, hasMore, options: null,
   rows: [{ personId: PERSON, version: 1, givenName: 'Avery', familyName: 'Able', email: null, phoneE164: null, segment: 'STUDENT', planName: 'Kids monthly',
-    planCode: 'KIDS', programName: null, membershipEndsAt: '2026-12-01T08:00:00.000Z', ranks: [{ rank: 'White', color: '#ffffff' }] }],
+    planCode: 'KIDS', programName: null, membershipEndsAt: '2026-12-01T08:00:00.000Z', membershipState: 'ACTIVE', age: 9, ranks: [{ rank: 'White', color: '#ffffff' }] }],
 });
 const database = (value) => ({
   inputs: [],
@@ -101,4 +101,29 @@ test('school contact card (0522): the person id comes from the path, no query is
   }
   assert.equal(await code(new SchoolContactsService(failingDatabase(pgError('P0002', 'SCHOOL_CONTACT_NOT_FOUND'))).card(context, PERSON)), 'SCHOOL_CONTACT_NOT_FOUND');
   assert.equal(await code(new SchoolContactsService(failingDatabase(new Error('x'))).card(context, 'nope')), 'VALIDATION_FAILED');
+});
+
+test('school contacts C4 (0623): sort and the added filters pass the controller, reach the database typed, and bind the cursor', async () => {
+  const db = scopeDatabase(), contacts = { calls: [], async list(ctx, filters, cursor) { this.calls.push([ctx, filters, cursor]); return { ok: true }; } };
+  const controller = new SchoolContactsController(db, contacts);
+  const query = { sort: 'AGE_YOUNGEST', membership: 'PAUSED', noBelt: 'true', endsFrom: '2026-12-01', endsTo: '2026-12-31', ageMin: '6', ageMax: '12', tag: 'Black Belt Club' };
+  await controller.list(ORG, SCHOOL, undefined, query, request);
+  assert.deepEqual(contacts.calls[0][1], query);
+  const base = database(page());
+  const service = new SchoolContactsService(base);
+  const first = await service.list(context, query, undefined);
+  assert.deepEqual(base.inputs[0], { sort: 'AGE_YOUNGEST', membership: 'PAUSED', noBelt: true, endsFrom: '2026-12-01', endsTo: '2026-12-31', ageMin: 6, ageMax: 12, tag: 'Black Belt Club' });
+  await service.list(context, { ...query, tag: 'black belt club' }, first.nextCursor);
+  assert.equal(base.inputs[1].afterId, PERSON, 'a tag in another case is the same filter');
+  for (const changed of [{ ...query, sort: 'AGE_OLDEST' }, { ...query, membership: 'HAS' }, { ...query, ageMax: '13' }, { ...query, endsTo: '2027-01-01' }]) {
+    assert.equal(await code(service.list(context, changed, first.nextCursor)), 'INVALID_CURSOR', JSON.stringify(changed));
+  }
+  const named = database(page());
+  await new SchoolContactsService(named).list(context, { sort: 'NAME' }, undefined);
+  assert.deepEqual(named.inputs[0], {}, 'the default order is left out');
+  for (const bad of [{ sort: 'name' }, { membership: 'FROZEN' }, { noBelt: 'false' }, { endsFrom: '2026-02-30' }, { ageMin: '121' }, { ageMin: '-1' }, { ageMin: '07' },
+    { ageMin: '12', ageMax: '6' }, { endsFrom: '2026-12-31', endsTo: '2026-12-01' }, { endsFrom: '2026-12-01', endsWithinDays: '30' },
+    { noBelt: 'true', rankId: PERSON }, { tag: 'a,b' }, { tag: ' x' }]) {
+    assert.equal(await code(new SchoolContactsService(database(page())).list(context, bad, undefined)), 'VALIDATION_FAILED', JSON.stringify(bad));
+  }
 });

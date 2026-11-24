@@ -1,0 +1,60 @@
+/* Creative Studio design editor (D1). Uses the HON workspace tokens (--hon-*) with legible fallbacks, matching Creative Studio. */
+.page { display: grid; gap: 14px; min-width: 0; max-width: 1400px; margin: 0 auto; padding: 20px; border-radius: var(--hon-radius, 16px); background: #08121f; color: #eaf4fb; }
+.head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.head h1 { margin: 0 0 4px; font-size: 24px; }
+.intro { max-width: 70ch; margin: 0; color: #b6c8da; font-size: 15px; line-height: 1.5; }
+.card { display: grid; align-content: start; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: linear-gradient(160deg, #10263b, #0b1828); }
+.card h2 { margin: 0; font-size: 17px; }
+.meta { margin: 0; color: var(--hon-muted, #9fb4c8); font-size: 13px; line-height: 1.5; }
+.notice { margin: 0; padding: 12px; border: 1px solid #35506d; border-radius: 12px; background: #10243a; color: #cfe0f2; font-size: 14px; }
+.notice[data-tone="warn"] { border-color: #7c6125; background: #2a2110; color: #ffd98a; }
+.button, .secondary { min-height: var(--hon-target, 44px); padding: 8px 14px; border-radius: 10px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.button { border: 0; background: var(--hon-accent, #8de3d8); color: #052025; }
+.secondary { border: 1px solid var(--hon-line, #24405a); background: var(--hon-raised, #13263a); color: #cfeff0; }
+.secondary[aria-pressed="true"] { border-color: var(--hon-accent, #8de3d8); background: #173a4a; }
+.button:disabled, .secondary:disabled { opacity: .55; cursor: not-allowed; }
+.button:focus-visible, .secondary:focus-visible, .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.newForm { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 2fr) auto; gap: 10px; align-items: end; }
+.field { display: grid; gap: 4px; min-width: 0; font-size: 13px; font-weight: 700; }
+.field input, .field select, .field textarea { width: 100%; min-width: 0; box-sizing: border-box; min-height: 40px; padding: 6px 9px; border: 1px solid #3b5269; border-radius: 9px; background: #0a1625; color: #eef6fc; font: inherit; font-weight: 400; }
+.field input[type="color"] { padding: 2px; height: 40px; }
+.field textarea { resize: vertical; min-height: 72px; }
+.check { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; font-size: 14px; }
+.rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rows li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; }
+.rowMain { display: grid; gap: 2px; margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
+.rowMain strong { font-size: 15px; }
+.editor { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.toolbar .spacer { flex: 1 1 auto; }
+.nameInput { min-width: 200px; flex: 1 1 240px; }
+.status { font-size: 13px; color: var(--hon-muted, #9fb4c8); }
+.status[data-tone="ok"] { color: #8ff0c9; }
+.status[data-tone="warn"] { color: #ffd98a; }
+.stageWrap { display: grid; place-items: center; min-width: 0; padding: 16px; border: 1px solid var(--hon-line, #24405a); border-radius: var(--hon-radius, 16px); background: repeating-conic-gradient(#0e1c2b 0% 25%, #0b1724 0% 50%) 50% / 24px 24px; overflow: hidden; }
+.stage { position: relative; touch-action: none; box-shadow: 0 8px 30px rgba(0, 0, 0, .45); outline: none; }
+.stage:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 4px; }
+.stage canvas { display: block; }
+.selection { position: absolute; border: 2px solid #4cc3ff; pointer-events: none; box-sizing: border-box; }
+.selection[data-locked="true"] { border-style: dashed; border-color: #ffd98a; }
+.handle { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #4cc3ff; border-radius: 3px; background: #ffffff; pointer-events: auto; touch-action: none; }
+.handle[data-handle="nw"], .handle[data-handle="se"] { cursor: nwse-resize; }
+.handle[data-handle="ne"], .handle[data-handle="sw"] { cursor: nesw-resize; }
+.handle[data-handle="start"], .handle[data-handle="end"] { border-radius: 50%; cursor: crosshair; }
+.side { display: grid; gap: 12px; min-width: 0; }
+.panel { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 14px; background: #0d1d2e; }
+.panel h2 { margin: 0; font-size: 15px; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.layerList { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; max-height: 260px; overflow: auto; }
+.layerList button { width: 100%; min-height: 36px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #dbe8f4; font: inherit; font-size: 13px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layerList button[aria-current="true"] { border-color: #4cc3ff; background: #12324a; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.hiddenInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+@media (max-width: 960px) { .editor { grid-template-columns: minmax(0, 1fr); } .newForm { grid-template-columns: minmax(0, 1fr); } }
+.editorRoot { display: grid; gap: 10px; min-width: 0; color: #eaf4fb; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.colorRow { display: flex; align-items: end; gap: 6px; min-width: 0; }
+.colorRow .field { flex: 1 1 auto; }
+.swatch { flex: 0 0 auto; width: 40px; height: 40px; border: 2px solid #ffffff; border-radius: 9px; cursor: pointer; box-shadow: 0 0 0 1px #3b5269; }
+.swatch:disabled { opacity: .5; cursor: default; }
+.swatch:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
