@@ -641,7 +641,7 @@ try {
         await page.getByRole('button', { name: 'Refresh Champions Club', exact: true }).click();
         await page.getByRole('heading', { name: heading, exact: true }).waitFor();
         if (mode !== 'empty') assert.equal(await page.locator('[data-champions-total]').count(), 0);
-        else { assert.equal(await page.locator('[data-champions-total]').textContent(), '0'); await page.getByText('No published qualification policy was returned.', { exact: false }).waitFor(); }
+        else { assert.equal(await page.locator('[data-champions-total]').textContent(), '0'); await page.getByText('The program isn’t published yet', { exact: false }).waitFor(); }
         assert.equal(await page.locator('dd').filter({ hasText: 'USD 2,000.00' }).count(), 0);
         assert.equal(await page.getByText('private-overview-note', { exact: false }).count(), 0);
         await noOverflow(page, `Champions ${mode}`);
@@ -732,7 +732,7 @@ try {
         await page.getByRole('heading', { name: heading, exact: true }).waitFor();
         assert.equal(await page.locator('tbody tr').count(), 0);
         assert.equal(await page.getByText('Hold Review School · fixture', { exact: true }).count(), 0);
-        if (mode === 'empty') await page.getByText('No ranked schools for this period.', { exact: false }).waitFor();
+        if (mode === 'empty') await page.getByText('No schools ranked for this period yet.', { exact: false }).waitFor();
       }
     });
     await check('HQ leaderboard independently denies school, family, support and unsigned identities', async () => {

@@ -51,7 +51,7 @@ export async function verifyInvoiceViewport({ page, origin, label, check, screen
   try {
     await check(`${label}: real invoice navigation, closed status and bounded organization/search filters`, async () => {
       await page.goto(`${origin}/hq/revenue`, { waitUntil: 'domcontentloaded' });
-      await page.getByRole('link', { name: 'Review HON invoices & payment history →', exact: true }).click();
+      await page.getByRole('link', { name: 'Invoices and payments →', exact: true }).click();
       await page.locator('[data-invoice-list]').waitFor();
       assert.equal(new URL(page.url()).pathname, '/hq/revenue/invoices');
       await page.goto(`${origin}/hq/revenue/invoices?status=VOID&organizationId=${saasId(3)}&schoolId=untrusted&role=OWNER`, { waitUntil: 'domcontentloaded' });
@@ -59,11 +59,11 @@ export async function verifyInvoiceViewport({ page, origin, label, check, screen
       await page.getByLabel('Invoice status', { exact: true }).selectOption('DRAFT'); await page.locator('[data-invoice-list]').waitFor();
       assert.equal(await page.locator('[data-invoice-list] a').count(), 1); await page.getByText('Unnumbered draft record', { exact: true }).waitFor();
       await page.getByLabel('Invoice status', { exact: true }).selectOption(''); await page.locator('[data-invoice-list]').waitFor();
-      await page.getByLabel('Billing organization in returned invoices', { exact: true }).selectOption(saasId(3));
+      await page.getByLabel('Business', { exact: true }).selectOption(saasId(3));
       assert.equal(await page.locator('[data-invoice-list] a').count(), 1); await page.getByText('Recorded total: USD 1,896.00', { exact: true }).waitFor();
-      await page.getByLabel('Billing organization in returned invoices', { exact: true }).selectOption('');
-      await page.getByLabel('Search returned invoice records', { exact: true }).fill('no-match'); await page.getByText('No invoice records in the returned window match this selection.', { exact: true }).waitFor();
-      await page.getByLabel('Search returned invoice records', { exact: true }).fill('');
+      await page.getByLabel('Business', { exact: true }).selectOption('');
+      await page.getByLabel('Search invoices', { exact: true }).fill('no-match'); await page.getByText('No invoices match.', { exact: true }).waitFor();
+      await page.getByLabel('Search invoices', { exact: true }).fill('');
       for (const name of ['Big Button', 'Classic', 'Modern']) { await page.getByRole('group', { name: 'Platform view' }).getByRole('button', { name, exact: true }).click(); await noOverflow(page, `${label} invoice list ${name}`); }
       await screenshot(page, `${label}-invoice-list`); await accessibility(page, `${label}-invoice-list`);
     });
@@ -72,15 +72,15 @@ export async function verifyInvoiceViewport({ page, origin, label, check, screen
       page.on('request', listener);
       try {
         await page.getByRole('link', { name: 'Review HON-2026-000001 for HON Cedar Organization · fixture', exact: true }).click();
-        await page.getByRole('button', { name: 'Load invoice and payment history', exact: true }).waitFor();
+        await page.getByRole('button', { name: 'Load invoice', exact: true }).waitFor();
         assert.equal(reads.length, 0, 'Route selection alone must not read invoice or organization facts');
-        await page.getByRole('button', { name: 'Load invoice and payment history', exact: true }).focus(); await page.keyboard.press('Enter');
+        await page.getByRole('button', { name: 'Load invoice', exact: true }).focus(); await page.keyboard.press('Enter');
         await page.locator('[data-invoice-detail]').waitFor(); await page.locator('[data-invoice-refunds]').waitFor();
         await page.waitForFunction(() => document.activeElement?.textContent === 'Verified invoice records');
         const heading = await page.getByRole('heading', { name: 'Verified invoice records', exact: true }).boundingBox();
         assert(heading && heading.y >= 18 && heading.y + heading.height < page.viewportSize().height - 64, 'Loaded detail heading must be visible above navigation');
-        await page.getByText('−USD 100.00', { exact: true }).waitFor(); await page.getByRole('heading', { name: 'Chargeback — recorded evidence', exact: true }).waitFor();
-        await page.getByRole('heading', { name: 'Approved record · not executed', exact: true }).waitFor();
+        await page.getByText('−USD 100.00', { exact: true }).waitFor(); await page.getByRole('heading', { name: 'Chargeback (recorded)', exact: true }).waitFor();
+        await page.getByRole('heading', { name: 'Approved · not sent yet', exact: true }).waitFor();
         assert.equal(await page.getByText('UNRELATED-PRIVATE-REFUND-REFERENCE', { exact: true }).count(), 0);
         assert.equal(await page.getByRole('button', { name: /charge|collect|activate|reserve|publish|fulfill|approve|issue refund/i }).count(), 0);
         await noOverflow(page, `${label} invoice detail`);
@@ -100,20 +100,20 @@ export async function verifyInvoiceViewport({ page, origin, label, check, screen
 export async function verifyInvoiceStates({ contextFor, origin, check, delay }) {
   const c = await contextFor({ width: 390, height: 844 }); const page = c.page; reset();
   const list = async () => { await page.goto(`${origin}/hq/revenue/invoices`, { waitUntil: 'domcontentloaded' }); await page.locator('[data-invoice-list]').waitFor(); };
-  const detail = async (id = 1) => { await page.goto(`${origin}/hq/revenue/invoices/${invoiceId(id)}?organizationId=${saasId(999)}&role=OWNER`, { waitUntil: 'domcontentloaded' }); await page.getByRole('button', { name: 'Load invoice and payment history', exact: true }).click(); await page.locator('[data-invoice-detail]').waitFor(); await page.locator('[data-invoice-refunds]').waitFor(); };
+  const detail = async (id = 1) => { await page.goto(`${origin}/hq/revenue/invoices/${invoiceId(id)}?organizationId=${saasId(999)}&role=OWNER`, { waitUntil: 'domcontentloaded' }); await page.getByRole('button', { name: 'Load invoice', exact: true }).click(); await page.locator('[data-invoice-detail]').waitFor(); await page.locator('[data-invoice-refunds]').waitFor(); };
   try {
     await check('Invoice list refresh and every denied/invalid/empty response clear old records', async () => {
       for (const mode of ['401', '403', '503', 'malformed', 'invalid-json']) {
         invoiceState.list = 'ready'; await list(); invoiceState.list = mode; await page.getByRole('button', { name: 'Refresh invoices', exact: true }).click();
-        await page.getByRole('heading', { name: /Sign in to review HON billing records|HON billing access denied|Invoice list could not be verified|Invoice list unavailable/ }).waitFor();
+        await page.getByRole('heading', { name: /Sign in to see invoices|HON billing access denied|Invoice list could not be verified|Invoice list unavailable/ }).waitFor();
         assert.equal(await page.locator('[data-invoice-list]').count(), 0); assert.equal(await page.getByText(/private-invoice-failure/).count(), 0);
       }
-      invoiceState.list = 'empty'; await list(); await page.getByText('No invoice records in the returned window match this selection.', { exact: true }).waitFor(); invoiceState.list = 'ready';
+      invoiceState.list = 'empty'; await list(); await page.getByText('No invoices match.', { exact: true }).waitFor(); invoiceState.list = 'ready';
     });
     await check('Invoice/core reads independently fail closed on denial, evidence/scope drift and subscription races', async () => {
       for (const mode of ['invoice-denied', 'subscription-denied', 'payment-standing-denied', '401', '503', 'malformed', 'invalid-json', 'wrong-invoice', 'cross-evidence', 'wrong-organization', 'subscription-race', 'collection-enabled']) {
         invoiceState.detail = 'ready'; await detail(); invoiceState.detail = mode; await page.getByRole('button', { name: 'Refresh invoice records', exact: true }).click();
-        await page.getByRole('heading', { name: /Sign in to review HON billing records|HON billing access denied|Invoice records could not be verified|Invoice records unavailable/ }).waitFor();
+        await page.getByRole('heading', { name: /Sign in to see invoices|HON billing access denied|Invoice records could not be verified|Invoice records unavailable/ }).waitFor();
         assert.equal(await page.locator('[data-invoice-detail]').count(), 0); assert.equal(await page.locator('[data-invoice-refunds]').count(), 0); assert.equal(await page.getByText(/private-invoice-failure/).count(), 0);
       }
       invoiceState.detail = 'ready';
@@ -124,7 +124,7 @@ export async function verifyInvoiceStates({ contextFor, origin, check, delay }) 
         await page.getByRole('heading', { name: /HON billing access denied|Refund review could not be verified/ }).waitFor(); assert.equal(await page.locator('[data-invoice-refunds]').count(), 0);
         assert.equal(await page.getByText(/private-invoice-failure|UNRELATED-PRIVATE-REFUND-REFERENCE/).count(), 0);
       }
-      invoiceState.refund = 'no-matches'; await detail(); await page.getByText('No matching refund-request records in the returned global window. Complete refund history is unavailable.', { exact: true }).waitFor(); invoiceState.refund = 'ready';
+      invoiceState.refund = 'no-matches'; await detail(); await page.getByText('No refund requests found.', { exact: true }).waitFor(); invoiceState.refund = 'ready';
     });
     await check('Invoice refresh retrieves changed official evidence and navigation discards delayed facts', async () => {
       await detail(); invoiceState.updated = true; invoiceState.delay = 450;
@@ -135,11 +135,11 @@ export async function verifyInvoiceStates({ contextFor, origin, check, delay }) 
       assert.equal(await page.locator('[data-invoice-detail]').count(), 0); assert.equal(await page.locator('[data-invoice-refunds]').count(), 0); invoiceState.delay = 0; invoiceState.updated = false;
     });
     await check('Draft tax, empty evidence, lifetime reversals and historical subscription facts remain distinct', async () => {
-      invoiceState.detail = 'empty'; invoiceState.refund = 'empty'; await detail(); await page.getByText('No payment-evidence entries were returned for this invoice. Its settlement state is reported above.', { exact: true }).waitFor(); await page.getByText('No recorded paid purchase', { exact: true }).first().waitFor();
-      invoiceState.detail = 'ready'; invoiceState.refund = 'ready'; await detail(4); await page.getByText('A different invoice; this invoice does not restart the window', { exact: true }).waitFor(); await page.getByText('Unavailable / tax unresolved', { exact: true }).first().waitFor();
-      await detail(3); await page.getByRole('heading', { name: 'Refund evidence recorded · not executed by HON', exact: true }).waitFor(); await page.getByText('Reversed in recorded evidence', { exact: true }).waitFor();
-      invoiceState.detail = 'historical'; await detail(); await page.getByText('Invoice is not the current subscription record', { exact: true }).waitFor(); invoiceState.detail = 'ready';
-      await page.goto(`${origin}/hq/revenue/invoices/not-a-uuid`, { waitUntil: 'domcontentloaded' }); await page.getByText('Invalid invoice selector. Choose a record from the authorized invoice list.', { exact: true }).waitFor(); assert.equal(await page.getByRole('button', { name: 'Load invoice and payment history', exact: true }).count(), 0);
+      invoiceState.detail = 'empty'; invoiceState.refund = 'empty'; await detail(); await page.getByText('No payments recorded for this invoice yet.', { exact: true }).waitFor(); await page.getByText('No recorded paid purchase', { exact: true }).first().waitFor();
+      invoiceState.detail = 'ready'; invoiceState.refund = 'ready'; await detail(4); await page.getByText('Another invoice started the 30 days; this one doesn’t restart it', { exact: true }).waitFor(); await page.getByText('Unavailable / tax unresolved', { exact: true }).first().waitFor();
+      await detail(3); await page.getByRole('heading', { name: 'Refund recorded · HON didn’t send it', exact: true }).waitFor(); await page.getByText('Reversed in recorded evidence', { exact: true }).waitFor();
+      invoiceState.detail = 'historical'; await detail(); await page.getByText('This invoice is for an older subscription', { exact: true }).waitFor(); invoiceState.detail = 'ready';
+      await page.goto(`${origin}/hq/revenue/invoices/not-a-uuid`, { waitUntil: 'domcontentloaded' }); await page.getByText('This invoice link isn’t valid. Pick one from the invoice list.', { exact: true }).waitFor(); assert.equal(await page.getByRole('button', { name: 'Load invoice', exact: true }).count(), 0);
     });
     await check('Every invoice/refund read independently rejects staff, family, support, non-billing HQ and unsigned sessions', async () => {
       const paths = [`${root}invoices`, `${root}invoices/${invoiceId(1)}`, `${root}organizations/${saasId(1)}/subscription`, `${root}organizations/${saasId(1)}/payment-standing`, eligibilityPaths[0], `${root}refunds`];
