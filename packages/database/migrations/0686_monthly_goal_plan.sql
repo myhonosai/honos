@@ -1,6 +1,6 @@
 BEGIN;
 
--- G1 (0666, renumbered from 0370 (then 0491) above the main ceiling 0496 on 2026-11-18; first assigned by the coordinator 2026-11-15): monthly goal planner, part 1. Owner (David, 2026-11-15): "Monthly
+-- G1 (0686, renumbered from 0370 (then 0491) above the main ceiling 0496 on 2026-11-18; first assigned by the coordinator 2026-11-15): monthly goal planner, part 1. Owner (David, 2026-11-15): "Monthly
 -- goal need to be more detailed with ai help. So it breaks down in not just monetary but how many appointment, lead,
 -- renewal, upgrade needed". Doc: docs/architecture/MONTHLY_GOAL_PLANNER.md.
 --
@@ -303,7 +303,7 @@ BEGIN
   RETURN result;
 END $$;
 COMMENT ON FUNCTION hon.read_monthly_goal_plan(text,jsonb) IS
-'Direct HUMAN_UI read-only monthly goal plan (G1, 0666): goal sources, school rates with record counts, activity counts needed and pace. Counts and totals only. No DML, no AI.';
+'Direct HUMAN_UI read-only monthly goal plan (G1, 0686): goal sources, school rates with record counts, activity counts needed and pace. Counts and totals only. No DML, no AI.';
 
 DO $$ DECLARE r text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['hon.school_renewals_due(uuid,uuid,timestamptz,timestamptz,timestamptz)',

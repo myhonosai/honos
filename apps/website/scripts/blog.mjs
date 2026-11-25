@@ -184,7 +184,7 @@ function endCard(lang, app) {
 </aside>`;
 }
 
-/** Returns [{ file, html }] for every blog page in every language. */
+/** Returns [{ file, html, kind, post? }] for every blog page in every language. */
 export function blogPages({ posts, homes, app }) {
   const files = [];
   for (const lang of BLOG_LANGS) {
@@ -199,7 +199,7 @@ export function blogPages({ posts, homes, app }) {
   </a></li>`;
     }).join('\n');
     files.push({
-      file: `${lang === 'en' ? '' : `${lang}/`}blog/index.html`,
+      file: `${lang === 'en' ? '' : `${lang}/`}blog/index.html`, kind: 'blog-index',
       html: page({
         lang, path: '/blog/', title: `${t.indexTitle} | HON OS`, description: t.indexDescription, ogType: 'website', home,
         main: `<section class="blog-head wrap">
@@ -215,7 +215,8 @@ ${list}
     for (const { slug, date, byLang } of posts) {
       const p = byLang[lang];
       files.push({
-        file: `${lang === 'en' ? '' : `${lang}/`}blog/${slug}/index.html`,
+        file: `${lang === 'en' ? '' : `${lang}/`}blog/${slug}/index.html`, kind: 'post',
+        post: { slug, title: p.title, description: p.description, date, author: p.author },
         html: page({
           lang, path: `/blog/${slug}/`, title: `${p.title} | HON OS`, description: p.description, ogType: 'article', home,
           main: `<article class="wrap post">

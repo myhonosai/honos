@@ -179,6 +179,15 @@ BEGIN
 END;
 $$;
 
+-- 0653 pictures inside email blasts: the READY pictures of the campaign email a lease is sending (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.communication_email_pictures(uuid,uuid)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.communication_email_pictures(uuid, uuid) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0556 school calls: connect a browser call, route an incoming call, record call progress, voicemails and recordings,
 -- and delete recordings after 90 days (when applied).
 DO $$

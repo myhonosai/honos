@@ -18,6 +18,10 @@ export class SchoolPersonRecordController {
   read(@Req() r: HonRequest, @Param('schoolId') s: string, @Param('personId') p: string) { return this.people.read(r, s, p).then(data => ({ data })); }
   @Post('school/people/update') @HttpCode(200)
   update(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.people.update(r, b, k).then(data => ({ data })); }
+  @Get('school/schools/:schoolId/people/:personId/details')
+  readDetails(@Req() r: HonRequest, @Param('schoolId') s: string, @Param('personId') p: string) { return this.people.readDetails(r, s, p).then(data => ({ data })); }
+  @Post('school/people/details') @HttpCode(200)
+  updateDetails(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.people.updateDetails(r, b, k).then(data => ({ data })); }
   @Post('school/people/birth-date') @HttpCode(200)
   updateBirthDate(@Req() r: HonRequest, @Body() b: unknown, @Headers('idempotency-key') k: string) { return this.people.updateBirthDate(r, b, k).then(data => ({ data })); }
 }

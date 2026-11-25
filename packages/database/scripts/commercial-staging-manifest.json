@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "7d5d2ac0d30da63cc575b7b164d31ac10a61bdb7109d62e099c84371be3e2848",
+  "chainSha256": "a69a1e04fb61df8ab15255cf0148d281d4b996edbf2186c31de542bcef197461",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -907,16 +907,64 @@
       "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
     },
     {
+      "file": "0643_claire_kpi_report.sql",
+      "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
+    },
+    {
       "file": "0644_booking_invoice_security_hygiene.sql",
       "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
+    },
+    {
+      "file": "0645_class_session_minimum_duration.sql",
+      "sha256": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe"
+    },
+    {
+      "file": "0646_maya_renewal_prep.sql",
+      "sha256": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0"
+    },
+    {
+      "file": "0647_chad_approved_draft_send.sql",
+      "sha256": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9"
+    },
+    {
+      "file": "0649_maya_check_in_draft_send.sql",
+      "sha256": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90"
+    },
+    {
+      "file": "0650_chad_lead_plan.sql",
+      "sha256": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487"
+    },
+    {
+      "file": "0651_hq_creative_cost_basis.sql",
+      "sha256": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219"
+    },
+    {
+      "file": "0652_staff_agent_speech.sql",
+      "sha256": "fdb50164a94331c08a57e6e034953a3c4c5addc68c16d764c8705736f960d408"
+    },
+    {
+      "file": "0653_school_blast_pictures.sql",
+      "sha256": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397"
+    },
+    {
+      "file": "0654_school_media_video.sql",
+      "sha256": "9d7b524e42313514d56d340a37759bef2c5bd7499a80444fa966e553ceef8d4e"
     },
     {
       "file": "0655_mobile_handoff_single_use.sql",
       "sha256": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
     },
     {
-      "file": "0666_monthly_goal_plan.sql",
-      "sha256": "9d50743cb51f2b9202f0366446f27da8edff1545397deee6c31d663303e9e667"
+      "file": "0656_person_profile_details.sql",
+      "sha256": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240"
+    },
+    {
+      "file": "0657_school_conversations_person_filter.sql",
+      "sha256": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e"
+    },
+    {
+      "file": "0686_monthly_goal_plan.sql",
+      "sha256": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42"
     }
   ]
 }

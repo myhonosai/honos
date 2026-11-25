@@ -38,7 +38,7 @@ export class ConversationCreateLeadGuard extends MembershipActivationHumanUiGuar
   protected override readonly command: string = CONVERSATION_CREATE_LEAD_COMMAND;
 }
 
-const LIST_KEYS = new Set(['status', 'assigned', 'unreadOnly', 'tag', 'search', 'beforeAt', 'beforeId']);
+const LIST_KEYS = new Set(['status', 'assigned', 'unreadOnly', 'tag', 'search', 'beforeAt', 'beforeId', 'personId']);
 
 /** The list filters arrive as plain query strings; anything else, or a repeated key, is refused. */
 function listQuery(query: Record<string, unknown>): Record<string, unknown> {
