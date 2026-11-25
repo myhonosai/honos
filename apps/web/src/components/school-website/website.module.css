@@ -84,17 +84,36 @@
 .icon:focus-visible, .linkish:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
 .items { display: grid; gap: 10px; margin: 0; padding: 10px; border: 1px dashed #35506d; border-radius: 10px; min-width: 0; }
 .item { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid #1c3349; }
-.templates { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 0; padding: 0; border: 0; }
-.templateCard { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; cursor: pointer; }
+.templates { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.templateGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.groupLabel { margin: 8px 0 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hon-muted, #9fb3c8); }
+.templateCard { position: relative; display: grid; grid-template-rows: auto 1fr; gap: 8px; padding: 10px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0d1d2e; cursor: pointer; }
+.templateCard input { position: absolute; top: 18px; left: 18px; z-index: 1; }
+.templateText { display: grid; gap: 4px; align-content: start; }
+.focus { justify-self: start; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; background: color-mix(in srgb, var(--hon-accent, #8de3d8) 18%, transparent); color: var(--hon-accent, #8de3d8); }
+.demo { display: grid; gap: 10px; margin-top: 8px; }
+.demoFrame { max-height: 82vh; }
 .templateCard:has(input:checked) { border-color: var(--hon-accent, #8de3d8); background: #123047; }
 .templateCard input { width: 20px; height: 20px; accent-color: var(--hon-accent, #8de3d8); }
-.swatch { display: block; height: 36px; border-radius: 8px; }
-.swatch[data-template="MODERN_CLEAN"] { background: linear-gradient(90deg, #1f3a8a 60%, #f59e0b 60%); }
-.swatch[data-template="FAMILY_FRIENDLY"] { background: linear-gradient(90deg, #0f766e 60%, #fbbf24 60%); }
-.swatch[data-template="BOLD_POWERFUL"] { background: linear-gradient(90deg, #111111 60%, #ef4444 60%); }
-.swatch[data-template="TRADITIONAL"] { background: linear-gradient(90deg, #7f1d1d 60%, #d4a017 60%); }
-.swatch[data-template="HIGH_CONVERSION"] { background: linear-gradient(90deg, #0b3b5c 60%, #22c55e 60%); }
+.swatch { display: block; aspect-ratio: 16 / 9; border-radius: 8px; background-size: cover; background-position: center; background-color: #10243a; }
+.swatch[data-template="MODERN_CLEAN"] { background-image: url("/site-art/hero-modern.webp"); }
+.swatch[data-template="FAMILY_FRIENDLY"] { background-image: url("/site-art/hero-family.webp"); }
+.swatch[data-template="BOLD_POWERFUL"] { background-image: url("/site-art/hero-bold.webp"); }
+.swatch[data-template="TRADITIONAL"] { background-image: url("/site-art/hero-traditional.webp"); }
+.swatch[data-template="HIGH_CONVERSION"] { background-image: url("/site-art/hero-conversion.webp"); }
+.swatch[data-template="NEON_GRID"] { background-image: url("/site-art/hero-neon.webp"); }
+.swatch[data-template="EDITORIAL"] { background-image: url("/site-art/hero-editorial.webp"); }
+.swatch[data-template="BENTO"] { background-image: url("/site-art/hero-bento.webp"); }
 .field input[type="color"] { padding: 4px; min-width: 64px; }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .page[data-mode="big-button"] .primary, .page[data-mode="big-button"] .secondary, .page[data-mode="big-button"] .tab { min-height: 60px; font-size: 18px; padding: 12px 20px; }
 .page[data-mode="big-button"] .field input, .page[data-mode="big-button"] .field select, .page[data-mode="big-button"] .field textarea { min-height: 56px; font-size: 18px; }
+/* WB5 conversation with Marcus */
+.chat { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.chat > li { display: grid; gap: 6px; }
+.bubbleMe { justify-self: end; max-width: 85%; margin: 0; padding: 10px 12px; border-radius: 14px 14px 4px 14px; background: #1d4ed8; color: #fff; font-size: 14px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.bubbleMarcus { justify-self: start; display: grid; gap: 8px; max-width: 100%; margin: 0; padding: 10px 12px; border: 1px solid #35506d; border-radius: 14px 14px 14px 4px; background: #13263a; color: #e2ecf7; font-size: 14px; overflow-wrap: anywhere; }
+.bubbleMarcus > p { margin: 0; }
+.bubbleMarcus summary { cursor: pointer; font-size: 14px; }
+.compose { display: grid; gap: 8px; }
+.describe textarea { min-height: 96px; }

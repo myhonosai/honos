@@ -4855,7 +4855,7 @@ END $$;
 
 -- Eian family AI exact verification (0474): the private turn table and its four S4 triggers, the pure route helper and the
 -- re-pinned planner that calls it, private Eian helpers and seven runtime entry points. The S4 shared functions that gained
--- EIAN were redefined again by 0507 (adding TEXT_PROPOSAL) and are pinned in the 0507 section below.
+-- EIAN were redefined again by 0550 (adding TEXT_PROPOSAL) and are pinned in the 0550 section below.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','223c2ace3f9235f3997c960f4e223e0a237145ad71246e2a88e97e9f502bbde1'),
