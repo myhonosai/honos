@@ -8,7 +8,7 @@ const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_
 const READ_LIMITS = "SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 
-// Exact 0665 error codes; every unknown database failure is unavailable, never success.
+// Exact 0685 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, { states: string[]; make: (code: string) => HttpException }> = {
   VALIDATION_FAILED: { states: ['22023'], make: code => new BadRequestException({ code }) },
   KAI_JOURNAL_FORBIDDEN: { states: ['42501'], make: code => new ForbiddenException({ code }) },
@@ -31,7 +31,7 @@ function translate(error: unknown): never {
 }
 
 /**
- * 0665: the Kai teaching journal (KJ1). Each read and save is one protected definer call that re-proves the direct human
+ * 0685: the Kai teaching journal (KJ1). Each read and save is one protected definer call that re-proves the direct human
  * subject, teaching.journal.use and Complete access. An instructor reads and changes only their own entries, and reads, never
  * changes, the entries other instructors at the same school chose to share. No AI runs here.
  */

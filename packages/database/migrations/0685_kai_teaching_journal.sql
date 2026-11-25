@@ -1,6 +1,6 @@
 BEGIN;
 
--- Kai teaching journal KJ1 (0665, allocated 2026-11-18). Owner request (David, 2026-11-18): "kai should also be teaching
+-- Kai teaching journal KJ1 (0685, allocated 2026-11-18). Owner request (David, 2026-11-18): "kai should also be teaching
 -- journal. instructor can speak to it regarding what they taught that day. and kai can recall it when instructor ask what did
 -- we work on last week. at same time have few recommendation from the pattern". Verified on main d4a765c: nothing stores what
 -- an instructor taught. Spec: docs/architecture/KAI_TEACHING_JOURNAL.md. Rules:
@@ -25,7 +25,7 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Kai journal requires a restricted runtime'; END IF;
   IF to_regprocedure('hon.membership_command_args_ok(text,text,uuid,uuid)') IS NULL OR to_regprocedure('hon.staff_member_eligible(uuid,uuid,uuid)') IS NULL
     OR to_regprocedure('hon.saas_ts(timestamptz)') IS NULL OR to_regprocedure('hon.membership_school_today()') IS NULL THEN
-    RAISE EXCEPTION '0665 requires 0077, 0154 and 0224'; END IF;
+    RAISE EXCEPTION '0685 requires 0077, 0154 and 0224'; END IF;
 END $$;
 
 INSERT INTO hon.permissions(code,description,is_sensitive,is_staff_assignable) VALUES

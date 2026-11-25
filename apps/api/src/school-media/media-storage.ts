@@ -10,7 +10,13 @@ import { Injectable } from '@nestjs/common';
  * reachable only through a signed link of at most five minutes.
  */
 export const MEDIA_SIGNED_LINK_SECONDS = 300;
-const OBJECT_KEY = /^media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const OBJECT_KEY = /^media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.720\.mp4|\.poster\.jpg)?$/;
+const ORIGINAL_KEY = /^media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** 0654: the three files of a video (original, 720p copy, poster); a picture has only the first. */
+export const videoObjectKeys = (originalKey: string): string[] => [originalKey, `${originalKey}.720.mp4`, `${originalKey}.poster.jpg`];
+/** The first bytes of a stored file and its total size, from a ranged read. */
+export interface StoredFileHead { totalBytes: number; head: Buffer }
+const PROBE_BYTES = 4096;
 const BUCKET = /^[a-z0-9][a-z0-9_-]{1,62}$/;
 
 export class MediaStorageOff extends Error { constructor() { super('MEDIA_STORAGE_OFF'); } }
@@ -72,11 +78,68 @@ export class MediaStorage {
     return `${settings.baseUrl}/storage/v1${signed}`;
   }
 
-  /** Removes the file; a file that is already gone counts as removed. */
-  async remove(objectKey: string): Promise<void> {
+  /** Stores a file from disk (the 0654 video copy) without holding it in memory. */
+  async putFile(objectKey: string, path: string, byteSize: number, contentType: string): Promise<void> {
     const settings = this.require(objectKey);
-    const response = await this.send(`${settings.baseUrl}/storage/v1/object/${settings.bucket}`, {
-      method: 'DELETE', headers: { ...this.auth(settings), 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [objectKey] }),
+    const { createReadStream } = await import('node:fs');
+    const { Readable } = await import('node:stream');
+    const response = await this.send(`${settings.baseUrl}/storage/v1/object/${settings.bucket}/${objectKey}`, {
+      method: 'POST',
+      headers: { ...this.auth(settings), 'Content-Type': contentType, 'Content-Length': String(byteSize), 'x-upsert': 'true', 'Cache-Control': 'max-age=300' },
+      body: Readable.toWeb(createReadStream(path)) as unknown as RequestInit['body'], duplex: 'half',
+    } as RequestInit, 20 * 60_000);
+    if (!response.ok) throw new MediaStorageFailed();
+  }
+
+  /**
+   * 0654: a one-time signed upload link for a video's original (media/<id> only), so the browser stores it straight into the
+   * private bucket. The link names exactly this key; nothing else can be written with it.
+   */
+  async signedUploadUrl(objectKey: string): Promise<string> {
+    const settings = this.require(objectKey);
+    if (!ORIGINAL_KEY.test(objectKey)) throw new MediaStorageFailed();
+    // x-upsert: a retried start signs a new link for the same key, which may already hold a partial upload.
+    const response = await this.send(`${settings.baseUrl}/storage/v1/object/upload/sign/${settings.bucket}/${objectKey}`, {
+      method: 'POST', headers: { ...this.auth(settings), 'Content-Type': 'application/json', 'x-upsert': 'true' }, body: '{}',
+    });
+    if (!response.ok) throw new MediaStorageFailed();
+    let body: unknown;
+    try { body = await response.json(); } catch { throw new MediaStorageFailed(); }
+    const signed = (body as { url?: unknown })?.url;
+    const prefix = `/object/upload/sign/${settings.bucket}/${objectKey}?token=`;
+    if (typeof signed !== 'string' || !signed.startsWith(prefix) || !/^[A-Za-z0-9._~-]{20,4096}$/.test(signed.slice(prefix.length))) throw new MediaStorageFailed();
+    return `${settings.baseUrl}/storage/v1${signed}`;
+  }
+
+  /** The total size and first 4 KiB of a stored file, or null when there is no such file. */
+  async head(objectKey: string): Promise<StoredFileHead | null> {
+    const settings = this.require(objectKey);
+    const response = await this.send(`${settings.baseUrl}/storage/v1/object/authenticated/${settings.bucket}/${objectKey}`, {
+      method: 'GET', headers: { ...this.auth(settings), Range: `bytes=0-${PROBE_BYTES - 1}` },
+    });
+    if (response.status === 404 || response.status === 400) { await response.body?.cancel().catch(() => undefined); return null; }
+    if (response.status !== 206 && response.status !== 200) { await response.body?.cancel().catch(() => undefined); throw new MediaStorageFailed(); }
+    let bytes: Buffer;
+    try { bytes = Buffer.from(await response.arrayBuffer()); } catch { throw new MediaStorageFailed(); }
+    let totalBytes: number;
+    if (response.status === 206) {
+      const range = /^bytes 0-(\d+)\/(\d+)$/.exec(response.headers.get('content-range') ?? '');
+      if (!range) throw new MediaStorageFailed();
+      totalBytes = Number(range[2]);
+      if (Number(range[1]) + 1 !== bytes.length) throw new MediaStorageFailed();
+    } else totalBytes = bytes.length;
+    if (!Number.isSafeInteger(totalBytes) || totalBytes < 1 || bytes.length > PROBE_BYTES || bytes.length > totalBytes) throw new MediaStorageFailed();
+    return { totalBytes, head: bytes };
+  }
+
+  /** Removes the files; a file that is already gone counts as removed. */
+  async remove(objectKey: string | readonly string[]): Promise<void> {
+    const keys = typeof objectKey === 'string' ? [objectKey] : [...objectKey];
+    if (keys.length < 1 || keys.length > 3) throw new MediaStorageFailed();
+    let settings: MediaStorageSettings | undefined;
+    for (const key of keys) settings = this.require(key);
+    const response = await this.send(`${settings!.baseUrl}/storage/v1/object/${settings!.bucket}`, {
+      method: 'DELETE', headers: { ...this.auth(settings!), 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: keys }),
     });
     if (!response.ok) throw new MediaStorageFailed();
   }
@@ -91,8 +154,8 @@ export class MediaStorage {
   private auth(settings: MediaStorageSettings): Record<string, string> {
     return { Authorization: `Bearer ${settings.key}`, apikey: settings.key };
   }
-  private async send(url: string, init: RequestInit): Promise<Response> {
-    try { return await this.fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(60_000) }); }
+  private async send(url: string, init: RequestInit, timeoutMs = 60_000): Promise<Response> {
+    try { return await this.fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) }); }
     catch { throw new MediaStorageFailed(); }
   }
 }

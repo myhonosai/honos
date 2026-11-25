@@ -17,7 +17,7 @@ type VoiceWindow = Parameters<typeof detectHonVoiceSupport>[0];
 const voiceWindow = (): VoiceWindow | null => typeof window === 'undefined' ? null : window as unknown as VoiceWindow;
 
 /**
- * Kai teaching journal (0665). The instructor tells Kai what they taught (typed, or dictated with the browser's own free
+ * Kai teaching journal (0685). The instructor tells Kai what they taught (typed, or dictated with the browser's own free
  * speech recognition), asks Kai what they worked on, and sees pattern notes from fixed rules. No AI runs here. The form and
  * any unanswered save live in memory only; a school change or session end drops them. Every save answer is followed by a
  * fresh read.

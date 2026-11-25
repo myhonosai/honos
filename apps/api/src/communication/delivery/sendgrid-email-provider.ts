@@ -6,6 +6,7 @@ import {
   type CommunicationSendRequest,
 } from './communication-provider.js';
 import type { VerifiedProviderReceipt } from './communication-worker-database.js';
+import { pictureOrigin, renderEmailWithPictures } from './email-pictures.js';
 
 export const SENDGRID_MAIL_SEND_URL = 'https://api.sendgrid.com/v3/mail/send';
 const ADDRESS = /^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$/;
@@ -48,6 +49,14 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
     // SendGrid must not drop them for an earlier unsubscribe. Spam reports and bounces still suppress.
     // HqMessageDispatcher passes hqPurpose from the 0282 claim.
     const requiredNotice = hq && (request.hqPurpose === 'BILLING' || request.hqPurpose === 'ACCOUNT');
+    // 0653: a blast email with pictures gets an HTML part; the picture links point at the HON site's /m/<token>.
+    let content: { type: string; value: string }[] = [{ type: 'text/plain', value: request.content }];
+    if (!hq && request.pictures) {
+      const origin = pictureOrigin(this.environment().HON_PUBLIC_ORIGIN);
+      if (!origin) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
+      const parts = renderEmailWithPictures(request.content, request.pictures, origin);
+      content = [{ type: 'text/plain', value: parts.text }, { type: 'text/html', value: parts.html }];
+    }
     return {
       personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
         hon_delivery_id: request.deliveryId, ...(purpose ? { hon_purpose: purpose } : {}),
@@ -55,7 +64,7 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
       from: { email: from, name: hq ? name : `${name} via HON` },
       // 0424: a school email carries its author's subject when there is one (one line, 150 characters, checked in 0423).
       subject: !hq && request.subject && SUBJECT.test(request.subject) ? request.subject : `A message from ${name}`,
-      content: [{ type: 'text/plain', value: request.content }],
+      content,
       mail_settings: { sandbox_mode: { enable: this.sandbox() }, ...(requiredNotice ? { bypass_unsubscribe_management: { enable: true } } : {}) },
       tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } },
     };
@@ -67,12 +76,14 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
     // An HQ send never falls back to the school from-address: without a valid HQ sender nothing is sent.
     if (request.origin === 'HQ' && !ADDRESS.test(request.senderEmail ?? '')) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
     if (!ADDRESS.test(request.recipientAddress)) throw new CommunicationProviderError('FAILED', 'INVALID_ADDRESS');
+    // Built before the call: a configuration refusal (0653 pictures without a site origin) is retryable, not an unknown send.
+    const body = JSON.stringify(this.requestBody(request));
     let response: Response;
     try {
       response = await this.transport(SENDGRID_MAIL_SEND_URL, {
         method: 'POST',
         headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-        body: JSON.stringify(this.requestBody(request)),
+        body,
         redirect: 'error',
         signal: AbortSignal.timeout(15_000),
       });

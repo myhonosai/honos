@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUU
 const {KaiJournalService}=require('../dist/kai-journal/kai-journal.service.js');
 const {KaiJournalReadHumanUiGuard,KaiJournalSaveHumanUiGuard,KaiTeamJournalReadHumanUiGuard}=require('../dist/kai-journal/kai-journal-human-ui.guard.js');
 const c=require('@hon/contracts');
-// 0665: the Kai teaching journal (KJ1, no AI).
+// 0685: the Kai teaching journal (KJ1, no AI).
 const entryId=randomUUID();
 const entry=(over={})=>({entryId,taughtOn:'2026-11-17',className:'Kids 6-8',notes:'Roundhouse kick drills.\nPartner blocking.',topics:['Roundhouse kick','Blocking'],
  source:'SPOKEN',status:'ACTIVE',shared:false,version:1,createdAt:'2026-11-17T20:00:00.000Z',updatedAt:'2026-11-17T20:00:00.000Z',...over});
@@ -14,7 +14,7 @@ const ctx=(over={})=>({organizationId:randomUUID(),schoolId:randomUUID(),princip
 function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_kai_journal|read_kai_team_journal|save_kai_journal_entry)/.test(sql)?{rows}:{rows:[]};};
  return {withTenantReadOnlyTransaction:async(_c,f)=>f({query:q}),withTenantTransaction:async(_c,f)=>f({query:q})};}
 
-test('read and save call only the 0665 functions with the session subject and verify the answer',async()=>{
+test('read and save call only the 0685 functions with the session subject and verify the answer',async()=>{
  const calls=[];const s=new KaiJournalService(db([{data:read()}],calls));
  const r=await s.read(ctx(),'2026-11-10','2026-11-17');
  assert.equal(r.entries[0].notes,'Roundhouse kick drills.\nPartner blocking.');

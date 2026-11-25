@@ -8,7 +8,7 @@ import { commsOutcomeFor } from '../src/components/hq-communications/model';
 import { commsCodeKey, commsText } from '../src/components/hq-communications/copy';
 import { HqCommunicationsListView, HqMessageView, PieceCounter, canOfferCancel, createInputFrom, senderInputFrom,
   type CommsListViewProps, type CommsMessageViewProps } from '../src/components/hq-communications/view';
-import { HQ_NAV, hqPageLabel } from '../src/components/hq-modern/catalog';
+import { HQ_INBOX, hqPageLabel } from '../src/components/hq-modern/catalog';
 
 const yes = () => true;
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -201,7 +201,7 @@ it('every wording exists in en, ko and es', () => {
 });
 
 it('links Texts & Email from the HQ navigation, the school page and the support case', () => {
-  expect(HQ_NAV.map(i => i.path)).toContain('/hq/communications');
+  expect(HQ_INBOX.map(i => i.path)).toContain('/hq/communications');
   expect(hqPageLabel('/hq/communications')).toBe('Texts & Email');
   expect(hqPageLabel(`/hq/communications/${id(1)}`)).toBe('HQ message');
   expect(readFileSync('src/components/hq-school-detail/view.tsx', 'utf8')).toContain('/hq/communications?');

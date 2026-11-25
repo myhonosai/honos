@@ -38,7 +38,7 @@ function EntryList({ entries, language, onOpen, locked }: { entries: readonly Ka
   </li>)}</ul>;
 }
 
-/** Kai teaching journal (0665): pure, every state comes from props. */
+/** Kai teaching journal (0685): pure, every state comes from props. */
 export function KaiJournalView(p: KaiJournalViewProps): React.ReactElement {
   const c = journalCopy(p.language), read = p.read, d = p.draft;
   const date = (v: string) => journalDate(v, p.language);

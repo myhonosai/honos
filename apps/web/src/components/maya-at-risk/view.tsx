@@ -9,6 +9,7 @@ export type MayaAtRiskViewProps = Readonly<{
   onRefresh?: (() => void) | undefined; onMore?: (() => void) | undefined;
   /** 0284: the per-student "Ask Maya" control (omitted in static previews). */
   renderAsk?: ((student: MayaAtRiskStudent) => React.ReactNode) | undefined;
+  renderCheckIn?: ((student: MayaAtRiskStudent) => React.ReactNode) | undefined;
 }>;
 
 export const LEVEL_LABEL: Record<MayaRiskLevel, string> = { HIGH: 'High risk', MEDIUM: 'Medium risk', WATCH: 'Watch' };
@@ -63,6 +64,7 @@ export function MayaAtRiskView(p: MayaAtRiskViewProps): React.ReactElement {
                 <ul>{s.factors.map((f) => <li key={f.code}>{factorText(p.language, f)}</li>)}</ul>
                 <p><strong>Suggested next step:</strong> {STEP_LABEL[s.suggestedNextStep]}</p>
                 {p.renderAsk ? p.renderAsk(s) : null}
+                {p.renderCheckIn ? p.renderCheckIn(s) : null}
               </li>)}
             </ul>
             {list.nextAfter ? <button type="button" className={styles.secondary} disabled={list.more === 'LOADING'} onClick={p.onMore}>
