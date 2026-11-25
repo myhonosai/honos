@@ -7134,3 +7134,30 @@ DO $$ DECLARE safe boolean; BEGIN
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe or drifted hon.read_school_contact_membership_details'; END IF;
 END $$;
 -- End contact card membership details exact verification.
+
+-- HQ school lifecycle exact verification (0675): two runtime entry points, two private helpers, three forced-RLS tables.
+DO $$ DECLARE f text; t text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.transition_school_lifecycle_from_hq(text,uuid,text,text,text,uuid,uuid,uuid)','hon.read_hq_school_archive_dates(text)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe HQ school lifecycle entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_lifecycle_evidence()','hon.require_hq_school_lifecycle_actor(text)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe HQ school lifecycle helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_school_lifecycle_requests','hq_school_lifecycle_audit','hq_school_lifecycle_outbox'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe HQ school lifecycle table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_hq_school_lifecycle_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'HQ school lifecycle evidence guard missing: %',t; END IF;
+  END LOOP;
+END $$;
+-- End HQ school lifecycle exact verification.

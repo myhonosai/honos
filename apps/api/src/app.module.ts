@@ -529,6 +529,7 @@ import { SUBSCRIPTION_SCHEDULE_PROVIDER, UnconfiguredSubscriptionScheduleProvide
 import { paymentProviderFromEnvironment } from './payments/stripe-test-mode-adapter.js';
 import { SaasCommandGuard, SaasReadGuard } from './saas-billing/saas-billing.guards.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
+import { HqSchoolLifecycleController, HqSchoolLifecycleHumanGuard, HqSchoolLifecycleService } from './hq/hq-school-lifecycle.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
 import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.js';
@@ -758,6 +759,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     InvoiceController,
     HqController,
     HqOnboardingController,
+    HqSchoolLifecycleController,
     HqAiProviderController,
     ZernioIntegrationController,
     A2pPreparationController,
@@ -1149,6 +1151,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: SUBSCRIPTION_SCHEDULE_PROVIDER, useFactory: () => new UnconfiguredSubscriptionScheduleProvider() },
     HqOverviewService,
     HqSchoolDirectoryService,
+    HqSchoolLifecycleService,
+    HqSchoolLifecycleHumanGuard,
   ],
 })
 export class AppModule {}
