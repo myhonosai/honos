@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { validateSchoolContactCardInput, validateSchoolContactQuery, verifySchoolContactCard, verifySchoolContactList, type SchoolContactCard, type SchoolContactList,
+import { validateSchoolContactCardInput, validateSchoolContactQuery, verifySchoolContactCard, verifySchoolContactList, verifySchoolContactMembershipDetails, type SchoolContactCard, type SchoolContactList,
+  type SchoolContactMembershipDetails,
   type SchoolContactQuery } from '@hon/contracts';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { decodeListCursor, encodeListCursor, staleListCursor } from '../foundation/list-cursor.js';
@@ -69,6 +70,22 @@ export class SchoolContactsService {
         const result = await client.query<{ data: unknown }>('SELECT hon.read_school_contact_card($1,$2::jsonb) AS data', [subject, JSON.stringify(input)]);
         if (result.rows.length !== 1) throw new Error('Unverified contact card.');
         return verifySchoolContactCard(result.rows[0]!.data, input.personId);
+      });
+    } catch (error) { return translate(error); }
+  }
+
+  /** 0659: payer, payment schedule and (with a receivables-reader code) paid and due for each membership on the card. */
+  async membershipDetails(context: MembershipLifecycleContext, personId: unknown): Promise<SchoolContactMembershipDetails> {
+    const subject = this.subject(context);
+    let input: { personId: string };
+    try { input = validateSchoolContactCardInput(personId); } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
+    try {
+      return await this.database.withTenantReadOnlyTransaction(context, async client => {
+        await client.query(READ_LIMITS);
+        await client.query(HUMAN_SETTINGS, [subject]);
+        const result = await client.query<{ data: unknown }>('SELECT hon.read_school_contact_membership_details($1,$2::jsonb) AS data', [subject, JSON.stringify(input)]);
+        if (result.rows.length !== 1) throw new Error('Unverified membership details.');
+        return verifySchoolContactMembershipDetails(result.rows[0]!.data);
       });
     } catch (error) { return translate(error); }
   }
