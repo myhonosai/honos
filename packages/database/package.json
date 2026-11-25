@@ -197,6 +197,7 @@
     "db:test-staff-shifts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-shifts-integrity.mjs",
     "db:test-staff-time-clock": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-staff-time-clock-integrity.mjs",
     "db:test-school-blasts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-blasts-integrity.mjs",
+    "db:test-school-blast-audience-filters": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-blast-audience-filters-integrity.mjs",
     "db:test-school-blast-pictures": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-blast-pictures-integrity.mjs",
     "db:test-school-media": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-media-library-integrity.mjs",
     "db:test-school-media-video": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-media-video-integrity.mjs",

@@ -412,6 +412,7 @@
     "0653_school_blast_pictures.sql": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397",
     "0654_school_media_video.sql": "9d7b524e42313514d56d340a37759bef2c5bd7499a80444fa966e553ceef8d4e",
     "0656_person_profile_details.sql": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240",
-    "0657_school_conversations_person_filter.sql": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e"
+    "0657_school_conversations_person_filter.sql": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e",
+    "0695_school_blast_audience_filters.sql": "eecde1129b9abe9eee70caa069b445b4c384a903df4a34108a26cb8b323140c9"
   }
 }
