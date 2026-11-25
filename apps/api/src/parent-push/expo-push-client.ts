@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import type { ParentPushData } from '@hon/contracts';
 
-/** One message for one phone. Title is the school's name, body the announcement title (0601 P5). */
-export interface ExpoPushMessage { to: string; title: string; body: string; data: { type: 'school_announcement'; announcementId: string } }
+/** One message for one phone. Title is the school's name, body the announcement title or a fixed new-message line (0601 P5, 0658). */
+export interface ExpoPushMessage { to: string; title: string; body: string; data: ParentPushData }
 /** How one send ended, in the 0601 record shape. */
 export type ExpoSendOutcome =
   | { outcome: 'SENT'; ticketId: string }

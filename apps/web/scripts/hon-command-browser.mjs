@@ -1156,7 +1156,7 @@ function resetPeople(over = {}) {
     version: 1, updatedAt: iso(-48), student: { birthDate: '2015-04-02', status: 'ACTIVE', version: 1 }, consents: { EMAIL: 'OPTED_IN', SMS: 'NOT_RECORDED' } }],
   [id(302), { personId: id(302), schoolId: scope.schoolId, givenName: 'Ben', familyName: 'Okafor', email: null, phoneE164: '+15555550102',
     version: 2, updatedAt: iso(-24), student: null, consents: { EMAIL: 'NOT_RECORDED', SMS: 'OPTED_OUT' } }]]);
-  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null, cardOn: false }, over);
+  Object.assign(ppl, { canEdit: true, posts: [], replies: [], byKey: new Map(), gate: null, cardOn: false, details: new Map(), detailPosts: [] }, over);
   // Contact consent records (0217 rule source): one row per recorded channel. puts/replies are the consent commands' own.
   ppl.consents = new Map([[id(301), new Map([['EMAIL', { channel: 'EMAIL', status: 'OPTED_IN', source: 'STAFF', capturedAt: '2026-10-01T16:00:00.000Z', version: 1, updatedAt: '2026-10-01T16:00:00.000Z' }]])],
     [id(302), new Map([['SMS', { channel: 'SMS', status: 'OPTED_OUT', source: 'PARENT', capturedAt: '2026-10-02T16:00:00.000Z', version: 1, updatedAt: '2026-10-02T16:00:00.000Z' }]])]]);
@@ -1192,6 +1192,8 @@ async function consentApiRoute(route, method, url, personId, channel) {
   const person = ppl.records.get(personId); if (person && (channel === 'EMAIL' || channel === 'SMS')) person.consents[channel] = body.status;
   return json(route, current ? 200 : 201, { data: saved, meta: { ...meta, replayed: false } });
 }
+const pplDetails = (personId) => ppl.details.get(personId) ?? { personId, version: 0, gender: null, guardianName: null, notes: null, primaryPhoneLabel: null,
+  primaryEmailLabel: null, otherPhones: [], otherEmails: [] };
 const pplRead = (r) => ({ ...r, student: r.student && { ...r.student }, consents: { ...r.consents }, canEdit: ppl.canEdit });
 async function peopleApiRoute(route, path, method, url) {
   const consent = path.match(new RegExp(`^/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/people/([0-9a-f-]{36})/communication-consents(?:/([A-Z]+))?$`));
@@ -1226,6 +1228,30 @@ async function peopleApiRoute(route, path, method, url) {
   }
   const read = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})$`));
   if (read && method === 'GET') { ppl.recordReads = (ppl.recordReads ?? 0) + 1; const r = ppl.records.get(read[1]); return r ? json(route, 200, { data: pplRead(r) }) : json(route, 404, { code: 'PERSON_UNAVAILABLE' }); }
+  // 0656 profile details: version 0 until first saved; the save checks the human command, key replay and version like the server.
+  const detailsRead = path.match(new RegExp(`^/api/v1/school/schools/${scope.schoolId}/people/([0-9a-f-]{36})/details$`));
+  if (detailsRead && method === 'GET') {
+    if (!ppl.records.has(detailsRead[1])) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
+    return json(route, 200, { data: { ...pplDetails(detailsRead[1]), canEdit: ppl.canEdit } });
+  }
+  if (path === '/api/v1/school/people/details' && method === 'POST') {
+    const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
+    ppl.detailPosts.push({ key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
+    if (headers['x-hon-human-command'] !== 'school-person-record' || headers.origin !== origin || !headers['idempotency-key']) return json(route, 403, { code: 'HUMAN_UI_REQUIRED' });
+    const prior = ppl.byKey.get(headers['idempotency-key']);
+    if (prior) return prior.body === raw ? json(route, 200, { data: prior.data }) : json(route, 409, { code: 'PERSON_IDEMPOTENCY_CONFLICT' });
+    const body = JSON.parse(raw);
+    if (!ppl.records.has(body.personId)) return json(route, 404, { code: 'PERSON_UNAVAILABLE' });
+    const current = pplDetails(body.personId), fields = ['gender', 'guardianName', 'notes', 'primaryPhoneLabel', 'primaryEmailLabel', 'otherPhones', 'otherEmails'];
+    if (body.expectedVersion !== current.version) return json(route, 409, { code: 'PERSON_VERSION_CONFLICT', outcome: 'NOT_SUBMITTED' });
+    const changed = fields.filter((f) => JSON.stringify(body[f]) !== JSON.stringify(current[f]));
+    if (!changed.length) return json(route, 400, { code: 'PERSON_UNCHANGED' });
+    const next = { personId: body.personId, version: current.version + 1, ...Object.fromEntries(fields.map((f) => [f, body[f]])) };
+    ppl.details.set(body.personId, next);
+    const data = { details: { ...next, canEdit: ppl.canEdit }, changedFields: changed };
+    ppl.byKey.set(headers['idempotency-key'], { body: raw, data });
+    return json(route, 200, { data });
+  }
   if (method !== 'POST' || !['/api/v1/school/people/update', '/api/v1/school/people/birth-date'].includes(path)) return null;
   const request = route.request(), headers = request.headers(), raw = request.postData() ?? '';
   ppl.posts.push({ path, key: headers['idempotency-key'], command: headers['x-hon-human-command'], body: raw });
@@ -2353,6 +2379,22 @@ for (const [name, viewport] of [['desktop-1440', { width: 1440, height: 900 }], 
     await dialog.getByText('Saved. Changed: last name.').waitFor();
     assert.equal(await dialog.getByRole('button', { name: 'Close' }).evaluate((el) => el === document.activeElement), false, 'the page re-rendering after the save does not pull focus back to Close');
     assert.equal(ppl.records.get(id(301)).familyName, 'Rivera-Lopez');
+    // 0656: more details in the same pop-up: gender, guardian, a second phone and email, saved with the person-record command.
+    const details = dialog.getByTestId('person-details');
+    await details.getByTestId('details-gender').waitFor();
+    await details.getByTestId('details-gender').selectOption('FEMALE');
+    await details.getByTestId('details-guardian').fill('Sam Rivera');
+    await details.getByTestId('details-add-phone').click();
+    await details.getByRole('textbox', { name: 'Phone 1' }).fill('+1 555 555 0199');
+    await details.getByTestId('details-add-email').click();
+    await details.getByRole('textbox', { name: 'Email 1' }).fill('Sam.Parent@Example.Invalid');
+    await details.getByTestId('details-save').click();
+    await details.getByText('Details saved.').waitFor();
+    const savedDetails = ppl.details.get(id(301));
+    assert.deepEqual([savedDetails.gender, savedDetails.guardianName, savedDetails.otherPhones, savedDetails.otherEmails],
+      ['FEMALE', 'Sam Rivera', [{ phoneE164: '+15555550199', label: 'MOBILE' }], [{ email: 'sam.parent@example.invalid', label: 'PERSONAL' }]]);
+    assert.equal(ppl.detailPosts.length, 1); assert.equal(ppl.detailPosts[0].command, 'school-person-record');
+    await shot(page, `people-profile-details-${name}`); await noOverflow(page, `people-profile-details-${name}`);
     await page.keyboard.press('Escape');
     await dialog.waitFor({ state: 'detached' });
     assert.equal(await edit.evaluate((el) => el === document.activeElement), true, 'focus returns to Edit profile');

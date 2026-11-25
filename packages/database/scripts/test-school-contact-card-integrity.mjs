@@ -1,5 +1,5 @@
 /**
- * School contact card proof (C2, 0522) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
+ * School contact card proof (C2, 0522; membership details 0659) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
  * ValidationPipe + HonExceptionFilter -> SchoolContactsController -> one protected definer function on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. Synthetic names only; nothing is sent or charged.
  */
@@ -223,6 +223,9 @@ async function records(org, school, tag) {
   const pay = (amount, voided) => raw('invoice_payment_records', `INSERT INTO hon.invoice_payment_records(organization_id,school_id,invoice_id,amount_minor,currency,received_on,method,actor_principal_id,voided_at,voided_by_principal_id,void_reason)
     VALUES($1,$2,$3,$4,'USD','2026-10-05','CASH',$5,$6,$7,$8)`, [org, school, open, amount, OWN.principal, voided ? new Date() : null, voided ? OWN.principal : null, voided ? 'Entered twice' : null]);
   await pay(5000, false); await pay(999, true);
+  // 0659: an older cancelled schedule and the current one; only the current one is shown.
+  await raw('membership_payment_schedules', `INSERT INTO hon.membership_payment_schedules(organization_id,school_id,membership_id,frequency,amount_minor,currency,next_charge_at,auto_renew,status,created_at)
+    VALUES($1,$2,$3,'WEEKLY',3000,'USD',NULL,false,'CANCELLED','2026-08-01T16:00:00Z'),($1,$2,$3,'MONTHLY',12900,'USD','2026-12-01T08:00:00Z',true,'ACTIVE','2026-09-01T16:00:00Z')`, [org, school, membership]);
 
   const pipeline = randomUUID(), stage = randomUUID(), lead = randomUUID();
   await sql("INSERT INTO hon.crm_pipelines(id,organization_id,school_id,name) VALUES($1,$2,$3,'Card pipeline')", [pipeline, org, school]);
@@ -257,6 +260,10 @@ async function records(org, school, tag) {
 // jsonb orders keys by length, so compare with sorted keys.
 const sorted = (v) => Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])])) : v;
 const json = (v) => JSON.stringify(sorted(v));
+// Payment amounts or currency anywhere in a card. Random ids and timestamps are taken out first, so a uuid that happens to
+// contain 5000 or 12900 never counts as an amount.
+const amountsIn = (v) => /(^|[^0-9])(12900|5000)([^0-9]|$)|"USD"|Minor"/.test(json(v)
+  .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, 'ID').replace(/\d{4}-\d{2}-\d{2}T[0-9:.]+Z/g, 'AT'));
 try {
   await cleanup();
   await seed();
@@ -306,7 +313,8 @@ try {
   // family-thread count only with family_messages.manage.
   const M = (await success(() => call(MEMBERSHIP_ONLY, A.avery), 'membership read only')).data;
   ok(M.membership.allowed && M.membership.items.length === 1 && json(M.billing) === '{"allowed":false}', 'membership shown, billing not allowed without an invoice code');
-  ok(json(M.timeline.map((e) => e.kind)) === json(['PERSON_ADDED', 'MEMBERSHIP_STARTED']) && !/12900|5000|USD/.test(json(M)), `no payment rows or amounts ${json(M.timeline)}`);
+  ok(json(M.timeline.map((e) => e.kind)) === json(['PERSON_ADDED', 'MEMBERSHIP_STARTED']) && !amountsIn(M), `no payment rows or amounts ${json(M.timeline)}`);
+  ok(amountsIn(C), 'the amount check does see amounts on a card that has them');
   ok(json(M.messages) === json({ allowed: true, direct: 1, family: null }), 'family-thread count needs family_messages.manage');
   const own = (await success(() => call(OWN, A.avery), 'owner')).data;
   ok(json({ ...own, generatedAt: 0 }) === json({ ...C, generatedAt: 0 }), 'the owner sees the same card');
@@ -315,9 +323,29 @@ try {
   const stranger = (await success(() => call(CARD, A.stranger), 'a contact with no records')).data;
   ok(stranger.overview.segment === 'OTHER' && stranger.family.families.length === 0 && stranger.billing.invoices.length === 0 && stranger.timeline.length === 1, 'an empty card');
 
+  // 3b. 0659 membership details: payer and current schedule with billing.membership.read; paid and due only with a receivables code.
+  const details = (actor, person, options) => call(actor, `${person}/memberships`, options);
+  const D = (await success(() => details(CARD, A.avery), 'membership details')).data;
+  ok(json(D) === json({ allowed: true, money: true, items: [{ membershipId: A.membership, payer: { personId: A.gale, givenName: 'Gale', familyName: 'Able' },
+    schedule: { frequency: 'MONTHLY', amountMinor: 12900, currency: 'USD', nextChargeAt: '2026-12-01T08:00:00.000Z', autoRenew: true, status: 'ACTIVE' },
+    paid: [{ currency: 'USD', paidMinor: 5000, dueMinor: 7900 }], lastPaidOn: '2026-10-05' }] }), `details: voided payments and drafts left out ${json(D)}`);
+  ok(json((await success(() => details(OWN, A.avery), 'owner details')).data) === json(D), 'the owner sees the same details');
+  const DM = (await success(() => details(MEMBERSHIP_ONLY, A.avery), 'membership-only details')).data;
+  ok(DM.allowed && DM.money === false && DM.items[0].paid === null && DM.items[0].lastPaidOn === null && DM.items[0].schedule.amountMinor === 12900, `no paid amounts without a receivables code ${json(DM)}`);
+  ok(json((await success(() => details(READER, A.avery), 'people.read only details')).data) === '{"allowed":false}', 'details not allowed without billing.membership.read');
+  ok(json((await success(() => details(CARD, A.stranger), 'no memberships')).data) === json({ allowed: true, money: true, items: [] }), 'no memberships, no items');
+  ok(!json((await success(() => details(OTHER_SCHOOL, seeded.B.avery), 'school B details')).data).includes(A.membership), 'school B never sees school A memberships');
+  for (const [actor, label] of [[NONE, 'no people.read'], [MIXED, 'a mixed parent role'], [HQ, 'an HQ operator']]) await refused(() => details(actor, A.avery), 403, undefined, `details refused for ${label}`);
+  await refused(() => details(OTHER_SCHOOL, A.avery, { school: ids.schoolA }), 403, undefined, 'details: school-B staff at the school-A route');
+  await refused(() => details(CARD, seeded.B.avery), 404, 'SCHOOL_CONTACT_NOT_FOUND', 'details: a school-B person at the school-A route');
+  await refused(() => details(CARD, A.avery, { query: 'x=1' }), 400, undefined, 'details: any query string');
+  await refused(() => details(CARD, A.avery, { headers: { 'Idempotency-Key': 'x' } }), 409, 'IDEMPOTENCY_KEY_NOT_ACCEPTED', 'details: an idempotency key');
+  await refused(() => details(CARD, A.avery, { headers: { 'Sec-Fetch-Site': 'cross-site' } }), 403, 'HUMAN_UI_REQUIRED', 'details: a cross-site read');
+
   // 4. Live authority: a revoked grant and a lapsed entitlement are refused at once.
   await sql('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE id=$1', [CARD.grants[0], OWN.principal]);
   await refused(() => call(CARD, A.avery), 403, undefined, 'refused after the grant is revoked');
+  await refused(() => call(CARD, `${A.avery}/memberships`), 403, undefined, 'details refused after the grant is revoked');
   await raw('organization_entitlements', 'UPDATE hon.organization_entitlements SET effective_until=clock_timestamp() WHERE organization_id=$1', [ids.organization]);
   await refused(() => call(OWN, A.avery), 403, undefined, 'refused without an active entitlement');
   await raw('organization_entitlements', 'UPDATE hon.organization_entitlements SET effective_until=NULL WHERE organization_id=$1', [ids.organization]);
@@ -335,7 +363,10 @@ try {
     const startMark = '-- School contact card exact verification (C2 0522)', endMark = '-- End school contact card exact verification.';
     const section = verify.split(startMark)[1]?.split(endMark)[0];
     ok(section, startMark);
-    await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
+    await sql(section.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;
+    const details = verify.split('-- Contact card membership details exact verification (0659)')[1]?.split('-- End contact card membership details exact verification.')[0];
+    ok(details, '0659 verification section');
+    await sql(details.replace(/^[^\n]*\n/, '').replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
 
   console.log(`PASS: school contact card (0522): ${checks} checks.`);
 } finally {

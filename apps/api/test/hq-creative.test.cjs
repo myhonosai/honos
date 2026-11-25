@@ -120,12 +120,25 @@ test('HTTP: reserve -> one provider call -> record; budget and resolution forwar
     assert.deepEqual(calls.map(c => c[0]), ['createHqCreativeGeneration', 'recordHqCreativeGenerationResult']);
     assert.deepEqual(calls[0][1], ['verified-human', JSON.stringify(ask()), JSON.stringify({ providerId: 'HIGGSFIELD', modelCode: 'synthetic-image-1' }), key]);
     assert.equal(JSON.parse(calls[1][1][2]).outcome, 'SUCCEEDED'); assert.equal(provider.calls.length, 1);
+    // 0651: the adapter's own rate is recorded as a HON estimate, never as the provider's actual cost.
+    assert.equal(JSON.parse(calls[1][1][2]).providerCostBasis, 'HON_ESTIMATE');
     // An unverified provider answer is recorded UNKNOWN (held for the HQ owner), never trusted.
     calls.length = 0; provider.behaviour = 'UNVERIFIED';
     reply = (op) => op === 'createHqCreativeGeneration' ? { generation: g, budget: budget(), replayed: false }
       : { generation: { ...g, status: 'UNDER_REVIEW', failureReason: 'UNVERIFIED_RESULT', completedAt: T2, version: 2 }, budget: budget(), replayed: false };
     await send(`${base}/hq/marketing/creative/generations`, { method: 'POST', headers: command('hq-creative-generation-create'), body: JSON.stringify(ask()) });
-    assert.deepEqual(JSON.parse(calls[1][1][2]), { outcome: 'UNKNOWN', finalUnits: null, providerCostMicrounits: null, failureReason: 'UNVERIFIED_RESULT', assets: null });
+    assert.deepEqual(JSON.parse(calls[1][1][2]), { outcome: 'UNKNOWN', finalUnits: null, providerCostMicrounits: null, providerCostBasis: null, failureReason: 'UNVERIFIED_RESULT', assets: null });
+    // A rejection that reports a cost carries its basis; one without a cost, a pre-send refusal and an unknown answer carry none.
+    for (const [behaviour, expected] of [
+      ['REJECT_WITH_COST', { outcome: 'FAILED', finalUnits: null, assets: null, failureReason: 'PROVIDER_REJECTED', providerCostMicrounits: 250, providerCostBasis: 'HON_ESTIMATE' }],
+      ['REJECT', { outcome: 'FAILED', finalUnits: null, assets: null, failureReason: 'PROVIDER_REJECTED', providerCostMicrounits: null, providerCostBasis: null }],
+      ['PRE_SEND', { outcome: 'NOT_SENT', finalUnits: null, providerCostMicrounits: null, providerCostBasis: null, failureReason: 'INVALID_REQUEST', assets: null }],
+      ['UNKNOWN', { outcome: 'UNKNOWN', finalUnits: null, providerCostMicrounits: null, providerCostBasis: null, failureReason: 'PROVIDER_UNKNOWN', assets: null }],
+    ]) {
+      calls.length = 0; provider.behaviour = behaviour;
+      await send(`${base}/hq/marketing/creative/generations`, { method: 'POST', headers: command('hq-creative-generation-create'), body: JSON.stringify(ask()) });
+      assert.deepEqual(JSON.parse(calls[1][1][2]), expected, behaviour);
+    }
     // A replay never calls the provider again.
     calls.length = 0; provider.calls.length = 0;
     reply = () => ({ generation: { ...g, status: 'SUCCEEDED', chargedCredits: 20, completedAt: T2, version: 2, assets: [asset()] }, budget: budget(), replayed: true });

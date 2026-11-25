@@ -1,0 +1,5 @@
+/* The public video page (0654). */
+.page { max-width: 900px; margin: 0 auto; padding: 24px 16px; color: #eaf4fb; background: #0d1b2a; min-height: 100vh; font-family: inherit; }
+.school { margin: 0 0 4px; color: #b8c7d6; font-size: 14px; }
+.title { margin: 0 0 16px; font-size: 24px; overflow-wrap: anywhere; }
+.player { display: block; width: 100%; height: auto; max-height: 80vh; background: #000; border-radius: 12px; }

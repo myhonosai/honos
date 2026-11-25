@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { AlexPlanArea, AlexPlanHorizon, AlexPlanView } from '@hon/contracts';
 import { AlexPlanError, alexPlanApi as defaultApi, type AlexPlanApi, type AlexPlanErrorKind, type AlexPlanScope } from './alex-plan-http';
 import styles from './hon-command.module.css';
+import { AgentVoiceBar } from './agent-voice-bar';
 
 /**
  * P1 (0639): plan with Alex. The owner gives a goal; Alex suggests up to eight tasks for named staff. Nothing happens until
@@ -116,6 +117,7 @@ export function AlexPlanPanel({ scope, api = defaultApi }: { scope: AlexPlanScop
     {alex.state === 'OFF' ? <p className={styles.state} data-state="EMPTY" data-alex-off>Alex planning is not available to you here yet.</p> : null}
     {alex.state === 'ON' ? <form className={styles.alexForm} onSubmit={(e) => { e.preventDefault(); void ask(); }}>
       <label>Goal<textarea value={goal} maxLength={500} rows={2} onChange={(e) => setGoal(e.target.value)} placeholder="For example: get ten more trial bookings before the belt test" data-alex-goal /></label>
+      <AgentVoiceBar scope={scope} agentKey="alex" name="Alex" value={goal} max={500} onChange={setGoal} answer={view?.summary ?? null} />
       <fieldset><legend>For</legend>
         {(['WEEK', 'MONTH'] as const).map((h) => <label key={h}><input type="radio" name="alex-horizon" checked={horizon === h} onChange={() => setHorizon(h)} /> {h === 'WEEK' ? 'This week' : 'This month'}</label>)}
       </fieldset>

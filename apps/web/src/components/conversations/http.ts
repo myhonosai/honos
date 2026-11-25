@@ -68,6 +68,7 @@ export async function loadConversations(scope: ConversationsScope, filters: Conv
   if (query.unreadOnly !== undefined) params.set('unreadOnly', String(query.unreadOnly));
   if (query.tag) params.set('tag', query.tag);
   if (query.search) params.set('search', query.search);
+  if (query.personId) params.set('personId', query.personId);
   if (query.before) { params.set('beforeAt', query.before.at); params.set('beforeId', query.before.id); }
   const text = params.toString();
   return verifyConversationList((await call(base(scope) + (text ? `?${text}` : ''), 'GET')).data);
