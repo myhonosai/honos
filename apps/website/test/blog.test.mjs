@@ -88,7 +88,7 @@ test('blog pages make no claim the owner has not approved', () => {
 test('blog pages load no animation script and nothing from other hosts', () => {
   for (const file of blogPages()) {
     const html = read(file);
-    assert.doesNotMatch(html, /<script\b/, `${file} has no scripts`);
+    assert.doesNotMatch(html, /<script\b(?! type="application\/ld\+json")/, `${file} runs no scripts (structured data only)`);
     assert.doesNotMatch(html, /(href|src)="(https?:)?\/\/(?!app\.example\.test|myhonos\.com\/)/, `${file} stays on this host`);
     assert.match(html, /href="\/styles\.css\?v=[0-9a-f]{10}"/, `${file} loads versioned CSS`);
   }

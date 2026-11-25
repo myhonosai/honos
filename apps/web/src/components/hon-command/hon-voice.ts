@@ -140,7 +140,8 @@ export interface RecognitionAdapter { start(options: RecognitionOptions, handler
  * Team chat: each teammate is read aloud with a slightly different browser voice. Presentation only: pitch, rate and
  * which of the browser's own voices for the language (by position) to prefer. No paid or cloud voice.
  */
-export type HonVoiceProfile = Readonly<{ pitch: number; rate: number; voiceIndex: number }>;
+/** agent (0652): whose voice this is, so a natural voice can read it when the server allows (agent-natural-voice.ts). */
+export type HonVoiceProfile = Readonly<{ pitch: number; rate: number; voiceIndex: number; agent?: string }>;
 /**
  * 0460 (owner ask "choose voice for all AI agents, give few choices each"): three free browser voices per teammate.
  * Choice 1 is the voice each teammate already had; 2 and 3 change pitch, pace and which of the device's own voices is
@@ -149,7 +150,7 @@ export type HonVoiceProfile = Readonly<{ pitch: number; rate: number; voiceIndex
 export type HonVoiceStyle = 'standard' | 'warm' | 'bright' | 'deep' | 'calm' | 'lively';
 export type HonVoiceOption = Readonly<{ style: HonVoiceStyle; profile: HonVoiceProfile }>;
 const option = (style: HonVoiceStyle, pitch: number, rate: number, voiceIndex: number): HonVoiceOption => ({ style, profile: { pitch, rate, voiceIndex } });
-export const HON_AGENT_VOICE_OPTIONS: Readonly<Record<string, readonly [HonVoiceOption, HonVoiceOption, HonVoiceOption]>> = Object.freeze({
+const RAW_VOICE_OPTIONS: Readonly<Record<string, readonly [HonVoiceOption, HonVoiceOption, HonVoiceOption]>> = {
   hon: [option('standard', 1, 1, 0), option('warm', 0.9, 0.95, 9), option('bright', 1.15, 1.05, 10)],
   claire: [option('standard', 1.15, 1, 1), option('calm', 1, 0.9, 11), option('lively', 1.3, 1.1, 12)],
   alex: [option('standard', 0.9, 1, 2), option('deep', 0.75, 0.95, 13), option('bright', 1.1, 1.05, 14)],
@@ -159,7 +160,10 @@ export const HON_AGENT_VOICE_OPTIONS: Readonly<Record<string, readonly [HonVoice
   chad: [option('standard', 0.95, 1.1, 6), option('calm', 0.9, 0.95, 21), option('bright', 1.2, 1.1, 22)],
   maya: [option('standard', 1.2, 0.95, 7), option('warm', 1.05, 0.9, 23), option('lively', 1.35, 1.05, 24)],
   kai: [option('standard', 1.05, 1, 8), option('calm', 0.9, 0.9, 25), option('bright', 1.25, 1.05, 26)],
-});
+};
+/** Every option names its teammate, so the teammate's natural voice (0652) can read it when allowed. */
+export const HON_AGENT_VOICE_OPTIONS: Readonly<Record<string, readonly [HonVoiceOption, HonVoiceOption, HonVoiceOption]>> = Object.freeze(Object.fromEntries(
+  Object.entries(RAW_VOICE_OPTIONS).map(([agent, options]) => [agent, options.map((o) => Object.freeze({ style: o.style, profile: Object.freeze({ ...o.profile, agent }) })) as unknown as readonly [HonVoiceOption, HonVoiceOption, HonVoiceOption]])));
 /** Each teammate's original voice (choice 1). */
 export const HON_AGENT_VOICES: Readonly<Record<string, HonVoiceProfile>> = Object.freeze(
   Object.fromEntries(Object.entries(HON_AGENT_VOICE_OPTIONS).map(([k, options]) => [k, options[0].profile])));

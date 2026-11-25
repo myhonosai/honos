@@ -74,6 +74,7 @@ export class CommunicationDispatcher {
           schoolId: delivery.schoolId, channel: delivery.channel, recipientAddress: delivery.recipientAddress,
           content: delivery.content, schoolName: delivery.schoolName, attempt: delivery.attempt,
           ...(delivery.subject ? { subject: delivery.subject } : {}),
+          ...(delivery.pictures ? { pictures: delivery.pictures } : {}),
           senderAddress: delivery.senderAddress, senderServiceId: delivery.senderServiceId,
         }), SEND_TIMEOUT_MS);
         result = { outcome: 'ACCEPTED', provider: adapter.provider, ...accepted };
