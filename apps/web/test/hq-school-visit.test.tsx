@@ -32,7 +32,7 @@ describe('HQ goes inside a school', () => {
     expect(renderToStaticMarkup(<HqVisitBannerView language="en" visit={null} />)).toBe('');
     const html = renderToStaticMarkup(<HqVisitBannerView language="en" visit={visit} timeLabel="8:00 PM" />);
     expect(html).toContain('HON HQ is inside this school'); expect(html).toContain('Until 8:00 PM');
-    expect(html).toContain('logged under your name'); expect(html).toContain('Payment and payout settings stay with the owner');
+    expect(html).toContain('logged under your name'); expect(html).toContain('Card charges, saved payment methods, refunds and payout settings stay with the owner');
     expect(html).toContain('data-hq-visit-leave'); expect(html).toContain('>Leave<');
     expect(renderToStaticMarkup(<HqVisitBannerView language="ko" visit={visit} busy />)).toContain('나가는 중');
   });

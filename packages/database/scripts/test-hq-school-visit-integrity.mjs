@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 // HQ goes inside a school (0696) integrity proof, TEST MODE, disposable database only. It proves: runtime holds only the three
 // entry points and no table access; only a current HQ owner or an hq.onboarding.manage operator goes inside (view-only operators,
 // HQ support, plain school owners, ended HQ grants and unknown subjects refused); Go inside makes the organization's SUPPORT_VISIT
-// system role (OWNER permissions minus school_pay.connection.manage and billing.hon.purchase) and a 4-hour grant, with HQ and
+// system role (OWNER permissions minus money settings, card charges, saved payment methods and refunds) and a 4-hour grant, with HQ and
 // school logs; an HQ person is refused by school features before the visit, let through during it (contacts actor, staff
 // eligibility) and refused again after Leave or expiry; money settings stay refused during the visit; replay, key reuse, extend,
 // leave-twice, paused school, own-visits read and immutable evidence; every lifted function carries the visit check.
@@ -127,7 +127,8 @@ try {
   const role = await row("SELECT id,name,is_system_role s,management_school_id m FROM hon.roles WHERE organization_id=$1 AND code='SUPPORT_VISIT'", [ORG]);
   assert.deepEqual({ name: role.name, s: role.s, m: role.m }, { name: 'HON HQ support', s: true, m: null });
   const missing = (await q('SELECT o.permission_code c FROM hon.role_permissions o WHERE o.role_id=$1 AND NOT EXISTS (SELECT 1 FROM hon.role_permissions r WHERE r.role_id=$2 AND r.permission_code=o.permission_code) ORDER BY 1', [OWNER_ROLE, role.id])).rows.map(r => r.c);
-  assert.deepEqual(missing, ['billing.hon.purchase', 'school_pay.connection.manage']);
+  assert.deepEqual(missing, ['billing.hon.purchase', 'billing.membership.refund.record', 'billing.payment.initiate', 'billing.refund.create',
+    'school_pay.autopay.manage', 'school_pay.connection.manage', 'school_pay.method.manage']);
   const grant = await row('SELECT g.* FROM hon.principal_role_grants g JOIN hon.hq_school_visits v ON v.role_grant_id=g.id WHERE v.id=$1', [first.visitId]);
   assert.equal(grant.principal_id, P('hq')); assert.equal(grant.role_id, role.id); assert.equal(grant.school_id, S1); assert.equal(grant.revoked_at, null);
   assert.deepEqual(await row("SELECT action_code a,reason r FROM hon.hq_school_visit_audit WHERE visit_id=$1", [first.visitId]), { a: 'ENTER', r: 'Help with class setup' });
@@ -144,7 +145,8 @@ try {
   assert.equal(await eligible('hq', S1), true);
   assert.equal(await contactsActor('hq', S2), P('hq'), 'the HQ person\'s own school works while they have a live visit');
   for (const perm of ['people.read', 'school.view', 'billing.invoice.issue']) assert.equal(await can('hq', S1, perm), true, perm);
-  for (const perm of ['school_pay.connection.manage', 'billing.hon.purchase']) assert.equal(await can('hq', S1, perm), false, perm);
+  for (const perm of ['school_pay.connection.manage', 'billing.hon.purchase', 'school_pay.autopay.manage', 'school_pay.method.manage', 'billing.payment.initiate',
+    'billing.refund.create', 'billing.membership.refund.record']) assert.equal(await can('hq', S1, perm), false, perm);
   // The visit grants nothing at another school of the organization.
   assert.equal((await row("SELECT count(*)::int n FROM hon.principal_role_grants WHERE principal_id=$1 AND school_id=$2 AND role_id=$3", [P('hq'), S2, role.id])).n, 0);
   // A second HQ person's visit is their own.
@@ -170,6 +172,7 @@ try {
   assert.equal(await eligible('hq', S1), false);
   const before = await row('SELECT (SELECT count(*) FROM hon.hq_school_visit_audit)::int a,(SELECT count(*) FROM hon.audit_events)::int e');
   assert.deepEqual(await leave('hq', S1), { schoolId: S1, left: false, replayed: false });
+  await deny(leave('schoolOwner', S1), 403, 'HQ_SCHOOL_VISIT_FORBIDDEN');
   assert.deepEqual(await row('SELECT (SELECT count(*) FROM hon.hq_school_visit_audit)::int a,(SELECT count(*) FROM hon.audit_events)::int e'), before);
   assert.equal(await row("SELECT action_code a FROM hon.audit_events WHERE school_id=$1 ORDER BY occurred_at DESC LIMIT 1", [S1]).then(r => r.a), 'hq.school.visit.left');
 

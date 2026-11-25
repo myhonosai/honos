@@ -1,10 +1,13 @@
 BEGIN;
 
 -- HQ goes inside a customer school (owner, 2026-11-25; like agency sub-account access).
--- David chose: "Full access anytime, logged"; "No, owner keeps money settings"; and "Let HQ logins work in schools".
+-- David chose: "Full access anytime, logged"; "No, owner keeps money settings"; "Let HQ logins work in schools"; and
+-- "No, owner keeps these" (card charges, saved payment methods and refunds).
 -- - "Go inside" gives the HQ person a 4-hour grant of the organization's system role SUPPORT_VISIT ("HON HQ support"):
---   the organization's OWNER permissions minus money settings (school_pay.connection.manage: the school's own payment
---   processor, payouts and credentials; billing.hon.purchase: the school's HON plan and top-ups). Owner-only features
+--   the organization's OWNER permissions minus money (school_pay.connection.manage: the school's own payment processor,
+--   payouts and credentials; billing.hon.purchase: the school's HON plan and top-ups; school_pay.autopay.manage and
+--   billing.payment.initiate: charging families; school_pay.method.manage: saved cards and banks; billing.refund.create
+--   and billing.membership.refund.record: refunds). Owner-only features
 --   gated on role code OWNER stay with the owner (owner invitations and handoff, A2P registration, role administration
 --   of OWNER-equivalent roles, suspended-owner reads).
 -- - Until now about 60 school features refused ANY principal holding an hq_operator_grants row. Those checks now let an
@@ -122,7 +125,9 @@ $$;
 CREATE FUNCTION hon.ensure_hq_support_role(p_org uuid) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE v_owner uuid; v_role uuid;
-  excluded constant text[] := ARRAY['school_pay.connection.manage','billing.hon.purchase'];
+  -- Owner decisions 2026-11-25: money settings, card charges, saved payment methods and refunds stay with the owner.
+  excluded constant text[] := ARRAY['school_pay.connection.manage','billing.hon.purchase','school_pay.autopay.manage',
+    'school_pay.method.manage','billing.payment.initiate','billing.refund.create','billing.membership.refund.record'];
 BEGIN
   SELECT id INTO v_owner FROM hon.roles WHERE organization_id = p_org AND code = 'OWNER' AND is_system_role;
   IF v_owner IS NULL THEN RAISE EXCEPTION 'HQ_SCHOOL_VISIT_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
@@ -270,8 +275,14 @@ BEGIN
   END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('hq.school.visit:' || actor::text || ':' || p_school_id::text, 0));
   SELECT * INTO visit FROM hon.hq_school_visits v WHERE v.hq_principal_id = actor AND v.school_id = p_school_id AND v.left_at IS NULL FOR UPDATE;
-  -- Nothing open: no write, nothing to record.
-  IF NOT FOUND THEN RETURN jsonb_build_object('schoolId', p_school_id, 'left', false, 'replayed', false); END IF;
+  -- Nothing open: no write, nothing to record. Only HQ people (even after their HQ grant ended) get the answer; anyone
+  -- else learns nothing about any school.
+  IF NOT FOUND THEN
+    IF NOT EXISTS (SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id = actor) THEN
+      RAISE EXCEPTION 'HQ_SCHOOL_VISIT_FORBIDDEN' USING ERRCODE = '42501';
+    END IF;
+    RETURN jsonb_build_object('schoolId', p_school_id, 'left', false, 'replayed', false);
+  END IF;
   at := clock_timestamp();
   INSERT INTO hon.hq_school_visit_requests(actor_principal_id, idempotency_key, request_fingerprint, request_id, correlation_id, status)
     VALUES (actor, p_key, fingerprint, p_request_id, p_correlation_id, 'IN_PROGRESS');
