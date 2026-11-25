@@ -8,13 +8,14 @@ import styles from './switcher.module.css';
 
 /**
  * Account switcher under the logo (owner, 2026-11-24; like HighLevel's sub-account switcher). Navigation only:
- * it lists HON HQ for HQ people and the schools this person already has access to. Every school page and API
+ * it lists HON HQ for HQ people (with a link to go inside any school from the HQ schools list) and the schools this
+ * person already has access to, including schools HQ is inside right now. Every school page and API
  * still verifies the school itself; the list grants nothing.
  */
 const copy = {
-  en: { label: 'Switch account', hq: 'HON HQ', hqSub: 'Company control plane', search: 'Find a school', none: 'No other schools', current: 'Current' },
-  ko: { label: '계정 전환', hq: 'HON HQ', hqSub: '회사 관리', search: '도장 찾기', none: '다른 도장이 없습니다', current: '현재' },
-  es: { label: 'Cambiar de cuenta', hq: 'HON HQ', hqSub: 'Panel de la empresa', search: 'Buscar escuela', none: 'No hay otras escuelas', current: 'Actual' },
+  en: { label: 'Switch account', hq: 'HON HQ', hqSub: 'Company control plane', search: 'Find a school', none: 'No other schools', current: 'Current', goInside: 'Go inside another school…', goInsideSub: 'Pick from all HON schools' },
+  ko: { label: '계정 전환', hq: 'HON HQ', hqSub: '회사 관리', search: '도장 찾기', none: '다른 도장이 없습니다', current: '현재', goInside: '다른 도장에 들어가기…', goInsideSub: 'HON의 모든 도장에서 고르기' },
+  es: { label: 'Cambiar de cuenta', hq: 'HON HQ', hqSub: 'Panel de la empresa', search: 'Buscar escuela', none: 'No hay otras escuelas', current: 'Actual', goInside: 'Entrar en otra escuela…', goInsideSub: 'Elige entre todas las escuelas de HON' },
 } as const;
 const text = (language: string) => language === 'ko' ? copy.ko : language === 'es' ? copy.es : copy.en;
 
@@ -48,6 +49,7 @@ export function SchoolSwitcherView({ language, current, isHq, schools, query = '
     <div className={styles.panel} role="menu" aria-label={c.label}>
       {schools.length > 6 && <input type="search" className={styles.search} aria-label={c.search} placeholder={c.search} value={query} onChange={e => onQuery(e.target.value)} />}
       {isHq && <a role="menuitem" href="/hq" data-switch-to="hq" aria-current={current.kind === 'hq' ? 'true' : undefined}><strong>{c.hq}</strong><small>{c.hqSub}</small></a>}
+      {isHq && <a role="menuitem" href="/hq/schools" data-switch-to="hq-schools"><strong>{c.goInside}</strong><small>{c.goInsideSub}</small></a>}
       {shown.map(s => <a key={s.schoolId} role="menuitem" href={schoolHomeHref(s)} data-switch-to={s.schoolId}
         aria-current={current.kind === 'school' && current.schoolId === s.schoolId ? 'true' : undefined}><strong>{s.schoolName}</strong><small>{s.organizationName}</small></a>)}
       {shown.length === 0 && <p className={styles.none}>{c.none}</p>}
