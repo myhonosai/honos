@@ -3916,7 +3916,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.read_family_message_inbox(text)',true,true,'search_path=pg_catalog, hon','bf49605bc28739c2b9fad8e9272d7de8a89726e059efd9a79cdd7442755fadc3'),
 ('hon.read_family_message_thread(text,uuid)',true,true,'search_path=pg_catalog, hon','2a3e50dfdfd9e083baec07b7415b69d4d608b42dcd2423b3b0f62795aa594bcb'),
 ('hon.mark_family_message_thread_read(text,jsonb,uuid,uuid)',true,true,'search_path=pg_catalog, hon','4a8709f673dad310ca48205c89698a47a3ede41ca75a4a8765919fb9b0599ac6'),
-('hon.reply_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','15319da45d4f9dfd4c979700a88010b4972d70f90e9594e9afb2887ce3147a7f')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.reply_family_message(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','1cae3e247d7ccfa1b72b47e4aa2948a8d99f024bd78619023fd4e12343f72db7')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -5311,7 +5311,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.school_announcement_staff_json(hon.school_announcements)',true,false,'search_path=pg_catalog, hon','e91a1110e8229f3cb6243554a745b9657e3a8c3d23a792aefed005405a945695'),
 ('hon.read_parent_school_announcements(text)',true,true,'search_path=pg_catalog, hon','b42286f83b937b65ff94ac33149c3ab4dd2799338939d70d37db7fb597c63da6'),
 ('hon.read_school_announcements(text)',true,true,'search_path=pg_catalog, hon','8e974dde8c79198e935240ed0f9270fb3fb99eee7c8cc17a60db1b75de64d696'),
-('hon.publish_school_announcement(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71af2f8ebb7fd6af9bab5d61e7f6f94796b6034e2225d056de1b96eaa1661496'),
+('hon.publish_school_announcement(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','7f50ec48b95451729488f8ca4a2198a011ee9999ed73c6acc2e5aa41f92549d0'),
 ('hon.withdraw_school_announcement(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','a0a798a755e39c3fba2c2f20a1fd4b1812e22cd917111ffd36f8e902b4d721d8')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
@@ -5680,12 +5680,12 @@ DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_ro
   FOR f IN SELECT * FROM (VALUES
 ('hon.parent_push_token_ok(text)',false,false,false,'search_path=pg_catalog','64cbc11052ab6aea74186b1cc9f1ddda87b6ce97d9687f2ac7aec64ba4cee53e'),
 ('hon.guard_parent_push_device()',false,false,false,'search_path=pg_catalog, hon','9e4b082ee1cd84b0e6c0d641f47262f202bac913b1ac8191668231dcadaec68f'),
-('hon.guard_parent_push_delivery()',false,false,false,'search_path=pg_catalog, hon','f152460ff71f820c99aa5fd5945164ab8db93f4cd66cb685a3df269816f2939b'),
+('hon.guard_parent_push_delivery()',false,false,false,'search_path=pg_catalog, hon','f5f0de8787da8e66af5eb4e605d7d1276412b89e8af891ab16a1383a2d82cb65'),
 ('hon.parent_push_principal_live_at(uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','12522dac7d3a7f73efa11a8ffb18e62b05daa24e957fd2cf55aa466c9f39287c'),
 ('hon.parent_push_scope(text)',true,false,false,'search_path=pg_catalog, hon','cc23b80a7a54efa4359ef77b38469c30ca57e15d5e0959a456716b209f2db3da'),
 ('hon.register_parent_push_device(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','8915741e9c7ef45d4ae8bc9ed811a5c1e08ba69a88f8abe8b726e785d07463e3'),
 ('hon.unregister_parent_push_device(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','a6cdc2689ee4d07f94e7a6dd9d55ec756a8c542ad1be33d42116cf4fc63944bd'),
-('hon.claim_parent_push_deliveries(integer,integer)',true,false,true,'search_path=pg_catalog, hon','c39c6a3334e45bec14e3f8c928dd3938bdf8386b3c2a7b8a2465fe8e3f69f37d'),
+('hon.claim_parent_push_deliveries(integer,integer)',true,false,true,'search_path=pg_catalog, hon','d78a85c7badb6b092ef16d496efa75c9bcbb2cff850d36f6abed9b5b41a8300f'),
 ('hon.record_parent_push_send(uuid,uuid,jsonb)',true,false,true,'search_path=pg_catalog, hon','8afe507bc68fbc6ffb10914d177b1dd1c9c3da5d75c722af68212afc6a53b10f'),
 ('hon.claim_parent_push_receipts(integer,integer)',true,false,true,'search_path=pg_catalog, hon','2e3117cf7b3871cc70474e3db0db52b46199050571971c53146ff74b09c8c4c5'),
 ('hon.record_parent_push_receipt(uuid,uuid,jsonb)',true,false,true,'search_path=pg_catalog, hon','01287d5d3efbe246579bc5b8e0fe56e7d3d9ef0eac886ae79990ecddc80fcccf')) e(signature,definer,runtime_allowed,worker_allowed,config,body_hash) LOOP
@@ -7090,6 +7090,37 @@ DO $$ DECLARE f record; safe boolean; BEGIN
     RAISE EXCEPTION 'hon.person_profile_details must stay private with forced RLS'; END IF;
 END $$;
 -- End profile details exact verification.
+-- Staff-chosen phone alerts exact verification (0658): four private helpers nobody else may run, and one private forced-RLS
+-- request table with exactly its two guards. The changed staff commands and worker claim are pinned in the 0330, 0576 and 0601 sections.
+DO $$ DECLARE f record; safe boolean; worker oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.guard_parent_push_request()',false,'search_path=pg_catalog, hon','c6cefca6bb46af125148bdf2308a5c651fc245e707e37f6fb97a4db02e639b4a'),
+('hon.request_parent_push(uuid,uuid,uuid,text,uuid,uuid,uuid,uuid,uuid,uuid)',true,'search_path=pg_catalog, hon','c3c05c806639ac2fcc7617b14c3e7db22e15a0bf5b4c4a8ee97417064acd948b'),
+('hon.parent_push_choice(jsonb,text[])',false,'search_path=pg_catalog','cfb9c4239c12117d337b1e9dbaa22954312e9fea4f13a6c9c2776ab68f503b86'),
+('hon.parent_push_principal_in_family(uuid,uuid,uuid,uuid)',true,'search_path=pg_catalog, hon','c18a444b92328eab98619def2521206f72cded18fabef912f752eef7eb5c40a9')) e(signature,definer,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      AND (worker IS NULL OR NOT has_function_privilege(worker,p.oid,'EXECUTE'))
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner)
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe parent push request function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.parent_push_requests'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.parent_push_requests'::regclass)
+    OR has_table_privilege('hon_runtime','hon.parent_push_requests','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.parent_push_requests','SELECT,INSERT,UPDATE,REFERENCES')
+    OR (worker IS NOT NULL AND (has_table_privilege(worker,'hon.parent_push_requests','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR has_any_column_privilege(worker,'hon.parent_push_requests','SELECT,INSERT,UPDATE,REFERENCES'))) THEN
+    RAISE EXCEPTION 'Unsafe parent push request table'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_requests'::regclass AND NOT tgisinternal AND tgenabled='O'
+      AND ((tgname='parent_push_requests_guard' AND tgfoid='hon.guard_parent_push_request()'::regprocedure)
+        OR (tgname='parent_push_requests_no_truncate' AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure)))<>2
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.parent_push_requests'::regclass AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'hon.parent_push_requests must carry exactly its two guards'; END IF;
+END $$;
+-- End staff-chosen phone alerts exact verification.
 
 -- Contact card membership details exact verification (0659): one read-only runtime entry point.
 DO $$ DECLARE safe boolean; BEGIN
