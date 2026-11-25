@@ -287,6 +287,51 @@ try{
  assert.deepEqual([fin.usedCredits,fin.heldCredits,fin.availableCredits,fin.inProgress],[40,10,150,0]);
  assert.equal((await creative.read(H('reader'),p0.generationId)).status,'UNDER_REVIEW');
 
+ // ---------- 5b. cost basis (0651) ----------
+ // A cost is stored with whether it is HON's own estimate or the provider's reported cost; a caller that predates the key
+ // stores no basis, and a basis never stands without a cost.
+ const fresh=async()=>(await billing.call('createHqCreativeGeneration',[H('owner'),JSON.stringify(ask({units:1,prompt:`Basis poster ${K()}`})),
+  JSON.stringify({providerId:'HIGGSFIELD',modelCode:'synthetic-image-1'}),K()],v=>v)).generation;
+ const basisOf=async id=>(await row('SELECT provider_cost_basis b,cost_status c,provider_cost_microunits m FROM hon.hq_creative_generations WHERE id=$1',[id]));
+ const img=[{mediaType:'image/png',width:64,height:64,durationSeconds:null,providerAssetReference:'synthetic:basis:1'}];
+ const won0=await fresh();
+ const rawRecord=(id,p)=>restricted.query('SELECT hon.record_hq_creative_generation_result($1,$2,$3::jsonb)',[H('owner'),id,JSON.stringify(p)]);
+ for(const bad of [
+  {outcome:'SUCCEEDED',finalUnits:1,providerCostMicrounits:900,providerCostBasis:'GUESS',failureReason:null,assets:img},
+  {outcome:'SUCCEEDED',finalUnits:1,providerCostMicrounits:900,providerCostBasis:null,failureReason:null,assets:img},
+  {outcome:'SUCCEEDED',finalUnits:1,providerCostMicrounits:900,providerCostBasis:1,failureReason:null,assets:img},
+  {outcome:'FAILED',finalUnits:null,providerCostMicrounits:null,providerCostBasis:'HON_ESTIMATE',failureReason:'PROVIDER_REJECTED',assets:null},
+  {outcome:'NOT_SENT',finalUnits:null,providerCostMicrounits:null,providerCostBasis:'HON_ESTIMATE',failureReason:'INVALID_REQUEST',assets:null},
+  {outcome:'UNKNOWN',finalUnits:null,providerCostMicrounits:null,providerCostBasis:'PROVIDER_REPORTED',failureReason:'PROVIDER_UNKNOWN',assets:null},
+  {outcome:'SUCCEEDED',finalUnits:1,providerCostMicrounits:900,providerCostBasis:'HON_ESTIMATE',extra:true,failureReason:null,assets:img},
+ ]) await sqlDeny(rawRecord(won0.generationId,bad),'22023');
+ assert.deepEqual(await basisOf(won0.generationId),{b:null,c:'PENDING',m:null},'a refused result writes nothing');
+ await record('owner',won0.generationId,{outcome:'SUCCEEDED',finalUnits:1,providerCostMicrounits:900,providerCostBasis:'HON_ESTIMATE',failureReason:null,assets:img});
+ assert.deepEqual(await basisOf(won0.generationId),{b:'HON_ESTIMATE',c:'RECORDED',m:'900'});
+ const legacy=await fresh();
+ await record('owner',legacy.generationId,{outcome:'SUCCEEDED',finalUnits:1,providerCostMicrounits:800,failureReason:null,assets:img});
+ assert.deepEqual(await basisOf(legacy.generationId),{b:null,c:'RECORDED',m:'800'},'a caller without the key records no basis');
+ const reported=await fresh();
+ await record('owner',reported.generationId,{outcome:'FAILED',finalUnits:null,providerCostMicrounits:250,providerCostBasis:'PROVIDER_REPORTED',failureReason:'PROVIDER_REJECTED',assets:null});
+ assert.deepEqual(await basisOf(reported.generationId),{b:'PROVIDER_REPORTED',c:'RECORDED',m:'250'});
+ const unpriced=await fresh();
+ await record('owner',unpriced.generationId,{outcome:'FAILED',finalUnits:null,providerCostMicrounits:null,providerCostBasis:null,failureReason:'PROVIDER_REJECTED',assets:null});
+ assert.deepEqual(await basisOf(unpriced.generationId),{b:null,c:'UNKNOWN',m:null});
+ // Through the API: the synthetic adapter's own rate is recorded as a HON estimate.
+ provider.behaviour='SUCCEED';
+ const viaApi=await creative.create(H('owner'),ask({units:1,prompt:'Basis poster via API'}),K());
+ assert.equal(viaApi.generation.status,'SUCCEEDED');
+ assert.equal((await basisOf(viaApi.generation.generationId)).b,'HON_ESTIMATE');
+ provider.behaviour='REJECT_WITH_COST';
+ const rejApi=await creative.create(H('owner'),ask({units:1,prompt:'Basis poster rejected'}),K());
+ assert.deepEqual(await basisOf(rejApi.generation.generationId),{b:'HON_ESTIMATE',c:'RECORDED',m:'250'});
+ provider.behaviour='SUCCEED';
+ // The basis moves only with the result; afterwards it is as fixed as the cost, and it never stands without a recorded cost.
+ await sqlDeny(admin.query("UPDATE hon.hq_creative_generations SET provider_cost_basis='PROVIDER_REPORTED',version=version+1 WHERE id=$1",[won0.generationId]),'42501');
+ await admin.query('ALTER TABLE hon.hq_creative_generations DISABLE TRIGGER guarded');
+ try{await sqlDeny(admin.query("UPDATE hon.hq_creative_generations SET provider_cost_basis='HON_ESTIMATE' WHERE id=$1",[unpriced.generationId]),'23514');}
+ finally{await admin.query('ALTER TABLE hon.hq_creative_generations ENABLE TRIGGER guarded');}
+
  // ---------- 6. immutability and separation ----------
  await sqlDeny(admin.query("UPDATE hon.hq_creative_generations SET prompt='changed' WHERE id=$1",[ok.generation.generationId]),'42501');
  await sqlDeny(admin.query("UPDATE hon.hq_creative_generations SET status='GENERATING',version=version+1 WHERE id=$1",[rej.generation.generationId]),'42501');
@@ -305,7 +350,7 @@ try{
  await deny(creative.studio(H('leaver')),403,'SAAS_FORBIDDEN');
  await deny(creative.create(H('leaver'),ask({units:1}),lk),403,'SAAS_FORBIDDEN');
  assert.equal((await row('SELECT count(*)::int n FROM hon.hq_creative_generations WHERE requested_by=$1',[P('leaver')])).n,0);
- console.log('HQ Creative Studio proof passed (posture, authority incl. read-only and owner-only, provider-not-connected before any write, budget periods/versions/history/floor, rates, request refusals incl. pause (and the pause-gate race)/campaign/cap/in-progress, idempotent replay and key reuse, outcomes recorded once, interrupted after 120 s, owner resolution, immutability, no school wallet rows, revocation).');
+ console.log('HQ Creative Studio proof passed (posture, authority incl. read-only and owner-only, provider-not-connected before any write, budget periods/versions/history/floor, rates, request refusals incl. pause (and the pause-gate race)/campaign/cap/in-progress, idempotent replay and key reuse, outcomes recorded once, interrupted after 120 s, owner resolution, cost basis (0651), immutability, no school wallet rows, revocation).');
 }finally{
  await cleanup().catch(e=>console.error('cleanup failed',e));
  await Promise.all([admin.end(),restricted.end(),database.onModuleDestroy?.()]);

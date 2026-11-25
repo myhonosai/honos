@@ -31,28 +31,28 @@ export function SchoolReferralResults({ data }: { data: SchoolReferralSnapshot }
     { count: 30, kind: 'LIFETIME_MEMBERSHIP', configured: policy?.lifetimeCount },
   ];
   return <div className={styles.results} data-school-records={s.schoolId}>
-    <section className={base.panel}><div className={base.sectionHeader}><h2 dir="auto">{s.schoolName}</h2><span className={base.badge}>Authorized HQ school details</span></div><p className={styles.note}>School identity: {s.schoolId} · Leaderboard display: {s.displayMode === 'ANONYMOUS' ? 'anonymous to other schools' : 'school name opted in'}. Names here are confidential to authorized HQ users.</p>
+    <section className={base.panel}><div className={base.sectionHeader}><h2 dir="auto">{s.schoolName}</h2><span className={base.badge}>School details</span></div><p className={styles.note}>School identity: {s.schoolId} · Leaderboard display: {s.displayMode === 'ANONYMOUS' ? 'anonymous to other schools' : 'school name opted in'}. Names here are confidential to authorized HQ users.</p>
       <dl className={styles.states}>{(['qualified', 'pending', 'rejected', 'refunded', 'reversed'] as const).map((name) => <div key={name}><dt className={detail.capitalize}>{name} referrals</dt><dd data-referral-state={name}>{s.referrals[name].toLocaleString('en-US')}</dd></div>)}</dl>
-      <dl className={styles.facts}><div><dt>Official all-time leaderboard rank</dt><dd>{s.allTimeRank === null ? 'Not ranked' : `#${s.allTimeRank.toLocaleString('en-US')}`}<small>Returned by Champions Club; ties share a rank. Exact tie-order position is not provided by this statistics contract.</small></dd></div><div><dt>Latest reported milestone</dt><dd>{latest ? `${latest.milestoneCount} referrals · ${rewardNames[latest.rewardKind]}` : 'None reported'}<small>Qualification progress is not an approved or fulfilled reward.</small></dd></div></dl>
+      <dl className={styles.facts}><div><dt>All-time rank</dt><dd>{s.allTimeRank === null ? 'Not ranked' : `#${s.allTimeRank.toLocaleString('en-US')}`}<small>Ties share a rank.</small></dd></div><div><dt>Latest reported milestone</dt><dd>{latest ? `${latest.milestoneCount} referrals · ${rewardNames[latest.rewardKind]}` : 'None reported'}<small>Progress isn’t a reward until it’s approved.</small></dd></div></dl>
     </section>
     <section className={base.panel} aria-labelledby="school-milestones-heading"><div className={base.sectionHeader}><h2 id="school-milestones-heading">Referral milestones</h2><span className={base.badge}>{policy ? `Reward policy v${policy.policyVersion}` : 'Policy undecided'}</span></div>
       <p className={styles.note}>Official qualified count: {ms.qualifiedReferrals.toLocaleString('en-US')}. Reached thresholds and next-step remaining counts come directly from the backend. They do not establish ledger awards.</p>
       <div className={detail.ladder}>{ladder.map(({ count, kind, configured }) => {
         const reached = ms.reached.some((item) => item.milestoneCount === count && item.rewardKind === kind);
         const next = ms.nextMilestone?.milestoneCount === count && ms.nextMilestone.rewardKind === kind ? ms.nextMilestone : null;
-        return <section key={count}><h3>{count} referrals</h3><p>{rewardNames[kind]}</p><strong>{reached ? 'Reached · backend reported' : next ? `${next.remaining} remaining · backend reported` : configured === count ? 'Later threshold · remaining not provided' : 'Roadmap target · not configured at this threshold'}</strong></section>;
+        return <section key={count}><h3>{count} referrals</h3><p>{rewardNames[kind]}</p><strong>{reached ? 'Reached · backend reported' : next ? `${next.remaining} remaining · backend reported` : configured === count ? 'Later goal' : 'Planned goal · not set up yet'}</strong></section>;
       })}</div>
       {ms.nextMilestone && <p className={styles.note} data-next-milestone>Next official milestone: {ms.nextMilestone.milestoneCount} referrals · {rewardNames[ms.nextMilestone.rewardKind]} · {ms.nextMilestone.remaining} remaining.</p>}
-      {!ms.nextMilestone && <p className={styles.note}>No next milestone was reported. This does not establish fulfillment or a lifetime entitlement.</p>}
-      <details className={detail.disclosure}><summary>All backend-reported reached thresholds</summary>{ms.reached.length ? <ul>{ms.reached.map((item, i) => <li key={`${item.rewardKind}:${item.milestoneCount}:${i}`}>{item.milestoneCount} referrals · {rewardNames[item.rewardKind]}</li>)}</ul> : <p>No reached thresholds were returned.</p>}</details>
+      {!ms.nextMilestone && <p className={styles.note}>No next goal.</p>}
+      <details className={detail.disclosure}><summary>Goals reached</summary>{ms.reached.length ? <ul>{ms.reached.map((item, i) => <li key={`${item.rewardKind}:${item.milestoneCount}:${i}`}>{item.milestoneCount} referrals · {rewardNames[item.rewardKind]}</li>)}</ul> : <p>No goals reached yet.</p>}</details>
     </section>
-    {s.hold && <details className={`${base.panel} ${detail.disclosure}`}><summary>Confidential HQ leaderboard review</summary><p>Reason: {stateName(s.hold.reasonCode)} · placed {utc(s.hold.placedAt)}.</p><p className={styles.note}>A hold is a review state, not a finding of fraud. It does not itself reverse referrals or void rewards. No hold commands are available here.</p></details>}
-    <section className={base.panel}><h2>Qualified referrals by month</h2><p className={styles.note}>The backend returns the last 12 UTC months, including the current month. These are not independently calculated rankings.</p><dl className={detail.months}>{s.monthlyQualified.map((item) => <div key={item.month}><dt>{item.month}</dt><dd>{item.qualified.toLocaleString('en-US')}</dd></div>)}</dl></section>
+    {s.hold && <details className={`${base.panel} ${detail.disclosure}`}><summary>Private HQ review</summary><p>Reason: {stateName(s.hold.reasonCode)} · placed {utc(s.hold.placedAt)}.</p><p className={styles.note}>A hold means HQ is checking this school. It’s not an accusation and doesn’t cancel anything.</p></details>}
+    <section className={base.panel}><h2>Qualified referrals by month</h2><p className={styles.note}>The last 12 months, including this one.</p><dl className={detail.months}>{s.monthlyQualified.map((item) => <div key={item.month}><dt>{item.month}</dt><dd>{item.qualified.toLocaleString('en-US')}</dd></div>)}</dl></section>
     <section className={base.panel}><h2>Referral history</h2><p className={styles.note}>Newest {s.historyLimit} state-transition events at most · not complete referral history. Several events may describe the same referral. Official totals above are independent aggregates.</p>
       {!s.history.length && <p>No referral history events were returned for this school.</p>}
       <ol className={detail.records}>{s.history.map((item, index) => <li key={`${item.attributionId}:${item.occurredAt}:${index}`}><div className={base.sectionHeader}><h3 dir="auto">{item.referredOrganizationName}</h3><span className={base.badge}>{stateName(item.toState)}</span></div><p>{item.fromState ? stateName(item.fromState) : 'New referral'} → {stateName(item.toState)} · {stateName(item.reason)}</p><p className={styles.note}>{utc(item.occurredAt)} · Referral {item.attributionId}</p></li>)}</ol>
     </section>
-    <section className={base.panel}><h2>Complete school reward history unavailable</h2><p className={styles.note}>The current HQ ledger returns a limited global history. A separately authorized, paginated HQ per-school reward-history contract is being coordinated with the backend owner. No school reward records, earned amounts, approvals or fulfillment are inferred from that global window.</p><Link className={styles.link} href="/hq/growth/rewards">Review global reward accounting →</Link></section>
+    <section className={base.panel}><h2>Full reward history coming later</h2><p className={styles.note}>The current HQ ledger returns a limited global history. A separately authorized, paginated HQ per-school reward-history contract is being coordinated with the backend owner. No school reward records, earned amounts, approvals or fulfillment are inferred from that global window.</p><Link className={styles.link} href="/hq/growth/rewards">See all rewards owed →</Link></section>
   </div>;
 }
 
@@ -73,7 +73,7 @@ export function HqSchoolReferrals(): React.ReactElement {
       <DetailState state={directory}/>
       {directory.kind === 'ready' && <>
         <p className={styles.note}>Search or choose a school to view its referral records.</p>
-        {directory.data.schools.length === 0 ? <p role="status">No authorized school identities were returned.</p> : <div className={detail.selection}>
+        {directory.data.schools.length === 0 ? <p role="status">No schools to show.</p> : <div className={detail.selection}>
           <label>Search school or organization<input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setSelected(null); }} autoComplete="off"/></label>
           <div><label htmlFor="champions-school-selection">Choose school</label><select id="champions-school-selection" value={schoolId ?? ''} onChange={(e) => setSelected(e.target.value ? { schoolId: e.target.value, revision: directoryRevision } : null)}><option value="">Select a school…</option>{schools.map((s) => <option key={s.schoolId} value={s.schoolId}>{s.schoolDisplayName} — {s.organizationDisplayName}</option>)}</select></div>
           {!schools.length && <p role="status">No matching schools in the returned directory.</p>}
@@ -83,6 +83,6 @@ export function HqSchoolReferrals(): React.ReactElement {
     </section>
     <ChampionsDetailNav/>
     {schoolId && <button className={detail.refresh} type="button" disabled={state.kind === 'loading'} onClick={() => setRevision((r) => r + 1)}>Refresh school referrals</button>}
-    <div aria-live="polite" aria-busy={state.kind === 'loading'} className={styles.results}><DetailState state={state}/>{state.kind === 'ready' && <><Retrieved at={state.retrievedAt}/><SchoolReferralResults data={state.data}/></>}{state.kind === 'idle' && directory.kind === 'ready' && <p className={styles.note}>Select a school to load its referral statistics. No school is selected automatically.</p>}</div>
+    <div aria-live="polite" aria-busy={state.kind === 'loading'} className={styles.results}><DetailState state={state}/>{state.kind === 'ready' && <><Retrieved at={state.retrievedAt}/><SchoolReferralResults data={state.data}/></>}{state.kind === 'idle' && directory.kind === 'ready' && <p className={styles.note}>Pick a school to see its referrals.</p>}</div>
   </div>;
 }

@@ -216,7 +216,7 @@ test school, watched end to end, with David's explicit OK.
 | C0 | This design doc | none |
 | C1 | Async provider jobs: submit/poll runtime interface, job records with a worker lease, 30-minute UNKNOWN timeout, daily per-school caps, HQ platform daily provider spend guard | 0354 |
 | C2 | Higgsfield and HeyGen adapters with fake HTTP servers in tests, readiness switches, HeyGen webhook receipt (hint only) | none |
-| C3 | Private media storage: download and verify, Supabase Storage bucket, signed reads, delete | 0671 |
+| C3 | Private media storage: download and verify, Supabase Storage bucket, signed reads, delete | 0691 |
 | C4 | Moderation (blocklist) and human approval of assets | 0356 |
 | C5 | Attach approved media to social posts and ads; AI team creative briefs | 0357 (merges after 0348, #341) |
 | C6 | Creative Studio screens: review queue, approved library, attach to post; EN/KO/ES, desktop and phone | none |
@@ -271,7 +271,7 @@ the HeyGen webhook endpoint, and moderation coverage.
   environment fake (tests inject fakes directly), and `avatar.photo.video` (needs A3, #294).
 - Tests: `apps/api/test/creative-provider-adapters.test.cjs` (9) against fake HTTP providers on 127.0.0.1.
 
-## 12. C3 as built (HON media storage, migration 0671)
+## 12. C3 as built (HON media storage, migration 0691)
 
 - **Where files live:** one private Supabase Storage bucket (`SupabaseCreativeMediaStore`). READY only with
   `HON_CREATIVE_MEDIA_STORAGE_APPROVED` exactly `true`, an https project origin in `HON_CREATIVE_MEDIA_STORAGE_URL`,

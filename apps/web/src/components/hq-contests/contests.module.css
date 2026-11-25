@@ -11,3 +11,13 @@
 .inline { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .inline > div { display: grid; gap: 4px; min-width: 10rem; flex: 1 1 10rem; }
 @media (max-width: 700px) { .prize { grid-template-columns: minmax(0, 1fr); } }
+.guide { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.guide li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 4px 10px; align-items: start; padding: 10px; border: 1px solid #2a4560; border-radius: 10px; }
+.guide li::before { counter-increment: step; content: counter(step); grid-row: span 3; display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: #1b3550; font-weight: 800; }
+.guide li[data-state="DONE"]::before { content: "✓"; background: #0f2a24; color: #8de3d8; }
+.guide li[data-state="NOW"] { border-color: #5fb8f0; background: #10243a; }
+.guide li[data-state="NOW"]::before { background: linear-gradient(135deg, #8de3d8, #5fb8f0); color: #04202a; }
+.guide strong { font-size: 15px; }
+.guide p { margin: 0; }
+.stepState { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--hon-muted, #9fb4c8); }
+.guide li[data-state="NOW"] .stepState { color: #8de3d8; }
