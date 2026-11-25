@@ -414,6 +414,7 @@
     "0656_person_profile_details.sql": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240",
     "0657_school_conversations_person_filter.sql": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e",
     "0658_parent_push_staff_choice.sql": "4a6cc907ac65dd0ecd598e3708a13a2617ef7b840e92559bb6b43f04f6e2a8cc",
-    "0659_school_contact_membership_details.sql": "7664c2da2c5603dc4bb2d0c35fbf014a974ed68c981b5563bd040b1f5006b63f"
+    "0659_school_contact_membership_details.sql": "7664c2da2c5603dc4bb2d0c35fbf014a974ed68c981b5563bd040b1f5006b63f",
+    "0660_website_starter_art.sql": "26fe9c89a8d32379f32e3c579a1b29375579f46ba8c2e1fb5b71fb4d3be248d3"
   }
 }
