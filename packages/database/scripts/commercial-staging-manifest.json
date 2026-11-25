@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "e6d6ce4299c01df9f0b5e3dc7d2dda69b97e15f4741330cd9a32feb58b2676d1",
+  "chainSha256": "6a83b0b774e4e79a86a1d13a153cc35060f478e1f5e0fa2c8a170797fc0693cb",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -933,6 +933,10 @@
     {
       "file": "0650_chad_lead_plan.sql",
       "sha256": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487"
+    },
+    {
+      "file": "0651_hq_creative_cost_basis.sql",
+      "sha256": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219"
     },
     {
       "file": "0655_mobile_handoff_single_use.sql",
