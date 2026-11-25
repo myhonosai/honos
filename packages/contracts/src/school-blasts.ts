@@ -89,10 +89,21 @@ export function schoolBlastPictureLine(assetId: string): string { return `{{pict
 /** The distinct picture ids of a body's picture lines, in order of first use. */
 export function schoolBlastPictureIds(body: string): string[] { return [...new Set(pictureMatches(body).map(m => m[1]!))]; }
 export function schoolBlastPictureCount(body: string): number { return pictureMatches(body).length; }
+/**
+ * 0654: an email body may also hold video lines {{video:<assetId>}} (shown as the video's poster linking to its page).
+ * Pictures and videos together are at most 10. Mirrors hon.school_blast_body_ok as replaced by 0654.
+ */
+const VIDEO_LINE = /^\{\{video:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}\}$/;
+const videoMatches = (body: string) => body.split('\n').map(line => VIDEO_LINE.exec(line)).filter((m): m is RegExpExecArray => m !== null);
+export function schoolBlastVideoLine(assetId: string): string { return `{{video:${assetId.toLowerCase()}}}`; }
+/** The distinct video ids of a body's video lines, in order of first use. */
+export function schoolBlastVideoIds(body: string): string[] { return [...new Set(videoMatches(body).map(m => m[1]!))]; }
+/** Picture and video lines together (the limit is SCHOOL_BLAST_LIMITS.pictures). */
+export function schoolBlastMediaCount(body: string): number { return pictureMatches(body).length + videoMatches(body).length; }
 export function schoolBlastBodyOk(v: unknown, channel: SchoolBlastChannel): v is string {
   if (channel === 'SMS') return schoolBlastTextOk(v, 1, SCHOOL_BLAST_LIMITS.smsBody);
-  return typeof v === 'string' && v.length <= SCHOOL_BLAST_LIMITS.emailBody && schoolBlastPictureCount(v) <= SCHOOL_BLAST_LIMITS.pictures
-    && schoolBlastTextOk(v.split('\n').map(line => PICTURE_LINE.test(line) ? 'x' : line).join('\n'), 1, SCHOOL_BLAST_LIMITS.emailBody);
+  return typeof v === 'string' && v.length <= SCHOOL_BLAST_LIMITS.emailBody && schoolBlastMediaCount(v) <= SCHOOL_BLAST_LIMITS.pictures
+    && schoolBlastTextOk(v.split('\n').map(line => PICTURE_LINE.test(line) || VIDEO_LINE.test(line) ? 'x' : line).join('\n'), 1, SCHOOL_BLAST_LIMITS.emailBody);
 }
 export function schoolBlastNameOk(v: unknown): v is string {
   return typeof v === 'string' && !EDGE_SPACE.test(v) && v.length >= 1 && v.length <= SCHOOL_BLAST_LIMITS.name && !CONTROL.test(v) && !/[\n\r\t]/.test(v);

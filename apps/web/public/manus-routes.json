@@ -253,6 +253,10 @@
       "title": "Class calendar"
     },
     {
+      "path": "/v/:token",
+      "title": "School video"
+    },
+    {
       "path": "/agreement/:token",
       "title": "Membership agreement"
     },

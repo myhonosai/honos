@@ -73,6 +73,9 @@ export function validateDeploymentConfiguration(env: DatabaseEnvironment = proce
     if (env.HON_COMMUNICATION_FAKE_PROVIDER !== undefined) failures.push('COMMUNICATION_FAKE_PROVIDER_FORBIDDEN');
     // 0347: the deterministic fake Zernio social adapter never runs in production or staging either.
     if (env.HON_ZERNIO_FAKE_PROVIDER !== undefined) failures.push('ZERNIO_FAKE_PROVIDER_FORBIDDEN');
+    // 0653/0654: with media storage on, blast emails link pictures and videos at the HON site; without a valid https origin
+    // every such email would only ever be retried, so the process refuses to start instead.
+    if (env.HON_MEDIA_STORAGE_APPROVED === 'true' && !/^https:\/\/[a-z0-9.-]+(:\d+)?$/i.test(env.HON_PUBLIC_ORIGIN ?? '')) failures.push('MEDIA_PUBLIC_ORIGIN_REQUIRED');
     if (env.HON_AUTH_MODE !== 'OIDC') failures.push('OIDC_AUTH_REQUIRED');
     else {
       // The API verifies HON session cookies only; OIDC endpoints are web-server configuration.

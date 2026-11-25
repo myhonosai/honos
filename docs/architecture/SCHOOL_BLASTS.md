@@ -78,10 +78,19 @@ the school's media library (BL3a, `docs/architecture/SCHOOL_MEDIA_LIBRARY.md`).
 Evidence: `packages/database/scripts/test-school-blast-pictures-integrity.mjs` (`db:test-school-blast-pictures`),
 `apps/api/test/school-blast-pictures.test.cjs`, `apps/web/test/school-blast-pictures-ui.test.tsx`.
 
+## Videos in blasts (BL3c, migration 0654)
+
+- **Email.** Insert video lists the school's READY videos whose 720p copy is done and puts `{{video:<assetId>}}` on its own
+  line. Pictures and videos together are at most 10 per email (`schoolBlastMediaCount`). Save and send check every video
+  line is a READY video of the same school with its copy DONE, else `409 BLAST_VIDEO_NOT_READY`. The worker lookup now
+  answers each item's `kind` too; in the email a video is its poster linking to `<HON_PUBLIC_ORIGIN>/v/<token>` with a
+  title link under it, and in the text part `<title>: <origin>/v/<token>`. A line whose kind does not match its item is
+  dropped, as is a video deleted since sending.
+- **Text.** Insert video link puts the plain `/v/<token>` page link where the cursor is. It is ordinary text: the link stops
+  working if the video is deleted.
+
 ## Later pieces
 
 - **BL2:** `{{checkout:<slug>}}` for a LIVE checkout page of the school, checked at save and at send, plus per-recipient
   attribution tokens.
-- **BL3c (0654):** video: resumable uploads up to 5 GB, a thumbnail, a hosted video page with the approved 720p playback copy,
-  shown in email as a thumbnail that opens the page and sent in a text as a link.
 - Belt-rank audience filter, contact-list segments (with the contacts list work), and AI-written blasts with approval.

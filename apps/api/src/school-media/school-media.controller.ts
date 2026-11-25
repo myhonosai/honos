@@ -6,8 +6,11 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
-import { DeleteSchoolMediaDto, RenameSchoolMediaDto } from './school-media.dto.js';
-import { SchoolMediaDeleteHumanUiGuard, SchoolMediaReadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaUploadHumanUiGuard } from './school-media-human-ui.guard.js';
+import { BeginSchoolVideoDto, DeleteSchoolMediaDto, FinishSchoolVideoDto, RenameSchoolMediaDto } from './school-media.dto.js';
+import {
+  SchoolMediaDeleteHumanUiGuard, SchoolMediaReadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaUploadHumanUiGuard, SchoolMediaVideoBeginHumanUiGuard,
+  SchoolMediaVideoFinishHumanUiGuard,
+} from './school-media-human-ui.guard.js';
 import { SchoolMediaService } from './school-media.service.js';
 
 const READ = 'marketing.media.read';
@@ -99,6 +102,40 @@ export class SchoolMediaController {
     return { data: { assetId: result.assetId, removed: result.removed }, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
   }
 
+  /** 0654: reserve a video and get its one-time upload link (the browser stores the file straight into the bucket). */
+  @Post('video/begin')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolMediaVideoBeginHumanUiGuard)
+  async beginVideo(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() input: BeginSchoolVideoDto,
+    @Req() request: HonRequest,
+  ) {
+    const context = await this.context(request, organizationId, schoolId, this.key(request, idempotencyKey), MANAGE);
+    const result = await this.media.beginVideo(context, definedFields(input));
+    return { data: { asset: result.asset, uploadUrl: result.uploadUrl }, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
+  }
+
+  /** 0654: the upload finished; HON checks the stored file and queues the 720p copy. */
+  @Post('video/finish')
+  @HttpCode(HttpStatus.OK)
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolMediaVideoFinishHumanUiGuard)
+  async finishVideo(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Body() input: FinishSchoolVideoDto,
+    @Req() request: HonRequest,
+  ) {
+    const context = await this.context(request, organizationId, schoolId, this.key(request, idempotencyKey), MANAGE);
+    const result = await this.media.finishVideo(context, definedFields(input));
+    return { data: result.asset, meta: { requestId: context.requestId, correlationId: context.correlationId, replayed: result.replayed } };
+  }
+
   private key(request: HonRequest, idempotencyKey: string | undefined): string {
     this.noQuery(request);
     const key = idempotencyKey?.trim();
@@ -139,5 +176,24 @@ export class PublicSchoolMediaController {
     if (!url) throw new NotFoundException({ result: 'INVALID' });
     response.setHeader('Cache-Control', 'no-store');
     response.redirect(302, url);
+  }
+
+  /** 0654: a video's poster picture (the web serves it as /m/<token>/poster). */
+  @Get(':token/poster')
+  @Header('Cache-Control', 'no-store')
+  async poster(@Param('token') token: string, @Res() response: Response): Promise<void> {
+    const url = await this.media.publicPoster(token);
+    if (!url) throw new NotFoundException({ result: 'INVALID' });
+    response.setHeader('Cache-Control', 'no-store');
+    response.redirect(302, url);
+  }
+
+  /** 0654: what the public video page (/v/<token>) shows: school name, title, size and length. */
+  @Get(':token/page')
+  @Header('Cache-Control', 'no-store')
+  async page(@Param('token') token: string) {
+    const page = await this.media.videoPage(token);
+    if (!page) throw new NotFoundException({ result: 'INVALID' });
+    return { data: page };
   }
 }

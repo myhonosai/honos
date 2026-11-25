@@ -15,7 +15,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const A = 'ab0c8d0e-4b8a-4c1e-9b7a-2d6f5e4c3b2a', B = id(41), TOKEN = 'T'.repeat(43);
 const line = (x: string) => `{{picture:${x}}}`;
 const asset = (assetId: string, over: Record<string, unknown> = {}) => ({ assetId, kind: 'IMAGE', mediaType: 'image/png', title: `Picture ${assetId.slice(-2)}`, byteSize: 10,
-  width: 640, height: 480, state: 'READY', version: 2, linkToken: TOKEN, createdAt: '2026-11-22T08:00:00.000Z', readyAt: '2026-11-22T08:00:01.000Z', updatedAt: '2026-11-22T08:00:01.000Z', ...over }) as never;
+  width: 640, height: 480, copyState: null, durationMs: null, state: 'READY', version: 2, linkToken: TOKEN, createdAt: '2026-11-22T08:00:00.000Z', readyAt: '2026-11-22T08:00:01.000Z', updatedAt: '2026-11-22T08:00:01.000Z', ...over }) as never;
 const draft = (body: string, channel: 'EMAIL' | 'SMS' = 'EMAIL') => ({ ...newBlastDraft(channel), name: 'Open house', subject: channel === 'EMAIL' ? 'Hi' : '', body });
 function props(over: Partial<SchoolBlastsViewProps> = {}): SchoolBlastsViewProps {
   return { language: 'en', waiting: false, concealed: false, hasSchool: true, list: { state: 'READY', blasts: [] }, selected: null, draft: draft(`Hello\n${line(A)}`),
