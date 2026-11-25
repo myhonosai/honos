@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
       { source: '/api/v1/:path*', destination: `${apiBaseUrl}/v1/:path*` },
       // 0628: the stable picture link used in emails and on the media screen; the API answers with a short-lived redirect.
       { source: '/m/:token', destination: `${apiBaseUrl}/v1/public/media/:token` },
+      // 0654: a video's poster picture.
+      { source: '/m/:token/poster', destination: `${apiBaseUrl}/v1/public/media/:token/poster` },
     ];
   },
 };

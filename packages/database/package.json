@@ -200,6 +200,7 @@
     "db:test-school-blasts": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-blasts-integrity.mjs",
     "db:test-school-blast-pictures": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-blast-pictures-integrity.mjs",
     "db:test-school-media": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-media-library-integrity.mjs",
+    "db:test-school-media-video": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-media-video-integrity.mjs",
     "db:test-school-demo-data": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-school-demo-data-integrity.mjs",
     "db:test-lead-pipeline-board": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-lead-pipeline-board-integrity.mjs",
     "db:test-shopify": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-shopify-commerce-integrity.mjs",

@@ -20,6 +20,7 @@ export type BlastErrorKind =
   /** 10 blasts in 24 hours already. Nothing changed. */ | 'DAILY_LIMIT'
   /** A filled-in message is too long. Nothing changed. */ | 'TOO_LONG'
   /** A picture in the email is no longer a ready picture of the library. Nothing changed. */ | 'PICTURE_GONE'
+  /** 0654: a video in the email is no longer a ready video whose copy is done. Nothing changed. */ | 'VIDEO_GONE'
   /** The blast is gone. Nothing changed. */ | 'GONE'
   /** The request was not accepted as sent. Nothing changed. */ | 'INVALID'
   /** Too many requests. Nothing changed. */ | 'RATE'
@@ -63,7 +64,7 @@ export function blastErrorFor(status: number, code: string | null): BlastError {
   if (status === 400) return new BlastError(code === 'BLAST_TEXT_TOO_LONG' ? 'TOO_LONG' : 'INVALID', code);
   if (status === 409) {
     const kind = ({ VERSION_CONFLICT: 'CHANGED', BLAST_NOT_DRAFT: 'NOT_DRAFT', BLAST_NOT_CANCELLABLE: 'NOT_CANCELLABLE', BLAST_NO_RECIPIENTS: 'NO_RECIPIENTS',
-      BLAST_AUDIENCE_TOO_LARGE: 'TOO_LARGE', BLAST_DAILY_LIMIT: 'DAILY_LIMIT', BLAST_PICTURE_NOT_READY: 'PICTURE_GONE', IDEMPOTENCY_KEY_REUSED: 'INVALID' } as Record<string, BlastErrorKind>)[code ?? ''];
+      BLAST_AUDIENCE_TOO_LARGE: 'TOO_LARGE', BLAST_DAILY_LIMIT: 'DAILY_LIMIT', BLAST_PICTURE_NOT_READY: 'PICTURE_GONE', BLAST_VIDEO_NOT_READY: 'VIDEO_GONE', IDEMPOTENCY_KEY_REUSED: 'INVALID' } as Record<string, BlastErrorKind>)[code ?? ''];
     if (kind) return new BlastError(kind, code);
   }
   // SCHOOL_BLAST_CONFLICT (a lock wait), IDEMPOTENCY_IN_PROGRESS, 5xx: the same request may be sent again.

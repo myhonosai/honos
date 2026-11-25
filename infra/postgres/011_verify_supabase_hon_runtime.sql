@@ -7041,6 +7041,55 @@ DO $$ DECLARE f record; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname=
   END IF;
 END $$;
 -- End blast pictures exact verification.
+-- School videos exact verification (0654)
+-- Seven runtime-only entry points, two private helpers, the copy service principal, and the combined kind check.
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.begin_school_video_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_video_upload(text,jsonb,uuid,uuid)',
+    'hon.claim_school_video_copy()','hon.finish_school_video_copy(uuid,uuid,jsonb)','hon.fail_school_video_copy(uuid,uuid,text)',
+    'hon.resolve_school_video_poster(text)','hon.resolve_school_video_page(text)'];
+  helpers text[]:=ARRAY['hon.school_video_copy_record(hon.school_media_assets,text,jsonb)','hon.school_blast_video_ids(text)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe school video entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe school video helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000654' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.school_media_assets'::regclass AND conname='school_media_assets_kind_check' AND convalidated)
+    OR has_table_privilege('hon_runtime','hon.school_media_assets','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe school video setup';
+  END IF;
+END $$;
+-- End school videos exact verification.
+
+-- Profile details exact verification (0656): two runtime entry points, private helpers, a private table.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.person_profile_contact_list(jsonb,text,text)',false,false,'search_path=pg_catalog','i','0859ee1b7ccfffcda5dd1e17cb1c96b553619c630c4c8f94b38b3bd504b707bc'),
+('hon.person_profile_details_json(uuid,text)',false,false,'search_path=pg_catalog, hon','s','71fc0dd8515dc24569eed24f08e09c2c919b2c82f21769083c271bab033ec3ad'),
+('hon.read_school_person_details(text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','s','a7f2c7808b1845d28a14ed29f15eb4a61bca3576423d38f49861cf6c92453144'),
+('hon.update_school_person_details(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','v','99183aaf4b5e2b529590dfc408f234a1c244346bbc8251aa71d0db9b287d0092')) e(signature,definer,runtime_allowed,config,volatility,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile=f.volatility
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe profile details function: %',f.signature; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') AND (has_table_privilege('hon_runtime','hon.person_profile_details','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')
+    OR NOT (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class WHERE oid='hon.person_profile_details'::regclass)) THEN
+    RAISE EXCEPTION 'hon.person_profile_details must stay private with forced RLS'; END IF;
+END $$;
+-- End profile details exact verification.
 -- Membership activates on signing exact verification (0680): no runtime entry point, two owner-only functions, one deferred
 -- signature trigger, one forced-RLS immutable outcome table, and the 0177 decision checks that bind each basis to its rules.
 DO $$ DECLARE f text; t text; c text; d boolean; s text;

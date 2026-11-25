@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "8c92789a517d5279bb1681a9d01940e5d2b24a55e77a883085a3b7ff98b2bc8c",
+  "chainSha256": "acadeeb31deda13214295bba8bf01860409c8cc4839858e8d71a040dc2156786",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -947,8 +947,16 @@
       "sha256": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397"
     },
     {
+      "file": "0654_school_media_video.sql",
+      "sha256": "9d7b524e42313514d56d340a37759bef2c5bd7499a80444fa966e553ceef8d4e"
+    },
+    {
       "file": "0655_mobile_handoff_single_use.sql",
       "sha256": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
+    },
+    {
+      "file": "0656_person_profile_details.sql",
+      "sha256": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240"
     },
     {
       "file": "0680_membership_activates_on_signing.sql",

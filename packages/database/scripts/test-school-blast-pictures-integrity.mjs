@@ -265,7 +265,7 @@ try {
   ok(Array.isArray(listed) && listed.length === 2, `two distinct pictures ${JSON.stringify(listed)}`);
   const one = listed.find((x) => x.assetId === PIC.one.id);
   ok(one && one.token === PIC.one.token && one.title === 'Open house' && one.width === 1200 && one.height === 800, 'id, token, title and size');
-  ok(listed.every((x) => Object.keys(x).sort().join() === 'assetId,height,title,token,width'), 'never a storage key');
+  ok(listed.every((x) => Object.keys(x).sort().join() === 'assetId,height,kind,title,token,width' && x.kind === 'IMAGE'), 'never a storage key (0654 adds the kind)');
   ok(await pictures(mine[0].delivery_id, UUIDV()) === null, 'a wrong lease reads nothing');
   ok(await pictures(mine[0].delivery_id, null) === null, 'no lease reads nothing');
   ok(await pictures(UUIDV(), mine[0].lease_token) === null, 'an unknown delivery reads nothing');

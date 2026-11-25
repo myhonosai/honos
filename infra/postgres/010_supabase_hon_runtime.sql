@@ -5477,6 +5477,44 @@ BEGIN
     FOREACH f IN ARRAY helpers[1:3] LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM hon_communication_worker',f); END LOOP;
   END IF;
 END $$;
+-- 0654 school videos: seven runtime entry points (video upload start and finish, the in-process copy job's claim, finish
+-- and fail, the public poster and page lookups) and two private helpers. The 0628 and 0653 functions it replaces keep
+-- their grants.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.begin_school_video_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_video_upload(text,jsonb,uuid,uuid)',
+    'hon.claim_school_video_copy()','hon.finish_school_video_copy(uuid,uuid,jsonb)','hon.fail_school_video_copy(uuid,uuid,text)',
+    'hon.resolve_school_video_poster(text)','hon.resolve_school_video_page(text)'];
+  helpers text[]:=ARRAY['hon.school_video_copy_record(hon.school_media_assets,text,jsonb)','hon.school_blast_video_ids(text)'];
+BEGIN
+  IF to_regprocedure('hon.resolve_school_video_page(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0654 first'; END IF;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0656 profile details on the contact card's Edit profile pop-up: two runtime entry points (read, save); the contact-list and
+-- read-shape helpers are private; the details table has no runtime privilege.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_school_person_details(text,uuid,uuid)','hon.update_school_person_details(text,jsonb,uuid)'];
+  fns text[]:=ARRAY['hon.person_profile_contact_list(jsonb,text,text)','hon.person_profile_details_json(uuid,text)']||entry; BEGIN
+  IF to_regprocedure('hon.update_school_person_details(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0656 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  EXECUTE 'REVOKE ALL ON TABLE hon.person_profile_details FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.person_profile_details FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
 -- 0680 Membership activates on signing: no runtime entry point. The outcome table keeps forced RLS with no client
 -- privilege; the two functions (the deferred signature trigger and its per-membership start) stay migration-owner only.
 DO $$ DECLARE r text; f text;
