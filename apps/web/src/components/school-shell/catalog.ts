@@ -68,7 +68,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements'), r('/staff/parent-app/curriculum', 'routeParentAppCurriculum')] },
   // Calls on the school texting number (0556): call log, voicemail and calling settings; the browser phone sits in the top bar.
   { key: 'calls', titleKey: 'navCalls', section: 'communication', routes: [r('/staff/calls', 'routeCalls')] },
-  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
+  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial'), r('/staff/marketing/social/posts', 'routeSocialPosts')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/checkout-orders', 'routeCheckoutOrders')] },
   { key: 'pos', titleKey: 'navPos', section: 'finance', routes: [r('/staff/billing/pos', 'routePointOfSale')] },
   // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.

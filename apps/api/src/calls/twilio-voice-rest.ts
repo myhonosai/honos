@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { voiceCallsApproved } from './twilio-voice.js';
 
 /**
- * CL3c (0556 K3, 0673 V1; docs/architecture/SCHOOL_CALLING.md §4): the Twilio Voice pieces HON creates and removes on a
+ * CL3c (0556 K3, 0693 V1; docs/architecture/SCHOOL_CALLING.md §4): the Twilio Voice pieces HON creates and removes on a
  * school's own subaccount. Every Twilio request is authenticated as HON's parent account and is made only when the owner's
  * voice switch HON_VOICE_CALLS_APPROVED is exactly 'true'; otherwise nothing leaves HON. The workers are off unless their
  * interval is set. Recording audio is fetched only to stream it to a staff member the database just authorized.

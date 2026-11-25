@@ -14,14 +14,13 @@ import { consentApi, type ConsentApi } from './consent-http';
 import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactFilters, type ContactsApi } from './contacts-http';
 import { ContactActions, type ContactChange } from './contact-actions';
 import type { CardState, CardTab, FamilyItem, MembershipItem } from './contact-card';
-import peopleStyles from './people.module.css';
 import { MembershipPanel } from './membership-panel';
 import { NewMembershipTools } from './new-membership';
 import { initialCardTarget } from './card-link';
 import { cardUrl, readCardMode, writeCardMode, type CardMode } from './card-panel';
 import { CardFamilyAccess } from './card-family-access';
 import { CardFamilyMessages } from './card-family-messages';
-import { panelText } from './panel-copy';
+import { CardTexts } from './card-texts';
 
 /** Keeps the open card (or none) in the address without a navigation, so a reload or a shared link reopens it. */
 function showCardInAddress(target: { personId: string; tab: CardTab } | null): void {
@@ -33,6 +32,8 @@ function showCardInAddress(target: { personId: string; tab: CardTab } | null): v
   } catch { /* the address is a convenience; the page works without it */ }
 }
 import { PersonPhoto } from './photo';
+import { PersonProfileDetails } from './profile-details';
+import { detailsApi, type DetailsApi } from './profile-details-http';
 import { AgreementLinkPanel } from '../agreement-link/send-panel';
 import { ContactMessageHistory } from '../contact-history/contact-history';
 import { photoApi, type PhotoApi } from './photo-http';
@@ -80,8 +81,8 @@ export function contactDeepLink(search: string): string | null {
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi;
-  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi;
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, details = detailsApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi;
+  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi; details?: DetailsApi;
   /** The verified signed-in subject, for the family access checks inside the card (they re-check identity before each step). */
   sessionSubject?: string | null }): React.ReactElement {
   const { preferences } = useLocale();
@@ -287,8 +288,8 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
     language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} sessionSubject={sessionSubject} familyId={family.familyId}/> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, sessionSubject]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesSlot = useCallback((c: SchoolContactCard) => selection ? <>
-    <section className={peopleStyles.subsection} data-testid="card-texts"><h3>{panelText(preferences.language, 'textsTitle')}</h3>
-      <a className={peopleStyles.secondary} href="/staff/texts">{panelText(preferences.language, 'textsOpen')}</a></section>
+    <CardTexts key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
+      scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={c.person.personId}/>
     {c.family.allowed && c.family.families.length ? <CardFamilyMessages key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} familyIds={c.family.families.map(f => f.familyId)}/> : null}
   </> : null, [selection?.organizationId, selection?.schoolId, preferences.language]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -323,12 +324,15 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   // The contact photo (0390) and contact consent each have their own reads and commands, mounted per person.
   const consentSlot = useCallback((r: PersonRecord) => selection ? <>
     <PersonPhoto key={`photo:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={photos}/>
+    {/* 0656: gender, guardian, notes and more phones and emails; program and rank come from the card read (0622 sets ranks up). */}
+    <PersonProfileDetails key={`details:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={details}
+      standing={card.state === 'READY' && lower(card.card.person.personId) === lower(r.personId) ? { programName: card.card.overview.programName, ranks: card.card.overview.ranks } : null}/>
     <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
     {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
     <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
   </> : null,
-  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
+  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos, details, card]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">

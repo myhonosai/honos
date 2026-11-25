@@ -11,11 +11,10 @@ import {
 import { hqCallsCopy } from '../src/components/calls/hq-copy';
 import { HQ_PHONE_BACKEND, PhoneController, type VoiceCallLike, type VoiceDevice } from '../src/components/calls/phone';
 import { HqCalls } from '../src/components/calls/hq-calls';
-import { HQ_NAV, hqPageLabel } from '../src/components/hq-modern/catalog';
-import { hqNavCurrent } from '../src/components/hq-modern/shell';
+import { hqNavLinks, hqNavMatch, hqPageLabel } from '../src/components/hq-modern/catalog';
 import { hqPhoneCopy, phoneCopy } from '../src/components/calls/phone-copy';
 
-// CL5 (0674) HQ calling: same-origin HQ commands, verified answers, and the HQ top-bar phone records before it connects.
+// CL5 (0694) HQ calling: same-origin HQ commands, verified answers, and the HQ top-bar phone records before it connects.
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const A = '11111111-1111-4111-8111-111111111111', C = '33333333-3333-4333-8333-333333333333', K = '55555555-5555-4555-8555-555555555555';
 const T = '2026-11-20T17:00:00.000Z';
@@ -127,12 +126,12 @@ describe('HQ calls page', () => {
   });
   it('renders the shell while loading and is in the HQ navigation next to texts', () => {
     expect(renderToStaticMarkup(<HqCalls />)).toContain('data-hq-calls');
-    const paths = HQ_NAV.map(item => item.path);
+    const paths = hqNavLinks().map(item => item.path);
     expect(paths.indexOf('/hq/communications/calls')).toBe(paths.indexOf('/hq/communications') + 1);
     expect(hqPageLabel('/hq/communications/calls')).toBe('Calls');
-    expect([hqNavCurrent('/hq/communications', '/hq/communications/calls'), hqNavCurrent('/hq/communications/calls', '/hq/communications/calls')]).toEqual([false, true]);
-    expect(hqNavCurrent('/hq/communications', `/hq/communications/${C}`)).toBe(true);
-    expect(hqNavCurrent('/hq', '/hq/schools')).toBe(false);
+    expect(hqNavMatch('/hq/communications/calls')).toBe('/hq/communications/calls');
+    expect(hqNavMatch(`/hq/communications/${C}`)).toBe('/hq/communications');
+    expect(hqNavMatch('/hq/schools')).not.toBe('/hq');
   });
   it('never stores, injects HTML, dials or reaches a provider from the page', () => {
     for (const file of ['hq-calls.tsx', 'hq-http.ts', 'hq-copy.ts']) {

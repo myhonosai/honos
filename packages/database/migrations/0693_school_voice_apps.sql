@@ -1,5 +1,5 @@
 BEGIN;
--- 0673 school calling, piece CL2 (allocated by the coordinator 2026-11-19; docs/architecture/SCHOOL_CALLING.md §4).
+-- 0693 school calling, piece CL2 (allocated by the coordinator 2026-11-19; docs/architecture/SCHOOL_CALLING.md §4).
 -- Browser calling needs, on each school's own Twilio subaccount (0351), one TwiML App (HON's fixed client-voice URL) and
 -- one API key whose secret signs the school's short-lived browser phone tokens. This migration only records them: the API
 -- worker creates them at Twilio only behind HON_VOICE_CALLS_APPROVED, and the key secret is sealed by the API (same vault

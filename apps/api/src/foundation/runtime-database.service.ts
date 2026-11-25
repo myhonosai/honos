@@ -344,7 +344,7 @@ export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record
   |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance'
   |'storefront'|'saveStorefront'|'beginStorefront'|'rotateStorefront'|'finishStorefront';
 
-/** CL5 (0674): the only HQ calling SQL the API may run. */
+/** CL5 (0694): the only HQ calling SQL the API may run. */
 const HQ_CALLS_CALLS = {
   overview: { sql: 'SELECT hon.read_hq_calling($1) AS data', arity: 1, readOnly: true },
   list: { sql: 'SELECT hon.read_hq_calls($1,$2::jsonb) AS data', arity: 2, readOnly: true },
@@ -710,6 +710,8 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       'SELECT hon.open_public_checkout_order($1,$2::jsonb,$3,$4::boolean) AS data',
       'SELECT hon.read_public_checkout_order($1,$2) AS data',
       'SELECT hon.resolve_school_media_link($1) AS data',
+      'SELECT hon.resolve_school_video_poster($1) AS data',
+      'SELECT hon.resolve_school_video_page($1) AS data',
     ].includes(statement)) throw new Error('Unknown public event call.');
     await this.assertRuntimePosture();
     const client = await this.getPool().connect();
@@ -719,6 +721,29 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: unknown }>(statement, values);
       await client.query('COMMIT');
       if (result.rows.length !== 1) throw new Error('Unverified public event call.');
+      return result.rows[0]!.data;
+    } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
+    finally { client.release(); }
+  }
+
+  /**
+   * 0654 school video copy job: the three fixed calls (claim, finish, fail), one short transaction each, no tenant settings.
+   * The lease returned by the claim is the only scope; the database records the work as its code-owned 0654 service.
+   */
+  async runSchoolVideoCopyCall(statement: string, values: unknown[]): Promise<unknown> {
+    if (![
+      'SELECT hon.claim_school_video_copy() AS data',
+      'SELECT hon.finish_school_video_copy($1::uuid,$2::uuid,$3::jsonb) AS data',
+      'SELECT hon.fail_school_video_copy($1::uuid,$2::uuid,$3) AS data',
+    ].includes(statement)) throw new Error('Unknown school video copy call.');
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: unknown }>(statement, values);
+      await client.query('COMMIT');
+      if (result.rows.length !== 1) throw new Error('Unverified school video copy call.');
       return result.rows[0]!.data;
     } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
     finally { client.release(); }
@@ -1592,9 +1617,12 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /** B-CRM-1a person record: the subject is the verified session subject; the database decides school authority. */
-  async callSchoolPersonRecord(operation: 'read'|'update'|'birthDate', params: readonly (string|null)[]): Promise<unknown> {
+  async callSchoolPersonRecord(operation: 'read'|'update'|'birthDate'|'detailsRead'|'details', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       read: {sql: 'SELECT hon.read_school_person($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      // 0656: gender, guardian, notes, contact labels and other phones/emails for the Edit profile pop-up.
+      detailsRead: {sql: 'SELECT hon.read_school_person_details($1,$2::uuid,$3::uuid) data',arity:3,readOnly:true},
+      details: {sql: 'SELECT hon.update_school_person_details($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
       update: {sql: 'SELECT hon.update_school_person($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
       birthDate: {sql: 'SELECT hon.update_school_student_birth_date($1,$2::jsonb,$3::uuid) data',arity:3,readOnly:false},
     } as const;
@@ -1675,7 +1703,7 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /**
-   * CL5 (0674) HQ calling: one fixed, subject-only SECURITY DEFINER call per operation, no tenant settings (the HQ actor
+   * CL5 (0694) HQ calling: one fixed, subject-only SECURITY DEFINER call per operation, no tenant settings (the HQ actor
    * check refuses any). Reads that write nothing run READ ONLY; opening a voicemail and the phone token are audited.
    */
   async callHqCalls(operation: HqCallsOperation, params: readonly (string | null)[]): Promise<unknown> {

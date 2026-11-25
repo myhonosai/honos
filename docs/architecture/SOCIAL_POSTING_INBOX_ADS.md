@@ -162,6 +162,22 @@ checks as S1, re-checked after the writes.
    recorded as a definite refusal (FAILED); a later piece may return it to PENDING with a later due time instead.
 7. **Read** `GET …/marketing/social/posts?from&to`: the calendar list with targets and statuses, at most 200.
 
+### 4A.5 Posts screen (2026-11-24, frontend only)
+
+David approved turning posting on (2026-11-24), but main had no screen that used the posts API. **Marketing >
+Facebook & Instagram > Posts** (`/staff/marketing/social/posts`) adds one, with no migration and no API change:
+
+- Reads the school's accounts (0347) and the posts from 30 days back to 70 days ahead (inside the 100-day read).
+- **Write:** text (up to 2,200 characters; 1,500 when a Google Business Profile is chosen), an optional https link and
+  1 to 4 accounts. Only CONNECTED Facebook Pages and Google Business Profiles with **Posting** on can be chosen.
+  Instagram is shown as "needs a photo, not available yet". A draft is saved, and edited by version.
+- **Approve** a draft for **now** or a local date and time up to 90 days ahead (sent as an ISO time with offset).
+  **Cancel** a draft, or an approved post before it starts. **Settle** an UNKNOWN target after checking the Page.
+- While `publishEnabled` is false the page says so: approved posts wait and nothing is sent.
+- Every write is one human command with its own idempotency key. Only an unknown outcome keeps the exact request for
+  Try again. Blur, a school change or a session end hide the page and drop the form and any kept request. The server
+  decides every permission (a person without `marketing.social.manage` is refused when approving).
+
 ## 4B. S3 design (0435): inbox (Messenger, Instagram DMs and comments)
 
 ### 4B.1 Scope

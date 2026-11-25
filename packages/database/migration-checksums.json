@@ -398,10 +398,22 @@
     "0639_alex_delegation_plans.sql": "16a0ef6be1c46733b17b66198911c87fc426253a4d32a9aa122d6be52072288d",
     "0640_jordan_follow_through.sql": "36153ab4e5c4cbc4046f25d1fdb03b008bc5c71b0e41def2aa482720213d795d",
     "0641_marcus_marketing_review.sql": "971b5e84a572c2eb131a24541f097a127e8d0c33d8e2c64b4643ead0a6daeb47",
-    "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
-    "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
     "0642_membership_plan_payment_options.sql": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251",
-    "0673_school_voice_apps.sql": "948b66a2dcdb4647c719fdbae8a930f7620b747faa374921027c1d3fe085d657",
-    "0674_hq_calls.sql": "09a70b1b444bd94e08ffc1f18ef81ca0fe406182bab52a32a0450d754d28287b"
+    "0643_claire_kpi_report.sql": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf",
+    "0644_booking_invoice_security_hygiene.sql": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7",
+    "0645_class_session_minimum_duration.sql": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe",
+    "0646_maya_renewal_prep.sql": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0",
+    "0647_chad_approved_draft_send.sql": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9",
+    "0649_maya_check_in_draft_send.sql": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90",
+    "0650_chad_lead_plan.sql": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487",
+    "0652_staff_agent_speech.sql": "fdb50164a94331c08a57e6e034953a3c4c5addc68c16d764c8705736f960d408",
+    "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
+    "0651_hq_creative_cost_basis.sql": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219",
+    "0653_school_blast_pictures.sql": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397",
+    "0654_school_media_video.sql": "9d7b524e42313514d56d340a37759bef2c5bd7499a80444fa966e553ceef8d4e",
+    "0656_person_profile_details.sql": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240",
+    "0657_school_conversations_person_filter.sql": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e",
+    "0693_school_voice_apps.sql": "3732a33c60a4ab592768b344c57b5a5fea56d51bdcbe11502509ec6765e5e7da",
+    "0694_hq_calls.sql": "828b4f102f63cbef9b14462338b1e15ea89258ee0f23e654c112435723555015"
   }
 }

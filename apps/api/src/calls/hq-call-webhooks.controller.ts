@@ -21,7 +21,7 @@ const RING_PATHS = { dialResult: HQ_CALL_PATHS.incomingDialResult, answered: HQ_
 const VOICEMAIL_PATHS = { done: HQ_CALL_PATHS.voicemailDone, status: HQ_CALL_PATHS.voicemailStatus };
 
 /**
- * CL5 (0674): Twilio's calls into HON for HQ calling on the HQ number. Every request must be signed by HON's parent
+ * CL5 (0694): Twilio's calls into HON for HQ calling on the HQ number. Every request must be signed by HON's parent
  * account over its own fixed HQ path (a school subaccount is refused), and the database decides everything else: the
  * number dialled comes from the stored HQ call, an incoming call rings only Ring me HQ people, and HQ calls are never
  * recorded (voicemail only). Nothing is dialled unless HON_VOICE_CALLS_APPROVED is exactly 'true'.

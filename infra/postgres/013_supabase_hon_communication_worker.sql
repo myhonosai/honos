@@ -179,6 +179,15 @@ BEGIN
 END;
 $$;
 
+-- 0653 pictures inside email blasts: the READY pictures of the campaign email a lease is sending (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.communication_email_pictures(uuid,uuid)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.communication_email_pictures(uuid, uuid) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- 0556 school calls: connect a browser call, route an incoming call, record call progress, voicemails and recordings,
 -- and delete recordings after 90 days (when applied).
 DO $$
@@ -210,7 +219,7 @@ BEGIN
 END;
 $$;
 
--- 0673 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
+-- 0693 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
 -- a phone token (when applied).
 DO $$
 BEGIN
@@ -222,7 +231,7 @@ BEGIN
 END;
 $$;
 
--- 0674 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
+-- 0694 HQ calls: the HQ voice app, connect an HQ browser call, route a call to the HQ number, record progress and
 -- voicemail, delete voicemail after 90 days (when applied).
 DO $$
 BEGIN

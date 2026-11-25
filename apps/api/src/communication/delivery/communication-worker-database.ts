@@ -5,6 +5,7 @@ import { Pool } from 'pg';
 import { runtimePoolOptions } from '../../foundation/runtime-pool-options.js';
 import type { CommunicationProviderName, DeliverableChannel } from './communication-provider.js';
 import type { TwilioSubaccountStore } from './twilio-subaccounts.js';
+import { verifyEmailPictures, type EmailPicture } from './email-pictures.js';
 
 export interface ClaimedCommunicationDelivery {
   deliveryId: string;
@@ -19,6 +20,8 @@ export interface ClaimedCommunicationDelivery {
   attempt: number;
   /** 0424: the email subject the author wrote (absent: the adapter's standard subject). */
   subject?: string | undefined;
+  /** 0653: the READY pictures of a blast email (absent: none). */
+  pictures?: EmailPicture[] | undefined;
   senderAddress?: string | undefined;
   senderServiceId?: string | undefined;
 }
@@ -70,7 +73,7 @@ export interface CommunicationWorkerStore {
   recordSocialPostEvent?(event: ZernioSocialEventRecord): Promise<{ outcome: 'APPLIED' | 'IGNORED' | 'UNMATCHED' | 'REPLAYED' }>;
   /** 0435 school inbox: record one signed inbound DM or comment. */
   recordSocialInboxEvent?(event: ZernioInboxEventRecord): Promise<{ outcome: SocialInboxEventOutcome }>;
-  /** 0556/0673 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
+  /** 0556/0693 calling on the school number (CL3b): the signed Twilio voice webhooks and the browser phone key. */
   connectSchoolClientCall?(callId: string, identity: string, accountSid: string | null, callSid: string): Promise<SchoolClientCallDecision>;
   routeSchoolIncomingCall?(to: string, from: string | null, callSid: string): Promise<SchoolIncomingCallRoute>;
   recordSchoolCallStatus?(accountSid: string | null, callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null,
@@ -78,7 +81,7 @@ export interface CommunicationWorkerStore {
   recordSchoolCallRecording?(accountSid: string | null, callSid: string, recordingSid: string, seconds: number, voicemail: boolean):
     Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'REFUSED' | 'UNKNOWN_CALL'; callId: string | null }>;
   readSchoolVoiceApp?(schoolId: string): Promise<SchoolVoiceAppKey | null>;
-  /** 0673 V1 (CL3c): the voice app worker claims a school, records its TwiML App, then its sealed API key. */
+  /** 0693 V1 (CL3c): the voice app worker claims a school, records its TwiML App, then its sealed API key. */
   readSchoolsNeedingVoiceApp?(limit: number): Promise<string[]>;
   beginSchoolVoiceApp?(schoolId: string, leaseSeconds: number): Promise<SchoolVoiceAppClaim>;
   recordSchoolVoiceAppTwiml?(schoolId: string, claimToken: string, twimlAppSid: string): Promise<boolean>;
@@ -86,7 +89,7 @@ export interface CommunicationWorkerStore {
   /** 0556 K3 (CL3c): recordings past 90 days, deleted at Twilio first, then marked deleted by exact SID. */
   readSchoolCallRecordingsDue?(limit: number): Promise<SchoolCallRecordingDue[]>;
   markSchoolCallRecordingDeleted?(callId: string, recordingSid: string): Promise<boolean>;
-  /** 0674 HQ calling on the HQ number (CL5): parent-account webhooks, the HQ voice app and voicemail retention. */
+  /** 0694 HQ calling on the HQ number (CL5): parent-account webhooks, the HQ voice app and voicemail retention. */
   connectHqClientCall?(callId: string, identity: string, callSid: string): Promise<HqClientCallDecision>;
   routeHqIncomingCall?(to: string, from: string | null, callSid: string): Promise<HqIncomingCallRoute>;
   recordHqCallStatus?(callSid: string, status: SchoolCallProviderStatus, answeredIdentity: string | null, durationSeconds: number | null, occurredAt: string):
@@ -195,17 +198,22 @@ export class CommunicationWorkerDatabase implements CommunicationWorkerStore, Tw
     const rows = await this.query<{
       delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
       recipient_address: string; content: string; school_name: string; attempt: number;
-      sender_address: string | null; sender_service_id: string | null; email_subject: string | null;
-    }>(`SELECT c.*, CASE WHEN c.channel = 'EMAIL' THEN hon.communication_email_subject(c.delivery_id, c.lease_token) END AS email_subject
+      sender_address: string | null; sender_service_id: string | null; email_subject: string | null; email_pictures: unknown;
+    }>(`SELECT c.*, CASE WHEN c.channel = 'EMAIL' THEN hon.communication_email_subject(c.delivery_id, c.lease_token) END AS email_subject,
+        CASE WHEN c.channel = 'EMAIL' THEN hon.communication_email_pictures(c.delivery_id, c.lease_token) END AS email_pictures
       FROM hon.claim_communication_deliveries($1::text[], $2, $3) c`, [channels, limit, leaseSeconds]);
-    return rows.map((row) => ({
+    return rows.map((row) => {
+      const pictures = row.channel === 'EMAIL' ? verifyEmailPictures(row.email_pictures) : null;
+      return {
       deliveryId: row.delivery_id, leaseToken: row.lease_token, organizationId: row.organization_id, schoolId: row.school_id,
       messageId: row.message_id, channel: row.channel, recipientAddress: row.recipient_address, content: row.content,
       schoolName: row.school_name, attempt: row.attempt,
       ...(row.channel === 'EMAIL' && row.email_subject ? { subject: row.email_subject } : {}),
+      ...(pictures ? { pictures } : {}),
       ...(row.sender_address ? { senderAddress: row.sender_address } : {}),
       ...(row.sender_service_id ? { senderServiceId: row.sender_service_id } : {}),
-    }));
+      };
+    });
   }
 
   async recordResult(deliveryId: string, leaseToken: string, result: CommunicationSendResult) {

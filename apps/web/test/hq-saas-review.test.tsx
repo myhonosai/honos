@@ -90,14 +90,14 @@ describe('HON HQ subscription account review', () => {
   it('preserves exact minor/micro units and renders authoritative inventory rather than list-derived totals', () => {
     expect(formatSaasMoney(Number.MAX_SAFE_INTEGER)).toBe('USD 90,071,992,547,409.91'); expect(formatSaasMoney(1, 6)).toBe('USD 0.000001'); expect(formatSaasMoney(1234567, 6)).toBe('USD 1.234567');
     const o = saasOverviewFixture(); const html = renderToStaticMarkup(<><SaasInventory catalog={o.catalog}/><SaasCatalogAndCosts data={o}/></>);
-    expect(html).toContain('43'); expect(html).toContain('26'); expect(html).toContain('USD 50.000000'); expect(html).toContain('HQ owner-verified provider billing'); expect(html).toContain('Legacy only');
+    expect(html).toContain('43'); expect(html).toContain('26'); expect(html).toContain('USD 50.000000'); expect(html).toContain('AI provider bills you recorded'); expect(html).toContain('Legacy only');
     const empty = renderToStaticMarkup(<><SaasInventory catalog={saasOverviewFixture({ empty: true }).catalog}/><SaasCatalogAndCosts data={saasOverviewFixture({ empty: true })}/></>);
-    expect(empty).toContain('Unavailable / undecided'); expect(empty).toContain('No verified provider-cost evidence'); expect(empty).toContain('No published catalog');
+    expect(empty).toContain('Unavailable / undecided'); expect(empty).toContain('No AI provider bills recorded yet'); expect(empty).toContain('No plans published yet');
   });
   it('renders real account balances, attestation distinctions and unknown costs without issuing benefits', () => {
     const html = renderToStaticMarkup(<SaasAccountResults data={saasAccountFixture()}/>);
-    for (const text of ['3,800', '5,000', 'OUTCOME UNKNOWN', 'Provider usage cost not recorded', 'USD 1.234567', 'Recorded standing · includes HQ attestations', 'Provider-verified standing', 'not processor confirmation', 'not configured', 'newest']) {
-      if (text === 'newest') expect(html).toMatch(/Newest 50/); else expect(html).toContain(text);
+    for (const text of ['3,800', '5,000', 'OUTCOME UNKNOWN', 'No cost recorded', 'USD 1.234567', 'Recorded by HQ', 'Provider-verified standing', 'aren’t confirmed by the card processor', 'isn’t switched on', 'newest']) {
+      if (text === 'newest') expect(html).toMatch(/latest 50/); else expect(html).toContain(text);
     }
     expect(html).not.toMatch(/<button|<form/);
     const mismatch = renderToStaticMarkup(<SaasAccountResults data={saasAccountFixture({ mismatch: true })}/>); expect(mismatch).toContain('MISMATCH');
@@ -105,12 +105,12 @@ describe('HON HQ subscription account review', () => {
   it('handles no subscription/entitlement/usage and escapes authorized names', () => {
     const a = saasAccountFixture({ empty: true }); a.subscription.organizationName = '<script>name</script>';
     const html = renderToStaticMarkup(<SaasAccountResults data={a}/>);
-    for (const text of ['No current subscription', 'No entitlement record', 'No allowance records', 'No premium reservations', '&lt;script&gt;']) expect(html).toContain(text);
+    for (const text of ['No current subscription', 'No entitlement record', 'No credit balances yet', 'No credit holds', '&lt;script&gt;']) expect(html).toContain(text);
     expect(html).not.toContain('<script>');
   });
   it('shows no facts before authorization and preserves the existing dynamic HQ route', () => {
     const fetch = vi.spyOn(globalThis, 'fetch'); const html = renderToStaticMarkup(<HqSaasReview/>);
-    expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Loading authorized subscription records'); expect(html).not.toContain('data-saas-account'); expect(html).not.toContain('data-saas-inventory');
+    expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Loading subscriptions'); expect(html).not.toContain('data-saas-account'); expect(html).not.toContain('data-saas-inventory');
     const route = readFileSync('src/app/hq/revenue/page.tsx', 'utf8'); expect(route).toContain('HqSaasReview'); expect(route).toContain('force-dynamic'); expect(route).toContain('index: false');
   });
 });

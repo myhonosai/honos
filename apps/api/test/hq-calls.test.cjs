@@ -10,7 +10,7 @@ const { SchoolVoiceAppWorker, SchoolCallRecordingRetentionWorker, HQ_VOICE_APP_N
 const { COMMUNICATION_WEBHOOK_PATHS } = require('../dist/communication/delivery/communication-webhook.controller.js');
 const { TwilioWebhookVerifier } = require('../dist/communication/delivery/twilio-text-provider.js');
 
-// CL5 (0674): HQ calling on the HQ texting number, all on HON's parent account, behind the owner's voice switch.
+// CL5 (0694): HQ calling on the HQ texting number, all on HON's parent account, behind the owner's voice switch.
 const parent = `AC${'c'.repeat(32)}`, sub = `AC${'d'.repeat(32)}`;
 const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222';
 const claim = '44444444-4444-4444-8444-444444444444';

@@ -1,5 +1,5 @@
 /**
- * Calling on the school texting number (0556 CL1, 0673 CL2; docs/architecture/SCHOOL_CALLING.md). Staff with
+ * Calling on the school texting number (0556 CL1, 0693 CL2; docs/architecture/SCHOOL_CALLING.md). Staff with
  * communication.call.use make and take browser calls on the school's own number, see the call log and voicemail, and
  * set their own Ring me. communication.call.manage (the school owner) switches calling on, sets the voicemail greeting
  * and, after accepting the consent statement, call recording. Nothing here reaches Twilio: the API proves every call
