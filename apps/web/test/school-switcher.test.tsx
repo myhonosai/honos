@@ -1,8 +1,8 @@
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it } from 'vitest';
-import { SchoolSwitcherView, schoolHomeHref } from '../src/components/school-switcher/switcher';
+import { expect, it, vi } from 'vitest';
+import { SchoolSwitcherView, bindSwitcherDismiss, schoolHomeHref } from '../src/components/school-switcher/switcher';
 
 const a = { organizationId: '11111111-1111-4111-8111-111111111111', schoolId: '22222222-2222-4222-8222-222222222222', organizationName: 'Ideal Org', schoolName: 'Ideal Martial Arts' };
 const b = { organizationId: '11111111-1111-4111-8111-111111111111', schoolId: '33333333-3333-4333-8333-333333333333', organizationName: 'Ideal Org', schoolName: 'Ideal North' };
@@ -28,4 +28,15 @@ it('filters by the search text and is mounted under the logo in both shells', ()
   expect(html).toContain('Dojo 3'); expect(html).not.toContain('Dojo 4'); expect(html).toContain('type="search"');
   expect(readFileSync('src/components/hq-modern/shell.tsx', 'utf8')).toContain("<SchoolSwitcher language={preferences?.language ?? 'en'} current={{ kind: 'hq' }} inHq />");
   expect(readFileSync('src/components/school-shell/frame.tsx', 'utf8')).toContain('{props.switcher}');
+});
+
+it('an open menu closes on a click outside it or on Escape, and a click inside keeps it open', () => {
+  const doc = new EventTarget(); let inside = false; const focus = vi.fn();
+  const menu = { open: true, contains: () => inside, querySelector: () => ({ focus }) };
+  const unbind = bindSwitcherDismiss(menu as never, doc as never);
+  inside = true; doc.dispatchEvent(new Event('pointerdown')); expect(menu.open).toBe(true);
+  inside = false; doc.dispatchEvent(new Event('pointerdown')); expect(menu.open).toBe(false);
+  menu.open = true; doc.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Enter' })); expect(menu.open).toBe(true);
+  doc.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' })); expect(menu.open).toBe(false); expect(focus).toHaveBeenCalled();
+  unbind(); menu.open = true; doc.dispatchEvent(new Event('pointerdown')); expect(menu.open).toBe(true);
 });

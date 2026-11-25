@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { schoolEntryApi } from '../school-entry/http';
 import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
 import { SCHOOL_SHELL_NAV, schoolShellHref } from '../school-shell/catalog';
@@ -22,17 +22,28 @@ export type SwitcherCurrent = { kind: 'hq' } | { kind: 'school'; schoolId: strin
 export const schoolHomeHref = (choice: Pick<StaffReportingSchoolChoice, 'organizationId' | 'schoolId'>) =>
   schoolShellHref(SCHOOL_SHELL_NAV[0]!.routes[0]!, { organizationId: choice.organizationId, schoolId: choice.schoolId });
 
+/** Close an open menu on a click or tap outside it, or on Escape (owner preference for every menu). Returns the unbind. */
+export function bindSwitcherDismiss(menu: HTMLDetailsElement, doc: Document): () => void {
+  const close = () => { if (menu.open) menu.open = false; };
+  const pointer = (event: Event) => { if (menu.open && !menu.contains(event.target as Node)) close(); };
+  const key = (event: KeyboardEvent) => { if (menu.open && event.key === 'Escape') { close(); menu.querySelector('summary')?.focus(); } };
+  doc.addEventListener('pointerdown', pointer); doc.addEventListener('keydown', key);
+  return () => { doc.removeEventListener('pointerdown', pointer); doc.removeEventListener('keydown', key); };
+}
+
 /** Pure view, so it can be rendered and tested without a network. */
 export function SchoolSwitcherView({ language, current, isHq, schools, query = '', onQuery = () => {}, onOpen }: {
   language: string; current: SwitcherCurrent; isHq: boolean; schools: readonly StaffReportingSchoolChoice[]; query?: string; onQuery?: (q: string) => void; onOpen?: () => void;
 }): React.ReactElement | null {
   const c = text(language);
+  const menu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => menu.current ? bindSwitcherDismiss(menu.current, document) : undefined);
   // Shown to HQ people everywhere, and to anyone with more than one school (multi-location organizations).
   if (!isHq && schools.length < 2) return null;
   const q = query.trim().toLocaleLowerCase();
   const shown = schools.filter(s => !q || s.schoolName.toLocaleLowerCase().includes(q) || s.organizationName.toLocaleLowerCase().includes(q));
   const currentLabel = current.kind === 'hq' ? c.hq : current.schoolName ?? schools.find(s => s.schoolId === current.schoolId)?.schoolName ?? c.label;
-  return <details className={styles.switcher} data-account-switcher="" onToggle={e => { if ((e.currentTarget as HTMLDetailsElement).open) onOpen?.(); }}>
+  return <details ref={menu} className={styles.switcher} data-account-switcher="" onToggle={e => { if ((e.currentTarget as HTMLDetailsElement).open) onOpen?.(); }}>
     <summary aria-label={`${c.label}: ${currentLabel}`}><span className={styles.current}>{currentLabel}</span><span aria-hidden="true" className={styles.caret}>▾</span></summary>
     <div className={styles.panel} role="menu" aria-label={c.label}>
       {schools.length > 6 && <input type="search" className={styles.search} aria-label={c.search} placeholder={c.search} value={query} onChange={e => onQuery(e.target.value)} />}
