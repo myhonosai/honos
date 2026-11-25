@@ -394,7 +394,7 @@ const expectedRlsTables = [
   'school_ai_training_files',
   'school_ai_training_items',
   'communication_message_resends',
-  'person_membership_starts',
+  'person_membership_starts', 'person_profile_details',
   'hq_ai_provider_connections',
   'hq_ai_model_catalog',
   'hq_ai_routing_policies',
