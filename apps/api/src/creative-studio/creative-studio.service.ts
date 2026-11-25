@@ -134,7 +134,7 @@ export class CreativeStudioService {
     return recorded ? this.videoReceipt(subject, school, created.video.videoId, recorded, false) : created;
   }
 
-  // ---------- A3 photo avatars (0664): an adult staff member's own consented photo; delete erases it ----------
+  // ---------- A3 photo avatars (0684): an adult staff member's own consented photo; delete erases it ----------
   async listPhotos(subject: string, schoolId: unknown): Promise<CreativePhotoRecords> {
     const school = parse(() => saasUuid(schoolId));
     return this.billing.call('readCreativeAvatarPhotos', [subject, school], validateCreativePhotoRecords);

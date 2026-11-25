@@ -9,7 +9,7 @@ const { SaasBillingService } = require('../dist/saas-billing/saas-billing.servic
 const { stripPhotoMetadata, PhotoMetadataError } = require('../dist/creative-studio/photo-metadata.js');
 const contracts = require('@hon/contracts');
 
-// Creative Studio photo avatars (A3, migration 0664): an adult staff member's own photo with signed likeness consent.
+// Creative Studio photo avatars (A3, migration 0684): an adult staff member's own photo with signed likeness consent.
 const U = () => randomUUID(), T = '2026-11-12T12:00:00.000Z';
 const seg = (marker, body) => { const b = Buffer.from(body); const h = Buffer.alloc(4); h[0] = 0xff; h[1] = marker; h.writeUInt16BE(b.length + 2, 2); return Buffer.concat([h, b]); };
 const jpeg = () => Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xe0, Buffer.from('JFIF\0\x01\x01\0\0\x01\0\x01\0\0', 'latin1')),
@@ -91,7 +91,7 @@ test('A3 JPEG: scan data is walked, markers between progressive scans are filter
   assert.throws(() => stripPhotoMetadata('image/jpeg', Buffer.concat([Buffer.from([0xff, 0xd8]), seg(0xdb, Buffer.alloc(65, 7)), scan('no end of image')])), PhotoMetadataError);
 });
 
-/** A fake database that answers like 0664 and records every call. */
+/** A fake database that answers like 0684 and records every call. */
 function fakeDatabase() {
   const calls = [];
   return { calls, callSaasBilling: async (operation, params) => {

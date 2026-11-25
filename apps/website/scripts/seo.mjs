@@ -2,6 +2,8 @@
 // Pages keep relative links in src/; the build adds the absolute addresses search engines and
 // link previews need, using the site's public origin (HON_WEBSITE_ORIGIN, default https://myhonos.com).
 
+import { jsonLdTag } from './structured.mjs';
+
 export const OG_IMAGE = '/assets/og-hon-os-1200.jpg';
 const LOCALES = { en: 'en_US', ko: 'ko_KR', es: 'es_US' };
 
@@ -25,10 +27,9 @@ const escAttr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 
 /**
  * Adds the canonical address, absolute hreflang alternates, Open Graph URL/locale/image and a large
- * Twitter card to one page. With home=true it also adds Organization and WebSite structured data
- * (a JSON data block, which the Content-Security-Policy does not treat as a script to run).
+ * Twitter card to one page, plus its structured data (graph, from structured.mjs) when given.
  */
-export function seoHead(html, { origin, path, lang, home = false }) {
+export function seoHead(html, { origin, path, lang, graph }) {
   const url = origin + path;
   const title = html.match(/<meta property="og:title" content="([^"]*)"/)?.[1] ?? 'HON OS';
   let out = html.replace(/(<link rel="alternate" hreflang="[^"]+" href=")\//g, `$1${origin}/`);
@@ -45,16 +46,7 @@ export function seoHead(html, { origin, path, lang, home = false }) {
     `<meta name="twitter:title" content="${title}">`,
     `<meta name="twitter:image" content="${origin}${OG_IMAGE}">`,
   ];
-  if (home) {
-    const data = {
-      '@context': 'https://schema.org',
-      '@graph': [
-        { '@type': 'Organization', '@id': `${origin}/#org`, name: 'HON OS', url: `${origin}/`, logo: `${origin}/apple-touch-icon.png` },
-        { '@type': 'WebSite', '@id': `${origin}/#site`, name: 'HON OS', url: `${origin}/`, inLanguage: ['en', 'ko', 'es'], publisher: { '@id': `${origin}/#org` } },
-      ],
-    };
-    tags.push(`<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`);
-  }
+  if (graph) tags.push(jsonLdTag(graph));
   const at = out.search(/<meta property="og:type"[^>]*>/);
   if (at < 0) throw new Error(`${path} has no og:type tag to add search tags after`);
   const end = out.indexOf('>', at) + 1;
@@ -67,12 +59,13 @@ export function robotsTxt({ origin, indexable }) {
     : 'User-agent: *\nDisallow: /\n';
 }
 
-/** pages: [{ path, alternates?: { lang: path } }] */
+/** pages: [{ path, lastmod?: 'YYYY-MM-DD', alternates?: { lang: path } }] */
 export function sitemapXml({ origin, pages }) {
-  const rows = pages.map(({ path, alternates }) => {
+  const rows = pages.map(({ path, lastmod, alternates }) => {
     const alt = alternates ? Object.entries(alternates)
       .map(([l, p]) => `\n    <xhtml:link rel="alternate" hreflang="${l}" href="${origin}${p}"/>`).join('') : '';
-    return `  <url>\n    <loc>${origin}${path}</loc>${alt}\n  </url>`;
+    const mod = lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : '';
+    return `  <url>\n    <loc>${origin}${path}</loc>${mod}${alt}\n  </url>`;
   });
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${rows.join('\n')}\n</urlset>\n`;
 }

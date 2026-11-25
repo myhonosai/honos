@@ -56,7 +56,7 @@ export class CreativeStudioAvatarVideosController {
 }
 
 /**
- * A3 Creative Studio photo avatars (0664): an adult staff member's own photo, with signed likeness consent. Uploading and
+ * A3 Creative Studio photo avatars (0684): an adult staff member's own photo, with signed likeness consent. Uploading and
  * making the avatar need the school staff actor; only the person in the photo can see the image; the person (or a live
  * school owner) can delete it at any time, which erases the image and withdraws the avatar and its videos.
  */

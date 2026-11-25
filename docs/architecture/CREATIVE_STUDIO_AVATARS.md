@@ -1,4 +1,4 @@
-# Creative Studio avatars (migrations 0276, 0277, 0664)
+# Creative Studio avatars (migrations 0276, 0277, 0684)
 
 Owner request (David, 2026-11-12): Creative Studio needs an avatar option, and a trial school should be able to try
 making one inside its trial creative budget. This builds it on the CS1 generation pipeline (0216) and the per-school
@@ -21,7 +21,7 @@ A3). Still out of scope: voices or voice cloning, editing an avatar after creati
 |---|---|---|
 | A1 Create an avatar | 0276 | `hon.creative_avatars`, create/list/read, API `/creative-studio/avatars`, Avatars card in Creative Studio |
 | A2 Avatar video | 0277 | a generation that names a READY avatar and a script, operation `avatar.video` |
-| A3 Photo avatar | 0664 | an adult staff member's own photo + signed likeness consent → an ordinary A1 avatar; delete at any time |
+| A3 Photo avatar | 0684 | an adult staff member's own photo + signed likeness consent → an ordinary A1 avatar; delete at any time |
 
 ## A1 contract
 
@@ -101,7 +101,7 @@ retry. EN/KO/ES.
 `test-creative-studio-avatar-videos.mjs` VD1–VD11b, web tests (`creative-studio-avatar-videos.test.tsx`) and the local
 mounted browser check (desktop and phone, axe).
 
-## A3 contract (0664): photo avatars
+## A3 contract (0684): photo avatars
 
 **Who**: only the signed-in person, about themselves. The uploader, the consent signer and the person in the photo are
 the same principal; there is no "subject" field to fill in. `require_saas_school_actor` refuses parent, guardian,

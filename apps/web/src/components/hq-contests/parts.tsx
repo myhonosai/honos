@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import type { ChampionsContestConfig, ChampionsContestStatus } from '@hon/contracts';
 import { contestText, type ContestKey } from './copy';
-import { PRIZE_KINDS, TIERS, configFrom, dollarsToMinor, emptyPrize, formatMoney, type ContestDraft, type PrizeDraft } from './form';
+import { PRIZE_KINDS, TIERS, configFrom, dollarsToMinor, emptyPrize, formatMoney, type ContestDraft, type GoLiveState, type PrizeDraft } from './form';
 import type { ContestOutcome } from './model';
 import styles from '../hq-access/hq-access.module.css';
 import local from './contests.module.css';
@@ -27,6 +27,29 @@ export function Outcome({ language, outcome, canRetry, onTryAgain }: { language:
   const key: ContestKey = outcome.kind === 'CHANGED' ? 'changed' : outcome.kind === 'KEY_REUSED' ? 'keyReused' : outcome.kind === 'DENIED' ? 'deniedCommand'
     : outcome.kind === 'INVALID' ? 'invalidCommand' : outcome.kind === 'GONE' ? 'goneCommand' : outcome.kind === 'LOCAL_INVALID' ? 'localInvalid' : refusal(outcome.code);
   return <p className={styles.outcome} data-tone="blocked" role="alert" data-contest-outcome={outcome.kind.toLowerCase()} data-contest-code={outcome.kind === 'REFUSED' ? outcome.code ?? '' : undefined}>{t(key)}</p>;
+}
+
+/**
+ * The three steps from draft to live, in order. With `states` each step says whether it is done, the one to do now, or
+ * later; `missing` lists what still blocks step 1 and `notes` adds a line under any step. `children` follows the steps.
+ */
+export function GoLiveGuide({ language, states, missing = [], notes = [null, null, null], children }: { language: string; states?: readonly GoLiveState[];
+  missing?: readonly string[]; notes?: readonly (string | null)[]; children?: React.ReactNode }): React.ReactElement {
+  const t = (key: ContestKey) => contestText(language, key);
+  const steps = [['guideStep1', 'guideStep1Help'], ['guideStep2', 'guideStep2Help'], ['guideStep3', 'guideStep3Help']] as const;
+  return <article className={styles.card} aria-labelledby="contest-guide" data-contest-guide="">
+    <div className={styles.cardHead}><h2 id="contest-guide">{t('guideTitle')}</h2></div>
+    <ol className={local.guide}>{steps.map(([title, help], i) => {
+      const state = states?.[i];
+      return <li key={title} data-contest-guide-step={i + 1} data-state={state}>
+        <strong>{t(title)}{state && <> · <span className={local.stepState}>{t(`guide${state}`)}</span></>}</strong>
+        <p className={styles.meta}>{t(help)}</p>
+        {i === 0 && state === 'NOW' && missing.length > 0 && <p data-contest-missing="">{t('guideMissing')} {missing.join('; ')}.</p>}
+        {notes[i] && <p>{notes[i]}</p>}
+      </li>;
+    })}</ol>
+    {children}
+  </article>;
 }
 
 export type SchoolChoice = { schoolId: string; label: string };

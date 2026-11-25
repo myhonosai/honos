@@ -1,6 +1,6 @@
 BEGIN;
 
--- A3 Creative Studio photo avatars (0664, allocated by the coordinator). Provider-free: nothing here calls a provider,
+-- A3 Creative Studio photo avatars (0684, allocated by the coordinator). Provider-free: nothing here calls a provider,
 -- charges a card, changes trial funding or activates a program. The photo never leaves this database.
 --
 -- Owner decision (David, 2026-11-12): an ADULT STAFF member may make an avatar from THEIR OWN photo, with signed

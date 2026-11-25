@@ -193,7 +193,7 @@ export async function createCreativeAvatarVideo(schoolId: string, input: Creativ
   } catch { throw new CreativeGenerationError('UNKNOWN'); }
 }
 
-// ---------- A3 photo avatars (0664): an adult staff member's own photo, signed consent, delete at any time ----------
+// ---------- A3 photo avatars (0684): an adult staff member's own photo, signed consent, delete at any time ----------
 const read = (path: string, signal: AbortSignal) => fetch(path, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
   referrerPolicy: 'no-referrer', headers: { Accept: 'application/json' }, signal });
 const command = (path: string, name: string, payload: unknown, signal: AbortSignal, key?: string) => fetch(path, { method: 'POST', credentials: 'same-origin', mode: 'same-origin',

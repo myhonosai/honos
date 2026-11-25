@@ -8,7 +8,7 @@
 // guard's body so each avatar.* operation needs its own record and any other avatar.* operation is refused.
 // C1 (0354) adds a BEFORE INSERT daily cap guard on creative_generations; its job tables have their own proof
 // (test-creative-provider-jobs.mjs).
-// A3 (0664) adds own-photo avatars: a permanent consent record, the deletable photo bytes, withdrawals and avatar links,
+// A3 (0684) adds own-photo avatars: a permanent consent record, the deletable photo bytes, withdrawals and avatar links,
 // five runtime entry points, and replaces the school reads and the avatar-video create so a withdrawn likeness is hidden
 // and never used again.
 export const creativeStudioTables = ['creative_generations', 'creative_generation_assets', 'creative_avatars', 'creative_avatar_videos',
