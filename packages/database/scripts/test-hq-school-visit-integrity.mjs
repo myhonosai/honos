@@ -193,6 +193,14 @@ try {
   assert.equal(await can('hq', S1, 'school_pay.connection.manage'), false, 're-synced on entry');
   await leave('hq', S1);
 
+  // ---------- 8b. ending the HQ authority ends a live visit at once, without waiting for its 4 hours ----------
+  await enter('onboarder', S1);
+  assert.equal(await contactsActor('onboarder', S1), P('onboarder'));
+  await q("UPDATE hon.hq_operator_grants SET effective_until=now() WHERE principal_id=$1", [P('onboarder')]);
+  assert.equal((await row('SELECT hon.hq_visit_active($1) a', [P('onboarder')])).a, false);
+  assert.equal(await contactsActor('onboarder', S1), null, 'an ended HQ grant lets nothing through');
+  assert.equal(await eligible('onboarder', S1), false);
+
   // ---------- 9. evidence is immutable ----------
   for (const sql of ["UPDATE hon.hq_school_visit_audit SET reason='x' WHERE organization_id=$1", 'DELETE FROM hon.hq_school_visit_outbox WHERE audit_id IN (SELECT id FROM hon.hq_school_visit_audit WHERE organization_id=$1)',
     "UPDATE hon.hq_school_visits SET reason='x' WHERE organization_id=$1", "UPDATE hon.hq_school_visits SET left_at=now() WHERE organization_id=$1 AND left_at IS NOT NULL"]) {

@@ -109,7 +109,11 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
   SELECT p_principal IS NOT NULL AND EXISTS (SELECT 1 FROM hon.hq_school_visits v
     JOIN hon.principal_role_grants g ON g.id = v.role_grant_id
     WHERE v.hq_principal_id = p_principal AND v.left_at IS NULL AND g.principal_id = p_principal
-      AND g.revoked_at IS NULL AND g.effective_from <= clock_timestamp() AND g.effective_until > clock_timestamp());
+      AND g.revoked_at IS NULL AND g.effective_from <= clock_timestamp() AND g.effective_until > clock_timestamp())
+    -- The visit ends as soon as the HQ authority that opened it ends (owner, or operator with hq.onboarding.manage).
+    AND EXISTS (SELECT 1 FROM hon.hq_operator_grants h WHERE h.principal_id = p_principal
+      AND h.effective_from <= clock_timestamp() AND (h.effective_until IS NULL OR h.effective_until > clock_timestamp())
+      AND (h.hq_role = 'HON_HQ_OWNER' OR (h.hq_role = 'HON_HQ_OPERATOR' AND 'hq.onboarding.manage' = ANY(h.permission_codes))));
 $$;
 
 -- The organization's SUPPORT_VISIT system role, created on first use and re-synced on every entry so later features

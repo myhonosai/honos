@@ -419,6 +419,6 @@
     "0675_hq_school_lifecycle.sql": "22c1f1983591b669efa7fbbefa1d6571120ace94b4322e19c1a32f9fa6b02e60",
     "0676_hq_school_plan_assignments.sql": "ec678f629f21222ff612462ceb151e821938b4aaa602d08dd64e928b2cb91dc6",
     "0677_hq_ad_account_connections.sql": "680101b594c865cede1c7ae422f0acab5f1dea0f54b27b2316edd47731ac0dbf",
-    "0696_hq_enter_school.sql": "61ad0297c2e68d8dcc0ab1767401b0886858d65c51f3bc0394b37811a3b1bb7b"
+    "0696_hq_enter_school.sql": "a5b09ea6c7b0f4107f311e2dd15cddacc479075961f03b2fa2da75a4eac3f228"
   }
 }
