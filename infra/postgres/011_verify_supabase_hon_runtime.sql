@@ -7322,3 +7322,41 @@ BEGIN
   END LOOP;
 END $$;
 -- End HQ ad account connections exact verification.
+-- Membership activates on signing exact verification (0680): no runtime entry point, two owner-only functions, one deferred
+-- signature trigger, one forced-RLS immutable outcome table, and the 0177 decision checks that bind each basis to its rules.
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
+BEGIN
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.membership_agreement_signed_starts()','ceac82a22b556d83ee6d0abc3e3eb5a4','v',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_start_on_signing(hon.membership_agreement_signatures,uuid)','10ef849cc2f518bab9164bee2eac0908','v',true,'search_path=pg_catalog, hon')) x(f,t,c,d,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c
+        AND p.prosecdef=d AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY[s])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Membership signing start function body/posture drift: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('membership_agreement_signed_starts','membership_start_on_signing'))<>2 THEN
+    RAISE EXCEPTION 'Unexpected membership signing start overload'; END IF;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.membership_agreement_signatures'::regclass AND tgname='membership_agreement_signed_starts'
+      AND tgfoid='hon.membership_agreement_signed_starts()'::regprocedure AND tgenabled='O' AND tgdeferrable AND tginitdeferred AND tgconstraint<>0)<>1 THEN
+    RAISE EXCEPTION 'Membership signing start trigger missing or not deferred'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.membership_signing_activations'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='membership_signing_activations')
+    OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid='hon.membership_signing_activations'::regclass AND a.grantee<>c.relowner)
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.membership_signing_activations'::regclass AND tgfoid='hon.guard_membership_activation_evidence()'::regprocedure
+      AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+    RAISE EXCEPTION 'Unsafe membership signing outcome table'; END IF;
+  FOR t,s IN SELECT * FROM (VALUES
+    ('membership_activation_decisions_decision_basis_check','CHECK ((decision_basis = ANY (ARRAY[''STAFF_ACTIVATION_PRE_POLICY''::text, ''AGREEMENT_SIGNED''::text])))'),
+    ('membership_activation_decisions_authorizing_permission_check','CHECK ((authorizing_permission = ANY (ARRAY[''billing.membership.activate''::text, ''membership_agreement.signed''::text])))'),
+    ('membership_activation_decisions_signing_basis_check','ad4f56069ec01210852c31434f8bca75'),
+    ('membership_activation_decision_requirements_not_evaluated_check','b41b29543d33fe8cf2845c400ecfb93f')) x(t,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.membership_activation_decisions'::regclass AND conname=t AND contype='c' AND convalidated
+        AND (pg_get_constraintdef(oid)=s OR md5(pg_get_constraintdef(oid))=s)) THEN
+      RAISE EXCEPTION 'Membership activation decision check drift: %',t; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.membership_effective_periods'::regclass AND conname='membership_effective_periods_authorizing_permission_check'
+      AND pg_get_constraintdef(oid)='CHECK ((authorizing_permission = ANY (ARRAY[''billing.membership.activate''::text, ''membership_agreement.signed''::text])))') THEN
+    RAISE EXCEPTION 'Membership effective period permission check drift'; END IF;
+END $$;
+-- End membership activates on signing exact verification.

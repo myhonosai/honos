@@ -5632,3 +5632,17 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+-- 0680 Membership activates on signing: no runtime entry point. The outcome table keeps forced RLS with no client
+-- privilege; the two functions (the deferred signature trigger and its per-membership start) stay migration-owner only.
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regclass('hon.membership_signing_activations') IS NULL THEN RAISE EXCEPTION 'Apply migration 0680 first'; END IF;
+  EXECUTE 'REVOKE ALL ON TABLE hon.membership_signing_activations FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.membership_signing_activations FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.membership_start_on_signing(hon.membership_agreement_signatures,uuid)','hon.membership_agreement_signed_starts()'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+END $$;
