@@ -61,7 +61,8 @@ export function schoolMediaUploadTransport(env: Record<string, string | undefine
 }
 
 /**
- * Strict transport for the public picture link /v1/public/media/<token> (the web serves it as /m/<token>): one GET path,
+ * Strict transport for the public picture link /v1/public/media/<token> (the web serves it as /m/<token>), plus the 0654
+ * video poster (<token>/poster) and video page facts (<token>/page): GET paths only,
  * no query string, no body, a per-client limit and a fixed-memory process cap. Email image proxies fetch on behalf of many
  * readers, so the per-client window is the larger 'media' one.
  */
@@ -72,7 +73,7 @@ export function publicMediaTransport(clients: PublicClientLimit = sharedPublicCl
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
-    if (!['GET', 'HEAD'].includes(req.method) || req.originalUrl.includes('?') || !/^\/v1\/public\/media\/[A-Za-z0-9_-]{43}$/.test(req.path)
+    if (!['GET', 'HEAD'].includes(req.method) || req.originalUrl.includes('?') || !/^\/v1\/public\/media\/[A-Za-z0-9_-]{43}(?:\/poster|\/page)?$/.test(req.path)
       || req.headers['transfer-encoding'] !== undefined || Number(req.headers['content-length'] ?? 0) !== 0) {
       res.status(400).json({ result: 'INVALID' }); return;
     }

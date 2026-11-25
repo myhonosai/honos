@@ -126,9 +126,64 @@ Every command has exact-request idempotency, an audit row and an inert outbox ev
   over signed HTTP with the real storage client pointed at an in-memory stand-in.
 - `apps/api/test/school-media.test.cjs` and `apps/web/test/school-media-ui.test.tsx`.
 
-## Not in BL3a
+## Video (BL3c, migration 0654)
 
-- Picture blocks in email blasts and the HTML email part (BL3b).
-- Video, thumbnails, the video page and the 720p playback copy (BL3c).
+Owner decisions (David): 2026-11-18 "Email pictures, video as a link"; 2026-11-22 "Allow media storage" and "Allow 720p
+copies". Spec of the plan: `/mnt/project-files/blasts/BL3_MEDIA_PLAN.md` (BL3c design).
+
+- **Upload.** MP4, MOV and WebM up to 5 GB (`SCHOOL_MEDIA_LIMITS.videoMaxBytes`). `POST .../marketing/media/video/begin`
+  (`marketing_media.video_begin`, `{title, mediaType, byteSize}`) reserves a PENDING video with the fixed key `media/<id>`
+  within the 0628 caps and answers a one-time signed upload link for exactly that key. The browser PUTs the file straight to
+  the private bucket (no cookies, no HON headers; progress is shown). `POST .../video/finish`
+  (`marketing_media.video_finish`, `{assetId}`) reads the stored file's first 4 KiB with a ranged request: the total size
+  must equal the started size (`409 MEDIA_UPLOAD_MISSING` / `MEDIA_UPLOAD_MISMATCH`) and the bytes must look like the
+  declared type (an ISO base media box for MP4/MOV, the EBML header for WebM). Anything else posing as a video answers `400
+  MEDIA_VIDEO_REFUSED`, and the video is abandoned with its files removed. A good file becomes READY with its copy QUEUED.
+  A retried begin with the same key signs a fresh link for the same video. The upload is one PUT, not resumable: a broken
+  upload is started again.
+- **The 720p copy.** An in-process job in hon-api (`SchoolVideoCopyWorker`, every minute, one video at a time) runs only with
+  `HON_MEDIA_VIDEO_COPIES_APPROVED=true` and media storage on, and only once `ffmpeg` and `ffprobe` answer on the host
+  (otherwise it claims nothing and says so once, so no video spends its tries). It claims the oldest QUEUED video of an
+  active school with a two-hour lease (`hon.claim_school_video_copy`), reads the original through a five-minute signed link
+  with a fixed demuxer (`mov` or `matroska`, https only, never as a playlist), and writes an H.264/AAC MP4 that fits 1280x720
+  (either way up, never upscaled) with faststart and no metadata or chapters, so location and camera details are dropped. A
+  poster frame is cleaned like any picture. Both are stored at `media/<id>.720.mp4` and `media/<id>.poster.jpg` and the facts
+  (sizes, checksum, width, height, length) are recorded as the code-owned service principal
+  `00000000-0000-4000-8000-000000000654` (audit source `SYSTEM_SERVICE`). A failed try goes back to QUEUED; the third
+  failure, or an expired third lease, is FAILED. A video deleted meanwhile has the two new files removed.
+- **The original must not change.** The signed upload link stays usable after finish, so before reading the original and
+  again before storing the copy, the job reads its first bytes and size: anything other than the size finish recorded, or
+  bytes without a video signature, fails the try as `SIZE_CHANGED` and nothing is copied. ffmpeg gets 80 minutes and the
+  copy upload 20, so a try ends inside its two-hour lease.
+- **What is public.** Only HON's copy. `/m/<token>` opens the 720p copy, `/m/<token>/poster` the poster, and `/v/<token>`
+  is a page (no account, `noindex`, no referrer) that plays the copy with its poster and shows the school's name, the title
+  and nothing else (`GET /v1/public/media/<token>/page`). Each answers only for a READY video of an active school whose copy
+  is DONE, and stops at once on delete. The uploaded original is never linked.
+- **Staff see** each video with its poster once ready ("Preparing a smaller copy" before, a plain notice if it failed), its
+  length and size, and Copy link gives the `/v/<token>` page.
+- **Storage use** counts the original, the copy and the poster. Delete removes all three files in one call.
+- **Hosting.** The copy runs on hon-api (0.5 CPU). A long video can take a while there; moving the job to its own worker
+  is a later deploy decision. The encode is held to two threads so it stays beside the API on a small instance. hon-api needs `ffmpeg` and `ffprobe` on its PATH (or `HON_FFMPEG_PATH` / `HON_FFPROBE_PATH`).
+  On Render the API build ends with `.github/scripts/install-video-tools.sh`, which downloads fixed ffmpeg/ffprobe 6.1.1
+  static release assets, checks each against its pinned SHA-256 and the features the job uses (libx264, aac, mjpeg, the
+  mov and matroska demuxers, https input), and puts them in `apps/api/.video-tools/`; `render.yaml` points the two paths
+  there. Any mismatch fails the build.
+  At deploy, set the media bucket's file size limit to 5 GiB, so nothing larger can be stored with an upload link.
+- **Startup check.** With media storage on, production and staging refuse to start without an https `HON_PUBLIC_ORIGIN`
+  (`MEDIA_PUBLIC_ORIGIN_REQUIRED`), since every picture or video email would otherwise only be retried.
+- **Known limit.** Finish finds the video through the library read (newest 500 items), so a video started long ago behind 500
+  newer items has to be uploaded again.
+
+Entry points added (runtime EXECUTE only): `begin_school_video_upload`, `finish_school_video_upload`,
+`claim_school_video_copy`, `finish_school_video_copy`, `fail_school_video_copy`, `resolve_school_video_poster`,
+`resolve_school_video_page`. Private helpers: `school_video_copy_record`, `school_blast_video_ids`.
+
+Evidence: `packages/database/scripts/test-school-media-video-integrity.mjs` (`db:test-school-media-video`),
+`apps/api/test/school-media-video.test.cjs` (runs the real ffmpeg when installed and checks the copy has no location or
+camera data), `apps/web/test/school-media-video-ui.test.tsx`, `apps/web/test/school-blast-videos-ui.test.tsx`.
+
+## Not in BL3a or BL3c
+
 - WebP, SVG and other picture types; resizing or thumbnails of pictures.
+- Resumable (chunked) video uploads, more than one copy size, and captions.
 - A background sweep for DELETED files whose removal failed.

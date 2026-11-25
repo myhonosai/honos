@@ -219,7 +219,8 @@ export function SiteView({ schoolName, document, pageSlug, base, mode, onNavigat
         {contact && str(contact.props.phone) && <p><a href={telHref(contact.props.phone)}>{str(contact.props.phone)}</a></p>}
         {contact && str(contact.props.address) && <Paras text={contact.props.address} />}</div>
       {nav.length > 1 && <ul className={styles.footerNav}>{nav.map(p => <li key={p.slug}><a href={p.slug === 'home' ? base : `${base}/${p.slug}`} {...go(p.slug)}>{p.title}</a></li>)}</ul>}
-      <p className={styles.meta}>© {schoolName}</p>
+      <div className={styles.meta}><p>© {schoolName}</p>
+        <nav aria-label="Policies" className={styles.footerLinks}><a href={`${base}/privacy`}>Privacy policy</a><a href={`${base}/terms`}>Terms of use</a></nav></div>
     </footer>
     {main && <div className={styles.stickyAction}><Action link={main.link} label={main.label} /></div>}
   </div>;

@@ -67,3 +67,10 @@ Expo's push service is free and needs no new account (the app already uses EAS p
 - A per-announcement "sent to N phones" count for staff in the CRM.
 - Per-family notification preferences in the app (the phone's own setting is the off switch).
 - Other notification types (messages, bookings, billing).
+
+
+## 0658 update (2026-11-23)
+
+Staff now choose per send: only announcements posted with "Also send as a phone alert" ticked are pushed, and a ticked
+staff reply in parent app messages pushes a fixed "new message" alert to that family's phones. See
+[PARENT_PUSH_STAFF_CHOICE.md](PARENT_PUSH_STAFF_CHOICE.md).

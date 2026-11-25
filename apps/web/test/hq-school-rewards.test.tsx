@@ -90,22 +90,22 @@ describe('HQ school referrals and reward accounting', () => {
   it('renders backend ranks, reached/next progress and limits without inferring later awards or school reward history', () => {
     const html = renderToStaticMarkup(<SchoolReferralResults data={{ statistics: school(), program: program() }}/>);
     expect(html).toContain('#1'); expect(html).toContain('Reached · backend reported'); expect(html).toContain('2 remaining · backend reported');
-    expect(html).toContain('Later threshold · remaining not provided'); expect(html).toContain('Newest 50');
-    expect(html).toContain('Complete school reward history unavailable'); expect(html).toContain('not an approved or fulfilled reward');
+    expect(html).toContain('Later goal'); expect(html).toContain('Newest 50');
+    expect(html).toContain('Full reward history coming later'); expect(html).toContain('Progress isn’t a reward until it’s approved');
     const unknown = school(); unknown.milestones.reached = []; unknown.milestones.nextMilestone = null;
     const absent = renderToStaticMarkup(<SchoolReferralResults data={{ statistics: unknown, program: program() }}/>);
     expect(absent).not.toContain('Reached · backend reported'); expect(absent).not.toContain('2 remaining'); expect(absent).toContain('None reported');
   });
   it('renders aggregates beyond the recent list and all exact liability statuses, never completed benefits', () => {
     const html = renderToStaticMarkup(<RewardLedgerResults data={{ ledger: ledger(), program: program() }}/>);
-    for (const text of ['450', 'USD 45,000.00', 'USD 100.00', 'Approved for future fulfillment', 'Reversal review required', 'Voided reward record', 'Lifetime membership', 'Newest 200', 'across all schools', 'not an applied credit or payment']) expect(html).toContain(text);
+    for (const text of ['450', 'USD 45,000.00', 'USD 100.00', 'Approved for future fulfillment', 'Reversal review required', 'Voided reward record', 'Lifetime membership', 'Newest 200', 'across all schools', 'not applied yet']) expect(html).toContain(text);
     expect(html).not.toMatch(/<button|<form/);
     const entry = ledger(); entry.entries[0]!.policyVersion = 1;
     expect(renderToStaticMarkup(<RewardLedgerResults data={{ ledger: entry, program: program() }}/>)).toContain('policy v1');
   });
   it('handles empty/unpublished results and escapes authorized user-controlled text', () => {
     const empty = renderToStaticMarkup(<RewardLedgerResults data={{ ledger: rewardLedgerFixture({ empty: true }), program: rewardProgramFixture({ empty: true }) }}/>);
-    expect(empty).toContain('No non-voided liability groups'); expect(empty).toContain('No recent reward records'); expect(empty).toContain('No published reward policy');
+    expect(empty).toContain('No rewards owed.'); expect(empty).toContain('No recent rewards match'); expect(empty).toContain('No reward settings published yet');
     const s = schoolReferralFixture({ empty: true }); s.schoolName = '<script>school</script>';
     const html = renderToStaticMarkup(<SchoolReferralResults data={{ statistics: s, program: rewardProgramFixture({ empty: true }) }}/>);
     expect(html).toContain('&lt;script&gt;'); expect(html).not.toContain('<script>'); expect(html).toContain('No referral history events'); expect(html).toContain('Not ranked');

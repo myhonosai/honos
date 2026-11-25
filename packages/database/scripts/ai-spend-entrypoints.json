@@ -2,8 +2,9 @@
   "description": "AI-0 strict inventory of every database path that can authorize, reserve, record or fund AI spend. Captured with `node scripts/test-ai-spend-authority-baseline.mjs --print-inventory` from the disposable AI-0 fixture and reviewed by hand.",
   "updateRule": "Change this file only in a PR that explains the new, changed or removed AI spend path and is approved by the owner. A known failure may move from OPEN to FIXED_BY_<slice> only in the PR that fixes it, which must also add the replacing invariant.",
   "baselineCommit": "b234be7f14c49d07349219dfb4ae3b9c2a05d3f9",
-  "migrationFiles": 184,
+  "migrationFiles": 185,
   "spendTables": [
+    "agent_speech_clips",
     "ai_text_proposals",
     "ai_usage_ledger",
     "chad_follow_up_invocations",
@@ -43,6 +44,7 @@
   ],
   "ledgerWriters": [
     "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)",
+    "hon.record_agent_speech_result(text,uuid,jsonb)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_eian_speech_result(text,uuid,jsonb)",
     "hon.record_eian_turn_result(text,uuid,jsonb)",
@@ -57,18 +59,21 @@
     "hon.ai_text_fail(uuid,uuid,text,text)",
     "hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)",
     "hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)",
+    "hon.fail_agent_speech(text,uuid,text,text)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
     "hon.fail_eian_speech(text,uuid,text,text)",
     "hon.fail_eian_turn(text,uuid,text,text)",
     "hon.fail_hon_reply(text,uuid,text,text)",
     "hon.fail_marketing_invocation(text,uuid,text,text)",
     "hon.fail_teaching_invocation(text,uuid,text,text)",
+    "hon.prepare_agent_speech(text,uuid,boolean)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_eian_speech(text,uuid,boolean)",
     "hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)",
     "hon.prepare_hon_reply(text,uuid,uuid,boolean)",
     "hon.prepare_marketing_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)",
+    "hon.record_agent_speech_result(text,uuid,jsonb)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_eian_speech_result(text,uuid,jsonb)",
     "hon.record_eian_turn_result(text,uuid,jsonb)",
@@ -112,6 +117,7 @@
     "hon.create_hq_creative_generation(text,jsonb,jsonb,uuid)",
     "hon.creative_generation_json(hon.creative_generations)",
     "hon.estimate_saas_premium_operation(text,uuid,text,integer)",
+    "hon.fail_agent_speech(text,uuid,text,text)",
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)",
     "hon.fail_eian_speech(text,uuid,text,text)",
     "hon.fail_eian_turn(text,uuid,text,text)",
@@ -131,6 +137,7 @@
     "hon.hq_hon_turn_json(hon.hq_hon_turns,uuid)",
     "hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)",
     "hon.plan_eian_turn(text,uuid,uuid,uuid)",
+    "hon.prepare_agent_speech(text,uuid,boolean)",
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)",
     "hon.prepare_eian_speech(text,uuid,boolean)",
     "hon.prepare_eian_turn(text,uuid,uuid,boolean,jsonb,jsonb)",
@@ -148,6 +155,7 @@
     "hon.read_saas_school_credits(text,uuid)",
     "hon.read_saas_trial_governance(text)",
     "hon.read_teaching_invocation(text,uuid)",
+    "hon.record_agent_speech_result(text,uuid,jsonb)",
     "hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)",
     "hon.record_chad_follow_up_result(text,uuid,jsonb)",
     "hon.record_eian_speech_result(text,uuid,jsonb)",
@@ -245,6 +253,11 @@
       "public": false,
       "security_definer": true
     },
+    "hon.fail_agent_speech(text,uuid,text,text)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
     "hon.fail_chad_follow_up_invocation(text,uuid,text,text)": {
       "runtime": true,
       "public": false,
@@ -280,6 +293,11 @@
       "public": false,
       "security_definer": true
     },
+    "hon.prepare_agent_speech(text,uuid,boolean)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
     "hon.prepare_chad_follow_up_invocation(text,uuid,uuid,boolean)": {
       "runtime": true,
       "public": false,
@@ -306,6 +324,11 @@
       "security_definer": true
     },
     "hon.prepare_teaching_invocation(text,uuid,uuid,boolean)": {
+      "runtime": true,
+      "public": false,
+      "security_definer": true
+    },
+    "hon.record_agent_speech_result(text,uuid,jsonb)": {
       "runtime": true,
       "public": false,
       "security_definer": true
@@ -382,6 +405,13 @@
     }
   },
   "runtimeSpendTablePrivileges": {
+    "agent_speech_clips": {
+      "select": false,
+      "insert": false,
+      "update": false,
+      "delete": false,
+      "truncate": false
+    },
     "ai_text_proposals": {
       "select": false,
       "insert": false,
@@ -468,6 +498,12 @@
     }
   },
   "spendTableTriggers": {
+    "agent_speech_clips": [
+      "ai_spend_reserve_guard",
+      "ai_spend_reserve_guard_insert",
+      "ai_spend_start_guard",
+      "zz_ai_hold_origin"
+    ],
     "ai_text_proposals": [
       "ai_spend_reserve_guard",
       "ai_spend_reserve_guard_insert",
