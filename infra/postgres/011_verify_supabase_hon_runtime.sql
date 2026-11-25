@@ -5111,13 +5111,13 @@ END $$;
 -- Shared AI text proposals exact verification (0550): the kind table and the proposal table with its guards and four S4
 -- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
 -- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
--- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips), and 0652 again to add
--- AGENT_SPEECH (staff agent speech clips); the eight hashes below are the 0652 bodies.
+-- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips); the eight hashes below
+-- are the 0638 bodies.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','912b515826a51a6fba5b9029977161f9e3a366b54d30123dc427cf3a0e44149d'),
-('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','83c921780a75b8c584f8f12f454b18de9962cf9b632eb337150c42a6603fcfea'),
-('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','6924f4f3fbf8f75fd7419616400161464fae107d1dabef4543154d3331031c09'),
+('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','0ce8e55d537824e95478cab1044836ce32825dbc57c551d2728621fba3ae7420'),
+('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','3dd7094de974a0b8ab47550b5acaed84a51830a8eee316b86b6b9b93bc188c0a'),
+('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','4efa8c4c7361e5d99a01791901cf279c2968be6d25925e348e2f046e50fb25d2'),
 ('hon.ai_text_begin(text,uuid,text,uuid,integer,jsonb)',true,false,'search_path=pg_catalog, hon','6f82977de496d1ed4a4dc92344338141ac0a7e6a1b438aedcd3d8289883036aa'),
 ('hon.ai_text_close(uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','c7eb4e44d4c7e0b43356156e95e0575a3abefc205611d98e4606c81505e29010'),
 ('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
@@ -5126,18 +5126,18 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','8637c7fd7f7cf540513b939f44eceb5f6bf459e920159947e7984f53f7bcdde7'),
 ('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','1fa1f6af3987b11c06f6877ce9ddc836de24ac9e63a989618dca4d864ef0abd8'),
 ('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
-('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','25644d7c2b7998c666c1d93cb9f82a44cf0d15aef5b638f2cff54e584951c469'),
+('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','cbe5c59d888995653f5736925f6e57ff8253b6679f3d02c508c20a5dab76b416'),
 ('hon.begin_school_website_ai_edit(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','942cb067060413f3309465c5cd4c6f8d326b8c73a41d695a00dcd452f3465f69'),
 ('hon.close_school_website_ai_edit(text,uuid,text)',true,true,'search_path=pg_catalog, hon','cf273be12c4a99889369dad1feb7ecff0ae6d73edaecde2c82274d6054432298'),
 ('hon.fail_school_website_ai_edit(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','cec489c91805c02f0a460bc9f8401c295fc0efdf66637a86ac3f000703352688'),
 ('hon.guard_ai_text_proposals()',false,false,'search_path=pg_catalog, hon','431a2ad9c9a47028538a537910d2b2b40bef20e091af7b4e650963202671be75'),
 ('hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','8b78db60ef391b85adc83b5bcbfcfe2eae5c8097fde15fc7d96888adf8cba659'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','529990ca6a5703607eb7bb898d9125aa0a8858f414f2e3552bd72da57a1ee0df'),
-('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','3fc40c85bd6bdf02173bbe45d5388d125859058ea580147e5a6e6a770ff9faba'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','a73fbbf439b5a15b83fb70c2fc5909d7e9b56df72e0c2a2b4ae78c0b7698b076'),
+('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','2b77dd1efdc51eea92ca2e19a4df1233aa40eb8d2404c3758af93ab09305f4dd'),
 ('hon.read_school_website_ai_edits(text,uuid)',true,true,'search_path=pg_catalog, hon','5bca23fda531a8d5ab1f1bbbed5d08b873ef8da848dea32ba893e4cbc335d99f'),
-('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c49d55805da8bb976a1590d9f2d2d819a17aa9d77073709a07c3a6d511563b43'),
+('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','cdd7b650316c258da26e037d5021e737cbb25be55d886acb17746431f2a6a020'),
 ('hon.record_school_website_ai_edit(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','94284d3805916895a286633e8a81d58d4f7f56c0835e41217b68be4e9588f2f4'),
-('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2b7ce366c109c00d780f032f37032ad10d037242361d34d99ff08741836c633a'),
+('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d391d660d3823fa0ea7fd518116d706649e482482a03739928f1494732f4eca6'),
 ('hon.school_website_ai_actor(text)',true,false,'search_path=pg_catalog, hon','768224c8665725fe986a89512fbac5a3a69e54e6b6627fbb033d13b5ceb2e1c5'),
 ('hon.school_website_ai_edit_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','a649cd44c33edc3d00f17a46830ce3f632ff814b5274e760688186d49b7baa6d'),
 ('hon.school_website_ai_facts(jsonb,text)',false,false,'search_path=pg_catalog, hon','c6a2bfb758bca374c226adeb598d7e297fed6715b68e4a10788bebb71a078a14'),
@@ -6243,6 +6243,14 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Unexpected owner-launch first booking overload'; END IF;
 END $$;
 -- End owner-launch first booking lifecycle exact verification.
+-- Class session minimum duration exact verification (0645, launch-readiness [25]): one validated check of at least a minute.
+DO $$ BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.class_sessions'::regclass AND conname='class_sessions_minimum_duration'
+      AND contype='c' AND convalidated
+      AND pg_get_constraintdef(oid)=$def$CHECK (((ends_at - starts_at) >= '00:01:00'::interval))$def$) THEN
+    RAISE EXCEPTION 'Missing or altered class session minimum duration'; END IF;
+END $$;
+-- End class session minimum duration exact verification.
 
 -- Checkout page share links exact verification (0620): the link guard, the public page selector, two runtime entry points
 -- (the public read's hash is the 0627 body, which adds the sign-up form fields)
@@ -6746,6 +6754,55 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End Claire KPI report exact verification.
+
+-- Membership plan payment options exact verification (0642): three runtime entry points, six private helpers, two forced-RLS tables.
+DO $$ DECLARE f text; t text; c text; d boolean; s text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.read_school_membership_plan_setups(text)','hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)',
+      'hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_plan_setup()','hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','hon.membership_plan_validated_setup(jsonb)',
+      'hon.membership_plan_setup_summary(uuid,integer)','hon.membership_plan_setup_terms(jsonb,jsonb)','hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['membership_plan_version_setups','membership_plan_payment_options'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe membership plan option table: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('guard_membership_plan_setup','membership_plan_setup_int','membership_plan_validated_setup',
+      'membership_plan_setup_summary','membership_plan_setup_terms','membership_plan_insert_setup','read_school_membership_plan_setups',
+      'create_school_membership_plan_with_options','revise_school_membership_plan_with_options'))<>9 THEN
+    RAISE EXCEPTION 'Unexpected membership plan option overload'; END IF;
+  FOR f,t,c,d,s IN SELECT * FROM (VALUES
+    ('hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)','5651355218ada7e3c5e45d33746c8bf1','v',true,'search_path=pg_catalog, hon'),
+    ('hon.guard_membership_plan_setup()','f580ad9acbae46a1c09263ce987ccd4a','v',false,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)','dab3c3a4fb662dbc2e180bb1131b5286','v',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','64ad633ebdcf89c8cc469aafdbd1d5f7','i',false,'search_path=pg_catalog'),
+    ('hon.membership_plan_setup_summary(uuid,integer)','22fca18a051aefb49e2e6873f8fd087c','s',true,'search_path=pg_catalog, hon'),
+    ('hon.membership_plan_setup_terms(jsonb,jsonb)','205c334ad93ba9649df12d2a7116a79b','i',false,'search_path=pg_catalog'),
+    ('hon.membership_plan_validated_setup(jsonb)','bb1d8330497d542e5322b9d23a787d9e','i',false,'search_path=pg_catalog, hon'),
+    ('hon.read_school_membership_plan_setups(text)','8a44c2bfb7fb9830d47c9b971c0e64e8','v',true,'search_path=pg_catalog, hon'),
+    ('hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)','5eb4d2e5618734fb43e94a6d0715ad96','v',true,'search_path=pg_catalog, hon')) x(f,t,c,d,s) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s]) THEN
+      RAISE EXCEPTION 'Membership plan option function body/posture drift: %',f; END IF;
+  END LOOP;
+  FOR t IN SELECT unnest(ARRAY['membership_plan_version_setups','membership_plan_payment_options']) LOOP
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_membership_plan_setup()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'Membership plan option guard missing: %',t; END IF;
+  END LOOP;
+END $$;
+-- End membership plan payment options exact verification.
 -- Maya renewal prep exact verification (0646): the MAYA_RENEWAL_PREP kind row on the shared AI text proposals (0550), the
 -- closed brief and answer shapes, the private helpers, the eight runtime entry points and the closed evidence tables.
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
