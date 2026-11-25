@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "90cf73b19b5ce75ca94ad96aa795774133eded3b7edf94af46f8c6b52195f1f1",
+  "chainSha256": "f3cf5f3e191bf1cc9ef3536d36d8b0c9aafacd83d19dda4607c126ba20e5a2e5",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -925,6 +925,22 @@
     {
       "file": "0647_chad_approved_draft_send.sql",
       "sha256": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9"
+    },
+    {
+      "file": "0649_maya_check_in_draft_send.sql",
+      "sha256": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90"
+    },
+    {
+      "file": "0650_chad_lead_plan.sql",
+      "sha256": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487"
+    },
+    {
+      "file": "0651_hq_creative_cost_basis.sql",
+      "sha256": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219"
+    },
+    {
+      "file": "0652_staff_agent_speech.sql",
+      "sha256": "fdb50164a94331c08a57e6e034953a3c4c5addc68c16d764c8705736f960d408"
     },
     {
       "file": "0653_school_blast_pictures.sql",

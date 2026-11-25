@@ -5111,13 +5111,13 @@ END $$;
 -- Shared AI text proposals exact verification (0550): the kind table and the proposal table with its guards and four S4
 -- triggers, the private ai_text core, the WEBSITE_EDIT entry points (seven runtime) and the eight S4 shared functions,
 -- now counting both EIAN (0474) and TEXT_PROPOSAL holds, UNKNOWN rows, resolutions, late expenses and HQ usage.
--- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips); the eight hashes below
--- are the 0638 bodies.
+-- 0638 re-created those eight shared functions again to add EIAN_SPEECH (Eian natural voice clips), and 0652 again to add
+-- AGENT_SPEECH (staff agent speech clips); the eight hashes below are the 0652 bodies.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','0ce8e55d537824e95478cab1044836ce32825dbc57c551d2728621fba3ae7420'),
-('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','3dd7094de974a0b8ab47550b5acaed84a51830a8eee316b86b6b9b93bc188c0a'),
-('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','4efa8c4c7361e5d99a01791901cf279c2968be6d25925e348e2f046e50fb25d2'),
+('hon.ai_org_committed_credits(uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','912b515826a51a6fba5b9029977161f9e3a366b54d30123dc427cf3a0e44149d'),
+('hon.ai_org_open_agent_holds(uuid)',false,false,'search_path=pg_catalog, hon','83c921780a75b8c584f8f12f454b18de9962cf9b632eb337150c42a6603fcfea'),
+('hon.ai_school_committed_cost_micros(uuid,uuid,timestamptz)',true,false,'search_path=pg_catalog, hon','6924f4f3fbf8f75fd7419616400161464fae107d1dabef4543154d3331031c09'),
 ('hon.ai_text_begin(text,uuid,text,uuid,integer,jsonb)',true,false,'search_path=pg_catalog, hon','6f82977de496d1ed4a4dc92344338141ac0a7e6a1b438aedcd3d8289883036aa'),
 ('hon.ai_text_close(uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','c7eb4e44d4c7e0b43356156e95e0575a3abefc205611d98e4606c81505e29010'),
 ('hon.ai_text_event(uuid,text)',true,false,'search_path=pg_catalog, hon','f959f57392aaa107fd79d0b094854aae0f61cac002bc96f71308fc8b503685a0'),
@@ -5126,18 +5126,18 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.ai_text_prepare(uuid,uuid,uuid,boolean,text)',true,false,'search_path=pg_catalog, hon','8637c7fd7f7cf540513b939f44eceb5f6bf459e920159947e7984f53f7bcdde7'),
 ('hon.ai_text_record(uuid,uuid,jsonb,jsonb,jsonb)',true,false,'search_path=pg_catalog, hon','1fa1f6af3987b11c06f6877ce9ddc836de24ac9e63a989618dca4d864ef0abd8'),
 ('hon.ai_text_row(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c872bdf33d4691655dfebf209863dfd96c2a51dbb64c897802fc25952c60d01d'),
-('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','cbe5c59d888995653f5736925f6e57ff8253b6679f3d02c508c20a5dab76b416'),
+('hon.ai_unknown_validate(text,jsonb)',false,false,'search_path=pg_catalog, hon','25644d7c2b7998c666c1d93cb9f82a44cf0d15aef5b638f2cff54e584951c469'),
 ('hon.begin_school_website_ai_edit(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','942cb067060413f3309465c5cd4c6f8d326b8c73a41d695a00dcd452f3465f69'),
 ('hon.close_school_website_ai_edit(text,uuid,text)',true,true,'search_path=pg_catalog, hon','cf273be12c4a99889369dad1feb7ecff0ae6d73edaecde2c82274d6054432298'),
 ('hon.fail_school_website_ai_edit(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','cec489c91805c02f0a460bc9f8401c295fc0efdf66637a86ac3f000703352688'),
 ('hon.guard_ai_text_proposals()',false,false,'search_path=pg_catalog, hon','431a2ad9c9a47028538a537910d2b2b40bef20e091af7b4e650963202671be75'),
 ('hon.prepare_school_website_ai_edit(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','8b78db60ef391b85adc83b5bcbfcfe2eae5c8097fde15fc7d96888adf8cba659'),
-('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','a73fbbf439b5a15b83fb70c2fc5909d7e9b56df72e0c2a2b4ae78c0b7698b076'),
-('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','2b77dd1efdc51eea92ca2e19a4df1233aa40eb8d2404c3758af93ab09305f4dd'),
+('hon.read_ai_school_usage_from_hq(text,timestamptz,timestamptz)',true,true,'search_path=pg_catalog, hon','529990ca6a5703607eb7bb898d9125aa0a8858f414f2e3552bd72da57a1ee0df'),
+('hon.read_ai_unknown_invocations_from_hq(text)',true,true,'search_path=pg_catalog, hon','3fc40c85bd6bdf02173bbe45d5388d125859058ea580147e5a6e6a770ff9faba'),
 ('hon.read_school_website_ai_edits(text,uuid)',true,true,'search_path=pg_catalog, hon','5bca23fda531a8d5ab1f1bbbed5d08b873ef8da848dea32ba893e4cbc335d99f'),
-('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','cdd7b650316c258da26e037d5021e737cbb25be55d886acb17746431f2a6a020'),
+('hon.record_ai_late_provider_expense(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','c49d55805da8bb976a1590d9f2d2d819a17aa9d77073709a07c3a6d511563b43'),
 ('hon.record_school_website_ai_edit(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','94284d3805916895a286633e8a81d58d4f7f56c0835e41217b68be4e9588f2f4'),
-('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','d391d660d3823fa0ea7fd518116d706649e482482a03739928f1494732f4eca6'),
+('hon.resolve_ai_unknown_invocation(text,text,uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','2b7ce366c109c00d780f032f37032ad10d037242361d34d99ff08741836c633a'),
 ('hon.school_website_ai_actor(text)',true,false,'search_path=pg_catalog, hon','768224c8665725fe986a89512fbac5a3a69e54e6b6627fbb033d13b5ceb2e1c5'),
 ('hon.school_website_ai_edit_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','a649cd44c33edc3d00f17a46830ce3f632ff814b5274e760688186d49b7baa6d'),
 ('hon.school_website_ai_facts(jsonb,text)',false,false,'search_path=pg_catalog, hon','c6a2bfb758bca374c226adeb598d7e297fed6715b68e4a10788bebb71a078a14'),
@@ -6885,6 +6885,142 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END IF;
 END $$;
 -- End Chad approved-draft send exact verification.
+-- Maya check-in draft send exact verification (0649): the nine entry points, the closed helpers, the kind row and the closed
+-- target and send tables with their guard triggers.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','aada1c58af4322b946b9c70dcb27a964d576f91c64412b4b2543c31038eff53b'),
+('hon.begin_maya_check_in_draft(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','8037d9c4b56871bd19ade58735294aa96ba75dff5207426eff5f1aeb7d583e91'),
+('hon.cancel_maya_check_in_send(text,uuid)',true,true,'search_path=pg_catalog, hon','b71c1b2766bce14b6c67a7406f29b0f3d6eb387638201a7b33fc5dc843ac2c82'),
+('hon.close_maya_check_in_draft(text,uuid,text)',true,true,'search_path=pg_catalog, hon','a429793d4fee573c13a532ddeff626fbf87a8148467ccebb8c169733a1a703f1'),
+('hon.fail_maya_check_in_draft(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','b8422adca7f8e57b0eebab3a0d543043e29ca6236e1258abc20046a78e1e4168'),
+('hon.guard_maya_check_in_rows()',false,false,'search_path=pg_catalog, hon','70e42942870b082d29dc5496d7bb2eb3e09bca3cb4c98d5d0cb9ae3a2eb09353'),
+('hon.maya_check_in_actor(text)',true,false,'search_path=pg_catalog, hon','b2a4b663d6b2fdb642de874c8c2ffd20f4044030c0e9e8f21933e8199439923c'),
+('hon.maya_check_in_at_risk_row(text,uuid)',true,false,'search_path=pg_catalog, hon','8fca542d01446bd487737686e1972e1cf81349b7a90ee831e3c02d659efa98fd'),
+('hon.maya_check_in_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6bb1010760d5aaf80a0bc12c53899ced64423bd426b98fcd1a22e066c78d0d4f'),
+('hon.maya_check_in_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','f880816eaac6b43db7c9d8f828d52d938181084365368e77b231d7f66ecb49e8'),
+('hon.maya_check_in_ok(jsonb,text)',false,false,'search_path=pg_catalog, hon','e4303630580f63bafe823229cdc3c6263ae30ba70f13c052d63153a196e2e174'),
+('hon.maya_check_in_reader(text)',true,false,'search_path=pg_catalog, hon','d4ae80cd2f829677b5030ebde2361235c42cacc067e4cda2f21074c222a794fe'),
+('hon.maya_check_in_recipient(uuid,text)',true,false,'search_path=pg_catalog, hon','88b9f3e004238666313f70a25da1c3d17f098b370a25925b5554d768d63482a7'),
+('hon.maya_check_in_text_ok(text,integer)',false,false,'search_path=pg_catalog, hon','3268ff4cc006a90b58ca4da62caa43597df2ae29558d09dfbaef9ab4526d3877'),
+('hon.maya_check_in_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','a8662bbe94fa0421845a5a525753b45463a8dbf99053afb144e82b2c549a1511'),
+('hon.plan_maya_check_in_draft(text,uuid)',true,true,'search_path=pg_catalog, hon','51fe6925bfeb5036120b0bedee7e467a36126f5ba2bfab11ab4f526cc2e98ab3'),
+('hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','b7c8a4842b1311aa713a4ab2de54aa277a77d633daa4a91df0f08a1ef3ad34c1'),
+('hon.read_maya_check_in_drafts(text,uuid)',true,true,'search_path=pg_catalog, hon','43a10962a748aa72834d9f8a58c8389c6f0b3da05261bbcb191c1f521ce6f87d'),
+('hon.record_maya_check_in_draft(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','d905a582ab535f67d0ffc3d5b22b30a3bc66b1186b623a36f8c086e3603a7a0a'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya check-in draft function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_CHECK_IN_DRAFT' AND k.agent_key='maya' AND k.task_class='ANALYZE'
+      AND k.input_budget=6000 AND k.output_budget=2000 AND k.max_cost_microunits=60000 AND k.max_result_bytes=8192
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RETENTION') THEN
+    RAISE EXCEPTION 'Maya check-in draft kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.maya_check_in_targets','hon.maya_check_in_sends'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_maya_check_in_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Maya check-in draft table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Maya check-in draft send exact verification.
+-- Chad lead next steps exact verification (0650): the eight entry points, the closed helpers, the kind row and the closed
+-- alias and applied tables with their guard triggers.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_chad_lead_plan(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','253813d8bc0931f217eb72133899965f8d47d02ebdd3a07e32b715ce5f6552d6'),
+('hon.chad_lead_plan_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','9237098bdcd5e14fcbf365a50255daeaebd7cd2ace58a98bc0a2bbdcc9161ec7'),
+('hon.chad_lead_plan_facts(uuid,jsonb)',true,false,'search_path=pg_catalog, hon','f7aae00bf3e0ed065c830fa6b2fbb51339a106b2e5dba6f8d21ca19fa776b03f'),
+('hon.chad_lead_plan_fits(uuid,jsonb)',true,false,'search_path=pg_catalog, hon','f1cf870baf7cdb8df6f20cc072eb70cda83b1ad6d0fccfc16a24d4de981382d3'),
+('hon.chad_lead_plan_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','fc880eaa82a372ce2d944f26fca711a277289f97a902fc70727271fa7c8408eb'),
+('hon.chad_lead_plan_ok(jsonb)',false,false,'search_path=pg_catalog, hon','53c1db02f1d870360b66a996f32ec58276d76b6ab700c4727c2c3f7a41d9bd6a'),
+('hon.chad_lead_plan_trial_ahead(uuid)',true,false,'search_path=pg_catalog, hon','f9b682b95e015bd65c0b5ce5e188ee3c2f97b7f0095c4d9c4768e67e7d7a792f'),
+('hon.chad_lead_plan_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','43dd2e938f74ba2b9dcfddb820d087df960f35684075c032f93fd2cc86baa5f2'),
+('hon.close_chad_lead_plan(text,uuid,text)',true,true,'search_path=pg_catalog, hon','3827175b2c629d450d256de6288cb332b9555bd097456cdaa9f6159dbd4fe441'),
+('hon.fail_chad_lead_plan(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','604697e041950c081b4af361d6e2fda3cc6f27301adda2ef078406868d5074b2'),
+('hon.plan_chad_lead_plan(text,uuid)',true,true,'search_path=pg_catalog, hon','b5413a3731f01b0b5ff2610bf83fe4b37d606cd2c8586ebf47cee77a7f23c1b2'),
+('hon.prepare_chad_lead_plan(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','945a8de0b22188eebd90c79205f2b798918a23661502acb0167cf37a269209ca'),
+('hon.read_chad_lead_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','c53ab32994f6b54d943c34ce797be9b4cd480b88cc985b43ba03778a93960885'),
+('hon.record_chad_lead_plan(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','909607819e61c08e9783866dbe5f2a1d2a963098c00b9f6bf9a1157a0b0fb0f2'),
+('hon.record_chad_lead_plan_step(text,uuid,integer,jsonb)',true,true,'search_path=pg_catalog, hon','5b58c53f95d12e741265fcf98b771d97afe2c6f5550bed6d9e56cf8304333322'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad lead plan function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='CHAD_LEAD_PLAN' AND k.agent_key='chad' AND k.task_class='DRAFT_FOLLOW_UP'
+      AND k.input_budget=10000 AND k.output_budget=2500 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='CHAD_FOLLOW_UP') THEN
+    RAISE EXCEPTION 'Chad lead plan kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.chad_lead_plan_refs','hon.chad_lead_plan_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_alex_plan_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Chad lead plan table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Chad lead next steps exact verification.
+-- Staff agent speech exact verification (0652): the private clip table (a digest and a length, never the words or the sound)
+-- with its four S4 triggers, two private helpers and five runtime entry points. The eight S4 shared functions that gained
+-- AGENT_SPEECH are pinned in the 0550 section above with their 0652 bodies.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.agent_speech_limits()',false,false,'search_path=pg_catalog','235a5d89c900d5fb27a8ad4ad46fc57552c541dcb8c260435ae0a8caa96708a5'),
+('hon.agent_speech_actor(text,text)',true,false,'search_path=pg_catalog, hon','58b4e5429b30f4631b3488b42b7db0b6f0db03c0d48cff18791c6e7d630aa160'),
+('hon.read_agent_speech_status(text,text,boolean)',true,true,'search_path=pg_catalog, hon','13f19b3d9ff39b73b48e68c657541ce7df0b35b8bcf98418b25ea3250db4cab9'),
+('hon.begin_agent_speech(text,text,text,text,integer)',true,true,'search_path=pg_catalog, hon','47d3bcd80b4ceeb22522b14a66172cfdc9e3e90c7ff454aaabdaa8861d045f0c'),
+('hon.prepare_agent_speech(text,uuid,boolean)',true,true,'search_path=pg_catalog, hon','68cc58641718e2737c90fe97a271299b99f4cfac1ecc3ae6a53c1d9404d15aed'),
+('hon.fail_agent_speech(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','dbaed1958f7fed118126360475daadabc68d35d6164a8dbeac015d63948e24b9'),
+('hon.record_agent_speech_result(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','7e32049882fd4dc21b09cbae94a37fab39705552f77186f8e8e6a88342b6fcb5'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe staff agent speech function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.agent_speech_clips'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.agent_speech_clips'::regclass)
+    OR has_table_privilege('hon_runtime','hon.agent_speech_clips','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.agent_speech_clips','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe staff agent speech clip table';
+  END IF;
+  -- The table can hold no words and no sound: exactly these columns.
+  IF (SELECT array_agg(a.attname::text ORDER BY a.attname::text) FROM pg_attribute a WHERE a.attrelid='hon.agent_speech_clips'::regclass AND a.attnum>0 AND NOT a.attisdropped)
+     <> ARRAY['agent_key','characters','created_at','held_at','id','idempotency_key','organization_id','provider_request_id','reason','requested_by','reserved_credits','school_id','status','text_digest','updated_at','usage_id'] THEN
+    RAISE EXCEPTION 'Staff agent speech clip columns changed';
+  END IF;
+  IF (SELECT count(*) FROM pg_trigger t WHERE t.tgrelid='hon.agent_speech_clips'::regclass AND t.tgenabled='O' AND (t.tgname, t.tgfoid) IN (
+      ('ai_spend_start_guard','hon.ai_spend_start_guard()'::regprocedure), ('ai_spend_reserve_guard','hon.ai_spend_reserve_guard()'::regprocedure),
+      ('ai_spend_reserve_guard_insert','hon.ai_spend_reserve_guard()'::regprocedure), ('zz_ai_hold_origin','hon.ai_stamp_hold_origin()'::regprocedure))) <> 4 THEN
+    RAISE EXCEPTION 'Staff agent speech clip S4 triggers missing';
+  END IF;
+END $$;
+-- End staff agent speech exact verification.
 -- Blast pictures exact verification (0653)
 -- Three private helpers, the worker-only campaign picture lookup, and the 0653 body check on hon.school_blasts in place of
 -- the 0621 one.

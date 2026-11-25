@@ -5187,6 +5187,45 @@ DO $$ DECLARE r text; f regprocedure; t text; BEGIN
       hon.transition_chad_follow_up_draft(uuid,text), hon.read_chad_draft_send_for_review(uuid) TO hon_runtime;
   END IF;
 END $$;
+-- 0649 Maya check-in drafts (P8): nine entry points; every helper closed, and no runtime access to the target or send tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_maya_check_in_draft(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0649 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_maya_check_in_rows()','hon.maya_check_in_text_ok(text,integer)','hon.maya_check_in_line_ok(text,integer)',
+    'hon.maya_check_in_brief_ok(jsonb)','hon.maya_check_in_ok(jsonb,text)','hon.maya_check_in_reader(text)','hon.maya_check_in_actor(text)',
+    'hon.maya_check_in_at_risk_row(text,uuid)','hon.maya_check_in_recipient(uuid,text)','hon.maya_check_in_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.maya_check_in_targets','hon.maya_check_in_sends'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_maya_check_in_draft(text,jsonb,uuid), hon.plan_maya_check_in_draft(text,uuid), hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean),
+      hon.fail_maya_check_in_draft(text,uuid,text,text), hon.record_maya_check_in_draft(text,uuid,jsonb), hon.read_maya_check_in_drafts(text,uuid),
+      hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid), hon.cancel_maya_check_in_send(text,uuid), hon.close_maya_check_in_draft(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+-- 0650 Chad lead next steps (P9): eight entry points; every helper closed, and no runtime access to the alias or applied tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_chad_lead_plan(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0650 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.chad_lead_plan_brief_ok(jsonb)','hon.chad_lead_plan_ok(jsonb)','hon.chad_lead_plan_trial_ahead(uuid)',
+    'hon.chad_lead_plan_fix_refs(uuid,text)','hon.chad_lead_plan_facts(uuid,jsonb)','hon.chad_lead_plan_fits(uuid,jsonb)','hon.chad_lead_plan_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.chad_lead_plan_refs','hon.chad_lead_plan_applied'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_chad_lead_plan(text,jsonb,uuid), hon.plan_chad_lead_plan(text,uuid), hon.prepare_chad_lead_plan(text,uuid,uuid,boolean),
+      hon.fail_chad_lead_plan(text,uuid,text,text), hon.record_chad_lead_plan(text,uuid,jsonb), hon.read_chad_lead_plans(text,uuid),
+      hon.record_chad_lead_plan_step(text,uuid,integer,jsonb), hon.close_chad_lead_plan(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+
 
 -- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
 DO $$ DECLARE r text; f text;
@@ -5378,6 +5417,24 @@ DO $$ DECLARE r text; f text; BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.read_eian_speech_status(text,boolean), hon.begin_eian_speech(text,text,text,integer),
       hon.prepare_eian_speech(text,uuid,boolean), hon.fail_eian_speech(text,uuid,text,text), hon.record_eian_speech_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0652 staff agent speech: one private table, two private helpers and five runtime entry points. The runtime gets no
+-- table privilege; the shared S4 functions it re-creates keep the grants set in their own sections above.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_agent_speech_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0652 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.agent_speech_limits()','hon.agent_speech_actor(text,text)',
+      'hon.read_agent_speech_status(text,text,boolean)','hon.begin_agent_speech(text,text,text,text,integer)','hon.prepare_agent_speech(text,uuid,boolean)',
+      'hon.fail_agent_speech(text,uuid,text,text)','hon.record_agent_speech_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.agent_speech_clips FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.agent_speech_clips FROM %I',r); END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_agent_speech_status(text,text,boolean), hon.begin_agent_speech(text,text,text,text,integer),
+      hon.prepare_agent_speech(text,uuid,boolean), hon.fail_agent_speech(text,uuid,text,text), hon.record_agent_speech_result(text,uuid,jsonb) TO hon_runtime;
   END IF;
 END $$;
 
