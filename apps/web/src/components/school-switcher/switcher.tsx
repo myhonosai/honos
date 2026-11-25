@@ -63,23 +63,32 @@ async function readIsHq(signal: AbortSignal): Promise<boolean> {
   return typeof body?.data?.hqRole === 'string';
 }
 
+/** A display hint only, never authority: it lets a school page show the HQ entry after an HQ visit. Opening the
+ * menu re-checks the HQ session, and a refusal removes the entry and the hint. */
+const HQ_HINT = 'hon.switcher.hq';
+export function rememberHqHint(value: boolean): void { try { if (value) localStorage.setItem(HQ_HINT, '1'); else localStorage.removeItem(HQ_HINT); } catch { /* storage off */ } }
+export function readHqHint(): boolean { try { return localStorage.getItem(HQ_HINT) === '1'; } catch { return false; } }
+
 /**
- * Loads the lists quietly. Inside HQ the shell already proved HQ access, so nothing is fetched until the
- * menu is first opened. Inside a school it loads on mount, to decide whether to show at all.
- * Any failure shows the switcher without that part (or not at all).
+ * No reads on mount (school pages promise no reads until the person asks). Inside HQ the shell already proved
+ * HQ access; the school list loads when the menu is first opened. Inside a school the parent passes the school
+ * list it already read, and the HQ entry is re-checked when the menu is opened. Failures drop that part.
  */
-export function SchoolSwitcher({ language, current, inHq = false }: { language: string; current: SwitcherCurrent; inHq?: boolean }): React.ReactElement | null {
+export function SchoolSwitcher({ language, current, inHq = false, schools: known }: {
+  language: string; current: SwitcherCurrent; inHq?: boolean; schools?: readonly StaffReportingSchoolChoice[];
+}): React.ReactElement | null {
   const [isHq, setIsHq] = useState(inHq);
-  const [schools, setSchools] = useState<readonly StaffReportingSchoolChoice[]>([]);
+  const [loaded, setLoaded] = useState<readonly StaffReportingSchoolChoice[]>([]);
   const [query, setQuery] = useState('');
-  const [wanted, setWanted] = useState(!inHq);
+  const [wanted, setWanted] = useState(false);
+  useEffect(() => { if (inHq) rememberHqHint(true); else setIsHq(readHqHint()); }, [inHq]);
   useEffect(() => {
     if (!wanted) return;
     const abort = new AbortController(), signal = AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]);
-    if (!inHq) readIsHq(signal).then(value => { if (!abort.signal.aborted) setIsHq(value); }, () => {});
-    schoolEntryApi.choices(signal).then(result => { if (!abort.signal.aborted && result.state === 'SELECTION_REQUIRED') setSchools(result.schools); }, () => {});
+    if (!inHq && readHqHint()) readIsHq(signal).then(value => { if (!abort.signal.aborted) { setIsHq(value); if (!value) rememberHqHint(false); } }, () => {});
+    if (!known) schoolEntryApi.choices(signal).then(result => { if (!abort.signal.aborted && result.state === 'SELECTION_REQUIRED') setLoaded(result.schools); }, () => {});
     return () => abort.abort();
-  }, [wanted, inHq]);
-  return <SchoolSwitcherView language={language} current={current} isHq={isHq} schools={schools} query={query} onQuery={setQuery}
+  }, [wanted, inHq, known]);
+  return <SchoolSwitcherView language={language} current={current} isHq={isHq} schools={known ?? loaded} query={query} onQuery={setQuery}
     onOpen={() => setWanted(true)} />;
 }

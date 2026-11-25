@@ -2,7 +2,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it, vi } from 'vitest';
-import { SchoolSwitcherView, bindSwitcherDismiss, schoolHomeHref } from '../src/components/school-switcher/switcher';
+import { SchoolSwitcherView, bindSwitcherDismiss, readHqHint, rememberHqHint, schoolHomeHref } from '../src/components/school-switcher/switcher';
 
 const a = { organizationId: '11111111-1111-4111-8111-111111111111', schoolId: '22222222-2222-4222-8222-222222222222', organizationName: 'Ideal Org', schoolName: 'Ideal Martial Arts' };
 const b = { organizationId: '11111111-1111-4111-8111-111111111111', schoolId: '33333333-3333-4333-8333-333333333333', organizationName: 'Ideal Org', schoolName: 'Ideal North' };
@@ -39,4 +39,18 @@ it('an open menu closes on a click outside it or on Escape, and a click inside k
   menu.open = true; doc.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Enter' })); expect(menu.open).toBe(true);
   doc.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' })); expect(menu.open).toBe(false); expect(focus).toHaveBeenCalled();
   unbind(); menu.open = true; doc.dispatchEvent(new Event('pointerdown')); expect(menu.open).toBe(true);
+});
+
+it('the HQ hint is only a display hint that storage failures turn off', () => {
+  const store = new Map<string, string>();
+  vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v), removeItem: (k: string) => store.delete(k) });
+  expect(readHqHint()).toBe(false); rememberHqHint(true); expect(readHqHint()).toBe(true); rememberHqHint(false); expect(readHqHint()).toBe(false);
+  vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => {} });
+  expect(readHqHint()).toBe(false); expect(() => rememberHqHint(true)).not.toThrow();
+  vi.unstubAllGlobals();
+});
+it('the switcher component itself reads nothing on mount', () => {
+  const source = readFileSync('src/components/school-switcher/switcher.tsx', 'utf8');
+  expect(source).toContain('useState(false)'); expect(source).toContain('if (!wanted) return;');
+  expect(readFileSync('src/components/school-shell/shell.tsx', 'utf8')).toContain('schools={schoolChoices}');
 });
