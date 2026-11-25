@@ -5420,6 +5420,24 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- 0652 staff agent speech: one private table, two private helpers and five runtime entry points. The runtime gets no
+-- table privilege; the shared S4 functions it re-creates keep the grants set in their own sections above.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_agent_speech_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0652 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.agent_speech_limits()','hon.agent_speech_actor(text,text)',
+      'hon.read_agent_speech_status(text,text,boolean)','hon.begin_agent_speech(text,text,text,text,integer)','hon.prepare_agent_speech(text,uuid,boolean)',
+      'hon.fail_agent_speech(text,uuid,text,text)','hon.record_agent_speech_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.agent_speech_clips FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.agent_speech_clips FROM %I',r); END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_agent_speech_status(text,text,boolean), hon.begin_agent_speech(text,text,text,text,integer),
+      hon.prepare_agent_speech(text,uuid,boolean), hon.fail_agent_speech(text,uuid,text,text), hon.record_agent_speech_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
 -- 0642 Membership plan payment options: three staff entry points (setups read, publish with options, revise with options).
 -- Both tables keep forced RLS with no runtime privilege; every helper stays migration-owner only.
 DO $$ DECLARE r text; f text; t text;
@@ -5441,6 +5459,22 @@ BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0653 pictures inside email blasts: three private helpers; the campaign picture lookup is runnable only by the
+-- communication worker (013). save_school_blast and send_school_blast keep their 0621 grants.
+DO $$ DECLARE r text; f text;
+  helpers text[]:=ARRAY['hon.school_blast_picture_ids(text)','hon.school_blast_body_ok(jsonb,text)','hon.school_blast_pictures_ready(uuid,uuid,text)',
+    'hon.communication_email_pictures(uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.communication_email_pictures(uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0653 first'; END IF;
+  FOREACH f IN ARRAY helpers LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker') THEN
+    FOREACH f IN ARRAY helpers[1:3] LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM hon_communication_worker',f); END LOOP;
   END IF;
 END $$;
 -- 0680 Membership activates on signing: no runtime entry point. The outcome table keeps forced RLS with no client
