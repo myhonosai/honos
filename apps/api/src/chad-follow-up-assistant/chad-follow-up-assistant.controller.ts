@@ -25,4 +25,10 @@ export class ChadFollowUpAssistantController {
   async read(@Req() req: HonRequest, @Param('invocationId', new ParseUUIDPipe()) id: string, @Query() query: Record<string, unknown>) { this.noQuery(query); return { data: await this.assistant.read(await this.context(req), id) }; }
   @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Post(':invocationId/retry') @HttpCode(200)
   async retry(@Req() req: HonRequest, @Param('invocationId', new ParseUUIDPipe()) id: string, @Body() input: unknown, @Query() query: Record<string, unknown>) { this.noQuery(query); this.empty(input); return { data: await this.assistant.generate(await this.context(req), id) }; }
+  @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Post(':invocationId/send-plan') @HttpCode(200)
+  async sendPlan(@Req() req: HonRequest, @Param('invocationId', new ParseUUIDPipe()) id: string, @Body() input: unknown, @Headers('idempotency-key') key: string | undefined, @Query() query: Record<string, unknown>) { this.noQuery(query); return { data: await this.assistant.setSendPlan(await this.context(req, key ?? ''), id, input) }; }
+  @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Get(':invocationId/send')
+  async sendState(@Req() req: HonRequest, @Param('invocationId', new ParseUUIDPipe()) id: string, @Query() query: Record<string, unknown>) { this.noQuery(query); return { data: await this.assistant.readSend(await this.context(req), id) }; }
+  @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @Post(':invocationId/send/cancel') @HttpCode(200)
+  async cancelSend(@Req() req: HonRequest, @Param('invocationId', new ParseUUIDPipe()) id: string, @Body() input: unknown, @Query() query: Record<string, unknown>) { this.noQuery(query); this.empty(input); return { data: await this.assistant.cancelSend(await this.context(req), id) }; }
 }
