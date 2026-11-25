@@ -101,7 +101,7 @@ export function ClaireKpiPanel({ scope, api = defaultApi }: { scope: ClaireKpiSc
         {(['LAST_7_DAYS', 'LAST_30_DAYS'] as const).map((p) => <label key={p}><input type="radio" name="claire-period" checked={period === p} onChange={() => setPeriod(p)} /> {p === 'LAST_7_DAYS' ? 'Last 7 days' : 'Last 30 days'}</label>)}
       </fieldset>
       <label>Anything Claire should focus on (optional)<textarea value={focus} maxLength={300} rows={2} onChange={(e) => setFocus(e.target.value)} placeholder="For example: are we keeping our students?" data-claire-focus /></label>
-      <AgentVoiceBar agentKey="claire" name="Claire" value={focus} max={300} onChange={setFocus} answer={view?.summary ?? null} />
+      <AgentVoiceBar scope={scope} agentKey="claire" name="Claire" value={focus} max={300} onChange={setFocus} answer={view?.summary ?? null} />
       <button type="submit" className={styles.primary} disabled={busy} data-claire-ask>{busy ? 'Claire is writing…' : 'Ask Claire for a report'}</button>
     </form> : null}
     {notice ? <div className={styles.note} role="alert" data-claire-notice={notice.kind}>

@@ -91,7 +91,7 @@ export function MarcusReviewPanel({ scope, api = defaultApi }: { scope: MarcusRe
         {(['LAST_30_DAYS', 'LAST_90_DAYS'] as const).map((p) => <label key={p}><input type="radio" name="marcus-period" checked={period === p} onChange={() => setPeriod(p)} /> {p === 'LAST_30_DAYS' ? 'Last 30 days' : 'Last 90 days'}</label>)}
       </fieldset>
       <label>A question for Marcus (optional)<textarea value={question} maxLength={300} rows={2} onChange={(e) => setQuestion(e.target.value)} placeholder="For example: which campaign should we keep running?" data-marcus-question /></label>
-      <AgentVoiceBar agentKey="marcus" name="Marcus" value={question} max={300} onChange={setQuestion} answer={view?.summary ?? null} />
+      <AgentVoiceBar scope={scope} agentKey="marcus" name="Marcus" value={question} max={300} onChange={setQuestion} answer={view?.summary ?? null} />
       <button type="submit" className={styles.primary} disabled={busy} data-marcus-ask>{busy ? 'Marcus is reading…' : 'Ask Marcus'}</button>
     </form> : null}
     {notice ? <div className={styles.note} role="alert" data-marcus-notice={notice.kind}>

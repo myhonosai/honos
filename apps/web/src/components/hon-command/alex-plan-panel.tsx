@@ -117,7 +117,7 @@ export function AlexPlanPanel({ scope, api = defaultApi }: { scope: AlexPlanScop
     {alex.state === 'OFF' ? <p className={styles.state} data-state="EMPTY" data-alex-off>Alex planning is not available to you here yet.</p> : null}
     {alex.state === 'ON' ? <form className={styles.alexForm} onSubmit={(e) => { e.preventDefault(); void ask(); }}>
       <label>Goal<textarea value={goal} maxLength={500} rows={2} onChange={(e) => setGoal(e.target.value)} placeholder="For example: get ten more trial bookings before the belt test" data-alex-goal /></label>
-      <AgentVoiceBar agentKey="alex" name="Alex" value={goal} max={500} onChange={setGoal} answer={view?.summary ?? null} />
+      <AgentVoiceBar scope={scope} agentKey="alex" name="Alex" value={goal} max={500} onChange={setGoal} answer={view?.summary ?? null} />
       <fieldset><legend>For</legend>
         {(['WEEK', 'MONTH'] as const).map((h) => <label key={h}><input type="radio" name="alex-horizon" checked={horizon === h} onChange={() => setHorizon(h)} /> {h === 'WEEK' ? 'This week' : 'This month'}</label>)}
       </fieldset>

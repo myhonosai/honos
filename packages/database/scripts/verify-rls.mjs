@@ -383,6 +383,7 @@ const expectedRlsTables = [
   'parent_family_selections',
   'eian_turns',
   'eian_speech_clips',
+  'agent_speech_clips',
   'parent_school_bookings',
   'school_conversations',
   'school_conversation_messages',

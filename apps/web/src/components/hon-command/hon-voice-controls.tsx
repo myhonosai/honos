@@ -5,6 +5,7 @@ import {
   HON_VOICE_LIMITS, HonVoiceController, browserRecognition, browserSpeech, browserTimer, detectHonVoiceSupport, installOnDeviceSpeech, onDeviceSpeech,
   type HonSpokenPart, type HonVoiceLang, type HonVoiceSnapshot, type OnDeviceSpeech, type SpeechAdapter,
 } from './hon-voice';
+import { naturalSpeech, type AgentVoiceScope } from './agent-natural-voice';
 import { HonOrb } from './hon-orb';
 import { createHonOrbSignal, heardPulse, honOrbStateFor, type HonOrbSignal } from './hon-orb-signal';
 import styles from './hon-conversation.module.css';
@@ -75,7 +76,8 @@ const IDLE: HonVoiceSnapshot = Object.freeze({ state: 'IDLE', handsFree: false, 
  * Owns one HonVoiceController for the mounted conversation. `ask` is read through a ref so the controller always hands the
  * question to the container's latest `send`. The controller is rebuilt when the language changes and shut down on unmount.
  */
-export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) {
+export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean, scope?: AgentVoiceScope) {
+  const orgId = scope?.organizationId, schoolId = scope?.schoolId;
   const askRef = useRef(ask); askRef.current = ask;
   const controller = useRef<HonVoiceController | null>(null);
   const [support, setSupport] = useState<HonVoiceSupport>({ checked: false, recognition: false, synthesis: false });
@@ -96,8 +98,10 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
     setSupport({ checked: true, ...found });
     try { setEnabled(window.localStorage.getItem(STORAGE_KEY) === 'on'); } catch { /* storage unavailable: voice stays off */ }
     if (!found.recognition) return;
+    const withNatural = (speech: SpeechAdapter) => (orgId && schoolId ? naturalSpeech(speech, { organizationId: orgId, schoolId }) : speech);
     const voice = new HonVoiceController({
-      recognition: browserRecognition(window as never), speech: found.synthesis ? browserSpeech(window as never, { onWord: () => orbSignal.pulse(0.55) }) : silentSpeech, timer: browserTimer, lang,
+      // 0652: with a school, each answer is read in its teammate's natural voice when the server allows it, else the browser's.
+      recognition: browserRecognition(window as never), speech: withNatural(found.synthesis ? browserSpeech(window as never, { onWord: () => orbSignal.pulse(0.55) }) : silentSpeech), timer: browserTimer, lang,
       ask: (text) => askRef.current(text),
     });
     controller.current = voice;
@@ -106,7 +110,7 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean) 
     let live = true;
     void onDeviceSpeech(window as never, lang).then((status) => { if (!live) return; setOnDeviceStatus(status); voice.setOnDevice(status === 'available'); });
     return () => { live = false; off(); voice.shutdown(); if (controller.current === voice) controller.current = null; setSnapshot(IDLE); };
-  }, [lang, orbSignal]);
+  }, [lang, orbSignal, orgId, schoolId]);
 
   const remember = (on: boolean) => { try { window.localStorage.setItem(STORAGE_KEY, on ? 'on' : 'off'); } catch { /* per-device convenience only */ } };
   const shutdown = useCallback(() => { controller.current?.shutdown(); }, []);
