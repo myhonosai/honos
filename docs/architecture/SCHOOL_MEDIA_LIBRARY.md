@@ -151,6 +151,10 @@ copies". Spec of the plan: `/mnt/project-files/blasts/BL3_MEDIA_PLAN.md` (BL3c d
   (sizes, checksum, width, height, length) are recorded as the code-owned service principal
   `00000000-0000-4000-8000-000000000654` (audit source `SYSTEM_SERVICE`). A failed try goes back to QUEUED; the third
   failure, or an expired third lease, is FAILED. A video deleted meanwhile has the two new files removed.
+- **The original must not change.** The signed upload link stays usable after finish, so before reading the original and
+  again before storing the copy, the job reads its first bytes and size: anything other than the size finish recorded, or
+  bytes without a video signature, fails the try as `SIZE_CHANGED` and nothing is copied. ffmpeg gets 80 minutes and the
+  copy upload 20, so a try ends inside its two-hour lease.
 - **What is public.** Only HON's copy. `/m/<token>` opens the 720p copy, `/m/<token>/poster` the poster, and `/v/<token>`
   is a page (no account, `noindex`, no referrer) that plays the copy with its poster and shows the school's name, the title
   and nothing else (`GET /v1/public/media/<token>/page`). Each answers only for a READY video of an active school whose copy
@@ -160,6 +164,7 @@ copies". Spec of the plan: `/mnt/project-files/blasts/BL3_MEDIA_PLAN.md` (BL3c d
 - **Storage use** counts the original, the copy and the poster. Delete removes all three files in one call.
 - **Hosting.** The copy runs on hon-api (0.5 CPU). A long video can take a while there; moving the job to its own worker
   is a later deploy decision. hon-api needs `ffmpeg` and `ffprobe` on its PATH (or `HON_FFMPEG_PATH` / `HON_FFPROBE_PATH`).
+  At deploy, set the media bucket's file size limit to 5 GiB, so nothing larger can be stored with an upload link.
 - **Startup check.** With media storage on, production and staging refuse to start without an https `HON_PUBLIC_ORIGIN`
   (`MEDIA_PUBLIC_ORIGIN_REQUIRED`), since every picture or video email would otherwise only be retried.
 - **Known limit.** Finish finds the video through the library read (newest 500 items), so a video started long ago behind 500

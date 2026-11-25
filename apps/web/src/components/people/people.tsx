@@ -32,6 +32,8 @@ function showCardInAddress(target: { personId: string; tab: CardTab } | null): v
   } catch { /* the address is a convenience; the page works without it */ }
 }
 import { PersonPhoto } from './photo';
+import { PersonProfileDetails } from './profile-details';
+import { detailsApi, type DetailsApi } from './profile-details-http';
 import { AgreementLinkPanel } from '../agreement-link/send-panel';
 import { ContactMessageHistory } from '../contact-history/contact-history';
 import { photoApi, type PhotoApi } from './photo-http';
@@ -79,8 +81,8 @@ export function contactDeepLink(search: string): string | null {
  * a child's birth date. Blur, a hidden tab, page hide, a school change or a session end hide the page at once, retire
  * every read and drop any kept save; reads start again only after the shell re-verifies the school.
  */
-export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi;
-  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi;
+export function People({ api = peopleApi, consents = consentApi, contacts = contactsApi, admin = contactAdminApi, photos = photoApi, details = detailsApi, sessionSubject = null }: { api?: PeopleApi; consents?: ConsentApi;
+  contacts?: ContactsApi; admin?: ContactAdminApi; photos?: PhotoApi; details?: DetailsApi;
   /** The verified signed-in subject, for the family access checks inside the card (they re-check identity before each step). */
   sessionSubject?: string | null }): React.ReactElement {
   const { preferences } = useLocale();
@@ -322,12 +324,15 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   // The contact photo (0390) and contact consent each have their own reads and commands, mounted per person.
   const consentSlot = useCallback((r: PersonRecord) => selection ? <>
     <PersonPhoto key={`photo:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={photos}/>
+    {/* 0656: gender, guardian, notes and more phones and emails; program and rank come from the card read (0622 sets ranks up). */}
+    <PersonProfileDetails key={`details:${lower(selection.schoolId)}:${r.personId}`} language={preferences.language} schoolId={selection.schoolId} record={r} canEdit={r.canEdit} api={details}
+      standing={card.state === 'READY' && lower(card.card.person.personId) === lower(r.personId) ? { programName: card.card.overview.programName, ranks: card.card.overview.ranks } : null}/>
     <PersonConsents key={`${lower(selection.schoolId)}:${r.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} record={r} canEdit={r.canEdit} onRecorded={onConsentRecorded} api={consents}/>
     {/* 0424: this person's texts, emails and messages (opened on request; needs the conversations permission). */}
     <ContactMessageHistory key={`history:${lower(selection.schoolId)}:${r.personId}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={r.personId}/>
   </> : null,
-  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos]); // eslint-disable-line react-hooks/exhaustive-deps
+  [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos, details, card]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">

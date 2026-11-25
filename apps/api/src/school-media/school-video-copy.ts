@@ -10,13 +10,13 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 import { emitTelemetry } from '../observability/telemetry.js';
 import { prepareMediaImage } from './media-image.js';
 import { MediaStorage } from './media-storage.js';
-import { videoDemuxer } from './media-video.js';
+import { videoDemuxer, videoSignatureOk } from './media-video.js';
 
 export const VIDEO_COPY_CLAIM = 'SELECT hon.claim_school_video_copy() AS data';
 export const VIDEO_COPY_FINISH = 'SELECT hon.finish_school_video_copy($1::uuid,$2::uuid,$3::jsonb) AS data';
 export const VIDEO_COPY_FAIL = 'SELECT hon.fail_school_video_copy($1::uuid,$2::uuid,$3) AS data';
 /** ffmpeg may run this long for one video; the database lease is two hours. */
-export const VIDEO_COPY_PROCESS_MS = 90 * 60_000;
+export const VIDEO_COPY_PROCESS_MS = 80 * 60_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Fit inside 1280 on the long side and 720 on the short side (720p either way up), never upscale, even sides. */
@@ -114,8 +114,16 @@ export class SchoolVideoCopyWorker {
     } finally { await rm(dir, { recursive: true, force: true }).catch(() => undefined); }
   }
 
+  private async originalUnchanged(job: VideoCopyJob): Promise<void> {
+    let original;
+    try { original = await this.storage.head(job.sourceKey); } catch { throw new CopyRefused('COPY_FAILED'); }
+    if (!original || original.totalBytes !== job.byteSize || !videoSignatureOk(job.mediaType, original.head)) throw new CopyRefused('SIZE_CHANGED');
+  }
+
   private async makeCopy(job: VideoCopyJob, dir: string): Promise<VideoCopyFacts> {
     const copyPath = join(dir, 'copy.mp4'), posterPath = join(dir, 'poster.jpg');
+    // The upload link can still write media/<id> after finish; copy only the original that finish checked (same size, a video signature).
+    await this.originalUnchanged(job);
     const source = await this.storage.signedUrl(job.sourceKey);
     const protocols = this.tools.allowHttp ? 'http,https,tls,tcp' : 'https,tls,tcp';
     try {
@@ -141,6 +149,7 @@ export class SchoolVideoCopyWorker {
     } catch { throw new CopyRefused('POSTER_FAILED'); }
     let poster;
     try { poster = prepareMediaImage('image/jpeg', await readFile(posterPath)); } catch { throw new CopyRefused('POSTER_FAILED'); }
+    await this.originalUnchanged(job);
     const copyBytes = (await stat(copyPath)).size;
     if (copyBytes < 1 || copyBytes > SCHOOL_MEDIA_LIMITS.videoMaxBytes || poster.byteSize > SCHOOL_MEDIA_LIMITS.maxBytes) throw new CopyRefused('COPY_TOO_LARGE');
     const copySha256 = await new Promise<string>((resolve, reject) => {

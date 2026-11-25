@@ -1211,3 +1211,4 @@ export * from './journey-recommendations.js';
 export * from './person-membership-start.js';
 export * from './creative-designs.js';
 export * from './staff-school-choice.js';
+export * from './person-profile-details.js';

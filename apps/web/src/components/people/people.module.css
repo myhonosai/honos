@@ -16,10 +16,10 @@
 .search label, .form label { font-size: 13px; font-weight: 700; }
 .searchRow { display: flex; gap: 8px; min-width: 0; }
 .searchRow input { flex: 1 1 auto; }
-.search input, .form input, .form textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #3b5269; border-radius: 10px; background: #0a1625; color: #eef6fc; font: inherit; color-scheme: dark; }
+.search input, .form input, .form textarea, .form select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid #3b5269; border-radius: 10px; background: #0a1625; color: #eef6fc; font: inherit; color-scheme: dark; }
 .form textarea { resize: vertical; }
-.search input:focus-visible, .form input:focus-visible, .form textarea:focus-visible, .person:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
-.form input:disabled, .form textarea:disabled { color: #a9bbcd; cursor: not-allowed; }
+.search input:focus-visible, .form input:focus-visible, .form textarea:focus-visible, .form select:focus-visible, .person:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.form input:disabled, .form textarea:disabled, .form select:disabled { color: #a9bbcd; cursor: not-allowed; }
 .list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: 560px; overflow-y: auto; }
 .person { display: grid; gap: 2px; width: 100%; min-height: var(--hon-target, 44px); padding: 8px 10px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px; background: #0d1d2e; color: #eef6fc; font: inherit; font-size: 14px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .person small { color: var(--hon-muted, #9fb4c8); font-size: 12px; }
@@ -173,3 +173,9 @@
 .dialogHead h2 { margin: 0; font-size: 19px; }
 .dialogClose { min-width: 40px; min-height: 40px; border: 1px solid var(--hon-line, #24405a); border-radius: 10px; background: #10243a; color: #eef6fc; font: inherit; font-size: 18px; cursor: pointer; }
 @media (max-width: 520px) { .backdrop { padding: 12px 8px; } .dialog { padding: 14px; } }
+
+/* 0656 profile details: one other phone or email per row (value, label, remove). */
+.fields legend { padding: 0; font-size: 13px; font-weight: 700; }
+.contactRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(96px, 30%) auto; gap: 8px; align-items: center; min-width: 0; }
+.contactRow input[aria-invalid="true"] { border-color: #e48aa0; }
+@media (max-width: 520px) { .contactRow { grid-template-columns: minmax(0, 1fr) auto; } .contactRow select { grid-column: 1; } }

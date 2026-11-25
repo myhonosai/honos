@@ -87,7 +87,7 @@ export class MediaStorage {
       method: 'POST',
       headers: { ...this.auth(settings), 'Content-Type': contentType, 'Content-Length': String(byteSize), 'x-upsert': 'true', 'Cache-Control': 'max-age=300' },
       body: Readable.toWeb(createReadStream(path)) as unknown as RequestInit['body'], duplex: 'half',
-    } as RequestInit, 30 * 60_000);
+    } as RequestInit, 20 * 60_000);
     if (!response.ok) throw new MediaStorageFailed();
   }
 
