@@ -49,6 +49,7 @@ const OPEN_BY_DESIGN={
  'hon.read_saas_founder_availability_for_school(text,uuid)':'billing recovery: founder spot availability for this organization, so a suspended school sees the prices it can resubscribe at (read only, reserves nothing)',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
  'hon.read_my_hq_contact(text)':'personal HQ-texts setting (0282): the signed-in person sees only their own phone and HQ texting choice, no school data; must stay reachable so a suspended school\'s owner can turn HQ texts off or remove the number',
+ 'hon.read_my_hq_school_visits(text)':'own HQ school visits (0696): the signed-in person sees only their own live HQ visits (an empty list for anyone else, school owners included), read only, grants nothing; the school banner needs it, and every school page still decides access itself',
  'hon.read_school_language_default(text,uuid)':'interface setting; grants nothing',
  'hon.submit_public_form(text,jsonb,text)':'public intake route (owner: keep public routes available); B6B decides suspended-school intake',
  'hon.submit_kiosk_handoff(text,text)':'public kiosk route; B6B decides suspended-school behaviour',
