@@ -119,6 +119,8 @@ export function HqCreativeView(props: CreativeViewProps): React.ReactElement {
   const v = state.view, b = v.budget;
   return <section className={styles.access} data-hq-creative="ready">{head}
     <p className={styles.meta}>{t('viewer', { name: v.viewer.displayName })}{v.viewer.canManage ? '' : ` ${t('readOnly')}`}</p>
+    <aside className={styles.card} data-hq-designs-link="" aria-labelledby="hq-cs-designs"><h2 id="hq-cs-designs">{t('designsTitle')}</h2>
+      <p className={styles.meta}>{t('designsBody')}</p><p><a className={styles.primary} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href="/hq/marketing/creative/designs">{t('designsLink')}</a></p></aside>
     <p className={styles.notice} data-creative-provider={v.provider}>{t(v.provider === 'CONNECTED' ? 'providerOn' : 'providerOff')}</p>
     <h2>{t('budgetTitle', { month: formatMonth(loc, b.periodStart) })}</h2>
     <p className={styles.meta}>{t('budgetSeparate')}</p>

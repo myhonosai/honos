@@ -58,6 +58,7 @@ test('0330 service refuses before any database call', async () => {
   await assert.rejects(() => service.reply({ ...staff, idempotencyKey: 'k' }, B, { body: 'Hi' }), (e) => e.response.code === 'VALIDATION_FAILED');
   await assert.rejects(() => service.reply(staff, B, { body: 'Hi' }), (e) => e.response.code === 'IDEMPOTENCY_KEY_REQUIRED');
   await assert.rejects(() => service.reply({ ...staff, idempotencyKey: 'k' }, B, { body: 'Hi', threadId: B }), (e) => e.response.code === 'VALIDATION_FAILED');
+  await assert.rejects(() => service.reply({ ...staff, idempotencyKey: 'k' }, B, { body: 'Hi', throughMessageId: C, phoneAlert: 'yes' }), (e) => e.response.code === 'VALIDATION_FAILED');
   assert.equal(calls, 0);
   const failing = new FamilyMessagesService({ resolveParentJourneyScopes: async () => { throw Object.assign(new Error('boom kim@example.test'), { code: 'XX000' }); } });
   await assert.rejects(() => failing.parentRead('subject'), (e) => e.response.code === 'FAMILY_MESSAGES_UNAVAILABLE' && !JSON.stringify(e.response).includes('kim'));

@@ -100,6 +100,7 @@ const props = (patch: Partial<CreativeViewProps> = {}): CreativeViewProps => ({ 
 it('shows the separate HQ budget and turns requests off honestly when no provider is connected', () => {
   const html = renderToStaticMarkup(<HqCreativeView {...props()}/>);
   expect(html).toContain('HQ’s own monthly limit, separate from schools');
+  expect(html).toContain('href="/hq/marketing/creative/designs"'); expect(html).toContain('Free, no AI.');
   expect(html).toContain('data-creative-provider="NOT_CONNECTED"');
   expect(html).toContain("David approves the paid service");
   expect(html).toContain('data-creative-requests-off=""');

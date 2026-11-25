@@ -1,0 +1,12 @@
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.tiles legend { margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+.tile { display: grid; gap: 4px; padding: 12px; border: 1px solid #35506d; border-radius: 12px; background: #0e2134; cursor: pointer; min-width: 0; }
+.tile:has(input:checked) { border-color: #8de3d8; box-shadow: inset 0 0 0 1px #8de3d8; background: #10303a; }
+.tile:focus-within { outline: 2px solid #5fb8f0; outline-offset: 2px; }
+.tile input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.tileName { font-weight: 800; }
+.tilePrice { font-size: 18px; font-weight: 800; color: #cfeff0; }
+.tileNote { font-size: 12px; color: #9fb7cc; }
+.big { margin: 0; font-size: 20px; font-weight: 800; }
+.history { font-size: 13px; }
+.history ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }

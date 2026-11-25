@@ -753,8 +753,16 @@
       "title": "HON HQ | Marketing & Creative"
     },
     {
+      "path": "/hq/marketing/ads/return",
+      "title": "HON HQ | Finishing connection"
+    },
+    {
       "path": "/hq/marketing/creative",
       "title": "HON HQ | Creative Studio"
+    },
+    {
+      "path": "/hq/marketing/creative/designs",
+      "title": "HON HQ | Designs"
     },
     {
       "path": "/hq/marketing/promotions",

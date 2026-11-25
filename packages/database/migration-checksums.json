@@ -413,6 +413,14 @@
     "0654_school_media_video.sql": "9d7b524e42313514d56d340a37759bef2c5bd7499a80444fa966e553ceef8d4e",
     "0656_person_profile_details.sql": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240",
     "0657_school_conversations_person_filter.sql": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e",
+    "0658_parent_push_staff_choice.sql": "4a6cc907ac65dd0ecd598e3708a13a2617ef7b840e92559bb6b43f04f6e2a8cc",
+    "0659_school_contact_membership_details.sql": "7664c2da2c5603dc4bb2d0c35fbf014a974ed68c981b5563bd040b1f5006b63f",
+    "0660_website_starter_art.sql": "26fe9c89a8d32379f32e3c579a1b29375579f46ba8c2e1fb5b71fb4d3be248d3",
+    "0675_hq_school_lifecycle.sql": "22c1f1983591b669efa7fbbefa1d6571120ace94b4322e19c1a32f9fa6b02e60",
+    "0676_hq_school_plan_assignments.sql": "ec678f629f21222ff612462ceb151e821938b4aaa602d08dd64e928b2cb91dc6",
+    "0677_hq_ad_account_connections.sql": "680101b594c865cede1c7ae422f0acab5f1dea0f54b27b2316edd47731ac0dbf",
+    "0678_hq_creative_designs.sql": "db2386168b7e785baf3bab1ff902b11e31278126d400fc160920a95834579970",
+    "0680_membership_activates_on_signing.sql": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb",
     "0681_staff_timesheet_no_self_approval.sql": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
   }
 }

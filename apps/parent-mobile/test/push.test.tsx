@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { verifyParentJourneyView } from '@hon/contracts/parent-journey-view';
 import { ParentApp } from '../src/ParentApp';
 import { createParentApi, type ParentApi, type ParentRead } from '../src/api/client';
-import { registerPhone, unregisterPhone, type PhonePush } from '../src/push/push';
+import { registerPhone, unregisterPhone, type OpenedAlert, type PhonePush } from '../src/push/push';
 import { createSampleApi } from '../src/sample/sample-api';
 import { journeyBody, NOW } from './fixtures';
 
@@ -22,12 +22,12 @@ function fakeSession(token: string | null) {
   };
 }
 function fakePhone(token: string | null = TOKEN) {
-  let open: (() => void) | undefined;
+  let open: ((alert: OpenedAlert) => void) | undefined;
   const phone = {
     platform: 'ios' as const,
     token: jest.fn(async (_ask: boolean) => token),
-    onOpenAnnouncement: jest.fn((l: () => void) => { open = l; return () => { open = undefined; }; }),
-    tap: () => open?.(),
+    onOpenAlert: jest.fn((l: (alert: OpenedAlert) => void) => { open = l; return () => { open = undefined; }; }),
+    tap: (alert: OpenedAlert = 'announcement') => open?.(alert),
   };
   return phone;
 }
@@ -35,7 +35,7 @@ function fakeApi(): ParentApi {
   const journey: ParentRead<ReturnType<typeof verifyParentJourneyView>> = { ok: true, data: verifyParentJourneyView(journeyBody()) };
   return {
     journey: jest.fn(async () => journey), schoolTimeZone: jest.fn(async () => 'America/Los_Angeles'),
-    classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })), attendanceStreaks: jest.fn(async () => ({ ok: false, state: 'unavailable' })), journeyRecommendations: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
+    classBookings: jest.fn(async () => ({ ok: false, state: 'unavailable' })), schoolMessages: jest.fn(async () => ({ ok: false, state: 'unavailable' })), announcements: jest.fn(async () => ({ ok: false, state: 'unavailable' })), attendanceStreaks: jest.fn(async () => ({ ok: false, state: 'unavailable' })), journeyRecommendations: jest.fn(async () => ({ ok: false, state: 'unavailable' })),
     pushStatus: jest.fn(async () => ({ ok: true, data: { sending: true } })),
     registerPushDevice: jest.fn(async () => ({ ok: true, data: DEVICE, replayed: false })),
     unregisterPushDevice: jest.fn(async () => ({ ok: true, data: { unregistered: true }, replayed: false })),
@@ -122,6 +122,19 @@ describe('Announcement notifications', () => {
     await act(async () => { phone.tap(); });
     await waitFor(() => expect(screen.getByRole('tab', { name: 'Home' }).props.accessibilityState.selected).toBe(true));
     expect((api.journey as jest.Mock).mock.calls.length).toBeGreaterThan(reads);
+  });
+
+  it('a tap on a school message alert opens Messages and reads the conversation again (0658)', async () => {
+    const api = fakeApi(); const phone = fakePhone();
+    await render(<ParentApp api={api} session={fakeSession('t')} now={now} newKey={newKey} push={phone} />);
+    await screen.findByRole('button', { name: 'Open Test Child A journey' });
+    await fireEvent.press(screen.getByRole('tab', { name: 'Messages' }));
+    await waitFor(() => expect(api.schoolMessages).toHaveBeenCalled());
+    await fireEvent.press(screen.getByRole('tab', { name: 'More' }));
+    const reads = (api.schoolMessages as jest.Mock).mock.calls.length;
+    await act(async () => { phone.tap('message'); });
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Messages' }).props.accessibilityState.selected).toBe(true));
+    await waitFor(() => expect((api.schoolMessages as jest.Mock).mock.calls.length).toBeGreaterThan(reads));
   });
 
   it('the sample family never signs a phone up', async () => {
