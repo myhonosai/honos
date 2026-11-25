@@ -7261,3 +7261,34 @@ BEGIN
   END LOOP;
 END $$;
 -- End HQ ad account connections exact verification.
+
+-- HQ school visits exact verification (0696): three runtime entry points, five private helpers, four forced-RLS tables,
+-- and 63 school checks that carry the live-visit test.
+DO $$ DECLARE f text; t text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.enter_school_as_hq(text,uuid,text,uuid,uuid,uuid)','hon.leave_school_as_hq(text,uuid,uuid,uuid,uuid)','hon.read_my_hq_school_visits(text)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe HQ school visit entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_visit_evidence()','hon.hq_visit_active(uuid)','hon.ensure_hq_support_role(uuid)',
+      'hon.require_hq_school_visit_actor(text)','hon.hq_school_visit_ts(timestamp with time zone)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe HQ school visit helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_school_visit_requests','hq_school_visits','hq_school_visit_audit','hq_school_visit_outbox'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe HQ school visit table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_hq_school_visit_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'HQ school visit evidence guard missing: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc LIKE '%hon.hq_visit_active(%')<>63 THEN
+    RAISE EXCEPTION 'HQ school visit check drift'; END IF;
+END $$;
+-- End HQ school visits exact verification.
