@@ -683,6 +683,9 @@ try {
   // The 0646 Maya renewal prep readers (maya_renewal_facts, maya_renewal_view, maya_renewal_fix_refs, record_maya_renewal_prep,
   // apply_maya_renewal_preps) only read memberships to draft and show staff-reviewed renewal notes; they never change a
   // membership and grant no booking, attendance or check-in benefit.
+  // The 0680 membership_agreement_signed_starts and membership_start_on_signing readers start a signed child's DRAFT through
+  // the unchanged 0177 evaluation with the same decision and period evidence (owner decision 2026-11-22: active when signed);
+  // a future start stays SCHEDULED, so they grant no booking, attendance or check-in benefit today.
   // The 0649 Maya check-in readers (maya_check_in_view, maya_check_in_recipient, approve_maya_check_in_draft) only read a
   // student's membership state to show and address a staff-approved check-in message; they never change a membership and
   // grant no booking, attendance or check-in benefit.
