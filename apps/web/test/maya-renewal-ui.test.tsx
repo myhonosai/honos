@@ -22,10 +22,10 @@ const yes = () => true;
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it('marks Maya renewal prep available and leaves only sending outreach as backend required', () => {
+it('marks Maya renewal prep and check-in sending available with nothing backend required', () => {
   const maya = HON_COMMAND_ROSTER.find((a) => a.id === 'maya')!;
   expect(maya.capabilities.find((c) => /Renewal prep/.test(c.label))?.state).toBe('AVAILABLE');
-  expect(maya.capabilities.filter((c) => c.state === 'BACKEND_REQUIRED').map((c) => c.label)).toEqual(['Send, schedule or track outreach']);
+  expect(maya.capabilities.filter((c) => c.state === 'BACKEND_REQUIRED').map((c) => c.label)).toEqual([]);
 });
 
 it('lists with a plain GET and asks, applies and dismisses with their own human command and key', async () => {

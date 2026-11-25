@@ -220,7 +220,8 @@ try {
 
   // 10. Isolation, immutability, audit.
   const b = await makeOrg('b'); const foreign = await addStaff(b, 'foreign', [...CHAD, 'action.approve']);
-  for (const op of [chad.readSend(ctx(foreign), d2.id), chad.cancelSend(ctx(foreign), d5.id), chad.setSendPlan(ctx(foreign), d7.id, { channel: 'EMAIL', sendAt: null })]) assert.equal(status(await settle(op)), 404);
+  // Each call starts only when awaited, so an early rejection is never left unhandled while an earlier one is pending.
+  for (const op of [() => chad.readSend(ctx(foreign), d2.id), () => chad.cancelSend(ctx(foreign), d5.id), () => chad.setSendPlan(ctx(foreign), d7.id, { channel: 'EMAIL', sendAt: null })]) assert.equal(status(await settle(op())), 404);
   await assert.rejects(admin.query('UPDATE hon.ai_draft_send_plans SET channel=channel WHERE source_id=$1', [d1.id]), /AI_DRAFT_SEND_ROWS_IMMUTABLE/);
   await assert.rejects(admin.query("UPDATE hon.ai_draft_sends SET approval_method='VOICE', voice_turn_id=$2 WHERE source_id=$1", [d1.id, K()]), /AI_DRAFT_SEND_ROWS_IMMUTABLE/);
   await assert.rejects(admin.query('UPDATE hon.ai_draft_sends SET cancelled_at=now() WHERE source_id=$1', [d1.id]), /AI_DRAFT_SEND_ROWS_IMMUTABLE/);

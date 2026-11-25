@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "d58438ee1e870f3942396eae59bf2066a2dfbd0db6d53b1f7ee90f92da09c0c7",
+  "chainSha256": "71d169f2dafa98313471d5e1f50ae99d8c2b8aebf0ec336a834496c8199a9fcb",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -925,6 +925,14 @@
     {
       "file": "0647_chad_approved_draft_send.sql",
       "sha256": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9"
+    },
+    {
+      "file": "0649_maya_check_in_draft_send.sql",
+      "sha256": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90"
+    },
+    {
+      "file": "0650_chad_lead_plan.sql",
+      "sha256": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487"
     },
     {
       "file": "0655_mobile_handoff_single_use.sql",

@@ -683,17 +683,17 @@ try {
   // The 0646 Maya renewal prep readers (maya_renewal_facts, maya_renewal_view, maya_renewal_fix_refs, record_maya_renewal_prep,
   // apply_maya_renewal_preps) only read memberships to draft and show staff-reviewed renewal notes; they never change a
   // membership and grant no booking, attendance or check-in benefit.
-  // The 0680 membership_agreement_signed_starts and membership_start_on_signing readers start a signed child's DRAFT through
-  // the unchanged 0177 evaluation with the same decision and period evidence (owner decision 2026-11-22: active when signed);
-  // a future start stays SCHEDULED, so they grant no booking, attendance or check-in benefit today.
+  // The 0649 Maya check-in readers (maya_check_in_view, maya_check_in_recipient, approve_maya_check_in_draft) only read a
+  // student's membership state to show and address a staff-approved check-in message; they never change a membership and
+  // grant no booking, attendance or check-in benefit.
   // The 0623 read_school_contact_list reader only shows the current membership's state on the staff contacts list and filters
   // by it; it is read-only and grants no booking, attendance or check-in benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
-  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'apply_maya_renewal_preps', 'automation_condition_holds', 'automation_date_candidates',
+  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'apply_maya_renewal_preps', 'approve_maya_check_in_draft', 'automation_condition_holds', 'automation_date_candidates',
     'automation_enrolled', 'automation_event_subject', 'begin_hon_turn_0284', 'billing_import_has_membership', 'cancel_school_membership', 'claire_kpi_count', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan',
     'draft_crm_guardian_child_membership_from_plan', 'draft_owner_launch_membership', 'eian_facts_ok', 'evaluate_membership_activation', 'evaluate_membership_date_revision',
-    'guard_membership_date_revision_insert', 'guard_membership_pause', 'guard_person_membership_overlap', 'list_retention_review_members', 'maya_renewal_facts', 'maya_renewal_fix_refs', 'maya_renewal_view',
+    'guard_membership_date_revision_insert', 'guard_membership_pause', 'guard_person_membership_overlap', 'list_retention_review_members', 'maya_check_in_recipient', 'maya_check_in_view', 'maya_renewal_facts', 'maya_renewal_fix_refs', 'maya_renewal_view',
     'membership_agreement_covered', 'membership_agreement_signed_starts', 'membership_start_on_signing',
     'parent_invoice_pay_invoices', 'pause_school_membership', 'person_membership_start_item', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation',
     'read_crm_adult_membership_preparation', 'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students',
@@ -743,10 +743,12 @@ try {
   // grants nothing.
   // 0646 maya_renewal_facts reads attendance marks only as renewal-note facts for staff review; it books, checks in and
   // grants nothing.
+  // 0649 maya_check_in_view and approve_maya_check_in_draft read attendance marks only as check-in message facts for staff
+  // review; they book, check in and grant nothing.
   // 0574 automation_date_candidates reads attendance marks only to find each active student's last attendance (MIA); it
   // books, checks in and grants nothing.
   assert.deepEqual((await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(class_bookings|attendance_records|class_pass|kiosk|check_in)' ORDER BY 1")).map((r) => r.proname),
-    ['acknowledge_retention_review_evidence', 'automation_condition_holds', 'automation_date_candidates', 'automation_event_subject', 'begin_hon_turn_0284', 'claire_kpi_count', 'maya_renewal_facts', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
+    ['acknowledge_retention_review_evidence', 'approve_maya_check_in_draft', 'automation_condition_holds', 'automation_date_candidates', 'automation_event_subject', 'begin_hon_turn_0284', 'claire_kpi_count', 'maya_check_in_view', 'maya_renewal_facts', 'read_maya_at_risk_students', 'read_retention_review_signals', 'read_school_contact_card', 'read_school_health_score', 'record_retention_attention_alert',
       'school_report_periods']);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' AND prosrc ~* '(INSERT\\s+INTO|UPDATE)\\s+(hon\\.)?(class_bookings|attendance_records|class_pass\\w*|kiosk\\w*|check_in\\w*)'"))[0].n, 0);
   assert.equal((await sql("SELECT count(*)::int n FROM pg_views WHERE definition ~* '\\mmemberships\\M'"))[0].n, 0);

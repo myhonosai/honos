@@ -6885,6 +6885,102 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END IF;
 END $$;
 -- End Chad approved-draft send exact verification.
+-- Maya check-in draft send exact verification (0649): the nine entry points, the closed helpers, the kind row and the closed
+-- target and send tables with their guard triggers.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','aada1c58af4322b946b9c70dcb27a964d576f91c64412b4b2543c31038eff53b'),
+('hon.begin_maya_check_in_draft(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','8037d9c4b56871bd19ade58735294aa96ba75dff5207426eff5f1aeb7d583e91'),
+('hon.cancel_maya_check_in_send(text,uuid)',true,true,'search_path=pg_catalog, hon','b71c1b2766bce14b6c67a7406f29b0f3d6eb387638201a7b33fc5dc843ac2c82'),
+('hon.close_maya_check_in_draft(text,uuid,text)',true,true,'search_path=pg_catalog, hon','a429793d4fee573c13a532ddeff626fbf87a8148467ccebb8c169733a1a703f1'),
+('hon.fail_maya_check_in_draft(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','b8422adca7f8e57b0eebab3a0d543043e29ca6236e1258abc20046a78e1e4168'),
+('hon.guard_maya_check_in_rows()',false,false,'search_path=pg_catalog, hon','70e42942870b082d29dc5496d7bb2eb3e09bca3cb4c98d5d0cb9ae3a2eb09353'),
+('hon.maya_check_in_actor(text)',true,false,'search_path=pg_catalog, hon','b2a4b663d6b2fdb642de874c8c2ffd20f4044030c0e9e8f21933e8199439923c'),
+('hon.maya_check_in_at_risk_row(text,uuid)',true,false,'search_path=pg_catalog, hon','8fca542d01446bd487737686e1972e1cf81349b7a90ee831e3c02d659efa98fd'),
+('hon.maya_check_in_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6bb1010760d5aaf80a0bc12c53899ced64423bd426b98fcd1a22e066c78d0d4f'),
+('hon.maya_check_in_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','f880816eaac6b43db7c9d8f828d52d938181084365368e77b231d7f66ecb49e8'),
+('hon.maya_check_in_ok(jsonb,text)',false,false,'search_path=pg_catalog, hon','e4303630580f63bafe823229cdc3c6263ae30ba70f13c052d63153a196e2e174'),
+('hon.maya_check_in_reader(text)',true,false,'search_path=pg_catalog, hon','d4ae80cd2f829677b5030ebde2361235c42cacc067e4cda2f21074c222a794fe'),
+('hon.maya_check_in_recipient(uuid,text)',true,false,'search_path=pg_catalog, hon','88b9f3e004238666313f70a25da1c3d17f098b370a25925b5554d768d63482a7'),
+('hon.maya_check_in_text_ok(text,integer)',false,false,'search_path=pg_catalog, hon','3268ff4cc006a90b58ca4da62caa43597df2ae29558d09dfbaef9ab4526d3877'),
+('hon.maya_check_in_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','a8662bbe94fa0421845a5a525753b45463a8dbf99053afb144e82b2c549a1511'),
+('hon.plan_maya_check_in_draft(text,uuid)',true,true,'search_path=pg_catalog, hon','51fe6925bfeb5036120b0bedee7e467a36126f5ba2bfab11ab4f526cc2e98ab3'),
+('hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','b7c8a4842b1311aa713a4ab2de54aa277a77d633daa4a91df0f08a1ef3ad34c1'),
+('hon.read_maya_check_in_drafts(text,uuid)',true,true,'search_path=pg_catalog, hon','43a10962a748aa72834d9f8a58c8389c6f0b3da05261bbcb191c1f521ce6f87d'),
+('hon.record_maya_check_in_draft(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','d905a582ab535f67d0ffc3d5b22b30a3bc66b1186b623a36f8c086e3603a7a0a'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya check-in draft function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_CHECK_IN_DRAFT' AND k.agent_key='maya' AND k.task_class='ANALYZE'
+      AND k.input_budget=6000 AND k.output_budget=2000 AND k.max_cost_microunits=60000 AND k.max_result_bytes=8192
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RETENTION') THEN
+    RAISE EXCEPTION 'Maya check-in draft kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.maya_check_in_targets','hon.maya_check_in_sends'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_maya_check_in_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Maya check-in draft table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Maya check-in draft send exact verification.
+-- Chad lead next steps exact verification (0650): the eight entry points, the closed helpers, the kind row and the closed
+-- alias and applied tables with their guard triggers.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_chad_lead_plan(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','253813d8bc0931f217eb72133899965f8d47d02ebdd3a07e32b715ce5f6552d6'),
+('hon.chad_lead_plan_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','9237098bdcd5e14fcbf365a50255daeaebd7cd2ace58a98bc0a2bbdcc9161ec7'),
+('hon.chad_lead_plan_facts(uuid,jsonb)',true,false,'search_path=pg_catalog, hon','f7aae00bf3e0ed065c830fa6b2fbb51339a106b2e5dba6f8d21ca19fa776b03f'),
+('hon.chad_lead_plan_fits(uuid,jsonb)',true,false,'search_path=pg_catalog, hon','f1cf870baf7cdb8df6f20cc072eb70cda83b1ad6d0fccfc16a24d4de981382d3'),
+('hon.chad_lead_plan_fix_refs(uuid,text)',true,false,'search_path=pg_catalog, hon','fc880eaa82a372ce2d944f26fca711a277289f97a902fc70727271fa7c8408eb'),
+('hon.chad_lead_plan_ok(jsonb)',false,false,'search_path=pg_catalog, hon','53c1db02f1d870360b66a996f32ec58276d76b6ab700c4727c2c3f7a41d9bd6a'),
+('hon.chad_lead_plan_trial_ahead(uuid)',true,false,'search_path=pg_catalog, hon','f9b682b95e015bd65c0b5ce5e188ee3c2f97b7f0095c4d9c4768e67e7d7a792f'),
+('hon.chad_lead_plan_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','43dd2e938f74ba2b9dcfddb820d087df960f35684075c032f93fd2cc86baa5f2'),
+('hon.close_chad_lead_plan(text,uuid,text)',true,true,'search_path=pg_catalog, hon','3827175b2c629d450d256de6288cb332b9555bd097456cdaa9f6159dbd4fe441'),
+('hon.fail_chad_lead_plan(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','604697e041950c081b4af361d6e2fda3cc6f27301adda2ef078406868d5074b2'),
+('hon.plan_chad_lead_plan(text,uuid)',true,true,'search_path=pg_catalog, hon','b5413a3731f01b0b5ff2610bf83fe4b37d606cd2c8586ebf47cee77a7f23c1b2'),
+('hon.prepare_chad_lead_plan(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','945a8de0b22188eebd90c79205f2b798918a23661502acb0167cf37a269209ca'),
+('hon.read_chad_lead_plans(text,uuid)',true,true,'search_path=pg_catalog, hon','c53ab32994f6b54d943c34ce797be9b4cd480b88cc985b43ba03778a93960885'),
+('hon.record_chad_lead_plan(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','909607819e61c08e9783866dbe5f2a1d2a963098c00b9f6bf9a1157a0b0fb0f2'),
+('hon.record_chad_lead_plan_step(text,uuid,integer,jsonb)',true,true,'search_path=pg_catalog, hon','5b58c53f95d12e741265fcf98b771d97afe2c6f5550bed6d9e56cf8304333322'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Chad lead plan function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='CHAD_LEAD_PLAN' AND k.agent_key='chad' AND k.task_class='DRAFT_FOLLOW_UP'
+      AND k.input_budget=10000 AND k.output_budget=2500 AND k.max_cost_microunits=80000 AND k.max_result_bytes=12288
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='CHAD_FOLLOW_UP') THEN
+    RAISE EXCEPTION 'Chad lead plan kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.chad_lead_plan_refs','hon.chad_lead_plan_applied'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_alex_plan_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Chad lead plan table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Chad lead next steps exact verification.
 -- Membership activates on signing exact verification (0680): no runtime entry point, two owner-only functions, one deferred
 -- signature trigger, one forced-RLS immutable outcome table, and the 0177 decision checks that bind each basis to its rules.
 DO $$ DECLARE f text; t text; c text; d boolean; s text;
