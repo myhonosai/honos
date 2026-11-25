@@ -20,6 +20,8 @@ const requireWeb = createRequire(join(root, 'package.json'));
 const ts = requireWeb('typescript');
 const copyCode = ts.transpileModule(await readFile(join(root, 'src/components/hq-marketing/copy.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
 const { marketingText } = await import('data:text/javascript;base64,' + Buffer.from(copyCode).toString('base64'));
+const adCode = ts.transpileModule(await readFile(join(root, 'src/components/hq-marketing/ad-copy.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { adText } = await import('data:text/javascript;base64,' + Buffer.from(adCode).toString('base64'));
 assert(process.env.HON_HQ_BROWSER_TOOLS && process.env.HON_HQ_BROWSER_RESULTS && process.env.HON_HQ_CHROME_BIN);
 const requireTools = createRequire(join(process.env.HON_HQ_BROWSER_TOOLS, 'runner.cjs'));
 const { chromium } = requireTools('playwright-core');
@@ -90,7 +92,35 @@ const api = createServer(async (req, res) => {
       else if (path === '/v1/hq/marketing/campaigns') {
         f.reads.push(req.url);
         if (f.denied) send(403, { code: 'SAAS_FORBIDDEN' }); else send(200, { data: f.store.list(url.searchParams.get('status')) });
+      } else if (path === '/v1/hq/marketing/ad-accounts') {
+        f.reads.push(req.url);
+        send(200, { data: { profileLinked: f.ads.accounts.length > 0, accounts: f.ads.accounts, viewer: { ...people.agent, canConnect: f.ads.canConnect }, checkedAt: T0, connectEnabled: f.ads.connectEnabled } });
       } else send(503, {});
+      return;
+    }
+    // 0677 ad account commands: connect returns HON's own return page (as the fake provider does), complete records one account.
+    const ad = /^\/v1\/hq\/marketing\/ad-accounts\/(connect|connect\/complete|([0-9a-f-]{36})\/disconnect)$/.exec(path);
+    if (req.method === 'POST' && ad) {
+      let raw = ''; for await (const chunk of req) raw += chunk;
+      const input = JSON.parse(raw), marker = req.headers['x-hon-human-command'];
+      f.commands.push({ kind: ad[1].endsWith('disconnect') ? 'AD_DISCONNECT' : ad[1] === 'connect' ? 'AD_CONNECT' : 'AD_COMPLETE', body: raw, marker });
+      if (ad[1] === 'connect') {
+        assert.equal(marker, 'hq-ad-connect'); f.ads.pending = { provider: input.provider, state: randomBytes(32).toString('base64url') };
+        send(200, { data: { authUrl: `${req.headers.origin}/hq/marketing/ads/return?state=${f.ads.pending.state}&accountId=ignored`, provider: input.provider, expiresAt: T0 } });
+      } else if (ad[1] === 'connect/complete') {
+        assert.equal(marker, 'hq-ad-connect-complete');
+        if (!f.ads.pending || input.state !== f.ads.pending.state) { send(400, { code: 'HQ_AD_CONNECT_STATE_INVALID' }); return; }
+        const account = { accountId: randomUUID(), provider: f.ads.pending.provider, displayName: 'HON Synthetic Ads', status: 'CONNECTED', version: 1,
+          connectedBy: people.agent, connectedAt: T0, updatedAt: T0, disconnectedAt: null };
+        f.ads.accounts.push(account); f.ads.pending = null;
+        send(200, { data: { provider: account.provider, connected: 1, conflicts: 0, accounts: f.ads.accounts } });
+      } else {
+        assert.equal(marker, 'hq-ad-disconnect');
+        const a = f.ads.accounts.find(x => x.accountId === ad[2]);
+        if (!a || a.version !== input.expectedVersion) { send(409, { code: 'SAAS_VERSION_CONFLICT' }); return; }
+        Object.assign(a, { status: 'DISCONNECTED', version: a.version + 1, disconnectedAt: T0 });
+        send(200, { data: { account: a, providerRemoval: 'REMOVED', replayed: false } });
+      }
       return;
     }
     const m = /^\/v1\/hq\/marketing\/campaigns(?:\/([0-9a-f-]{36})\/(versions|status))?$/.exec(path);
@@ -119,7 +149,8 @@ let browser;
 const check = async (name, run) => { await run(); report.checks.push(name); console.log('PASS ' + name); };
 const t = (key, language = 'en') => marketingText(language, key);
 async function open(name, viewport, configure = () => {}, language = 'en', path = '/hq/marketing') {
-  const f = { language, reads: [], commands: [], store: store(true), denied: false, unknownOnce: null }; configure(f); fixtures.set(name, f);
+  const f = { language, reads: [], commands: [], store: store(true), denied: false, unknownOnce: null,
+    ads: { connectEnabled: false, canConnect: true, accounts: [] } }; configure(f); fixtures.set(name, f);
   const context = await browser.newContext({ viewport, reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const scope = createHmac('sha256', session.secret).update(JSON.stringify(['hon-local-presentation-v1', session.mode, session.audience, name])).digest('hex');
@@ -151,14 +182,36 @@ try {
   await check('the HQ marketing page shows campaigns, planned budget and both ad accounts as not connected (desktop and 390px)', async () => {
     for (const [name, viewport] of [['marketing-desktop', { width: 1280, height: 900 }], ['marketing-mobile', { width: 390, height: 844 }]]) {
       const s = await open(name, viewport); await ready(s);
+      await s.page.locator('[data-ad-connect-off]').waitFor();
       const text = await s.page.locator(ROOT).innerText();
-      for (const expected of ['Spring founder push', 'Trial nurture on Instagram', 'SPRING-GOOGLE', '$3,700.50', t('plannedNote'), t('GOOGLE_ADS_ACCOUNT'), t('META_ADS_ACCOUNT'), t('adAccountsHelp')]) assert(text.includes(expected), expected);
+      for (const expected of ['Spring founder push', 'Trial nurture on Instagram', 'SPRING-GOOGLE', '$3,700.50', t('plannedNote'), t('GOOGLE_ADS_ACCOUNT'), t('META_ADS_ACCOUNT'), adText('en', 'notEnabled')]) assert(text.includes(expected), expected);
+      assert.equal(await s.page.getByRole('button', { name: adText('en', 'connect'), exact: true }).count(), 0, 'no Connect while the switch is off');
       assert.equal(await s.page.locator('[data-ad-account]').count(), 2);
       assert.equal((text.match(new RegExp(t('notConnected'), 'g')) ?? []).length, 2);
-      assert.equal(s.f.reads[0], '/v1/hq/marketing/campaigns?status=OPEN&limit=25');
+      assert(s.f.reads.includes('/v1/hq/marketing/campaigns?status=OPEN&limit=25'));
       assert(await s.page.locator('a[href="/hq/marketing"]').count() > 0, 'HQ navigation links the page');
       await capture(s, name, ROOT); await s.context.close();
     }
+  });
+  await check('the HQ owner connects Google Ads through the return page (state taken once, other values ignored) and disconnects it after confirming', async () => {
+    const s = await open('marketing-ads', { width: 390, height: 844 }, f => { f.ads.connectEnabled = true; }); await ready(s);
+    await s.page.locator('[data-ad-account="GOOGLE_ADS"]').getByRole('button', { name: adText('en', 'connect'), exact: true }).click();
+    await s.page.locator('[data-hq-ad-return="DONE"]').waitFor();
+    assert.equal(new URL(s.page.url()).search, '', 'the state left the address');
+    assert((await s.page.locator('[data-hq-ad-return]').innerText()).includes(adText('en', 'returnDone', { count: '1' })));
+    assert.deepEqual(s.f.commands.map(c => c.kind), ['AD_CONNECT', 'AD_COMPLETE']);
+    assert.deepEqual(Object.keys(JSON.parse(s.f.commands[1].body)), ['state'], 'only the state is posted');
+    await capture(s, 'marketing-ads-return', '[data-hq-ad-return]');
+    await s.page.getByRole('link', { name: adText('en', 'back'), exact: true }).click(); await ready(s);
+    const card = s.page.locator('[data-ad-account="GOOGLE_ADS"]');
+    await s.page.locator('[data-ad-account="GOOGLE_ADS"][data-connected="true"]').waitFor();
+    assert((await card.innerText()).includes('HON Synthetic Ads'));
+    await capture(s, 'marketing-ads-connected', '[data-marketing-ad-accounts]');
+    await card.getByRole('button', { name: adText('en', 'disconnect'), exact: true }).click();
+    await card.getByRole('button', { name: adText('en', 'confirmDisconnect', { name: 'HON Synthetic Ads' }), exact: true }).click();
+    await s.page.locator('[data-ad-account="GOOGLE_ADS"][data-connected="false"]').waitFor();
+    assert.equal(s.f.commands.at(-1).kind, 'AD_DISCONNECT'); assert.equal(s.f.commands.at(-1).body, '{"expectedVersion":1}');
+    await s.context.close();
   });
   await check('creating a campaign sends one human command and it appears as a draft', async () => {
     const s = await open('marketing-create', { width: 390, height: 844 }); await ready(s);

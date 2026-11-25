@@ -14,14 +14,15 @@ function failure(error: unknown) { return error instanceof Error ? error.message
 /**
  * Parent app > Announcements (David 2026-11-19: "announcement that we can push out from crm"). 0576: staff with
  * family_messages.manage post a short announcement; every family of the school sees it on the HON Family app's Home screen for
- * 60 days. A post never changes; it can be taken down once. Nothing is texted, emailed or pushed to phones.
+ * 60 days. A post never changes; it can be taken down once. Nothing is texted or emailed. A phone alert goes out only when
+ * staff tick "Also send as a phone alert" on that post (0658, David 2026-11-23: staff decide); it is unticked by default.
  */
 export function StaffSchoolAnnouncements(): React.ReactElement {
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
   const scope: AnnouncementsScope | null = selection ? { organizationId: selection.organizationId, schoolId: selection.schoolId } : null;
   const scopeKey = scope ? `${scope.organizationId}/${scope.schoolId}` : '';
-  const [items, setItems] = useState<SchoolAnnouncement[] | null>(null), [title, setTitle] = useState(''), [body, setBody] = useState('');
+  const [items, setItems] = useState<SchoolAnnouncement[] | null>(null), [title, setTitle] = useState(''), [body, setBody] = useState(''), [phoneAlert, setPhoneAlert] = useState(false);
   const [confirming, setConfirming] = useState<'publish' | string | null>(null);
   const [busy, setBusy] = useState(false), [acting, setActing] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState(''), [denied, setDenied] = useState(false);
   const [hidden, setHidden] = useState(false);
@@ -43,7 +44,7 @@ export function StaffSchoolAnnouncements(): React.ReactElement {
     } finally { if (generation.current === token) setBusy(false); }
   }, [scopeKey]);
   useEffect(() => { clear(); void refresh(); }, [scopeKey, clear, refresh]);
-  useEffect(() => onShellPrivacyEvent(() => { clear(); setTitle(''); setBody(''); setError(''); setNotice(''); setHidden(true); }), [clear]);
+  useEffect(() => onShellPrivacyEvent(() => { clear(); setTitle(''); setBody(''); setPhoneAlert(false); setError(''); setNotice(''); setHidden(true); }), [clear]);
 
   async function command(identity: string, run: (key: string) => Promise<unknown>, done: string): Promise<boolean> {
     attempt.current = attemptFor(identity, attempt.current, () => crypto.randomUUID());
@@ -60,7 +61,9 @@ export function StaffSchoolAnnouncements(): React.ReactElement {
   const ready = isSchoolAnnouncementTitle(title) && isSchoolAnnouncementBody(body);
   async function publish() {
     if (!scope || !ready || acting) return;
-    if (await command(`publish:${title}\n${body}`, key => publishSchoolAnnouncement(scope, title, body, key), 'Posted. Families see it on the HON Family app Home screen.')) { setTitle(''); setBody(''); }
+    const done = phoneAlert ? 'Posted. Families see it on the HON Family app Home screen, and a phone alert goes to families who allowed notifications.'
+      : 'Posted. Families see it on the HON Family app Home screen.';
+    if (await command(`publish:${phoneAlert ? 'alert' : 'quiet'}:${title}\n${body}`, key => publishSchoolAnnouncement(scope, title, body, key, phoneAlert), done)) { setTitle(''); setBody(''); setPhoneAlert(false); }
   }
   async function withdraw(item: SchoolAnnouncement) {
     if (!scope || acting) return;
@@ -70,7 +73,7 @@ export function StaffSchoolAnnouncements(): React.ReactElement {
   if (!scope) return <p role="status">Choose a school to see announcements.</p>;
   return <main className={s.page} data-school-announcements="">
     <header className={s.head}><div><h1>Announcements</h1>
-      <p>Post a short note to every family at {shell.schoolName ?? 'your school'}. It shows on the Home screen of the HON Family app for 60 days. It is not texted, emailed or sent as a phone alert.</p></div>
+      <p>Post a short note to every family at {shell.schoolName ?? 'your school'}. It shows on the Home screen of the HON Family app for 60 days. It is not texted or emailed. It is also sent as a phone alert only if you tick the box below.</p></div>
       {items && <button type="button" className={s.ghost} disabled={busy} onClick={() => void refresh()}>Refresh</button>}</header>
     {hidden && !items && <p className={s.actions}><button type="button" className={s.button} onClick={() => void refresh()}>Show announcements</button></p>}
     <div aria-live="polite">{busy && !items && <p className={s.muted} role="status">Loading announcements…</p>}
@@ -85,10 +88,14 @@ export function StaffSchoolAnnouncements(): React.ReactElement {
         <label className={s.label} htmlFor="announcement-body">Message
           <textarea id="announcement-body" className={s.field} rows={4} value={body} maxLength={SCHOOL_ANNOUNCEMENT_LIMITS.body + 1} disabled={acting}
             onChange={e => { setBody(e.target.value); setConfirming(null); }} /></label>
+        <label className={s.label} htmlFor="announcement-phone-alert" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input id="announcement-phone-alert" type="checkbox" checked={phoneAlert} disabled={acting} onChange={e => { setPhoneAlert(e.target.checked); setConfirming(null); }} />
+          Also send as a phone alert</label>
+        <p className={s.muted}>The alert shows your school's name and the title, to families who use the HON Family app and allowed notifications.</p>
         <div className={s.actions}>
           <span className={s.muted}>{title.length} / {SCHOOL_ANNOUNCEMENT_LIMITS.title} · {body.length} / {SCHOOL_ANNOUNCEMENT_LIMITS.body}</span>
           {confirming === 'publish'
-            ? <><span className={s.muted}>Every family at this school will see this. A post cannot be edited, only taken down.</span>
+            ? <><span className={s.muted}>Every family at this school will see this{phoneAlert ? ', and their phones get an alert' : ''}. A post cannot be edited, only taken down.</span>
               <button type="button" className={s.primary} disabled={acting || !ready} onClick={() => void publish()}>{acting ? 'Posting…' : 'Post to all families'}</button>
               <button type="button" className={s.ghost} disabled={acting} onClick={() => setConfirming(null)}>Cancel</button></>
             : <button type="button" className={s.primary} disabled={acting || !ready} onClick={() => setConfirming('publish')}>Post…</button>}

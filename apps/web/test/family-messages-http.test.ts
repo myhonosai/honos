@@ -42,6 +42,12 @@ describe('family messages http', () => {
     await expect(markFamilyMessageThreadRead(scope, A, 'nope')).rejects.toThrow();
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it('asks for a phone alert on a reply only when staff ticked it (0658)', async () => {
+    const C = '33333333-3333-4333-8333-333333333333';
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(201, { data: { threadId: A, version: 5, message: { messageId: C, from: 'SCHOOL', mine: true, body: 'Thanks', sentAt: '2026-11-20T17:00:00.000Z' } }, meta: { replayed: false } }));
+    await replyFamilyMessage({ organizationId: A, schoolId: B }, A, 'Thanks', 'k', B, true);
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({ body: JSON.stringify({ body: 'Thanks', throughMessageId: B, phoneAlert: true }) });
+  });
   it('keeps the key only for the same text', () => {
     let n = 0; const key = () => `k${++n}`;
     const first = sendAttempt('Hi', null, key);

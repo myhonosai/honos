@@ -258,6 +258,7 @@ export const es = {
   "Zernio connection": "Conexión con Zernio",
   "Creative Studio": "Estudio creativo",
   "Plan promotions": "Promociones de planes",
+  "Flyers & posters": "Volantes y carteles",
   "Owner workspace": "Espacio del propietario",
   "Start here: what needs you today and where to go next.": "Empieza aquí: lo que te necesita hoy y adónde ir después.",
   "How can HON help here?": "¿Cómo puede ayudar HON aquí?",

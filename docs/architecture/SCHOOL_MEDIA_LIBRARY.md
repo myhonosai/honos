@@ -163,7 +163,11 @@ copies". Spec of the plan: `/mnt/project-files/blasts/BL3_MEDIA_PLAN.md` (BL3c d
   length and size, and Copy link gives the `/v/<token>` page.
 - **Storage use** counts the original, the copy and the poster. Delete removes all three files in one call.
 - **Hosting.** The copy runs on hon-api (0.5 CPU). A long video can take a while there; moving the job to its own worker
-  is a later deploy decision. hon-api needs `ffmpeg` and `ffprobe` on its PATH (or `HON_FFMPEG_PATH` / `HON_FFPROBE_PATH`).
+  is a later deploy decision. The encode is held to two threads so it stays beside the API on a small instance. hon-api needs `ffmpeg` and `ffprobe` on its PATH (or `HON_FFMPEG_PATH` / `HON_FFPROBE_PATH`).
+  On Render the API build ends with `.github/scripts/install-video-tools.sh`, which downloads fixed ffmpeg/ffprobe 6.1.1
+  static release assets, checks each against its pinned SHA-256 and the features the job uses (libx264, aac, mjpeg, the
+  mov and matroska demuxers, https input), and puts them in `apps/api/.video-tools/`; `render.yaml` points the two paths
+  there. Any mismatch fails the build.
   At deploy, set the media bucket's file size limit to 5 GiB, so nothing larger can be stored with an upload link.
 - **Startup check.** With media storage on, production and staging refuse to start without an https `HON_PUBLIC_ORIGIN`
   (`MEDIA_PUBLIC_ORIGIN_REQUIRED`), since every picture or video email would otherwise only be retried.

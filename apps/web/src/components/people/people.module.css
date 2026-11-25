@@ -146,7 +146,7 @@
 .subsection h4 { margin: 0; font-size: 13px; }
 .messages { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; max-height: 360px; overflow-y: auto; }
 .messages > li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 10px; background: #0d1d2e; }
-.messages > li[data-from="SCHOOL"] { background: #123047; }
+.messages > li[data-from="SCHOOL"], .messages > li[data-from="STAFF"] { background: #123047; }
 .messageBody { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .photoRow { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
 .photoFrame { width: 132px; height: 132px; flex: none; display: grid; place-items: center; overflow: hidden; border: 1px solid #35506d; border-radius: 14px; background: #0a1625; color: #cfe0f2; font-size: 34px; font-weight: 800; }
