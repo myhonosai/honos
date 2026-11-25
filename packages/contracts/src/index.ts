@@ -1066,6 +1066,7 @@ export * from './parent-classpass-view.js';
 export * from './ai-draft-work.js';
 
 export * from './hq-school-directory.js';
+export * from './hq-school-lifecycle.js';
 export * from './curriculum-resource-library.js';
 export * from './class-sessions-read.js';
 export * from './champions-club.js';
@@ -1120,6 +1121,7 @@ export * from './hq-communications.js';
 export * from './hq-marketing.js';
 export * from './hq-ad-connections.js';
 export * from './hq-plan-promotions.js';
+export * from './hq-school-plans.js';
 export * from './hq-prospects.js';
 export * from './hq-creative.js';
 export * from './student-imports.js';

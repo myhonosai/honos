@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "26c62e18af800ffb8f78c7e90afc3e51531f1641b79e3d69ef2c9a34d70e0ab0",
+  "chainSha256": "d01610ed1663d1aa1ab53ae610e38e6b62099b553fd7784692790888c5bd8676",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -961,6 +961,26 @@
     {
       "file": "0657_school_conversations_person_filter.sql",
       "sha256": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e"
+    },
+    {
+      "file": "0658_parent_push_staff_choice.sql",
+      "sha256": "4a6cc907ac65dd0ecd598e3708a13a2617ef7b840e92559bb6b43f04f6e2a8cc"
+    },
+    {
+      "file": "0659_school_contact_membership_details.sql",
+      "sha256": "7664c2da2c5603dc4bb2d0c35fbf014a974ed68c981b5563bd040b1f5006b63f"
+    },
+    {
+      "file": "0660_website_starter_art.sql",
+      "sha256": "26fe9c89a8d32379f32e3c579a1b29375579f46ba8c2e1fb5b71fb4d3be248d3"
+    },
+    {
+      "file": "0675_hq_school_lifecycle.sql",
+      "sha256": "22c1f1983591b669efa7fbbefa1d6571120ace94b4322e19c1a32f9fa6b02e60"
+    },
+    {
+      "file": "0676_hq_school_plan_assignments.sql",
+      "sha256": "ec678f629f21222ff612462ceb151e821938b4aaa602d08dd64e928b2cb91dc6"
     },
     {
       "file": "0677_hq_ad_account_connections.sql",

@@ -48,7 +48,7 @@ describe('HQ school directory UI', () => {
     try {
       const html = renderToStaticMarkup(<HqSchoolDirectory />);
       expect(fetchSpy).not.toHaveBeenCalled();
-      for (const text of ['School directory', 'VERIFYING HQ ACCESS', 'Customer-account facts only.']) expect(html).toContain(text);
+      for (const text of ['School directory', 'VERIFYING HQ ACCESS', 'Removing a school']) expect(html).toContain(text);
       // The HQ shell owns navigation, the page heading and the View control; the directory repeats none of them.
       expect(html).not.toMatch(/aria-pressed=|<nav|<main|<h1/);
       for (const view of ['big-button', 'classic'] as const) {
