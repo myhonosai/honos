@@ -84,10 +84,10 @@ describe('HQ Champions Club read integration', () => {
     const data = validateChampionsHqLeaderboard(board());
     const html = renderToStaticMarkup(<LeaderboardResults board={data}/>);
     expect(html.indexOf('Zeta School')).toBeLessThan(html.indexOf('Alpha School'));
-    expect(html).toContain('Ties share rank');
+    expect(html).toContain('Ties share a rank');
     expect(html).toContain('Position'); expect(html).toContain('Anonymous in school standings');
     expect(html.indexOf('Private HQ Review School')).toBeGreaterThan(html.indexOf('</table>'));
-    expect(html).toContain('Confidential HQ reviews'); expect(html).toContain('not a finding of fraud');
+    expect(html).toContain('Confidential HQ reviews'); expect(html).toContain('not an accusation');
     data.standings[0]!.schoolName = '<script>alert(1)</script>';
     expect(renderToStaticMarkup(<LeaderboardResults board={data}/>)).toContain('&lt;script&gt;');
     expect(renderToStaticMarkup(<LeaderboardResults board={data}/>)).not.toContain('<script>');
@@ -95,13 +95,13 @@ describe('HQ Champions Club read integration', () => {
   it('distinguishes an authorized empty result from unavailable data', () => {
     const data = validateChampionsHqLeaderboard({ ...board(), standings: [], totalRanked: 0, held: [] });
     const html = renderToStaticMarkup(<LeaderboardResults board={data}/>);
-    expect(html).toContain('No ranked schools for this period');
+    expect(html).toContain('No schools ranked for this period yet');
     expect(html).not.toContain('Zeta School');
   });
   it('server-renders no operational rows or hold information and keeps the route no-index', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     const html = renderToStaticMarkup(<HqChampionsLeaderboard/>);
-    expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Loading authorized standings');
+    expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Loading the leaderboard');
     expect(html).not.toMatch(/Zeta School|Private HQ Review School|FRAUD_REVIEW/);
     const route = readFileSync('src/app/hq/growth/leaderboard/page.tsx', 'utf8');
     expect(route).toContain('HqChampionsLeaderboard'); expect(route).toContain('force-dynamic'); expect(route).toContain('index: false');

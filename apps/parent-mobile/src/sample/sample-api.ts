@@ -218,6 +218,9 @@ export function createSampleApi(now: () => Date = () => new Date()): ParentApi {
     eianStatus: () => ok({ mode: 'GUIDED' as const, reason: 'NOT_INCLUDED' as const }),
     askEian: async () => ({ ok: false as const, state: 'refused' as const, code: 'EIAN_AI_UNAVAILABLE' }),
     eianTurn: async () => ({ ok: false as const, state: 'unavailable' as const }),
+    // The sample family never reaches HON's speech service: the phone's own voice reads Eian's answers.
+    eianSpeechStatus: () => ok({ voice: 'PHONE' as const, reason: 'NOT_INCLUDED' as const }),
+    eianSpeak: async () => ({ ok: false as const, state: 'refused' as const, code: 'EIAN_SPEECH_UNAVAILABLE' }),
     schoolBookings: () => ok(schoolBookingView()),
     bookSchoolEventSlot: (slotId, _key) => {
       const slot = eventSlots.find(x => x.slotId === slotId);
