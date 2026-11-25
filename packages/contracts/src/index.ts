@@ -1119,6 +1119,7 @@ export * from './hq-support.js';
 export * from './hq-business-numbers.js';
 export * from './hq-communications.js';
 export * from './hq-marketing.js';
+export * from './hq-ad-connections.js';
 export * from './hq-plan-promotions.js';
 export * from './hq-school-plans.js';
 export * from './hq-prospects.js';

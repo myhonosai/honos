@@ -132,6 +132,10 @@ export const SAAS_COMMANDS = {
   createMarketingCampaign: 'hq-marketing-campaign-create',
   updateMarketingCampaign: 'hq-marketing-campaign-update',
   setMarketingCampaignStatus: 'hq-marketing-campaign-status',
+  // 0677: HQ ad account connections; same values as HQ_AD_COMMANDS.
+  connectHqAdAccount: 'hq-ad-connect',
+  completeHqAdConnect: 'hq-ad-connect-complete',
+  disconnectHqAdAccount: 'hq-ad-disconnect',
   // 0308: HQ plan promotions; same values as HQ_PLAN_PROMOTION_COMMANDS.
   createPlanPromotion: 'hq-plan-promotion-create',
   updatePlanPromotion: 'hq-plan-promotion-update',
