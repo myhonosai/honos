@@ -17,22 +17,30 @@ function students({ start, leads, join, leave, months }) {
 test('the section is labelled as an estimate, not a promise', () => {
   assert.match(text, /Estimate, not a promise/);
   assert.match(text, /Your results will differ/);
-  assert.match(text, /Estimated students after 12 months/);
+  assert.match(text, /Estimated students 12 months from now/);
   assert.match(text, /Estimated office hours a week/);
+  assert.match(text, /With HON OS, we assume/);
   assert.doesNotMatch(text, /guarantee|will grow|proven|on average our schools/i);
 });
 
-test('the student numbers follow from the printed assumptions', () => {
-  assert.match(text, /100 students at the start/);
-  assert.match(text, /10 new leads a month, 3 in 10 join, 3% of students leave each month/);
-  assert.match(text, /With HON OS, we assume marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2\.5% a month/);
-  const none = students({ start: 100, leads: 10, join: 0.3, leave: 0.03, months: 12 });
-  const hon = students({ start: 100, leads: 15, join: 0.4, leave: 0.025, months: 12 });
-  assert.equal(none, 100);
-  assert.equal(hon, 137);
-  assert.match(sec, new RegExp(`data-count="${none}" data-pre="">${none}<`));
+test('the student numbers follow from the real starting point and the printed assumptions', () => {
+  // Real school, last 12 months (owner's monthly report, 2026-11-25): 200 students,
+  // 20 trial appointments a month, 64% show, 58% of shows join, about 3.2% leave a month.
+  assert.match(text, /real martial arts school in California with 200 students/);
+  assert.match(text, /averaged 20 trial appointments a month; 64% showed up, 58% of those joined, and about 3\.2% of students left each month/);
+  assert.match(text, /reminders lift show-ups to 75%, follow-ups lift joining to 65%, and absence alerts cut leaving to 2\.5% a month/);
+  const today = students({ start: 200, leads: 20 * 0.64, join: 0.58, leave: 0.032, months: 12 });
+  const hon = students({ start: 200, leads: 20 * 0.75, join: 0.65, leave: 0.025, months: 12 });
+  assert.equal(today, 210);
+  assert.equal(hon, 250);
+  assert.match(sec, new RegExp(`data-count="${today}" data-pre="">${today}<`));
   assert.match(sec, new RegExp(`data-count="${hon}" data-pre="">${hon}<`));
-  assert.match(text, new RegExp(`about ${hon} after 12 months`));
+  assert.match(text, new RegExp(`reaches about ${today} in 12 months`));
+  assert.match(text, new RegExp(`giving about ${hon}\\.`));
+});
+
+test('the school is not named and no revenue is shown', () => {
+  assert.doesNotMatch(text, /Ideal|San Gabriel|\$\d/);
 });
 
 test('the weekly hours table adds up to the chart', () => {
@@ -47,8 +55,8 @@ test('the weekly hours table adds up to the chart', () => {
 });
 
 test('bar heights match their values on each axis', () => {
-  assert.match(sec, /--h:66\.7%[^"]*"><b data-count="100"/);
-  assert.match(sec, /--h:91\.3%[^"]*"><b data-count="137"/);
+  assert.match(sec, /--h:70%[^"]*"><b data-count="210"/);
+  assert.match(sec, /--h:83\.3%[^"]*"><b data-count="250"/);
   assert.match(sec, /--h:80%[^"]*"><b><span data-count="16"/);
   assert.match(sec, /--h:25%[^"]*"><b><span data-count="5"/);
 });

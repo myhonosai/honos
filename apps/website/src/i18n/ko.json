@@ -243,12 +243,7 @@
  "Terms of Service": "서비스 이용약관 (영문)",
  "&copy; 2026 HON OS. all rights reserved": "&copy; 2026 HON OS. 모든 권리 보유",
  "built for the people who run the mat": "매트를 운영하는 사람들을 위해 만들었습니다",
- "No CRM vs. <em class=\"s\">HON OS</em>": "CRM 없이 vs. <em class=\"s\">HON OS</em>",
- "An estimate for an example school of 100 students: how many students it could have after a year, and how many hours of office work a week it could save. Your results will differ.": "수련생 100명인 예시 도장의 추정치입니다. 1년 뒤 수련생이 몇 명이 될 수 있는지, 매주 사무 업무를 몇 시간 줄일 수 있는지 보여 줍니다. 실제 결과는 도장마다 다릅니다.",
- "Estimated students after 12 months": "12개월 뒤 예상 수련생 수",
- "no CRM, no marketing": "CRM·마케팅 없음",
  "with HON OS": "HON OS 사용",
- "No CRM": "CRM 없음",
  "Estimated office hours a week": "주당 예상 사무 업무 시간",
  "h": "시간",
  "spreadsheets, calls, paper": "스프레드시트, 전화, 종이",
@@ -268,5 +263,10 @@
  "0.5 h": "0.5시간",
  "1 h": "1시간",
  "2 h": "2시간",
- "Estimate, not a promise. Example school: 100 students at the start. No CRM and no marketing: 10 new leads a month, 3 in 10 join, 3% of students leave each month, so the school stays at about 100. With HON OS, we assume marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2.5% a month, giving about 137 after 12 months. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 예시 도장: 처음 수련생 100명. CRM과 마케팅 없이: 매달 새 문의 10건, 10명 중 3명 등록, 매달 수련생의 3% 이탈, 그래서 약 100명에 머뭅니다. HON OS 사용 시 가정: 마케팅으로 매달 문의 15건, 후속 연락 알림으로 10명 중 4명 등록, 결석 알림으로 이탈이 매달 2.5%로 줄어 12개월 뒤 약 137명. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다."
+ "Today vs. <em class=\"s\">HON OS</em>": "지금 vs. <em class=\"s\">HON OS</em>",
+ "An estimate built on a real martial arts school in California with 200 students: how many students it could have a year from now, and how many hours of office work a week it could save. Your results will differ.": "캘리포니아의 실제 도장(수련생 200명)을 바탕으로 한 추정치입니다. 1년 뒤 수련생이 몇 명이 될 수 있는지, 매주 사무 업무를 몇 시간 줄일 수 있는지 보여 줍니다. 실제 결과는 도장마다 다릅니다.",
+ "Estimated students 12 months from now": "12개월 뒤 예상 수련생 수",
+ "at today's pace": "지금 속도대로",
+ "Without HON OS": "HON OS 없이",
+ "Estimate, not a promise. Starting point: a real martial arts school in California with 200 students. Over its last 12 months it averaged 20 trial appointments a month; 64% showed up, 58% of those joined, and about 3.2% of students left each month. At that pace it reaches about 210 in 12 months. With HON OS, we assume reminders lift show-ups to 75%, follow-ups lift joining to 65%, and absence alerts cut leaving to 2.5% a month, giving about 250. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 출발점: 수련생 200명인 캘리포니아의 실제 도장. 최근 12개월 동안 매달 평균 체험 예약 20건, 그중 64%가 방문했고 방문자의 58%가 등록했으며, 매달 수련생의 약 3.2%가 그만뒀습니다. 이 속도라면 12개월 뒤 약 210명입니다. HON OS 사용 시 가정: 알림으로 방문율이 75%로, 후속 연락으로 등록률이 65%로 오르고, 결석 알림으로 이탈이 매달 2.5%로 줄어 약 250명. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다."
 }
