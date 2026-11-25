@@ -9,7 +9,16 @@ import type { PoolClient } from 'pg';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function uuid(value: unknown): asserts value is string { if (typeof value !== 'string' || !UUID.test(value)) throw new BadRequestException({ code: 'INVALID_FOLLOW_UP_DRAFT_IDENTIFIER' }); }
 function directHuman(context: ChadFollowUpAssistantContext) { if (context.principalType !== 'HUMAN_USER' || context.source !== 'HUMAN_UI' || context.actionRequestId || context.delegatedByPrincipalId || !context.externalSubject) throw new ForbiddenException({ code: 'CHAD_HUMAN_STAFF_REQUIRED' }); for (const id of [context.organizationId, context.schoolId, context.principalId, context.requestId, context.correlationId]) uuid(id); }
-function boundaryError(error: unknown): never { const code = (error as { code?: string }).code; if (code === '42501') throw new ForbiddenException({ code: 'FOLLOW_UP_DRAFT_FORBIDDEN', detail: 'Current direct school staff authority, active Complete entitlement, and a permitted current lead are required.' }); if (code === 'P0002') throw new NotFoundException({ code: 'FOLLOW_UP_DRAFT_UNAVAILABLE' }); if (['40001', '23505', '55P03', '40P01'].includes(code ?? '')) throw new ConflictException({ code: 'FOLLOW_UP_DRAFT_CONFLICT', detail: 'Retain the exact request key; refresh the known lead version before retrying.' }); if (['22023', '22P02', '23514', '23503', '22003'].includes(code ?? '')) throw new BadRequestException({ code: 'INVALID_FOLLOW_UP_DRAFT_REQUEST' }); if (code === '57014') throw new ServiceUnavailableException({ code: 'FOLLOW_UP_DRAFT_TIMEOUT', detail: 'No success is assumed; read durable state before any retry.' }); throw error; }
+const SEND_ERRORS: Record<string, () => Error> = {
+  CHAD_SEND_PLAN_INVALID: () => new BadRequestException({ code: 'CHAD_SEND_PLAN_INVALID', detail: 'Pick text or email (or no send), and now or a time up to 30 days ahead.' }),
+  CHAD_SEND_PLAN_NO_CONSENT: () => new ConflictException({ code: 'CHAD_SEND_PLAN_NO_CONSENT', detail: 'This contact has not agreed to messages on that channel. Nothing will be sent.' }),
+  CHAD_SEND_PLAN_NO_ADDRESS: () => new ConflictException({ code: 'CHAD_SEND_PLAN_NO_ADDRESS', detail: 'This contact has no phone number or email for that channel.' }),
+  CHAD_SEND_PLAN_CLOSED: () => new ConflictException({ code: 'CHAD_SEND_PLAN_CLOSED', detail: 'This draft was already reviewed, so its send plan can no longer change.' }),
+  CHAD_SEND_NOT_CANCELLABLE: () => new ConflictException({ code: 'CHAD_SEND_NOT_CANCELLABLE', detail: 'This message was not queued or is already being sent.' }),
+  CHAD_FOLLOW_UP_NOT_FOUND: () => new NotFoundException({ code: 'FOLLOW_UP_DRAFT_UNAVAILABLE' }),
+  IDEMPOTENCY_KEY_REUSED: () => new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' }),
+};
+function boundaryError(error: unknown): never { const code = (error as { code?: string }).code; const known = SEND_ERRORS[(error as { message?: string }).message ?? '']; if (known && ['22023', '40001', 'P0002', '23505'].includes(code ?? '')) throw known(); if (code === '42501') throw new ForbiddenException({ code: 'FOLLOW_UP_DRAFT_FORBIDDEN', detail: 'Current direct school staff authority, active Complete entitlement, and a permitted current lead are required.' }); if (code === 'P0002') throw new NotFoundException({ code: 'FOLLOW_UP_DRAFT_UNAVAILABLE' }); if (['40001', '23505', '55P03', '40P01'].includes(code ?? '')) throw new ConflictException({ code: 'FOLLOW_UP_DRAFT_CONFLICT', detail: 'Retain the exact request key; refresh the known lead version before retrying.' }); if (['22023', '22P02', '23514', '23503', '22003'].includes(code ?? '')) throw new BadRequestException({ code: 'INVALID_FOLLOW_UP_DRAFT_REQUEST' }); if (code === '57014') throw new ServiceUnavailableException({ code: 'FOLLOW_UP_DRAFT_TIMEOUT', detail: 'No success is assumed; read durable state before any retry.' }); throw error; }
 
 @Injectable()
 export class ChadFollowUpAssistantService {
@@ -28,6 +37,18 @@ export class ChadFollowUpAssistantService {
     if (payload) await this.bindRecorded(context, id, payload);
     return this.read(context, id);
   }
+
+  /** 0647: the requester's send plan for a draft awaiting review ({channel: SMS|EMAIL|NONE, sendAt: ISO|null}). */
+  async setSendPlan(context: ChadFollowUpAssistantContext, id: string, input: unknown): Promise<unknown> {
+    uuid(id);
+    if (!context.idempotencyKey || context.idempotencyKey.length > 200 || context.idempotencyKey.trim() !== context.idempotencyKey) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED' });
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).sort().join(',') !== 'channel,sendAt') throw new BadRequestException({ code: 'CHAD_SEND_PLAN_INVALID' });
+    return this.transaction(context, async (client) => (await client.query<{ data: unknown }>('SELECT hon.set_chad_draft_send_plan($1,$2::uuid,$3::jsonb,$4) data', [context.externalSubject, id, JSON.stringify(input), context.idempotencyKey])).rows[0]!.data);
+  }
+  /** 0647: the plan and what happened at approval (queued, or why not), for the requester or the approver. */
+  readSend(context: ChadFollowUpAssistantContext, id: string): Promise<unknown> { uuid(id); return this.transaction(context, async (client) => (await client.query<{ data: unknown }>('SELECT hon.read_chad_draft_send($1,$2::uuid) data', [context.externalSubject, id])).rows[0]!.data); }
+  /** 0647: cancel a queued approved-draft message before the delivery worker claims it. */
+  cancelSend(context: ChadFollowUpAssistantContext, id: string): Promise<unknown> { uuid(id); return this.transaction(context, async (client) => (await client.query<{ data: unknown }>('SELECT hon.cancel_chad_draft_send($1,$2::uuid) data', [context.externalSubject, id])).rows[0]!.data); }
 
   /** Re-attempts the approval proposal for a recorded or held result (for example after access returns). Never calls a provider. */
   private async resumeRecorded(context: ChadFollowUpAssistantContext, id: string): Promise<void> {

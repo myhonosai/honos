@@ -1,6 +1,6 @@
 BEGIN;
 
--- HON OS free trial creative credits (migration 0663, allocated 2026-11-12). Source only: the trial program stays CLOSED
+-- HON OS free trial creative credits (migration 0683, allocated 2026-11-12). Source only: the trial program stays CLOSED
 -- and the creative program stays INACTIVE, so nothing here can spend until the owner opens both.
 -- Owner decision 2026-11-12 (supersedes the 0246 rule "CREATIVE_MEDIA is never trial-funded"): the free trial includes
 -- Creative Studio, worth about $15 of real provider cost per school (images, short videos and an avatar try).
@@ -141,7 +141,7 @@ BEGIN
   SELECT NULL::integer AS period_index, NULL::timestamptz AS period_start, NULL::timestamptz AS period_end INTO per;
   SELECT sc.organization_id, sc.status = 'ACTIVE' AND o.status = 'ACTIVE' INTO v_org, school_active
     FROM hon.schools sc JOIN hon.organizations o ON o.id = sc.organization_id WHERE sc.id = p_school;
-  -- 0663: the free trial's creative window.
+  -- 0683: the free trial's creative window.
   IF v_org IS NOT NULL AND school_active AND hon.saas_creative_program_active() AND hon.hon_os_trial_live(v_org, p_at) THEN
     SELECT * INTO g FROM hon.hon_os_trial_creative_grants WHERE organization_id = v_org AND school_id = p_school;
     IF g.enrollment_id IS NOT NULL AND p_at >= g.starts_at AND p_at < g.ends_at THEN

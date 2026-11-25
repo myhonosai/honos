@@ -93,3 +93,18 @@ Prices are the owner-approved ones already on the page. Nothing new is invented;
 - **Discount banner:** shows the discount that really applies today, Founder 50: 20% off the standard price for the first 50 schools while they stay subscribed. A promo or referral variant ("{name} has applied a {n}% discount on your first year of HON OS") is built into `site.js` but switched off (`OFFER = null`), because no billing path applies promo or referral discounts yet (Champions Club records referrals only). A test keeps it off. Turning it on needs David's decision and a billing path.
 - **Languages:** every new phrase is in the Korean and Spanish dictionaries; the banner variant has its own Korean and Spanish strings in `site.js`.
 - **Out of scope:** live billing, founder billing (B2), checkout, the app's old `/pricing` page, redeploying the site.
+
+## Search and AI-answer readiness (2026-11-24)
+
+Owner request (David, 2026-11-24): optimise the marketing website for search engines, answer engines and AI search (SEO, AEO, GEO, llms.txt), without changing the design, URLs, tracking or business facts. Live baseline checked the same day: `/audit/SEO_AEO_BASELINE_2026-11-24.md` in the project files.
+
+- **Structured data on every page** (`scripts/structured.mjs`, one JSON-LD block per page, built from what the page already shows):
+  - Home (en/ko/es): Organization (name, legal name from the Terms, logo, description), WebSite, WebPage, SoftwareApplication with the four public prices as Offers, and FAQPage read from the page's own `<details>` questions in that language.
+  - Blog list: CollectionPage, Blog, BreadcrumbList. Blog post: WebPage, BlogPosting (headline, description, `datePublished` and author from front matter), BreadcrumbList. Legal pages: WebPage, BreadcrumbList.
+  - Never added: ratings, reviews, awards, addresses, phone numbers, staff or student details.
+- **`/llms.txt`** (llmstxt.org format) generated at build from the English home page, the posts and the legal pages, with absolute links. No `llms-full.txt` (it would duplicate the site and drift).
+- **Sitemap:** blog posts carry `<lastmod>` from their date. Other pages get none, since a build date is not a content date.
+- **robots.txt:** unchanged. It already allows every crawler, search and training alike; changing training rules needs David's decision.
+- **Korean copy:** fixes the particle after 도장 (도장를 → 도장을, 도장는 → 도장은), including the Korean H1.
+- **Tests** (`test/aeo.test.mjs`): JSON-LD parses and every `@id` reference resolves; FAQ data equals the visible FAQ; data prices equal the pricing section; posts' date and headline match the page; llms.txt links are absolute and in the sitemap (or the two public app pages); key facts are in the HTML before any script runs; every internal link resolves; discovery files carry no secrets, backend hosts or email addresses.
+- **Out of scope here:** deploy (deploy hold), Search Console / Bing Webmaster verification (David's accounts), external listings, AI-training robots rules, Ideal Martial Arts content (a separate school site), agent/booking protocols.

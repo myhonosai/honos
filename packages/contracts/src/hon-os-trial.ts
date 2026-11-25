@@ -23,7 +23,7 @@ const caps = (o: Record<string, unknown>) => {
 };
 
 export interface TrialAiCredits { credits: number; dailyCap: number; perRequestCap: number; expiresAt: string; used: number }
-/** 0663: the trial's own Creative Studio credits (about $15 of provider cost), spent from the school's wallet until the trial ends. */
+/** 0683: the trial's own Creative Studio credits (about $15 of provider cost), spent from the school's wallet until the trial ends. */
 export interface TrialCreativeCredits { credits: number; available: number; expiresAt: string }
 export interface TrialOfferAiCredits { credits: number; dailyCap: number; perRequestCap: number; expiryDays: number }
 

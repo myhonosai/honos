@@ -9,7 +9,7 @@ const trial={enrollmentId:randomUUID(),organizationId:randomUUID(),schoolId:scho
  automaticCharge:false,paymentMethodRequired:false,aiIncluded:false,aiCredits:null,creativeCreditsIncluded:false,creativeCredits:null};
 const aiCredits={credits:100,dailyCap:20,perRequestCap:10,expiresAt:'2026-11-16T10:00:00.123456Z',used:7};
 const funded={...trial,aiIncluded:true,aiCredits};
-// 0663: the trial's own Creative Studio credits, ending with the trial.
+// 0683: the trial's own Creative Studio credits, ending with the trial.
 const creative={credits:1500,available:1200,expiresAt:trial.endsAt},withCreative={...funded,creativeCreditsIncluded:true,creativeCredits:creative};
 const offer={campaignId:input.campaignId,name:'Founding schools trial',durationDays:14,automaticCharge:false,paymentMethodRequired:false,aiIncluded:false,aiCredits:null};
 const fundedOffer={...offer,aiIncluded:true,aiCredits:{credits:100,dailyCap:20,perRequestCap:10,expiryDays:7}};

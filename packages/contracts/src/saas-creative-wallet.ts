@@ -10,7 +10,7 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 import { saasUuid } from './saas-billing.js';
 
-/** TRIAL (0663): a free trial's own creative credits, granted at trial start and expiring when the trial ends. */
+/** TRIAL (0683): a free trial's own creative credits, granted at trial start and expiring when the trial ends. */
 export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP' | 'TRIAL';
 export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO';
 export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
@@ -258,7 +258,7 @@ export function validateSaasCreativeBalance(value: unknown): void { validateBala
 function validateBalance(value: unknown): void {
   const b = record(value, drift); exactKeys(b, ['availableCredits','heldCredits','byKind'], drift);
   if (!count(b.availableCredits) || !count(b.heldCredits) || !Array.isArray(b.byKind) || (b.byKind.length !== 4 && b.byKind.length !== 5)) drift();
-  // TRIAL is listed only for a school that has a trial lot (0663), in consumption order after included credits.
+  // TRIAL is listed only for a school that has a trial lot (0683), in consumption order after included credits.
   const order = b.byKind.length === 5 ? ['INCLUDED_MONTHLY','TRIAL','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'] : ['INCLUDED_MONTHLY','ADJUSTMENT','PROMOTIONAL','PURCHASED_TOPUP'];
   let available = 0, held = 0;
   (b.byKind as unknown[]).forEach((value, i) => {

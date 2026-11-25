@@ -42,7 +42,7 @@ campaign provider-cost cap.
   trial to `REGISTERED` (`AI_ACCESS_NOT_PAID`).
 - `hon.ai_trial_funding_available` (0195 hook, replaced here) is true only for `AGENT_INFERENCE`, while the trial owns
   the entitlement, has a budget and `now < starts_at + creditExpiryDays`. `CREATIVE_MEDIA` was never trial-funded
-  here; 0663 (below) replaces that with the trial's own creative credits.
+  here; 0683 (below) replaces that with the trial's own creative credits.
 - `hon.ai_org_ceiling` (0194, replaced in 0246 and 0272) is what every agent prepare already compares
   `committed + estimate` against under the `ai.budget:<org>` lock. For a school whose entitlement a trial owns it is 0
   unless funded now; when funded it is the least of 12000, the trial credits left, today's (UTC) daily cap and
@@ -61,7 +61,7 @@ Note for HQ: agent estimates today are up to 10 credits per request (HON reply),
 those requests. The campaign cost cap is checked per school under its own budget lock, so schools deciding at the same
 instant can each still start one request (at most its plan's maximum cost) past it; once their holds exist, they count.
 
-## Trial creative credits (0663)
+## Trial creative credits (0683)
 
 Owner decision 2026-11-12: the free trial includes Creative Studio, worth about $15 of real provider cost per school
 (images, short videos and an avatar try). This supersedes "CREATIVE_MEDIA is never trial-funded" above.
@@ -79,7 +79,7 @@ Owner decision 2026-11-12: the free trial includes Creative Studio, worth about 
 - **Gates unchanged:** the trial program stays CLOSED and the creative program INACTIVE; HQ emergency pauses apply.
 - **Receipt:** the trial receipt now says `creativeCreditsIncluded: true` with `creativeCredits` (granted, left now,
   expiry = trial end). The wallet lists `TRIAL` by kind only for a school that has a trial lot.
-- A trial started before 0663 has no creative lot (no trial exists outside disposable test databases).
+- A trial started before 0683 has no creative lot (no trial exists outside disposable test databases).
 
 ## Evidence
 

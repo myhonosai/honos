@@ -11,7 +11,7 @@ import {
 
 /** The starts a school can pick, in the order the menu shows them. Date starts carry a number; a tag start carries a tag. */
 export const WHEN_KINDS = ['LEAD_CREATED', 'TRIAL_BOOKED', 'TRIAL_NO_SHOW', 'TRIAL_ATTENDED', 'MEMBERSHIP_ACTIVATED', 'ABSENT_DAYS', 'BIRTHDAY',
-  'MEMBERSHIP_ENDS_IN_DAYS', 'MEMBERSHIP_CANCELLED', 'MEMBERSHIP_ANNIVERSARY', 'MISSED_CALL', 'TAG_ADDED'] as const satisfies readonly AutomationTriggerKind[];
+  'MEMBERSHIP_ENDS_IN_DAYS', 'MEMBERSHIP_CANCELLED', 'TAG_ADDED'] as const satisfies readonly AutomationTriggerKind[];
 export type WhenKind = typeof WHEN_KINDS[number];
 export const WHEN_DAYS: Partial<Record<WhenKind, { min: number; max: number; fallback: number }>> = {
   ABSENT_DAYS: { min: 3, max: 365, fallback: 14 }, BIRTHDAY: { min: 0, max: 30, fallback: 0 }, MEMBERSHIP_ENDS_IN_DAYS: { min: 1, max: 180, fallback: 30 },
@@ -21,13 +21,13 @@ export const DATE_KINDS: readonly WhenKind[] = ['ABSENT_DAYS', 'BIRTHDAY', 'MEMB
 
 export const GROUPS = ['EVERYONE', 'OPEN_LEADS', 'ACTIVE_STUDENTS'] as const;
 export type Group = typeof GROUPS[number];
-export const STOPS = ['TRIAL_BOOKED', 'REPLIED', 'ENROLLED', 'LEAD_CLOSED'] as const;
+export const STOPS = ['TRIAL_BOOKED', 'ENROLLED', 'LEAD_CLOSED'] as const;
 export type Stop = typeof STOPS[number];
 export const CHANNELS = ['TEXT', 'EMAIL', 'TASK', 'NOTIFY'] as const;
 export type Channel = typeof CHANNELS[number];
 export const DELAY_UNITS = ['NOW', 'HOURS', 'DAYS'] as const;
 export type DelayUnit = typeof DELAY_UNITS[number];
-export const MERGE_FIELDS = ['first_name', 'school_name', 'staff_name'] as const;
+export const MERGE_FIELDS = ['first_name', 'school_name'] as const;
 
 export type Send = { channel: Channel; delayUnit: DelayUnit; delayAmount: number; subject: string; text: string; videoUrl: string };
 export type SimpleAutomation = {
@@ -80,9 +80,9 @@ export function problems(a: SimpleAutomation): Problem[] {
   });
   return out;
 }
-/** Every {{...}} must be one of the merge fields the server knows. */
+/** Every {{...}} must be one of the merge fields the automation engine fills in today. */
 export function mergeOk(text: string): boolean {
-  return !/(\{\{|\}\})/.test(text.replace(/\{\{(first_name|school_name|program_name|trial_time|booking_link|staff_name)\}\}/g, ''));
+  return !/(\{\{|\}\})/.test(text.replace(/\{\{(first_name|school_name)\}\}/g, ''));
 }
 
 function trigger(a: SimpleAutomation): AutomationDefinition['trigger'] {
@@ -110,7 +110,7 @@ export function toDefinition(a: SimpleAutomation): AutomationDefinition {
     const id = `send_${i + 1}`, text = messageText(s);
     if (s.channel === 'TEXT') steps.push({ id, type: 'SEND_SMS', content: { mode: 'FIXED', text }, next: next(id) });
     if (s.channel === 'EMAIL') steps.push({ id, type: 'SEND_EMAIL', content: { mode: 'FIXED', subject: s.subject.trim(), text }, next: next(id) });
-    if (s.channel === 'TASK') steps.push({ id, type: 'CREATE_TASK', title: text, details: '', dueInHours: TASK_DUE_HOURS, assignTo: taskAssignee(a.group), next: next(id) });
+    if (s.channel === 'TASK') steps.push({ id, type: 'CREATE_TASK', title: text, details: '', dueInHours: TASK_DUE_HOURS, assignTo: TASK_ASSIGNEE, next: next(id) });
     if (s.channel === 'NOTIFY') steps.push({ id, type: 'NOTIFY_STAFF', to: 'SCHOOL_OWNERS', text, next: next(id) });
   });
   return validateAutomationDefinition({
@@ -152,7 +152,7 @@ export function fromDefinition(name: string, d: AutomationDefinition): SimpleAut
       if (pending > 0 || typeof at.minutes !== 'number' || at.localTime !== null) return null;
       pending = at.minutes;
     } else {
-      const send = readSend(at, pending, group);
+      const send = readSend(at, pending);
       if (!send) return null;
       sends.push(send); pending = 0;
     }
@@ -164,11 +164,11 @@ export function fromDefinition(name: string, d: AutomationDefinition): SimpleAut
   return { name, when, days, tag, group, onlyTag, stopWhen: STOPS.filter(s => d.exitWhen.includes(s)), repeat: d.entry.reentry === 'EVERY_TIME', sends };
 }
 
-/** Tasks the simple form writes: due in a day, to the lead's owner for leads and to the school owners for students. */
+/** Tasks the simple form writes: due in a day, to the school owners (the engine cannot assign a lead's owner yet). */
 const TASK_DUE_HOURS = 24;
-const taskAssignee = (group: Group): 'SCHOOL_OWNERS' | 'LEAD_ASSIGNEE' => (group === 'ACTIVE_STUDENTS' ? 'SCHOOL_OWNERS' : 'LEAD_ASSIGNEE');
+const TASK_ASSIGNEE = 'SCHOOL_OWNERS';
 
-function readSend(step: AutomationWorkflowStep, wait: number, group: Group): Send | null {
+function readSend(step: AutomationWorkflowStep, wait: number): Send | null {
   const delay: Pick<Send, 'delayUnit' | 'delayAmount'> = wait === 0 ? { delayUnit: 'NOW', delayAmount: 1 }
     : wait % 1440 === 0 ? { delayUnit: 'DAYS', delayAmount: wait / 1440 } : wait % 60 === 0 ? { delayUnit: 'HOURS', delayAmount: wait / 60 } : { delayUnit: 'NOW', delayAmount: -1 };
   if (delay.delayAmount === -1) return null;
@@ -184,7 +184,7 @@ function readSend(step: AutomationWorkflowStep, wait: number, group: Group): Sen
     return { channel: 'EMAIL', ...delay, subject: content.subject, ...split(content.text) };
   }
   // Only a task the form itself would write; any other due time or assignee opens read-only so saving never rewrites it.
-  if (step.type === 'CREATE_TASK' && typeof step.title === 'string' && step.details === '' && step.dueInHours === TASK_DUE_HOURS && step.assignTo === taskAssignee(group)) return { channel: 'TASK', ...delay, subject: '', text: step.title, videoUrl: '' };
+  if (step.type === 'CREATE_TASK' && typeof step.title === 'string' && step.details === '' && step.dueInHours === TASK_DUE_HOURS && step.assignTo === TASK_ASSIGNEE) return { channel: 'TASK', ...delay, subject: '', text: step.title, videoUrl: '' };
   if (step.type === 'NOTIFY_STAFF' && step.to === 'SCHOOL_OWNERS' && typeof step.text === 'string') return { channel: 'NOTIFY', ...delay, subject: '', text: step.text, videoUrl: '' };
   return null;
 }
@@ -194,25 +194,25 @@ export const TEMPLATE_KEYS = ['NO_SHOW', 'LEAD_NURTURE', 'MIA', 'BIRTHDAY', 'REN
 export type TemplateKey = typeof TEMPLATE_KEYS[number];
 const s = (channel: Channel, delayUnit: DelayUnit, delayAmount: number, text: string, subject = ''): Send => ({ channel, delayUnit, delayAmount, subject, text, videoUrl: '' });
 export const TEMPLATES: Record<TemplateKey, SimpleAutomation> = {
-  NO_SHOW: { name: 'Trial no-show follow-up', when: 'TRIAL_NO_SHOW', days: 14, tag: '', group: 'OPEN_LEADS', onlyTag: '', stopWhen: ['TRIAL_BOOKED', 'REPLIED', 'ENROLLED', 'LEAD_CLOSED'], repeat: true, sends: [
+  NO_SHOW: { name: 'Trial no-show follow-up', when: 'TRIAL_NO_SHOW', days: 14, tag: '', group: 'OPEN_LEADS', onlyTag: '', stopWhen: ['TRIAL_BOOKED', 'ENROLLED', 'LEAD_CLOSED'], repeat: true, sends: [
     s('TEXT', 'HOURS', 2, 'Hi {{first_name}}, we missed you at your trial class today at {{school_name}}. Want to pick a new time? Just reply here.'),
     s('EMAIL', 'DAYS', 1, 'Hi {{first_name}},\n\nWe saved a spot for you and would love to see you on the mat. Reply to this email and we will find a time that works.\n\n{{school_name}}', 'Let us find you a new trial time'),
     s('TASK', 'DAYS', 2, 'Call {{first_name}} about a new trial time'),
   ] },
-  LEAD_NURTURE: { name: 'New lead nurture', when: 'LEAD_CREATED', days: 14, tag: '', group: 'OPEN_LEADS', onlyTag: '', stopWhen: ['TRIAL_BOOKED', 'REPLIED', 'ENROLLED', 'LEAD_CLOSED'], repeat: false, sends: [
+  LEAD_NURTURE: { name: 'New lead nurture', when: 'LEAD_CREATED', days: 14, tag: '', group: 'OPEN_LEADS', onlyTag: '', stopWhen: ['TRIAL_BOOKED', 'ENROLLED', 'LEAD_CLOSED'], repeat: false, sends: [
     s('TEXT', 'NOW', 1, 'Hi {{first_name}}, thanks for your interest in {{school_name}}! When would you like to try a free class? Reply here and we will set it up.'),
     s('EMAIL', 'DAYS', 1, 'Hi {{first_name}},\n\nHere is what your first class at {{school_name}} looks like: a warm welcome, a short warm-up, and a class built for beginners. Reply and we will book your free trial.\n\n{{school_name}}', 'Your first class at {{school_name}}'),
     s('TEXT', 'DAYS', 2, 'Hi {{first_name}}, just checking in. Do you have any questions about classes at {{school_name}}?'),
     s('EMAIL', 'DAYS', 4, 'Hi {{first_name}},\n\nWe would still love to meet you. Reply with a day that works and we will hold a spot in a beginner class.\n\n{{school_name}}', 'Still thinking about classes?'),
   ] },
-  MIA: { name: 'Missing student check-in', when: 'ABSENT_DAYS', days: 14, tag: '', group: 'ACTIVE_STUDENTS', onlyTag: '', stopWhen: ['REPLIED'], repeat: true, sends: [
+  MIA: { name: 'Missing student check-in', when: 'ABSENT_DAYS', days: 14, tag: '', group: 'ACTIVE_STUDENTS', onlyTag: '', stopWhen: [], repeat: true, sends: [
     s('TEXT', 'NOW', 1, 'Hi {{first_name}}, we have missed you in class at {{school_name}}! Is everything OK? We would love to see you back this week.'),
-    s('NOTIFY', 'DAYS', 3, '{{first_name}} has not been to class in a while and has not replied. A personal call may help.'),
+    s('NOTIFY', 'DAYS', 3, '{{first_name}} has not been to class in a while. A personal call may help.'),
   ] },
   BIRTHDAY: { name: 'Happy birthday', when: 'BIRTHDAY', days: 0, tag: '', group: 'ACTIVE_STUDENTS', onlyTag: '', stopWhen: [], repeat: true, sends: [
     s('TEXT', 'NOW', 1, 'Happy birthday, {{first_name}}! Everyone at {{school_name}} hopes you have a great day.'),
   ] },
-  RENEWAL: { name: 'Membership renewal reminder', when: 'MEMBERSHIP_ENDS_IN_DAYS', days: 30, tag: '', group: 'ACTIVE_STUDENTS', onlyTag: '', stopWhen: ['REPLIED'], repeat: true, sends: [
+  RENEWAL: { name: 'Membership renewal reminder', when: 'MEMBERSHIP_ENDS_IN_DAYS', days: 30, tag: '', group: 'ACTIVE_STUDENTS', onlyTag: '', stopWhen: [], repeat: true, sends: [
     s('EMAIL', 'NOW', 1, 'Hi {{first_name}},\n\nYour membership at {{school_name}} ends in about a month. We would love to keep training with you. Reply to this email and we will help you renew.\n\n{{school_name}}', 'Your membership is ending soon'),
     s('TEXT', 'DAYS', 14, 'Hi {{first_name}}, your membership at {{school_name}} ends soon. Want us to help you renew? Just reply here.'),
     s('TASK', 'DAYS', 7, 'Talk with {{first_name}} about renewing'),

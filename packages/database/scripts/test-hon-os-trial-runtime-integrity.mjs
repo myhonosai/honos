@@ -94,7 +94,7 @@ try{
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  const excluded=new Set([...tables,'users','principals','organizations','schools','roles','role_permissions','principal_role_grants','hon_os_school_registrations','hon_os_signup_program','hon_os_trial_program',
   'hq_operator_grants','saas_trial_policy_versions','saas_trial_policy_decisions','saas_trial_campaign_versions','saas_trial_publications','saas_requests','saas_audit','saas_outbox',
-  // 0663: a trial grants its own creative lot (wallet, lot, ledger GRANT, grant snapshot); checked by count at the end.
+  // 0683: a trial grants its own creative lot (wallet, lot, ledger GRANT, grant snapshot); checked by count at the end.
   'saas_creative_wallets','saas_creative_lots','saas_creative_ledger','hon_os_trial_creative_grants']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
  const snapshot=async()=>{const out={};for(const t of others){assert.match(t,/^[a-z_0-9]+$/);out[t]=hash(JSON.stringify(await q('SELECT to_jsonb(t)::text r FROM hon.'+t+' t ORDER BY 1')));}return out;};
@@ -153,7 +153,7 @@ try{
  assert.equal(row.program_status,'TEST_MODE');assert.equal(row.prior_entitlement.status,'SUSPENDED');assert.equal(row.granted_entitlement_version,prior.version+1);assert.equal(row.terms_reference,'HON_OS_TRIAL_SYNTHETIC_TERMS');assert.deepEqual(row.ai_budget,budget);
  assert(await gated(ana.externalSubject)>0,'the trial school can use entitlement-gated school features');
  assert.notEqual((await q('SELECT hon.school_staff_manager($1,$2) m',[ana.externalSubject,ana.reg.schoolId]))[0].m,null);
- // Agent AI is allowed under the HQ-set credit; Creative Studio media under the trial's own creative grant (0663).
+ // Agent AI is allowed under the HQ-set credit; Creative Studio media under the trial's own creative grant (0683).
  assert.equal(await ai(ana.reg.organizationId),null);assert.equal(await ai(ana.reg.organizationId,'clock_timestamp()','CREATIVE_MEDIA'),null);
  assert.equal(await ai(ben.reg.organizationId),'AI_ACCESS_NOT_PAID');
  // 0288 (owner 2026-11-12): while the trial owns access the school's internal AI cost ceiling defaults to $15; a school
@@ -172,7 +172,7 @@ try{
  assert.deepEqual((await q(`SELECT hon.hon_os_trial_live($1,${endsAt}) a,hon.hon_os_trial_live($1,${endsAt}-interval '1 millisecond') b`,[ana.reg.organizationId]))[0],{a:false,b:true});
  pass('the trial sets the entitlement to COMPLETE ACTIVE until exactly start + 14 days (gated features open, access ends by the clock); no access state, subscription, checkout, allowance or exception; agent AI allowed under the HQ-set credit until it expires on day 7, Creative Studio media under its own trial grant until the trial ends');
 
- // 0663. The trial's own Creative Studio credits: one TRIAL lot per trial, spent through the real wallet reservation path, stopped by credits and by $15 of real cost.
+ // 0683. The trial's own Creative Studio credits: one TRIAL lot per trial, spent through the real wallet reservation path, stopped by credits and by $15 of real cost.
  {const org=ana.reg.organizationId,school=ana.reg.schoolId,tr=(await q('SELECT * FROM hon.hon_os_trial_enrollments WHERE organization_id=$1',[org]))[0];
   const g=(await q('SELECT * FROM hon.hon_os_trial_creative_grants WHERE enrollment_id=$1',[tr.id]))[0];
   assert.deepEqual([g.organization_id,g.school_id,g.credits,g.cost_cap_minor,+g.starts_at,+g.ends_at],[org,school,1500,1500,+tr.starts_at,+tr.ends_at]);
@@ -216,7 +216,7 @@ try{
    assert.equal((await admin.query('SELECT hon.saas_creative_eligibility($1,t.ends_at) e FROM hon.hon_os_trial_enrollments t WHERE t.id=$2',[school,tr.id])).rows[0].e.reason,'PAID_ACCESS_REQUIRED');
   }finally{await admin.query('ROLLBACK');}
   assert.equal((await q('SELECT count(*) n FROM hon.saas_creative_reservations WHERE school_id=$1',[school]))[0].n,'0','the spending fixture rolled back');}
- pass('0663: each trial gets its own 1,500-credit TRIAL creative lot ending with the trial (no lot without a trial); the real reservation path spends it (images, avatars), never past the credits, never once $15 of real creative cost is recorded, never after the trial; no included monthly window; agent AI unaffected');
+ pass('0683: each trial gets its own 1,500-credit TRIAL creative lot ending with the trial (no lot without a trial); the real reservation path spends it (images, avatars), never past the credits, never once $15 of real creative cost is recorded, never after the trial; no included monthly window; agent AI unaffected');
 
  // 5. Replay, key reuse, second trial.
  assert.deepEqual(ok(await send('account/trial',{identity:ana,body:form(ana),key})),trial);
