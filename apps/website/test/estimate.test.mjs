@@ -25,7 +25,7 @@ test('the section is labelled as an estimate, not a promise', () => {
 test('the student numbers follow from the printed assumptions', () => {
   assert.match(text, /100 students at the start/);
   assert.match(text, /10 new leads a month, 3 in 10 join, 3% of students leave each month/);
-  assert.match(text, /15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2\.5% a month/);
+  assert.match(text, /With HON OS, we assume marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2\.5% a month/);
   const none = students({ start: 100, leads: 10, join: 0.3, leave: 0.03, months: 12 });
   const hon = students({ start: 100, leads: 15, join: 0.4, leave: 0.025, months: 12 });
   assert.equal(none, 100);

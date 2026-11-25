@@ -260,13 +260,13 @@
  "Marketing posts and emails": "Publicaciones y correos de marketing",
  "Belt testing preparation": "Preparación de exámenes de cinturón",
  "Total": "Total",
- "Estimate, not a promise. Example school: 100 students at the start. No CRM and no marketing: 10 new leads a month, 3 in 10 join, 3% of students leave each month, so the school stays at about 100. With HON OS: marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2.5% a month, giving about 137 after 12 months. Hours are our estimate of typical weekly office work.": "Estimación, no una promesa. Escuela de ejemplo: 100 alumnos al inicio. Sin CRM ni marketing: 10 prospectos nuevos al mes, se inscriben 3 de cada 10 y el 3% de los alumnos se va cada mes, así que la escuela se mantiene en unos 100. Con HON OS: el marketing trae 15 prospectos al mes, los recordatorios de seguimiento ayudan a que se inscriban 4 de cada 10 y las alertas de ausencia bajan las bajas al 2.5% al mes, lo que da unos 137 después de 12 meses. Las horas son nuestra estimación del trabajo de oficina semanal típico.",
  "16 h": "16 h",
  "5 h": "5 h",
  "4 h": "4 h",
- "1.5 h": "1.5 h",
+ "1.5 h": "1,5 h",
  "3 h": "3 h",
- "0.5 h": "0.5 h",
+ "0.5 h": "0,5 h",
  "1 h": "1 h",
- "2 h": "2 h"
+ "2 h": "2 h",
+ "Estimate, not a promise. Example school: 100 students at the start. No CRM and no marketing: 10 new leads a month, 3 in 10 join, 3% of students leave each month, so the school stays at about 100. With HON OS, we assume marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2.5% a month, giving about 137 after 12 months. Hours are our estimate of typical weekly office work.": "Estimación, no una promesa. Escuela de ejemplo: 100 alumnos al inicio. Sin CRM ni marketing: 10 prospectos nuevos al mes, se inscriben 3 de cada 10 y el 3 % de los alumnos se va cada mes, así que la escuela se mantiene en unos 100. Con HON OS, suponemos que el marketing trae 15 prospectos al mes, los recordatorios de seguimiento ayudan a que se inscriban 4 de cada 10 y las alertas de ausencia bajan las bajas al 2,5 % al mes, lo que da unos 137 después de 12 meses. Las horas son nuestra estimación del trabajo de oficina semanal típico."
 }

@@ -260,7 +260,6 @@
  "Marketing posts and emails": "마케팅 게시물과 이메일",
  "Belt testing preparation": "승급 심사 준비",
  "Total": "합계",
- "Estimate, not a promise. Example school: 100 students at the start. No CRM and no marketing: 10 new leads a month, 3 in 10 join, 3% of students leave each month, so the school stays at about 100. With HON OS: marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2.5% a month, giving about 137 after 12 months. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 예시 도장: 처음 수련생 100명. CRM과 마케팅 없이: 매달 새 문의 10건, 10명 중 3명 등록, 매달 수련생의 3% 이탈, 그래서 약 100명에 머뭅니다. HON OS 사용: 마케팅으로 매달 문의 15건, 후속 연락 알림으로 10명 중 4명 등록, 결석 알림으로 이탈이 매달 2.5%로 줄어 12개월 뒤 약 137명. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다.",
  "16 h": "16시간",
  "5 h": "5시간",
  "4 h": "4시간",
@@ -268,5 +267,6 @@
  "3 h": "3시간",
  "0.5 h": "0.5시간",
  "1 h": "1시간",
- "2 h": "2시간"
+ "2 h": "2시간",
+ "Estimate, not a promise. Example school: 100 students at the start. No CRM and no marketing: 10 new leads a month, 3 in 10 join, 3% of students leave each month, so the school stays at about 100. With HON OS, we assume marketing brings 15 leads a month, follow-up reminders help 4 in 10 join, and absence alerts bring leaving down to 2.5% a month, giving about 137 after 12 months. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 예시 도장: 처음 수련생 100명. CRM과 마케팅 없이: 매달 새 문의 10건, 10명 중 3명 등록, 매달 수련생의 3% 이탈, 그래서 약 100명에 머뭅니다. HON OS 사용 시 가정: 마케팅으로 매달 문의 15건, 후속 연락 알림으로 10명 중 4명 등록, 결석 알림으로 이탈이 매달 2.5%로 줄어 12개월 뒤 약 137명. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다."
 }
