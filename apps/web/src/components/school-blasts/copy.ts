@@ -17,6 +17,7 @@ export interface BlastCopy {
   picturesTitle: string; insertPicture: string; picturesHint: string; noPictures: string; picturesDenied: string; picturesUnavailable: string;
   pictureMissing: string; removePicture: string; pictureMarker: string;
   videosTitle: string; insertVideo: string; insertVideoLink: string; videosHint: string; videoLinkHint: string; noVideos: string; videoMissing: string; videoMarker: string;
+  checkoutTitle: string; insertCheckoutLink: string; checkoutHint: string; noCheckouts: string; checkoutsDenied: string; checkoutsUnavailable: string;
   saveDraft: string; close: string; problems: Record<BlastProblem, string>;
   previewTitle: string; preview: string; matched: (n: number) => string; outcomes: Record<SchoolBlastOutcome, string>; sample: (name: string) => string; nobody: string;
   savedFirst: string; sendTitle: string; sendNow: string; schedule: string; scheduleAt: string; scheduleHint: string; scheduleBad: string;
@@ -53,6 +54,10 @@ const en: BlastCopy = {
   videoLinkHint: 'Adds the link to the video’s page where your cursor is. Only videos that finished preparing can go in.',
   noVideos: 'No ready videos yet. Upload one in Marketing > Pictures for emails and wait until it has finished preparing.',
   videoMissing: 'This video is no longer ready in your library. Remove it.', videoMarker: '[Video]',
+  checkoutTitle: 'Checkout pages', insertCheckoutLink: 'Insert checkout link',
+  checkoutHint: 'Adds the link to one of your Live checkout pages where your cursor is. If the page is no longer Live when someone opens it, they see that it isn’t available.',
+  noCheckouts: 'No Live checkout pages yet. Publish one in Payments > Checkout Pages.',
+  checkoutsDenied: 'You can’t see this school’s checkout pages. Ask the owner for access to Checkout pages.', checkoutsUnavailable: 'Checkout pages could not be read right now.',
   saveDraft: 'Save draft', close: 'Close',
   problems: { name: 'Give the blast a name (up to 100 characters, one line).', subject: 'Add a subject (up to 150 characters, one line).', body: 'Write a message.',
     bodyLength: 'The message is too long.', mergeTag: 'Use only the merge tags from the Insert buttons.', groups: 'Pick at least one group.', tags: 'Tags use letters, numbers, spaces, - and _. Up to 10, no repeats.',
@@ -108,6 +113,10 @@ const ko: BlastCopy = {
   videoLinkHint: '커서 위치에 동영상 페이지 링크를 넣습니다. 준비가 끝난 동영상만 넣을 수 있습니다.',
   noVideos: '준비된 동영상이 아직 없습니다. 마케팅 > 이메일용 사진에서 올리고 준비가 끝날 때까지 기다리세요.',
   videoMissing: '이 동영상은 보관함에서 더 이상 준비된 상태가 아닙니다. 빼 주세요.', videoMarker: '[동영상]',
+  checkoutTitle: '결제 페이지', insertCheckoutLink: '결제 링크 넣기',
+  checkoutHint: '공개 중인 결제 페이지의 링크를 커서 위치에 넣습니다. 받는 사람이 열 때 페이지가 공개 중이 아니면 이용할 수 없다고 표시됩니다.',
+  noCheckouts: '공개 중인 결제 페이지가 아직 없습니다. 결제 > 결제 페이지에서 공개하세요.',
+  checkoutsDenied: '이 학교의 결제 페이지를 볼 수 없습니다. 원장에게 결제 페이지 권한을 요청하세요.', checkoutsUnavailable: '지금은 결제 페이지를 읽을 수 없습니다.',
   saveDraft: '임시 저장', close: '닫기',
   problems: { name: '이름을 입력하세요(100자 이내, 한 줄).', subject: '제목을 입력하세요(150자 이내, 한 줄).', body: '메시지를 입력하세요.',
     bodyLength: '메시지가 너무 깁니다.', mergeTag: '넣기 버튼의 병합 태그만 사용하세요.', groups: '그룹을 하나 이상 선택하세요.', tags: '태그는 문자, 숫자, 공백, -, _만 사용합니다. 최대 10개, 중복 없이.',
@@ -163,6 +172,10 @@ const es: BlastCopy = {
   videoLinkHint: 'Añade el enlace a la página del video donde está el cursor. Solo los videos ya preparados pueden ir.',
   noVideos: 'Aún no hay videos listos. Sube uno en Marketing > Imágenes para correos y espera a que termine de prepararse.',
   videoMissing: 'Este video ya no está listo en tu biblioteca. Quítalo.', videoMarker: '[Video]',
+  checkoutTitle: 'Páginas de pago', insertCheckoutLink: 'Insertar enlace de pago',
+  checkoutHint: 'Agrega el enlace a una de tus páginas de pago publicadas donde está el cursor. Si la página ya no está publicada cuando alguien la abre, verá que no está disponible.',
+  noCheckouts: 'Aún no hay páginas de pago publicadas. Publica una en Pagos > Páginas de pago.',
+  checkoutsDenied: 'No puedes ver las páginas de pago de esta escuela. Pide acceso a Páginas de pago al dueño.', checkoutsUnavailable: 'No se pudieron leer las páginas de pago en este momento.',
   saveDraft: 'Guardar borrador', close: 'Cerrar',
   problems: { name: 'Ponle un nombre (hasta 100 caracteres, una línea).', subject: 'Agrega un asunto (hasta 150 caracteres, una línea).', body: 'Escribe un mensaje.',
     bodyLength: 'El mensaje es demasiado largo.', mergeTag: 'Usa solo las etiquetas de los botones Insertar.', groups: 'Elige al menos un grupo.', tags: 'Las etiquetas usan letras, números, espacios, - y _. Hasta 10, sin repetir.',
