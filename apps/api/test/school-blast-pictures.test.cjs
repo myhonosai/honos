@@ -9,7 +9,7 @@ const { verifyEmailPictures, renderEmailWithPictures, pictureOrigin } = require(
 // packages/database/scripts/test-school-blast-pictures-integrity.mjs.
 const A = '3f0c8d0e-4b8a-4c1e-9b7a-2d6f5e4c3b2a', B = '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d', GONE = '0b1c2d3e-4f5a-4b6c-9d7e-8f9a0b1c2d3e';
 const TOKEN = 'T'.repeat(43);
-const picture = (over = {}) => ({ assetId: A, token: TOKEN, title: 'Open "house" <2026>', width: 1200, height: 800, ...over });
+const picture = (over = {}) => ({ assetId: A, kind: 'IMAGE', token: TOKEN, title: 'Open "house" <2026>', width: 1200, height: 800, ...over });
 const ORIGIN = 'https://app.example.test';
 const approved = (over = {}) => ({ SENDGRID_API_KEY: 'SG.test', HON_EMAIL_FROM: 'notices@hon.example', HON_EMAIL_SEND_APPROVED: 'true', HON_PUBLIC_ORIGIN: ORIGIN, ...over });
 const request = (over = {}) => ({

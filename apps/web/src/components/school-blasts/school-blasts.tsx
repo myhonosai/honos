@@ -6,9 +6,9 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { BlastError, blastApi, keepForRetry, type BlastApi, type BlastScope } from './http';
-import { MediaError, mediaApi, type MediaApi } from '../school-media/http';
+import { MediaError, mediaApi, videoPageLink, type MediaApi } from '../school-media/http';
 import type { BlastOutcomeKind } from './copy';
-import { blastDraftOf, blastInput, blastProblems, insertMergeTag, insertPicture, newBlastDraft, pictureIdsOf, removePicture, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
+import { blastDraftOf, blastInput, blastProblems, insertLink, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
 import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type PicturesRead, type PreviewRead, type SendAsk } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
@@ -41,11 +41,13 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi }: { api?: Blast
   // 0653: the school's ready pictures, read once a draft or blast with an email needs them.
   const [pictures, setPictures] = useState<PicturesRead>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // 0654: the video picker (email video lines, or a text's plain video link) reads the same library.
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false);
   const gen = useRef(0), privacy = useRef(0), detail = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; gen.current++; detail.current++; pending.current = null; }; }, []);
 
-  const forget = useCallback(() => { setDraft(null); setSaved(null); setSelected(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null); setPictures(null); setPickerOpen(false); }, []);
+  const forget = useCallback(() => { setDraft(null); setSaved(null); setSelected(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null); setPictures(null); setPickerOpen(false); setVideoPickerOpen(false); }, []);
   useEffect(() => onShellPrivacyEvent((event) => {
     concealShellPrivateNow(); gen.current++; privacy.current++; detail.current++; pending.current = null;
     setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setList({ state: 'LOADING' }); setPictures(null);
@@ -69,7 +71,8 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi }: { api?: Blast
     return () => { abort.abort(); };
   }, [api, orgId, schoolId, refresh]);
 
-  const needPictures = (draft?.channel === 'EMAIL') || (selected?.state === 'READY' && pictureIdsOf(selected.blast.body).length > 0);
+  const needPictures = (draft?.channel === 'EMAIL') || (!!draft && videoPickerOpen)
+    || (selected?.state === 'READY' && (pictureIdsOf(selected.blast.body).length > 0 || videoIdsOf(selected.blast.body).length > 0));
   useEffect(() => {
     if (!needPictures || pictures !== null || !orgId || !schoolId) return;
     const shown = privacy.current, scope = { organizationId: orgId, schoolId };
@@ -126,8 +129,10 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi }: { api?: Blast
     void send();
   }, [lock, orgId, schoolId, send]);
 
-  const readyIds = useMemo(() => pictures?.state === 'READY' ? new Set(pictures.assets.map(a => a.assetId)) : undefined, [pictures]);
-  const problems = useMemo(() => draft ? blastProblems(draft, readyIds) : [], [draft, readyIds]);
+  const readyIds = useMemo(() => pictures?.state === 'READY' ? new Set(pictures.assets.filter(a => a.kind === 'IMAGE').map(a => a.assetId)) : undefined, [pictures]);
+  const readyVideoIds = useMemo(() => pictures?.state === 'READY'
+    ? new Set(pictures.assets.filter(a => a.kind === 'VIDEO' && a.copyState === 'DONE').map(a => a.assetId)) : undefined, [pictures]);
+  const problems = useMemo(() => draft ? blastProblems(draft, readyIds, readyVideoIds) : [], [draft, readyIds, readyVideoIds]);
   const dirty = !!draft && (!draft.blastId || !same(draft, saved));
   const edit = useCallback((change: (d: BlastDraft) => BlastDraft) => {
     if (lock !== 'NONE') return;
@@ -145,6 +150,17 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi }: { api?: Blast
     if (lock !== 'NONE') return;
     // Opening the picker reads the library again, so pictures uploaded meanwhile appear.
     setPickerOpen((open) => { if (!open) setPictures(null); return !open; });
+  }, [lock]);
+  const onInsertVideo = useCallback((assetId: string, start: number, end: number) => {
+    edit((d) => d.channel === 'EMAIL' ? { ...d, body: insertVideo(d.body, start, end, assetId).text } : d); setVideoPickerOpen(false);
+  }, [edit]);
+  const onInsertVideoLink = useCallback((linkToken: string, start: number, end: number) => {
+    edit((d) => d.channel === 'SMS' ? { ...d, body: insertLink(d.body, start, end, videoPageLink(globalThis.location.origin, linkToken)).text } : d); setVideoPickerOpen(false);
+  }, [edit]);
+  const onRemoveVideo = useCallback((assetId: string) => edit((d) => ({ ...d, body: removeVideo(d.body, assetId) })), [edit]);
+  const onToggleVideoPicker = useCallback(() => {
+    if (lock !== 'NONE') return;
+    setVideoPickerOpen((open) => { if (!open) setPictures(null); return !open; });
   }, [lock]);
   const onNew = useCallback((channel: SchoolBlastChannel) => {
     if (lock !== 'NONE') return;
@@ -186,6 +202,7 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi }: { api?: Blast
       onPreview={onPreview} onScheduleLocal={(v) => { if (lock === 'NONE') { setScheduleLocal(v); setAsk(null); } }} onAsk={onAsk} onConfirm={onConfirm}
       onBack={() => setAsk(null)} onCancelBlast={onCancelBlast} onRefresh={() => { setRefresh((n) => n + 1); if (selected?.state === 'READY' && !dirty) load(selected.blast.blastId); }}
       onTryAgain={() => { void send(); }}
-      pictures={pictures} pickerOpen={pickerOpen} onTogglePicker={onTogglePicker} onInsertPicture={onInsertPicture} onRemovePicture={onRemovePicture}/>
+      pictures={pictures} pickerOpen={pickerOpen} onTogglePicker={onTogglePicker} onInsertPicture={onInsertPicture} onRemovePicture={onRemovePicture}
+      videoPickerOpen={videoPickerOpen} onToggleVideoPicker={onToggleVideoPicker} onInsertVideo={onInsertVideo} onInsertVideoLink={onInsertVideoLink} onRemoveVideo={onRemoveVideo}/>
   </div>;
 }

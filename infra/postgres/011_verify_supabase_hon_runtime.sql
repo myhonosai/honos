@@ -7041,3 +7041,30 @@ DO $$ DECLARE f record; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname=
   END IF;
 END $$;
 -- End blast pictures exact verification.
+-- School videos exact verification (0654)
+-- Seven runtime-only entry points, two private helpers, the copy service principal, and the combined kind check.
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.begin_school_video_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_video_upload(text,jsonb,uuid,uuid)',
+    'hon.claim_school_video_copy()','hon.finish_school_video_copy(uuid,uuid,jsonb)','hon.fail_school_video_copy(uuid,uuid,text)',
+    'hon.resolve_school_video_poster(text)','hon.resolve_school_video_page(text)'];
+  helpers text[]:=ARRAY['hon.school_video_copy_record(hon.school_media_assets,text,jsonb)','hon.school_blast_video_ids(text)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe school video entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe school video helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.principals WHERE id='00000000-0000-4000-8000-000000000654' AND principal_type='SYSTEM_SERVICE' AND user_id IS NULL)
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.school_media_assets'::regclass AND conname='school_media_assets_kind_check' AND convalidated)
+    OR has_table_privilege('hon_runtime','hon.school_media_assets','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe school video setup';
+  END IF;
+END $$;
+-- End school videos exact verification.
