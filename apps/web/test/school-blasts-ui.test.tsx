@@ -125,7 +125,7 @@ it('the composer: merge tag buttons, groups, a save that waits for changes, and 
   expect(fresh).toContain('data-group="ACTIVE_STUDENTS"'); expect(fresh).toMatch(/disabled=""[^>]*data-action="save"/); expect(fresh).not.toContain('data-testid="blast-send"');
   expect(fresh).toContain('agreed to hear from you');
   const text = renderToStaticMarkup(<SchoolBlastsView {...props({ draft: newBlastDraft('SMS'), dirty: true })} />);
-  expect(text).not.toContain('data-field="subject"'); expect(text).toContain('Pictures and video are coming later');
+  expect(text).not.toContain('data-field="subject"'); expect(text).toContain('without pictures');
   const unsaved = renderToStaticMarkup(<SchoolBlastsView {...props({ draft, dirty: true })} />);
   expect(unsaved).toContain('Save your changes before you send'); expect(unsaved).toMatch(/disabled=""[^>]*data-action="preview"/); expect(unsaved).not.toContain('data-action="send-now"');
   const checked = renderToStaticMarkup(<SchoolBlastsView {...props({ draft, preview: { state: 'READY', preview: preview() as never } })} />);

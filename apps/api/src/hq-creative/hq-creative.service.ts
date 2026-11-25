@@ -1,43 +1,24 @@
 import { BadRequestException, ConflictException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import {
-  CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_GENERATION_LIMITS, saasUuid, validateHqCreativeBudgetInput, validateHqCreativeBudgetReceipt,
+  CREATIVE_GENERATION_LIMITS, saasUuid, validateHqCreativeBudgetInput, validateHqCreativeBudgetReceipt,
   validateHqCreativeGeneration, validateHqCreativeGenerationInput, validateHqCreativeGenerationReceipt, validateHqCreativeResolveInput,
   validateHqCreativeStudio, validateHqCreativeStudioRecords,
   type HqCreativeGeneration, type HqCreativeGenerationReceipt, type HqCreativeStudio,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
-import {
-  CREATIVE_PROVIDER_RUNTIME, CreativeProviderRuntimeError, type CreativeProviderRoute, type CreativeProviderRuntime, type CreativeResult,
-} from '../creative-studio/creative-provider-runtime.js';
+import { CREATIVE_PROVIDER_RUNTIME, type CreativeProviderRoute, type CreativeProviderRuntime } from '../creative-studio/creative-provider-runtime.js';
+import { thrownOutcome, unknownOutcome, verifiedOutcome, type CreativeOutcome } from '../creative-studio/creative-outcome.js';
 
 function parse<T>(work: () => T): T {
   try { return work(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); }
 }
 
-/** What the database records for a provider outcome (0253 record_hq_creative_generation_result, same shape as 0216). */
-type Outcome = {
-  outcome: 'SUCCEEDED' | 'FAILED' | 'NOT_SENT' | 'UNKNOWN'; finalUnits: number | null; providerCostMicrounits: number | null;
-  failureReason: string | null; assets: CreativeResult['assets'] | null;
-};
-const unknown = (failureReason: 'PROVIDER_UNKNOWN' | 'UNVERIFIED_RESULT' | 'INTERRUPTED'): Outcome =>
-  ({ outcome: 'UNKNOWN', finalUnits: null, providerCostMicrounits: null, failureReason, assets: null });
-const REFERENCE = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}$/;
-const int = (v: unknown, min: number, max: number): v is number => Number.isSafeInteger(v) && (v as number) >= min && (v as number) <= max;
-
-/** A provider result is trusted only if it fits the reservation exactly; anything else is held UNDER_REVIEW for the HQ owner. */
-function verified(result: CreativeResult, g: HqCreativeGeneration): Outcome {
-  const assets = result?.assets;
-  const types: readonly string[] = CREATIVE_ASSET_MEDIA_TYPES[g.mediaKind];
-  const ok = result && int(result.finalUnits, 1, g.units) && int(result.providerCostMicrounits, 0, 999_999_999_999_999) && Array.isArray(assets)
-    && assets.length >= 1 && assets.length <= (g.mediaKind === 'VIDEO' ? 1 : CREATIVE_GENERATION_LIMITS.maxAssets)
-    && assets.every(a => a && Object.keys(a).sort().join(',') === 'durationSeconds,height,mediaType,providerAssetReference,width'
-      && types.includes(a.mediaType) && int(a.width, 1, 8192) && int(a.height, 1, 8192)
-      && (g.mediaKind === 'IMAGE' ? a.durationSeconds === null : int(a.durationSeconds, 1, 600))
-      && typeof a.providerAssetReference === 'string' && REFERENCE.test(a.providerAssetReference));
-  if (!ok) return unknown('UNVERIFIED_RESULT');
-  return { outcome: 'SUCCEEDED', finalUnits: result.finalUnits, providerCostMicrounits: result.providerCostMicrounits, failureReason: null,
-    assets: assets.map(a => ({ mediaType: a.mediaType, width: a.width, height: a.height, durationSeconds: a.durationSeconds, providerAssetReference: a.providerAssetReference })) };
-}
+/**
+ * What the database records for a provider outcome (0253 record_hq_creative_generation_result, same shape as 0216). The
+ * school studio's verification is reused, so the cost basis (0637) travels with every cost and 0651 stores it.
+ */
+type Outcome = CreativeOutcome;
+const unknown = unknownOutcome;
 
 /**
  * M2 HQ Creative Studio. HQ authority, the HQ credit cap, the platform creative pause, idempotency and immutability live in
@@ -109,18 +90,9 @@ export class HqCreativeService {
     try {
       const result = await this.provider.generate({ ...route, providerRequestId: g.generationId, operationCode: g.operationCode, mediaKind: g.mediaKind,
         units: g.units, format: g.format, prompt: g.prompt });
-      return verified(result, g);
+      return verifiedOutcome(result, g);
     } catch (error) {
-      if (error instanceof CreativeProviderRuntimeError && error.outcome === 'PRE_SEND') {
-        return { outcome: 'NOT_SENT', finalUnits: null, providerCostMicrounits: null, assets: null,
-          failureReason: error.reason === 'INVALID_REQUEST' ? 'INVALID_REQUEST' : 'PROVIDER_NOT_CONNECTED' };
-      }
-      if (error instanceof CreativeProviderRuntimeError && error.outcome === 'FAILED') {
-        const cost = error.providerCostMicrounits;
-        return { outcome: 'FAILED', finalUnits: null, assets: null, failureReason: 'PROVIDER_REJECTED',
-          providerCostMicrounits: int(cost, 0, 999_999_999_999_999) ? cost : null };
-      }
-      return unknown('PROVIDER_UNKNOWN');
+      return thrownOutcome(error);
     }
   }
 

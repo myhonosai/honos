@@ -71,6 +71,10 @@ const idle=page=>page.waitForFunction(()=>document.querySelector('[data-zernio-w
 const shield=page=>page.getByRole('heading',{name:translate('en','zernio.concealed'),exact:true});
 const restore=page=>page.getByRole('button',{name:translate('en','zernio.restore'),exact:true}).click();
 async function concealed(page){await shield(page).waitFor();assert.equal(await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).count(),0);assert.equal(await page.getByText(translate('en','zernio.VALID'),{exact:true}).count(),0);}
+// A confirmed session end retires the whole HQ shell (#607): the workbench unmounts and only the sign-in prompt remains.
+// Getting the configuration back needs a fresh page load, which makes one new protected read.
+async function retired(page){await page.getByRole('heading',{name:'Sign in to verify HQ access.',exact:true}).waitFor();assert.equal(await page.locator('[data-zernio-workbench]').count(),0);assert.equal(await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).count(),0);assert.equal(await page.getByText(translate('en','zernio.VALID'),{exact:true}).count(),0);}
+async function reopen(page,s){const before=s.reads;await page.goto(origin+'/hq/integrations/zernio');await page.locator('[data-zernio-workbench]').waitFor();await idle(page);await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();assert.equal(s.reads,before+1);}
 async function languageCall(page,save=false){return page.evaluate(async({module,save})=>{const http=await import(module);try{if(save)await http.updateMyLanguage({language:'ko',expectedVersion:1},crypto.randomUUID());else await http.loadMyLanguage();return 'success';}catch{return 'denied';}}, {module:actualLanguage,save});}
 async function capture(page,name){
   await page.evaluate(()=>document.fonts.ready);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.addScriptTag({content:axe});
@@ -89,25 +93,25 @@ try{
       await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await page.getByRole('heading',{name:translate(language,'zernio.concealed'),exact:true}).waitFor();await idle(page);await capture(page,`${language}-${size}-zernio-concealed`);
     }finally{await context.close();}
   });
-  for(const save of [false,true])await check(`real language ${save?'save':'GET'} 401 immediately conceals READY and requires explicit authorized restoration`,async()=>{
+  for(const save of [false,true])await check(`real language ${save?'save':'GET'} 401 immediately retires READY and requires a fresh authorized page load`,async()=>{
     const {page,context,s}=await open();try{
-      const reads=s.reads;s.languageStatus=401;assert.equal(await languageCall(page,save),'denied');await concealed(page);await idle(page);assert.equal(s.reads,reads);
-      await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(s.reads,reads);s.configurationStatus=401;await restore(page);await idle(page);await concealed(page);
-      s.languageStatus=200;s.configurationStatus=200;assert.equal(await languageCall(page),'success');await concealed(page);const before=s.reads;await restore(page);await idle(page);assert.equal(s.reads,before+1);assert.equal(s.verifies,0);
-      await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();
+      const reads=s.reads;s.languageStatus=401;assert.equal(await languageCall(page,save),'denied');await retired(page);assert.equal(s.reads,reads);
+      await page.evaluate(()=>window.dispatchEvent(new Event('focus')));assert.equal(s.reads,reads);
+      s.languageStatus=200;assert.equal(await languageCall(page),'success');await retired(page);assert.equal(s.reads,reads);
+      await reopen(page,s);assert.equal(s.verifies,0);
     }finally{await context.close();}
   });
-  await check('LOADING + language 401 cancels/invalidate reads, ignores late successful response and settles without reload',async()=>{
+  await check('LOADING + language 401 cancels/invalidates reads, ignores late successful response, and needs a fresh page load',async()=>{
     const {page,context,s}=await open();try{
       // Deliberately ignore AbortSignal at the fixture transport boundary to prove the epoch guard too.
       await page.evaluate(()=>{const original=window.fetch;window.fetch=(input,options)=>original(input,String(input).includes('/hq/integrations/zernio/configuration')?{...options,signal:undefined}:options);});
       s.hold=true;await page.getByRole('button',{name:translate('en','zernio.refresh'),exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-zernio-workbench]')?.getAttribute('data-zernio-busy')==='true');
-      s.languageStatus=401;await languageCall(page);await concealed(page);assert(await page.getByRole('button',{name:translate('en','zernio.restore'),exact:true}).isDisabled());
-      assert.equal(s.held.length,1);s.hold=false;s.held.splice(0).forEach(release=>release());await idle(page);await concealed(page);s.languageStatus=200;
-      await restore(page);await idle(page);await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();assert.equal(s.verifies,0);
+      s.languageStatus=401;await languageCall(page);await retired(page);
+      assert.equal(s.held.length,1);s.hold=false;s.held.splice(0).forEach(release=>release());await page.evaluate(()=>new Promise(done=>setTimeout(done,300)));await retired(page);s.languageStatus=200;
+      await reopen(page,s);assert.equal(s.verifies,0);
     }finally{s.held.splice(0).forEach(release=>release());await context.close();}
   });
-  await check('own HON 401 clears mounted receipt and broadcasts; HON 403 remains local; provider rejection does not invalidate',async()=>{
+  await check('own HON 401 retires the mounted receipt and broadcasts; HON 403 remains local; provider rejection does not invalidate',async()=>{
     const {page,context,s}=await open();try{
       await page.evaluate(()=>{window.__invalidations=0;window.addEventListener('hon:session-invalidated',()=>++window.__invalidations);});
       s.languageStatus=403;await languageCall(page);await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.__invalidations),0);
@@ -115,14 +119,16 @@ try{
       s.enabled=true;await page.getByRole('button',{name:translate('en','zernio.refresh'),exact:true}).click();await idle(page);
       await page.locator('[data-zernio-workbench] input[type=checkbox]').check();await page.getByRole('button',{name:translate('en','zernio.verify'),exact:true}).click();await idle(page);await page.getByText(translate('en','zernio.VALID'),{exact:true}).waitFor();
       s.providerStatus='REJECTED';await page.locator('[data-zernio-workbench] input[type=checkbox]').check();await page.getByRole('button',{name:translate('en','zernio.verify'),exact:true}).click();await idle(page);await page.getByText(translate('en','zernio.REJECTED'),{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.__invalidations),0);
-      s.verifyStatus=401;await page.locator('[data-zernio-workbench] input[type=checkbox]').check();await page.getByRole('button',{name:translate('en','zernio.verify'),exact:true}).click();await idle(page);await concealed(page);assert.equal(await page.evaluate(()=>window.__invalidations),1);
-      s.verifyStatus=200;await restore(page);await idle(page);s.configurationStatus=403;await page.getByRole('button',{name:translate('en','zernio.refresh'),exact:true}).click();await idle(page);assert.equal(await page.evaluate(()=>window.__invalidations),1);
+      s.verifyStatus=401;await page.locator('[data-zernio-workbench] input[type=checkbox]').check();await page.getByRole('button',{name:translate('en','zernio.verify'),exact:true}).click();await retired(page);assert.equal(await page.evaluate(()=>window.__invalidations),1);
+      s.verifyStatus=200;await reopen(page,s);await page.evaluate(()=>{window.__invalidations=0;window.addEventListener('hon:session-invalidated',()=>++window.__invalidations);});
+      s.configurationStatus=403;await page.getByRole('button',{name:translate('en','zernio.refresh'),exact:true}).click();await idle(page);assert.equal(await page.evaluate(()=>window.__invalidations),0);
       await page.locator('[data-zernio-workbench] [role=alert]').waitFor();await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await concealed(page);assert.equal(await page.locator('[data-zernio-workbench] [role=alert]').count(),0);
     }finally{await context.close();}
   });
   for(const event of ['blur','pagehide','hidden','hon:session-invalidated','hon:school-context-changed'])await check(`${event}: mounted privacy clearing and explicit restoration only`,async()=>{
     const {page,context,s}=await open();try{
       const reads=s.reads;await page.evaluate(event=>{if(event==='hidden'){Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));}else window.dispatchEvent(new Event(event));},event);
+      if(event==='hon:session-invalidated'){await retired(page);assert.equal(s.reads,reads);assert.equal(s.verifies,0);await reopen(page,s);return;}
       await concealed(page);await idle(page);assert.equal(s.reads,reads);assert.equal(s.verifies,0);
       if(event==='hidden')await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'}));
       await restore(page);await idle(page);assert.equal(s.reads,reads+1);await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();

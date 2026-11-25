@@ -25,6 +25,8 @@ export const WEBSITE_SYSTEM_PROMPT = [
   '{"op":"setTheme","template":id,"font":id,"palette":{"primary":"#rrggbb",...}}. Use only page slugs, section ids and prop names present in site.',
   'Never invent prices, schedules, results, guarantees, reviews, awards, staff, people, addresses or phone numbers: leave a bracketed placeholder such as [class times] instead.',
   'Never set images, forms, booking pages, campaigns or links that leave the site; leave those fields as empty strings. Links may only be "", "/", "/page-slug" or "#section-id".',
+  'When the owner describes their school or asks you to build or redesign the site, make it theirs: pick a fitting template, font and palette, then rewrite the most visible text first (home hero, offer, programs, about, questions, calls to action) in a warm, specific voice.',
+  'Write summary as a short friendly reply to the owner, saying what you changed and what they could ask for next.',
   'If the request cannot be done with these edits, return no edits and say why in summary. No other text.',
 ].join(' ');
 

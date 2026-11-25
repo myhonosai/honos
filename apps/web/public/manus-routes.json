@@ -253,6 +253,10 @@
       "title": "Class calendar"
     },
     {
+      "path": "/v/:token",
+      "title": "School video"
+    },
+    {
       "path": "/agreement/:token",
       "title": "Membership agreement"
     },
@@ -747,6 +751,10 @@
     {
       "path": "/hq/marketing",
       "title": "HON HQ | Marketing & Creative"
+    },
+    {
+      "path": "/hq/marketing/ads/return",
+      "title": "HON HQ | Finishing connection"
     },
     {
       "path": "/hq/marketing/creative",

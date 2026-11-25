@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { naturalSpeech, type AgentNaturalVoiceApi, type AgentVoiceScope, type ClipPlayer } from './agent-natural-voice';
 import { browserRecognition, browserSpeech, detectHonVoiceSupport, honAgentVoice, onDeviceSpeech, speakableText, type HonVoiceLang, type RecognitionAdapter, type SpeechAdapter } from './hon-voice';
 import styles from './hon-command.module.css';
 
 /**
  * A microphone and a read-aloud button for one AI teammate's own panel (owner ask 2026-11-22: voice for every agent). Browser
- * speech only, as in the HON panel (V1): the browser turns one spoken sentence into the panel's text box, where the person can
- * still edit it before pressing the panel's own button; and the teammate's answer can be read aloud in that teammate's voice.
+ * speech recognition, as in the HON panel (V1): the browser turns one spoken sentence into the panel's text box, where the person can
+ * still edit it before pressing the panel's own button; and the teammate's answer can be read aloud in that teammate's voice:
+ * its own Gemini voice when the server allows it for this person and school (0652), else the browser's voice.
  * Voice never presses a button, applies, approves or sends anything.
  */
 export function appendHeard(current: string, heard: string, max: number): string {
@@ -18,18 +20,24 @@ export function appendHeard(current: string, heard: string, max: number): string
 }
 
 type Recognizer = RecognitionAdapter;
-export type AgentVoiceDeps = { recognition: Recognizer | null; speech: SpeechAdapter | null };
+export type AgentVoiceDeps = { recognition: Recognizer | null; speech: SpeechAdapter | null; natural?: { api?: AgentNaturalVoiceApi; play?: ClipPlayer } };
 const browserDeps = (): AgentVoiceDeps => {
   if (typeof window === 'undefined') return { recognition: null, speech: null };
   const found = detectHonVoiceSupport(window as never);
   return { recognition: found.recognition ? browserRecognition(window as never) : null, speech: found.synthesis ? browserSpeech(window as never) : null };
 };
 
-export function AgentVoiceBar({ agentKey, name, value, max, onChange, answer = null, voiceChoice = 1, lang = 'en-US', deps }: {
+export function AgentVoiceBar({ agentKey, name, value, max, onChange, answer = null, voiceChoice = 1, lang = 'en-US', deps, scope }: {
   agentKey: string; name: string; value: string; max: number; onChange: (next: string) => void;
-  answer?: string | null; voiceChoice?: number; lang?: HonVoiceLang; deps?: AgentVoiceDeps;
+  answer?: string | null; voiceChoice?: number; lang?: HonVoiceLang; deps?: AgentVoiceDeps; scope?: AgentVoiceScope;
 }): React.ReactElement | null {
-  const [tools, setTools] = useState<AgentVoiceDeps | null>(deps ?? null);
+  const [found, setTools] = useState<AgentVoiceDeps | null>(deps ?? null);
+  // With a school, the answer is read in the teammate's natural voice when allowed; the browser voice is the fallback.
+  const orgId = scope?.organizationId, schoolId = scope?.schoolId;
+  const tools = useMemo<AgentVoiceDeps | null>(() => {
+    if (!found?.speech || !orgId || !schoolId || typeof window === 'undefined') return found;
+    return { ...found, speech: naturalSpeech(found.speech, { organizationId: orgId, schoolId }, found.natural ?? {}) };
+  }, [found, orgId, schoolId]);
   const [state, setState] = useState<'IDLE' | 'LISTENING' | 'SPEAKING' | 'BLOCKED'>('IDLE');
   const [heard, setHeard] = useState('');
   // Like the HON panel: when the browser can recognise speech on this device, audio stays on the device.

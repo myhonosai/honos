@@ -6,9 +6,11 @@ import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { BlastError, blastApi, keepForRetry, type BlastApi, type BlastScope } from './http';
+import { MediaError, mediaApi, videoPageLink, type MediaApi } from '../school-media/http';
+import { CheckoutError, checkoutApi, type CheckoutApi } from '../school-checkout/http';
 import type { BlastOutcomeKind } from './copy';
-import { blastDraftOf, blastInput, blastProblems, insertMergeTag, newBlastDraft, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
-import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type PreviewRead, type SendAsk } from './view';
+import { blastDraftOf, blastInput, blastProblems, checkoutPageLink, insertLink, liveCheckoutLinks, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
+import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type CheckoutsRead, type PicturesRead, type PreviewRead, type SendAsk } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
 type Pending = Readonly<{ key: string; scope: BlastScope } & (
@@ -22,7 +24,7 @@ const same = (a: BlastDraft | null, b: BlastDraft | null) => JSON.stringify(a) =
  * draft, check its audience and send it now or schedule it. The draft stays in memory until saved; a school change or
  * session end drops it. Every command answer is followed by a fresh list read.
  */
-export function SchoolBlasts({ api = blastApi }: { api?: BlastApi }): React.ReactElement {
+export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = checkoutApi }: { api?: BlastApi; media?: Pick<MediaApi, 'library'>; checkout?: Pick<CheckoutApi, 'pages' | 'links'> }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -37,14 +39,22 @@ export function SchoolBlasts({ api = blastApi }: { api?: BlastApi }): React.Reac
   const [outcome, setOutcome] = useState<BlastOutcome>(null);
   const [lock, setLock] = useState<Lock>('NONE');
   const [refresh, setRefresh] = useState(0);
+  // 0653: the school's ready pictures, read once a draft or blast with an email needs them.
+  const [pictures, setPictures] = useState<PicturesRead>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // 0654: the video picker (email video lines, or a text's plain video link) reads the same library.
+  const [videoPickerOpen, setVideoPickerOpen] = useState(false);
+  // BL2: the school's Live checkout pages and their share links, read each time the picker opens.
+  const [checkouts, setCheckouts] = useState<CheckoutsRead>(null);
+  const [checkoutPickerOpen, setCheckoutPickerOpen] = useState(false);
   const gen = useRef(0), privacy = useRef(0), detail = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; gen.current++; detail.current++; pending.current = null; }; }, []);
 
-  const forget = useCallback(() => { setDraft(null); setSaved(null); setSelected(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null); }, []);
+  const forget = useCallback(() => { setDraft(null); setSaved(null); setSelected(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null); setPictures(null); setPickerOpen(false); setVideoPickerOpen(false); }, []);
   useEffect(() => onShellPrivacyEvent((event) => {
     concealShellPrivateNow(); gen.current++; privacy.current++; detail.current++; pending.current = null;
-    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setList({ state: 'LOADING' });
+    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setList({ state: 'LOADING' }); setPictures(null);
     if (event.type === HON_SESSION_INVALIDATED_EVENT || event.type === HON_SCHOOL_CONTEXT_CHANGED_EVENT) forget();
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), [forget]);
 
@@ -64,6 +74,29 @@ export function SchoolBlasts({ api = blastApi }: { api?: BlastApi }): React.Reac
       (error) => { if (owned() && !abort.signal.aborted) setList({ state: readState(error) }); });
     return () => { abort.abort(); };
   }, [api, orgId, schoolId, refresh]);
+
+  const needPictures = (draft?.channel === 'EMAIL') || (!!draft && videoPickerOpen)
+    || (selected?.state === 'READY' && (pictureIdsOf(selected.blast.body).length > 0 || videoIdsOf(selected.blast.body).length > 0));
+  useEffect(() => {
+    if (!needPictures || pictures !== null || !orgId || !schoolId) return;
+    const shown = privacy.current, scope = { organizationId: orgId, schoolId };
+    const owned = () => mounted.current && shown === privacy.current;
+    setPictures({ state: 'LOADING' });
+    media.library(scope, AbortSignal.timeout(15000), owned).then((library) => { if (owned()) setPictures({ state: 'READY', assets: library.assets.filter(a => a.state === 'READY') }); },
+      (error) => { if (owned()) setPictures({ state: error instanceof MediaError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+  }, [needPictures, pictures, media, orgId, schoolId]);
+
+  useEffect(() => {
+    if (!draft || !checkoutPickerOpen || checkouts !== null || !orgId || !schoolId) return;
+    const shown = privacy.current, scope = { organizationId: orgId, schoolId }, language = preferences.language;
+    const owned = () => mounted.current && shown === privacy.current;
+    setCheckouts({ state: 'LOADING' });
+    const signal = AbortSignal.timeout(15000);
+    Promise.all([checkout.pages(scope, signal, owned), checkout.links(scope, signal, owned)]).then(([read, issued]) => {
+      if (!owned()) return;
+      setCheckouts({ state: 'READY', pages: liveCheckoutLinks(read, issued, language) });
+    }, (error) => { if (owned()) setCheckouts({ state: error instanceof CheckoutError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
+  }, [draft, checkoutPickerOpen, checkouts, checkout, orgId, schoolId, preferences.language]);
 
   /** Shows one blast: a draft opens in the composer, a sent or cancelled one opens read-only. */
   const show = useCallback((blast: SchoolBlast) => {
@@ -112,7 +145,10 @@ export function SchoolBlasts({ api = blastApi }: { api?: BlastApi }): React.Reac
     void send();
   }, [lock, orgId, schoolId, send]);
 
-  const problems = useMemo(() => draft ? blastProblems(draft) : [], [draft]);
+  const readyIds = useMemo(() => pictures?.state === 'READY' ? new Set(pictures.assets.filter(a => a.kind === 'IMAGE').map(a => a.assetId)) : undefined, [pictures]);
+  const readyVideoIds = useMemo(() => pictures?.state === 'READY'
+    ? new Set(pictures.assets.filter(a => a.kind === 'VIDEO' && a.copyState === 'DONE').map(a => a.assetId)) : undefined, [pictures]);
+  const problems = useMemo(() => draft ? blastProblems(draft, readyIds, readyVideoIds) : [], [draft, readyIds, readyVideoIds]);
   const dirty = !!draft && (!draft.blastId || !same(draft, saved));
   const edit = useCallback((change: (d: BlastDraft) => BlastDraft) => {
     if (lock !== 'NONE') return;
@@ -122,6 +158,34 @@ export function SchoolBlasts({ api = blastApi }: { api?: BlastApi }): React.Reac
   const onToggleGroup = useCallback((g: SchoolBlastAudienceGroup) => edit((d) => ({ ...d, groups: d.groups.includes(g) ? d.groups.filter(x => x !== g) : [...d.groups, g] })), [edit]);
   const onInsert = useCallback((target: 'subject' | 'body', field: SchoolBlastMergeField, start: number, end: number) =>
     edit((d) => ({ ...d, [target]: insertMergeTag(d[target], start, end, field).text })), [edit]);
+  const onInsertPicture = useCallback((assetId: string, start: number, end: number) => {
+    edit((d) => d.channel === 'EMAIL' ? { ...d, body: insertPicture(d.body, start, end, assetId).text } : d); setPickerOpen(false);
+  }, [edit]);
+  const onRemovePicture = useCallback((assetId: string) => edit((d) => ({ ...d, body: removePicture(d.body, assetId) })), [edit]);
+  const onTogglePicker = useCallback(() => {
+    if (lock !== 'NONE') return;
+    // Opening the picker reads the library again, so pictures uploaded meanwhile appear.
+    setPickerOpen((open) => { if (!open) setPictures(null); return !open; });
+  }, [lock]);
+  const onInsertVideo = useCallback((assetId: string, start: number, end: number) => {
+    edit((d) => d.channel === 'EMAIL' ? { ...d, body: insertVideo(d.body, start, end, assetId).text } : d); setVideoPickerOpen(false);
+  }, [edit]);
+  const onInsertVideoLink = useCallback((linkToken: string, start: number, end: number) => {
+    edit((d) => d.channel === 'SMS' ? { ...d, body: insertLink(d.body, start, end, videoPageLink(globalThis.location.origin, linkToken)).text } : d); setVideoPickerOpen(false);
+  }, [edit]);
+  const onRemoveVideo = useCallback((assetId: string) => edit((d) => ({ ...d, body: removeVideo(d.body, assetId) })), [edit]);
+  const onToggleVideoPicker = useCallback(() => {
+    if (lock !== 'NONE') return;
+    setVideoPickerOpen((open) => { if (!open) setPictures(null); return !open; });
+  }, [lock]);
+  const onInsertCheckoutLink = useCallback((publicId: string, start: number, end: number) => {
+    edit((d) => ({ ...d, body: insertLink(d.body, start, end, checkoutPageLink(globalThis.location.origin, publicId)).text })); setCheckoutPickerOpen(false);
+  }, [edit]);
+  const onToggleCheckoutPicker = useCallback(() => {
+    if (lock !== 'NONE') return;
+    // Opening the picker reads the pages again, so a page published meanwhile appears.
+    setCheckoutPickerOpen((open) => { if (!open) setCheckouts(null); return !open; });
+  }, [lock]);
   const onNew = useCallback((channel: SchoolBlastChannel) => {
     if (lock !== 'NONE') return;
     detail.current++; setSelected(null); setDraft(newBlastDraft(channel)); setSaved(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null);
@@ -161,6 +225,9 @@ export function SchoolBlasts({ api = blastApi }: { api?: BlastApi }): React.Reac
       onNew={onNew} onOpen={onOpen} onEdit={onEdit} onToggleGroup={onToggleGroup} onInsert={onInsert} onSave={onSave} onClose={onClose}
       onPreview={onPreview} onScheduleLocal={(v) => { if (lock === 'NONE') { setScheduleLocal(v); setAsk(null); } }} onAsk={onAsk} onConfirm={onConfirm}
       onBack={() => setAsk(null)} onCancelBlast={onCancelBlast} onRefresh={() => { setRefresh((n) => n + 1); if (selected?.state === 'READY' && !dirty) load(selected.blast.blastId); }}
-      onTryAgain={() => { void send(); }}/>
+      onTryAgain={() => { void send(); }}
+      pictures={pictures} pickerOpen={pickerOpen} onTogglePicker={onTogglePicker} onInsertPicture={onInsertPicture} onRemovePicture={onRemovePicture}
+      videoPickerOpen={videoPickerOpen} onToggleVideoPicker={onToggleVideoPicker} onInsertVideo={onInsertVideo} onInsertVideoLink={onInsertVideoLink} onRemoveVideo={onRemoveVideo}
+      checkouts={checkouts} checkoutPickerOpen={checkoutPickerOpen} onToggleCheckoutPicker={onToggleCheckoutPicker} onInsertCheckoutLink={onInsertCheckoutLink}/>
   </div>;
 }

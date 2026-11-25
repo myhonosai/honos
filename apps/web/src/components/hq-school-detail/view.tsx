@@ -8,7 +8,7 @@ export type SchoolDetailState =
   | { state: 'LOADING' } | { state: 'DENIED' } | { state: 'GONE' } | { state: 'INVALID' } | { state: 'UNAVAILABLE' }
   | { state: 'READY'; view: HqSchoolDetail };
 export type SchoolDetailViewProps = Readonly<{ language: string; formattingLocale: string; concealed: boolean; state: SchoolDetailState; busy: boolean;
-  onRefresh: () => void; onReveal: () => void; health?: React.ReactNode }>;
+  onRefresh: () => void; onReveal: () => void; health?: React.ReactNode; plan?: React.ReactNode }>;
 
 const STATUS = new Set(['ACTIVE', 'SUSPENDED', 'ARCHIVED']);
 const tone = (status: string) => status === 'PAID_ACCESS' || status === 'PROVISIONED_ACCESS' || status === 'EXCEPTION_IN_EFFECT' ? 'ready'
@@ -48,6 +48,7 @@ export function HqSchoolDetailView(props: SchoolDetailViewProps): React.ReactEle
       <span className={styles.status} data-tone={v.school.schoolStatus === 'ACTIVE' ? 'ready' : 'blocked'}>{status(v.school.schoolStatus)}</span></div>
       <Facts rows={[[t('slug'), v.school.slug], [t('timezone'), v.school.timezone], [t('schoolStatus'), status(v.school.schoolStatus)], [t('created'), `${date(v.school.createdAt)} UTC`]]}/>
     </article>
+    {props.plan}
 
     <article className={styles.card} aria-labelledby="hq-sd-access"><div className={styles.cardHead}><h2 id="hq-sd-access">{t('sectionAccess')}</h2>
       <span className={styles.status} data-tone={tone(org.accessStatus)}>{accessText(language, org.accessStatus)}</span></div>

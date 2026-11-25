@@ -14,8 +14,11 @@ export interface ParentPushDeviceReceipt { device: { deviceId: string; platform:
 export interface ParentPushUnregisterReceipt { unregistered: boolean }
 /** Whether the school's server sends notifications at all. The app asks for permission only when it does. */
 export interface ParentPushStatus { sending: boolean }
-/** What the notification carries, in data: never a name, a body or a family. */
-export interface ParentPushData { type: 'school_announcement'; announcementId: string }
+/**
+ * What the notification carries, in data: never a name, a body or a family. 0658: a staff reply in parent app messages
+ * that staff chose to send as a phone alert carries only its thread.
+ */
+export type ParentPushData = { type: 'school_announcement'; announcementId: string } | { type: 'school_message'; threadId: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function invalid(): never { throw new Error('Invalid parent push data.'); }
@@ -57,6 +60,11 @@ export function verifyParentPushStatus(value: unknown): ParentPushStatus {
 /** The app accepts a notification tap only in this exact shape. */
 export function readParentPushData(value: unknown): ParentPushData | null {
   try {
+    const type = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).type : undefined;
+    if (type === 'school_message') {
+      const row = record(value, ['type', 'threadId']);
+      return typeof row.threadId === 'string' && UUID.test(row.threadId) ? { type: 'school_message', threadId: row.threadId } : null;
+    }
     const row = record(value, ['type', 'announcementId']);
     if (row.type !== 'school_announcement' || typeof row.announcementId !== 'string' || !UUID.test(row.announcementId)) return null;
     return { type: 'school_announcement', announcementId: row.announcementId };
