@@ -177,6 +177,10 @@
       "title": "HON | Social accounts"
     },
     {
+      "path": "/staff/marketing/social/posts",
+      "title": "HON | Posts"
+    },
+    {
       "path": "/staff/marketing/social/return",
       "title": "HON | Finishing connection"
     },
@@ -191,6 +195,14 @@
     {
       "path": "/sites/:slug/:page",
       "title": "School website"
+    },
+    {
+      "path": "/sites/:slug/privacy",
+      "title": "School privacy policy"
+    },
+    {
+      "path": "/sites/:slug/terms",
+      "title": "School terms of use"
     },
     {
       "path": "/staff/creative-studio",

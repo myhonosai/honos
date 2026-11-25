@@ -33,16 +33,19 @@ describe('HQ Modern foundation', () => {
     const snapshot = renderToStaticMarkup(<CompanySnapshot/>);
     expect(snapshot).toContain('2 organizations');
     expect(snapshot).toContain('>3</strong>');
-    expect(snapshot).toContain('Unavailable');
+    expect(snapshot).not.toMatch(/MRR|>Unavailable<\/span>/);
     const attention = renderToStaticMarkup(<NeedsAttention/>);
-    for (const text of ['Pending approvals', 'Support escalations', 'Failed operations', 'Owner decisions', 'No pending count is assumed']) expect(attention).toContain(text);
+    for (const text of ['Pending approvals', 'Support escalations', 'Failed operations', 'Owner decisions', 'open each list to check it']) expect(attention).toContain(text);
+    expect(attention).not.toContain('Unavailable');
     expect(attention).not.toMatch(/\b(0 pending|all clear|resolved|completed)\b/i);
   });
 
   it('renders the approved dashboard with named executive workspace links and no claimed AI work', () => {
     const html = renderToStaticMarkup(<HqModernDashboard/>);
     for (const executive of HQ_EXECUTIVES) expect(html).toContain(`href="/hq/executives/${executive.executiveKey}"`);
-    for (const text of ['HON', 'Needs Your Attention', 'Company at a glance', 'Growth &amp; Referrals', 'No recorded work', 'Conversation unavailable']) expect(html).toContain(text);
+    for (const text of ['HON', 'Needs Your Attention', 'Company at a glance', 'Growth &amp; Referrals', 'Press the arrow to open HON', 'You approve anything important.']) expect(html).toContain(text);
+    // Empty tiles are shortcuts, never a dash or an Unavailable badge; no policy jargon on the home page.
+    expect(html).not.toMatch(/>—<|>Unavailable<\/span>|Shared Action Engine|Read-only|Verified platform facts|Commercial programs/);
     expect(html).not.toMatch(/\$[\d,]+|Working|Your AI team is on it|Ideal Martial Arts/);
     // The original command stage leads: HON with the six executives around it, then verified counts and program status.
     const order = ['id="hq-team-title"', 'aria-label="Company performance overview"', 'id="hq-commercial-title"', 'id="hq-attention-title"'].map((marker) => html.indexOf(marker));
@@ -50,12 +53,15 @@ describe('HQ Modern foundation', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it('provides no sending or microphone activation when the services are unavailable', () => {
+  it('the home composer never sends: with no text the arrow is off, and the arrow only opens the real HON panel', () => {
     const html = renderToStaticMarkup(<HonComposer context="Overview"/>);
-    expect(html).toContain('Unsent message draft');
-    expect(html).toContain('not sent or saved');
-    expect(html).toMatch(/disabled="" aria-label="Send unavailable/);
-    expect(html).toContain('Microphone off');
+    expect(html).toContain('Message HON');
+    expect(html).toMatch(/<button type="submit" disabled="" aria-label="Continue with HON"/);
+    expect(html).not.toMatch(/Microphone|Talk to HON/);
+    const source = readFileSync('src/components/hq-modern/assistant.tsx', 'utf8');
+    // No fetch or ask in the composer; the drawer hosts the real HQ Ask HON panel for agent "hon".
+    expect(source.slice(0, source.indexOf('export function HonAssistant'))).not.toMatch(/fetch|hqHonApi|\.ask\(/);
+    expect(source).toContain('<HqHonPanel agentKey="hon" name="HON" compact initialQuestion={draft}/>');
   });
 
   it('renders explicit planned states for every missing module and never grants business actions', () => {
@@ -63,7 +69,7 @@ describe('HQ Modern foundation', () => {
       const html = renderToStaticMarkup(<HqPlannedPage pagePath={path}/>);
       expect(html).toContain('Planned');
       expect(html).toContain('Unavailable');
-      expect(html).toContain('No service is called');
+      expect(html).toContain('Nothing here does anything yet');
     }
     expect(Object.keys(HQ_PLANNED)).not.toContain('/hq/growth/contests');
   });

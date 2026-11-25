@@ -11,6 +11,7 @@ test('every hon.ai_text_kinds usage_agent in the migrations is a contracts AI us
       for (const row of m[1].matchAll(/\(([^()]*)\)/g)) found.push([file, row[1].split(',').map((x) => x.trim().replace(/^'|'$/g, '')).at(-1)]);
     }
   }
+  assert.ok(found.some(([f]) => f.startsWith('0641_')), 'the Marcus review kind is covered');
   assert.ok(found.some(([f, a]) => f.startsWith('0594_') && a === 'PAPER_READING'), 'the paper import kind is covered');
   for (const [file, agent] of found) assert.ok(AI_USAGE_AGENTS.includes(agent), `${file}: ${agent}`);
 });
