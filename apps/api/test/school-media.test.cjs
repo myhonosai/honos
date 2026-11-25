@@ -214,7 +214,7 @@ test('uploads store nothing while media storage is off, and refuse non-human or 
 test('an upload stores the cleaned bytes under the database key and only then confirms it', async () => {
   const stored = [];
   const storage = MediaStorage.withSettings({ baseUrl: 'https://example.supabase.co', key: 'k'.repeat(40), bucket: 'hon-media' }, async (url, init) => { stored.push({ url, body: init.body }); return new Response('{}'); });
-  const pending = { assetId: ASSET, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 1, width: 2, height: 2, state: 'PENDING', version: 1, linkToken: null,
+  const pending = { assetId: ASSET, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 1, width: 2, height: 2, state: 'PENDING', version: 1, linkToken: null, copyState: null, durationMs: null,
     createdAt: '2026-11-22T10:00:00.000Z', readyAt: null, updatedAt: '2026-11-22T10:00:00.000Z' };
   const image = png(2, 2);
   const { media, calls } = service({ storage, answers: [{ ...pending, objectKey: `media/${ASSET}` }, { ...pending, state: 'READY', version: 2, linkToken: TOKEN, readyAt: '2026-11-22T10:00:01.000Z' }] });
@@ -242,7 +242,7 @@ test('an upload stores the cleaned bytes under the database key and only then co
 test('a picture deleted while its bytes were being stored has its file removed again, not left in the bucket', async () => {
   const requests = [];
   const storage = MediaStorage.withSettings({ baseUrl: 'https://example.supabase.co', key: 'k'.repeat(40), bucket: 'hon-media' }, async (url, init) => { requests.push({ url, method: init.method, body: init.body }); return new Response('{}'); });
-  const pending = { assetId: ASSET, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 1, width: 2, height: 2, state: 'PENDING', version: 1, linkToken: null,
+  const pending = { assetId: ASSET, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 1, width: 2, height: 2, state: 'PENDING', version: 1, linkToken: null, copyState: null, durationMs: null,
     createdAt: '2026-11-22T10:00:00.000Z', readyAt: null, updatedAt: '2026-11-22T10:00:00.000Z' };
   const notPending = Object.assign(new Error('MEDIA_NOT_PENDING'), { code: '55000' });
   const { media, calls } = service({ storage, answers: [{ ...pending, objectKey: `media/${ASSET}` }, notPending, { assetId: ASSET, state: 'REMOVED' }] });

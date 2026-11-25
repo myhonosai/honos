@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from './ui/text';
 import { createNavigationContainerRef, NavigationContainer, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -12,6 +12,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { ScheduleScreen, SignInScreen } from './screens/OtherTabs';
 import { EianScreen } from './eian/EianScreen';
 import { EianVoiceContext, type EianVoice } from './eian/voice';
+import { createNaturalEianVoice, type ClipPlayer } from './eian/natural-voice';
 import { MoreScreen, type Area as MoreArea } from './more/MoreScreen';
 import { MessagesScreen } from './messages/MessagesScreen';
 import { MessageAlertOpenedContext } from './messages/opened-alert';
@@ -39,9 +40,11 @@ export interface ParentAppProps {
   push?: PhonePush | null;
   /** Eian's voice from the phone; without it Eian is text only. */
   voice?: EianVoice | null;
+  /** Plays Eian's natural voice clips; without it the phone's own voice reads every answer. */
+  clipPlayer?: ClipPlayer | null;
 }
 
-export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi, push, voice = null }: ParentAppProps) {
+export function ParentApp({ api, session, now = () => new Date(), version = '0.1.0', onSignIn, newKey = missingKeySource, sampleApi, push, voice = null, clipPlayer = null }: ParentAppProps) {
   const [sample, setSample] = useState<ParentApi | null>(null);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   useEffect(() => {
@@ -63,8 +66,15 @@ export function ParentApp({ api, session, now = () => new Date(), version = '0.1
   const [opened, setOpened] = useState<{ count: number; tab: 'Home' | 'Messages' }>({ count: 0, tab: 'Home' });
   useEffect(() => (signedIn && push ? push.onOpenAlert(alert => setOpened(o => ({ count: o.count + 1, tab: alert === 'message' ? 'Messages' : 'Home' }))) : undefined), [signedIn, push]);
 
+  // Eian's natural voice sits in front of the phone's own voice and talks to whichever family is on screen (the sample
+  // family's API never reaches the speech service). Signed out, every request is refused and the phone's voice reads.
+  const current = useRef<ParentApi>(api);
+  current.current = sample ?? api;
+  const eianVoice = useMemo(() => (voice && clipPlayer
+    ? createNaturalEianVoice({ api: () => current.current, phone: voice, player: clipPlayer, newKey: () => latest.current.newKey() }) : voice), [voice, clipPlayer]);
+
   return (
-    <EianVoiceContext.Provider value={voice}>
+    <EianVoiceContext.Provider value={eianVoice}>
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } }}>
       {token === undefined ? <Loading label="Starting HON" />
         : sample ? (

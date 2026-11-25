@@ -78,6 +78,11 @@ const HEX = /^#[0-9a-f]{6}$/;
 export const WEBSITE_SLUG = /^[a-z0-9](?:[a-z0-9-]{1,46}[a-z0-9])$/;
 export const WEBSITE_PAGE_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export const WEBSITE_SECTION_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+/** Pages HON adds to every published school site (privacy policy and terms); an owner page cannot take these addresses. */
+export const WEBSITE_BUILT_IN_PAGE_SLUGS = ['privacy', 'terms'] as const;
+export function websiteBuiltInPageSlug(slug: unknown): boolean {
+  return typeof slug === 'string' && (WEBSITE_BUILT_IN_PAGE_SLUGS as readonly string[]).includes(slug);
+}
 export const WEBSITE_RESERVED_SLUGS = ['admin', 'api', 'app', 'hq', 'hon', 'staff', 'www', 'sites', 'static', 'assets', 'login', 'auth', 'support', 'help', 'mail', 'test'] as const;
 const HTTPS = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9\-._~%!$&'()*+,;=:@/]*)?(?:\?[A-Za-z0-9\-._~%!$&'()*+,;=:@/?]*)?(?:#[A-Za-z0-9\-._~%!$&'()*+,;=:@/?]*)?$/;
 const PUBLIC_ID = /^[a-f0-9]{48}$/;
@@ -200,14 +205,24 @@ function siteName(value: unknown): string {
   if (!fieldOk(line(120), value) || !(value as string).trim() || (value as string).trim() !== value) throw new Error('VALIDATION_FAILED');
   return value as string;
 }
+/**
+ * A document an owner saves: the full document rules plus no page at a built-in address. Enforced here (API input) only;
+ * the 0361 database rule does not know these addresses, so a site published earlier with such a page still reads and the
+ * built-in page takes that address.
+ */
+function ownerDocument(value: unknown): WebsiteDocument {
+  const doc = validateWebsiteDocument(value);
+  if (doc.pages.some(page => websiteBuiltInPageSlug(page.slug))) throw new Error('VALIDATION_FAILED');
+  return doc;
+}
 export function validateCreateSchoolWebsiteInput(value: unknown): CreateSchoolWebsiteInput {
   const v = closedInput(value, ['publicSlug', 'name', 'document']);
   if (!websiteSlugOk(v.publicSlug)) throw new Error('VALIDATION_FAILED');
-  return { publicSlug: v.publicSlug, name: siteName(v.name), document: validateWebsiteDocument(v.document) };
+  return { publicSlug: v.publicSlug, name: siteName(v.name), document: ownerDocument(v.document) };
 }
 export function validateSaveSchoolWebsiteDraftInput(value: unknown): SaveSchoolWebsiteDraftInput {
   const v = closedInput(value, ['expectedRevision', 'name', 'document']);
-  return { expectedRevision: revision(v.expectedRevision), name: siteName(v.name), document: validateWebsiteDocument(v.document) };
+  return { expectedRevision: revision(v.expectedRevision), name: siteName(v.name), document: ownerDocument(v.document) };
 }
 export function validatePublishSchoolWebsiteInput(value: unknown): PublishSchoolWebsiteInput {
   const v = closedInput(value, ['expectedRevision', 'note']);

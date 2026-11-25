@@ -9,3 +9,6 @@ dist/
 .secrets/
 !.env.example
 coverage/
+
+# 0654 video tools fetched at build time (.github/scripts/install-video-tools.sh)
+apps/api/.video-tools/

@@ -38,7 +38,7 @@ function mount() {
   const render = () => { hooks.frame = frame; frame.cursor = 0; const tree = HqAiProviderControl() as Element; frame.effects.splice(0).forEach((e) => e()); return tree; };
   return { render };
 }
-const providerForm = (tree: Element) => elements(tree).find((e) => e.type === 'form' && text(e).includes('Save connection metadata'))!;
+const providerForm = (tree: Element) => elements(tree).find((e) => e.type === 'form' && text(e).includes('Secret reference ID'))!;
 const uncertain = (tree: Element) => elements(tree).find((e) => typeof e.type === 'function' && (e.type as { name?: string }).name === 'UncertainNotice' && text(e) === '' && e.props.state?.kind === 'uncertain');
 const submit = (form: Element) => form.props.onSubmit({ preventDefault() {} });
 const posts = (f: ReturnType<typeof vi.fn>) => f.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST') as [string, RequestInit][];
@@ -106,7 +106,7 @@ it('a session end retires the registry, the forms and any held save; late answer
   (window as unknown as EventTarget).dispatchEvent(new Event(HON_SESSION_INVALIDATED_EVENT));
   tree = page.render();
   expect(text(tree)).not.toContain('REGISTERED');
-  expect(text(tree)).toContain('Sign in to verify a human HQ session');
+  expect(text(tree)).toContain('Sign in to see AI providers.');
   late(json({ data: { recordId: 'OPENROUTER', version: 2, replayed: true } })); await settle(); tree = page.render();
   expect(text(tree)).not.toContain('REGISTERED');
   expect(posts(f)).toHaveLength(2);

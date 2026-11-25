@@ -10,6 +10,8 @@ import { localize, markLanguage } from './i18n.mjs';
 import { loadPosts, blogPages } from './blog.mjs';
 import { legalPages } from './legal.mjs';
 import { siteOrigin, seoHead, urlPath, robotsTxt, sitemapXml } from './seo.mjs';
+import { pageGraph, llmsTxt } from './structured.mjs';
+import { STRINGS } from './blog.mjs';
 
 export const LANGUAGES = ['ko', 'es'];
 
@@ -74,21 +76,29 @@ export function buildSite({ outDir = join(root, 'dist'), env = process.env } = {
     homes[lang] = fill(localize(english, dict, lang), `${lang}/index.html`).replaceAll('href="/blog/"', `href="/${lang}/blog/"`);
   }
   const pages = [];
-  for (const [lang, html] of Object.entries(homes)) pages.push({ file: lang === 'en' ? 'index.html' : `${lang}/index.html`, html, lang, home: true });
+  for (const [lang, html] of Object.entries(homes)) pages.push({ file: lang === 'en' ? 'index.html' : `${lang}/index.html`, html, kind: 'home' });
   const posts = loadPosts(join(root, 'src', 'blog', 'posts'));
-  for (const { file, html } of blogPages({ posts, homes, app })) pages.push({ file, html });
-  for (const { file, html } of legalPages({ dir: join(root, 'src', 'legal'), home: homes.en })) pages.push({ file, html });
+  for (const p of blogPages({ posts, homes, app })) pages.push(p);
+  const legal = legalPages({ dir: join(root, 'src', 'legal'), home: homes.en });
+  for (const { file, html } of legal) pages.push({ file, html, kind: 'legal' });
   const sitemap = [];
-  for (const { file, html, home = false } of pages) {
+  for (const { file, html, kind, post } of pages) {
     const path = urlPath(file);
     const lang = html.match(/<html lang="([a-z]+)">/)?.[1] ?? 'en';
     const alternates = Object.fromEntries([...html.matchAll(/<link rel="alternate" hreflang="([a-z]{2})" href="([^"]+)">/g)].map((m) => [m[1], m[2]]));
-    sitemap.push({ path, alternates: Object.keys(alternates).length > 1 ? alternates : undefined });
+    sitemap.push({ path, lastmod: post?.date, alternates: Object.keys(alternates).length > 1 ? alternates : undefined });
     mkdirSync(dirname(join(out, file)), { recursive: true });
-    writeFileSync(join(out, file), seoHead(html, { origin, path, lang, home }));
+    const graph = pageGraph({ kind, origin, path, lang, html, post, homeName: 'HON OS', blogName: STRINGS[lang]?.blog ?? 'Blog' });
+    writeFileSync(join(out, file), seoHead(html, { origin, path, lang, graph }));
   }
   writeFileSync(join(out, 'robots.txt'), robotsTxt({ origin, indexable }));
   writeFileSync(join(out, 'sitemap.xml'), sitemapXml({ origin, pages: sitemap }));
+  const legalDocs = legal.map(({ file, html }) => ({
+    slug: file.split('/')[0],
+    title: html.match(/<h1>([^<]+)<\/h1>/)[1],
+    description: html.match(/<meta name="description" content="([^"]*)"/)[1],
+  }));
+  writeFileSync(join(out, 'llms.txt'), llmsTxt({ origin, app, homeHtml: homes.en, posts: posts.map((p) => ({ slug: p.slug, ...p.byLang.en })), legal: legalDocs }));
   return { outDir: out, app, origin, robots, posts: posts.map((p) => p.slug) };
 }
 

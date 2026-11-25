@@ -172,7 +172,7 @@ try {
     for (const [name, viewport] of [['creative-desktop', { width: 1280, height: 900 }], ['creative-mobile', { width: 390, height: 844 }]]) {
       const s = await open(name, viewport, f => { f.store = store({ provider: 'NOT_CONNECTED' }); }); await ready(s);
       const text = await s.page.locator(ROOT).innerText();
-      for (const expected of [t('providerOff'), t('budgetSeparate'), t('requestsOff'), 'Founder 50 poster', t('UNDER_REVIEW'), '2 synthetic test result(s)']) assert(text.includes(expected), expected);
+      for (const expected of [t('providerOff'), t('budgetSeparate'), t('requestsOff'), 'Founder 50 poster', t('UNDER_REVIEW'), '2 test result(s)']) assert(text.includes(expected), expected);
       assert(await s.page.getByRole('button', { name: t('submitRequest'), exact: true }).isDisabled(), 'no request can be sent without a provider');
       assert.equal(s.f.reads[0], '/v1/hq/marketing/creative');
       await capture(s, name, ROOT); await s.context.close();
