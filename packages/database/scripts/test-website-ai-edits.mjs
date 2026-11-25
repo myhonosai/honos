@@ -91,7 +91,7 @@ try {
   }
   const entry = ['begin_school_website_ai_edit', 'school_website_ai_edit_planning_reference', 'prepare_school_website_ai_edit', 'fail_school_website_ai_edit', 'record_school_website_ai_edit', 'read_school_website_ai_edits', 'close_school_website_ai_edit', 'read_school_website_ai_price'];
   const fns = await rows("SELECT p.oid, p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE 'ai_text_%' OR p.proname LIKE '%website_ai%' OR p.proname='guard_ai_text_proposals')");
-  assert.equal(fns.length, 24); // 0670 adds three private creative helpers and the runtime price read
+  assert.equal(fns.length, 24); // 0690 adds three private creative helpers and the runtime price read
   for (const f of fns) {
     assert.equal((await row("SELECT has_function_privilege($1,$2::oid,'EXECUTE') ok", [runtimeRole, f.oid])).ok, entry.includes(f.proname), f.proname);
     assert.equal((await row("SELECT coalesce(bool_or(a.grantee=0),false) pub FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=$1", [f.oid])).pub, false, f.proname);
@@ -99,7 +99,7 @@ try {
   const kind = await row("SELECT * FROM hon.ai_text_kinds WHERE kind='WEBSITE_EDIT'");
   assert.deepEqual([kind.agent_key, kind.task_class, kind.input_budget, kind.output_budget, Number(kind.max_cost_microunits), kind.caller, kind.usage_agent], ['marcus', 'DRAFT_MARKETING', 16000, 4000, 150000, 'HUMAN_UI', 'WEBSITE_EDIT']);
   await assert.rejects(admin.query("UPDATE hon.ai_text_kinds SET output_budget=8000 WHERE kind='WEBSITE_EDIT'"));
-  pass('custody: forced deny-all RLS on both tables, runtime executes exactly eight entry points (0670 adds the price read), nothing to PUBLIC, the WEBSITE_EDIT kind is fixed');
+  pass('custody: forced deny-all RLS on both tables, runtime executes exactly eight entry points (0690 adds the price read), nothing to PUBLIC, the WEBSITE_EDIT kind is fixed');
 
   await admin.query('BEGIN');
   await admin.query("INSERT INTO hon.hq_ai_provider_connections(provider_id,display_name,state,credential_secret_ref) VALUES('OPENROUTER','WB5 synthetic route','HEALTHY',$1)", [`hon-secret:${K()}`]);

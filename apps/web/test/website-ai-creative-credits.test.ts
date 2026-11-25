@@ -4,7 +4,7 @@ import { websiteAiApi } from '../src/components/school-website/ai-http';
 import { websiteAiText } from '../src/components/school-website/ai-copy';
 import { studioWallet } from '../src/components/creative-studio/model';
 
-// 0670: AI website edits are paid from creative credits when the school can use them, otherwise from included AI.
+// 0690: AI website edits are paid from creative credits when the school can use them, otherwise from included AI.
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const ORG = '11111111-1111-4111-8111-111111111111', SCHOOL = '22222222-2222-4222-8222-222222222222';
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

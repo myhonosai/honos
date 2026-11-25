@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0670: AI website edits are paid from the school's creative credits (CW1 wallet, 0202), never from the included AI team
+-- 0690: AI website edits are paid from the school's creative credits (CW1 wallet, 0202), never from the included AI team
 -- allowance. Owner decision 2026-11-24 (card "Charge AI website building to the school's creative credits?" -> Yes),
 -- applying the owner's 2026-11-12 rule (docs/hon/INCLUDED_AI_AND_FAIR_USE.md): heavy work such as website building
 -- reserves through the creative wallet at HQ-configurable rates and is never billed as an included conversation.
@@ -105,7 +105,7 @@ BEGIN
       OR coalesce(jsonb_typeof(item->'creditsPerUnit'), '') <> 'number' OR (item->>'creditsPerUnit') !~ '^[1-9][0-9]{0,6}$' OR (item->>'creditsPerUnit')::integer > 1000000
       OR coalesce(jsonb_typeof(item->'maxUnitsPerRequest'), '') <> 'number' OR (item->>'maxUnitsPerRequest') !~ '^[1-9][0-9]{0,3}$' OR (item->>'maxUnitsPerRequest')::integer > 1000
       OR coalesce(jsonb_typeof(item->'costEvidenceId'), '') NOT IN ('string','null')
-      -- 0670: a website rate is per REQUEST, one unit per request, and always provisional.
+      -- 0690: a website rate is per REQUEST, one unit per request, and always provisional.
       OR (item->>'mediaKind' = 'WEBSITE' AND NOT (item->>'billingUnit' = 'REQUEST' AND (item->>'maxUnitsPerRequest')::integer = 1
         AND jsonb_typeof(item->'costEvidenceId') = 'null')) THEN
       RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
@@ -295,7 +295,7 @@ CREATE TRIGGER zz_ai_text_creative_settle AFTER UPDATE OF status ON hon.ai_text_
 
 -- ---------- the shared core (0550 bodies plus the creative-billed branch) ----------
 -- The final claim before a provider call. The organization budget lock is the FIRST lock (0194 order), then the row.
--- 0670: ai.budget always comes before the creative wallet; wallet-holding paths never take ai.budget.
+-- 0690: ai.budget always comes before the creative wallet; wallet-holding paths never take ai.budget.
 CREATE OR REPLACE FUNCTION hon.ai_text_prepare(p_id uuid, p_requested_by uuid, p_plan uuid, p_ready boolean, p_block text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
 DECLARE budget_locked boolean := hon.ai_budget_lock(hon.current_organization_id());
@@ -335,11 +335,11 @@ BEGIN
   END IF;
   -- S4: pause, access and the school's own AI limit (decided here so the row says why), then the organization budget.
   IF why IS NULL AND hon.ai_spend_allowed(i.organization_id,i.school_id,clock_timestamp(),'AGENT_INFERENCE') IS NOT NULL THEN why := 'AI_SPEND_STOPPED'; END IF;
-  -- 0670: a request that pays with creative credits never spends or checks the included AI allowance.
+  -- 0690: a request that pays with creative credits never spends or checks the included AI allowance.
   IF why IS NULL AND NOT creative AND hon.ai_org_committed_credits(i.organization_id,clock_timestamp())+p.customer_credit_estimate>hon.ai_org_ceiling(i.organization_id,clock_timestamp()) THEN
     why := 'CUSTOMER_BUDGET_EXCEEDED';
   END IF;
-  -- 0670: a creative-paid edit whose API died after prepare stays SENDING and would block every later edit. Before the
+  -- 0690: a creative-paid edit whose API died after prepare stays SENDING and would block every later edit. Before the
   -- wallet lock (record takes the row, then the wallet), time out this school's aged creative-paid SENDING proposals
   -- exactly as 0550 does on re-prepare; the settle trigger moves each reservation to OUTCOME_UNKNOWN for the HQ CW1 queue.
   IF why IS NULL AND creative THEN
@@ -363,7 +363,7 @@ BEGIN
     'inputBudget',p.input_budget,'outputBudget',p.output_budget,'maxCostMicrounits',p.max_provider_cost_microunits);
 END $$;
 
--- Evidence first (S4-a): exactly one ledger row for a SENDING proposal with a plan, then the result (0550 body). 0670: a
+-- Evidence first (S4-a): exactly one ledger row for a SENDING proposal with a plan, then the result (0550 body). 0690: a
 -- creative-paid request (an open reservation link) records 0 customer credits; its budget is the plan's token and cost limits, and its creative
 -- reservation is settled by the status trigger.
 CREATE OR REPLACE FUNCTION hon.ai_text_record(p_id uuid, p_requested_by uuid, p_usage jsonb, p_result jsonb, p_problems jsonb)

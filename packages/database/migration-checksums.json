@@ -398,6 +398,6 @@
     "0637_creative_cost_basis.sql": "757d2a2d5cc37a46ec6a549b458e8d54796a46d6c1983b5fe1bf37d8b6d8197e",
     "0638_eian_natural_voice.sql": "2e2bead154d457670f92d225f44d0049b0d03e11ec86f996ed5e465bc162680d",
     "0660_website_starter_art.sql": "26fe9c89a8d32379f32e3c579a1b29375579f46ba8c2e1fb5b71fb4d3be248d3",
-    "0670_website_ai_creative_credits.sql": "a0ec95d28129014364c83d37fc11fdc176f9d6c7839eaa377134722d1f4a0dc8"
+    "0690_website_ai_creative_credits.sql": "ad5a2752eac16cd5ead5e27c6cb95153922b72955421d6d503cd22f8c040e6d6"
   }
 }

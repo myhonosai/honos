@@ -67,7 +67,7 @@ export const websiteAiApi = {
     if (answer.status !== 200) throw websiteAiErrorFor(answer.status, codeOf(answer.value));
     return checked(() => verifyWebsiteAiEditList(data(answer.value)));
   },
-  /** 0670: what the next edit is paid with (creative credits at the HQ rate, or included AI). A read; nothing is reserved. */
+  /** 0690: what the next edit is paid with (creative credits at the HQ rate, or included AI). A read; nothing is reserved. */
   async price(scope: WebsiteScope, signal: AbortSignal, owned: Owned): Promise<WebsiteAiPrice> {
     let answer: { status: number; value: unknown };
     try { answer = await exchange(websiteBase(scope) + '/ai-edits/price', signal, owned); }

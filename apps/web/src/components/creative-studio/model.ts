@@ -21,7 +21,7 @@ export type StudioState =
 export const STUDIO_HISTORY_LIMIT = 12;
 
 type WalletRate = NonNullable<SaasCreativeSchoolWallet['rates']>['rates'][number];
-/** Website rates (0670) pay for AI website edits only; the image and video studio never offers them. */
+/** Website rates (0690) pay for AI website edits only; the image and video studio never offers them. */
 const isMediaRate = (rate: WalletRate): rate is WalletRate & { mediaKind: 'IMAGE' | 'VIDEO' } => rate.mediaKind !== 'WEBSITE';
 
 export function studioWallet(data: SaasCreativeSchoolWallet): StudioWallet {

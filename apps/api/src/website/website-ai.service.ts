@@ -57,7 +57,7 @@ export class WebsiteAiService {
   list(context: SchoolWebsiteContext): Promise<WebsiteAiEditView[]> {
     return this.tx(context, false, async c => verifyWebsiteAiEditList((await c.query<{ data: unknown }>('SELECT hon.read_school_website_ai_edits($1,NULL) data', [context.externalSubject])).rows[0]?.data));
   }
-  /** 0670: what the next edit is paid with (creative credits at the HQ rate, or included AI); nothing is reserved. */
+  /** 0690: what the next edit is paid with (creative credits at the HQ rate, or included AI); nothing is reserved. */
   price(context: SchoolWebsiteContext): Promise<WebsiteAiPrice> {
     return this.tx(context, false, async c => verifyWebsiteAiPrice((await c.query<{ data: unknown }>('SELECT hon.read_school_website_ai_price($1) data', [context.externalSubject])).rows[0]?.data));
   }

@@ -11,7 +11,7 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
 import { saasUuid } from './saas-billing.js';
 
 export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP';
-/** WEBSITE (0670): AI website edits, one REQUEST each, always PROVISIONAL; never a Creative Studio generation. */
+/** WEBSITE (0690): AI website edits, one REQUEST each, always PROVISIONAL; never a Creative Studio generation. */
 export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO' | 'WEBSITE';
 export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
 export type SaasCreativeRateBasis = 'PROVISIONAL' | 'VERIFIED_COST';
@@ -20,7 +20,7 @@ export type SaasCreativeEligibilityReason = 'PROGRAM_INACTIVE' | 'SCHOOL_NOT_ACT
   | 'HON_OS_SUBSCRIPTION_REQUIRED' | 'SUBSCRIPTION_NOT_IN_SERVICE' | 'VERIFIED_PAYMENT_REQUIRED' | 'WINDOW_UNAVAILABLE' | 'WINDOW_NOT_PAID';
 const LOT_KINDS: readonly SaasCreativeLotKind[] = ['INCLUDED_MONTHLY','PROMOTIONAL','ADJUSTMENT','PURCHASED_TOPUP'];
 const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO','WEBSITE'];
-/** Whether a rate's unit, per-request cap and basis fit its kind, exactly as the database checks it (0202, 0670). */
+/** Whether a rate's unit, per-request cap and basis fit its kind, exactly as the database checks it (0202, 0690). */
 export function saasCreativeRateFitsKind(kind: unknown, unit: unknown, maxUnits: unknown, basis: unknown): boolean {
   if (kind === 'IMAGE') return unit === 'IMAGE' || unit === 'REQUEST';
   if (kind === 'VIDEO') return unit === 'IMAGE' || unit === 'VIDEO_SECOND' || unit === 'REQUEST';

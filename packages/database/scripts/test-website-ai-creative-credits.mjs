@@ -2,7 +2,7 @@ import pg from 'pg';
 import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, verifyChampionsProofConnection } from './champions-proof-target.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-// 0670: AI website edits paid from the school's creative credits (CW1 wallet, 0202) when the school can use them, and from
+// 0690: AI website edits paid from the school's creative credits (CW1 wallet, 0202) when the school can use them, and from
 // included AI exactly as in 0550 when it cannot (trial and unpaid schools, the program off, no published rate). Real
 // database, restricted runtime role, the real API services and a counted in-process fake provider (fetch is refused).
 // DISPOSABLE DATABASE ONLY, TEST MODE, SIMULATED payments. Each check runs on its own so one failure never hides another.
@@ -59,7 +59,7 @@ const ask = async (k, text = 'Make the welcome warmer', patch = {}) => ai.reques
 const balance = async (k) => row("SELECT (b->>'availableCredits')::int available, (b->>'heldCredits')::int held FROM hon.saas_creative_balance_json($1, clock_timestamp()) b", [S[k]]);
 const linkOf = (id) => row('SELECT x.* FROM hon.ai_text_creative_reservations c JOIN hon.saas_creative_reservations x ON x.id=c.reservation_id WHERE c.proposal_id=$1', [id]);
 const usageOf = (id) => rows('SELECT customer_credits::int c, provider_cost_microunits::bigint cost, spend_class, modality FROM hon.ai_usage_ledger WHERE source_invocation_id=$1', [id]);
-const pause = (action, organizationId, spendClass) => admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3) r', [H('owner'), JSON.stringify({ action, organizationId, spendClass, reason: 'Fixture emergency pause for the 0670 proof' }), K()]);
+const pause = (action, organizationId, spendClass) => admin.query('SELECT hon.command_ai_spend_pause($1,$2::jsonb,$3) r', [H('owner'), JSON.stringify({ action, organizationId, spendClass, reason: 'Fixture emergency pause for the 0690 proof' }), K()]);
 const results = [];
 async function check(id, title, fn) {
   try { await fn(); results.push([id, 'PASS', title]); console.log(`PASS ${id}: ${title}`); }
@@ -353,10 +353,10 @@ try {
     assert.equal((await linkOf(lost.id)).status, 'OUTCOME_UNKNOWN', 'a late answer does not settle a timed-out edit');
   });
 
-  await check('W13', 'the 011 exact verification for 0670 and the shared 0550 core passes on this database', async () => {
+  await check('W13', 'the 011 exact verification for 0690 and the shared 0550 core passes on this database', async () => {
     const fs = await import('node:fs/promises');
     const sql = await fs.readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    for (const marker of ['-- Shared AI text proposals exact verification (0550)', '-- AI website edits on creative credits exact verification (0670)']) {
+    for (const marker of ['-- Shared AI text proposals exact verification (0550)', '-- AI website edits on creative credits exact verification (0690)']) {
       const start = sql.indexOf(marker); assert(start >= 0, marker);
       const block = sql.slice(sql.indexOf('DO $$', start), sql.indexOf('END $$;', start) + 'END $$;'.length);
       await admin.query(block.replaceAll("'hon_runtime'", `'${CHAMPIONS_RUNTIME_ROLE}'`));
@@ -367,6 +367,6 @@ try {
   await database.onModuleDestroy?.().catch?.(() => {});
 }
 const failed = results.filter((r) => r[1] === 'FAIL');
-console.log(`0670 website AI edits on creative credits: ${results.length - failed.length}/${results.length} checks passed, ${fake.calls} fake provider calls, ${networkCalls} network calls`);
+console.log(`0690 website AI edits on creative credits: ${results.length - failed.length}/${results.length} checks passed, ${fake.calls} fake provider calls, ${networkCalls} network calls`);
 if (failed.length || networkCalls) process.exit(1);
 process.exit(0);

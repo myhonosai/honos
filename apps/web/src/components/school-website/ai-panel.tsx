@@ -52,7 +52,7 @@ export function WebsiteAiPanel(p: WebsiteAiPanelProps): React.ReactElement {
     return () => abort.abort();
   }, [api, p.scope, reload]);
 
-  // 0670: what the next message costs, refreshed after each one. Unknown stays unshown (the server still decides).
+  // 0690: what the next message costs, refreshed after each one. Unknown stays unshown (the server still decides).
   useEffect(() => {
     const abort = new AbortController();
     api.price(p.scope, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), () => mounted.current)

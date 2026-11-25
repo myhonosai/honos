@@ -18,7 +18,7 @@ const formatTime = (locale: string, iso: string) => new Intl.DateTimeFormat(loca
 const formatMonth = (locale: string, day: string) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', year: 'numeric', month: 'long' }).format(new Date(`${day}T00:00:00.000Z`));
 const n = (locale: string, v: number) => new Intl.NumberFormat(locale).format(v);
 type HqRate = HqCreativeStudio['rates'][number];
-/** Website rates (0670) pay for school AI website edits only; HQ Creative makes images and video. */
+/** Website rates (0690) pay for school AI website edits only; HQ Creative makes images and video. */
 const mediaRates = (rates: readonly HqRate[]) => rates.filter((r): r is HqRate & { mediaKind: 'IMAGE' | 'VIDEO' } => r.mediaKind !== 'WEBSITE');
 const tone = (s: HqCreativeGeneration['status']) => s === 'SUCCEEDED' ? 'ready' : s === 'GENERATING' || s === 'UNDER_REVIEW' ? 'waiting' : s === 'RESOLVED_CHARGED' ? 'ready' : 'blocked';
 

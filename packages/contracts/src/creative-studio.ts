@@ -8,7 +8,7 @@ import { championsDrift as drift, championsExactKeys as exactKeys, championsInva
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
 import { validateSaasCreativeBalance, type SaasCreativeBalance } from './saas-creative-wallet.js';
 
-/** The media a generation makes: image or video (website edits bill the wallet but are never generations, 0670). */
+/** The media a generation makes: image or video (website edits bill the wallet but are never generations, 0690). */
 export type CreativeMediaKind = 'IMAGE' | 'VIDEO';
 
 export const CREATIVE_GENERATION_FORMATS = ['SQUARE', 'PORTRAIT', 'LANDSCAPE'] as const;

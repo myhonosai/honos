@@ -22,7 +22,7 @@ export class SchoolWebsiteAiController {
     const context = await this.context(r, o, s, '');
     return { data: await this.suggestions.list(context), meta: this.meta(context) };
   }
-  /** 0670: declared before ':id'. What the next edit costs; the database re-proves the same access as asking. */
+  /** 0690: declared before ':id'. What the next edit costs; the database re-proves the same access as asking. */
   @Get('price') @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer') @UseGuards(SchoolWebsiteReadHumanUiGuard)
   async price(@Param('organizationId', new ParseUUIDPipe()) o: string, @Param('schoolId', new ParseUUIDPipe()) s: string, @Headers('idempotency-key') k: string | undefined, @Req() r: HonRequest) {
     if (k !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });

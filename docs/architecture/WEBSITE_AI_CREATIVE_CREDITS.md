@@ -1,4 +1,4 @@
-# AI website edits on creative credits (0670)
+# AI website edits on creative credits (0690)
 
 Owner decisions:
 - 2026-11-24 04:23Z, card "Charge AI website building to the school's creative credits?" was answered **Yes**. This applies the 2026-11-12 rule in `docs/hon/INCLUDED_AI_AND_FAIR_USE.md`.

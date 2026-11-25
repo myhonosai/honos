@@ -5267,11 +5267,11 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
--- 0670 AI website edits on creative credits: two private tables (the billing registry and the proposal-to-reservation link),
+-- 0690 AI website edits on creative credits: two private tables (the billing registry and the proposal-to-reservation link),
 -- private helpers (the CW1 block above already revokes every creative function), one runtime read of the website price.
 -- The replaced shared AI text functions and CW1 functions keep the grants set in their own sections above.
 DO $$ DECLARE r text; t text; f text; BEGIN
-  IF to_regprocedure('hon.read_school_website_ai_price(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0670 first'; END IF;
+  IF to_regprocedure('hon.read_school_website_ai_price(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0690 first'; END IF;
   FOREACH t IN ARRAY ARRAY['ai_text_creative_billing','ai_text_creative_reservations'] LOOP
     EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
     EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
