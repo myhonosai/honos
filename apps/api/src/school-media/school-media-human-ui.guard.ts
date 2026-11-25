@@ -17,6 +17,14 @@ export class SchoolMediaRenameHumanUiGuard extends MembershipActivationHumanUiGu
 export class SchoolMediaDeleteHumanUiGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = SCHOOL_MEDIA_COMMANDS.delete;
 }
+@Injectable()
+export class SchoolMediaVideoBeginHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SCHOOL_MEDIA_COMMANDS.videoBegin;
+}
+@Injectable()
+export class SchoolMediaVideoFinishHumanUiGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = SCHOOL_MEDIA_COMMANDS.videoFinish;
+}
 
 /**
  * The upload carries raw picture bytes, so it cannot use the JSON guard: same browser rules (POST, exact configured Origin,

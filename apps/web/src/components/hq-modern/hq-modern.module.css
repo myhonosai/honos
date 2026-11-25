@@ -631,3 +631,21 @@
   .commercialStatus{order:3}
   .commercialList{grid-template-columns:minmax(0,1fr)}
 }
+/* HQ usability (2026-11-24): display choices sit quietly in the page header instead of a full-width bar on every page. */
+.topbar{flex-wrap:wrap}
+.topbar>.appearance{flex:0 1 auto;margin:0 0 0 auto;padding:4px 6px;gap:8px;min-height:0;background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
+.topbar>.appearance>.appearanceGroup{padding:3px;gap:2px}
+.topbar>.appearance button{min-height:36px;padding:4px 9px;font-size:11px}
+.topbar>.appearance>.appearanceGroup>span{font-size:10px;margin:0 4px}
+.topbar>div{text-align:left}
+/* HQ Ask HON panel inside the HON drawer (2026-11-24): readable spacing for the real question form and answers. */
+.assistantBody [data-hq-hon-agent]{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.assistantBody [data-hq-hon-agent] h2{font-size:18px}
+.assistantBody [data-hq-hon-agent] p{font-size:13px;line-height:1.5}
+.assistantBody [data-hq-hon-agent] form{display:flex;flex-direction:column;gap:10px}
+.assistantBody [data-hq-hon-agent] label{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.assistantBody [data-hq-hon-agent] textarea{width:100%;min-height:88px;padding:10px 12px;border:1px solid var(--hon-border);border-radius:10px;background:#0b1626;color:var(--hon-text);resize:vertical}
+.assistantBody [data-hq-hon-agent] fieldset{border:1px solid var(--hon-border);border-radius:10px;padding:8px 12px;display:flex;flex-wrap:wrap;gap:10px;font-size:13px}
+.assistantBody [data-hq-hon-agent] button[type=submit]{align-self:flex-start;min-width:110px;background:var(--hon-accent-2);color:#00202e;border-color:var(--hon-accent-2);font-weight:700}
+.assistantBody [data-hq-hon-agent] ol{display:flex;flex-direction:column;gap:12px;padding-left:18px;font-size:13px}
+.assistantBody [data-hq-hon-agent] fieldset label{flex-direction:row;align-items:center;gap:6px}

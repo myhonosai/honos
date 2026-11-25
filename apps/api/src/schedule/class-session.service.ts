@@ -79,6 +79,10 @@ function normalizeInput(input: CreateClassSessionInput): NormalizedClassSessionI
   if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
     throw validationError('Class session endsAt must be after startsAt.');
   }
+  // 0645: hon.class_sessions requires at least one minute; refuse here so the caller gets a 400, not a database error.
+  if (new Date(endsAt).getTime() - new Date(startsAt).getTime() < 60_000) {
+    throw validationError('Class session must last at least one minute.');
+  }
 
   return {
     programId: input.programId,

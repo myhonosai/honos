@@ -4,9 +4,10 @@ import type { ChampionsContestCommand, ChampionsContestConfig, ChampionsContestD
 import { useLocale } from '../localization/provider';
 import { contestText, type ContestKey } from './copy';
 import { ContestError, contestApi, contestId as checkId, type ContestApi } from './http';
-import { dayToInstant, draftFrom, formatMoney, scheduleBlockers } from './form';
+import { chaseQuestion, dayToInstant, draftFrom, formatMoney, goLiveSteps, scheduleBlockers } from './form';
 import { useConcealment, useContestCommand, type ContestOutcome } from './model';
-import { ContestForm, Facts, Outcome, formatTime, statusTone, type SchoolChoices } from './parts';
+import { ContestForm, Facts, GoLiveGuide, Outcome, formatTime, statusTone, type SchoolChoices } from './parts';
+import { HqHonPanel } from '../hq-hon/hq-hon-panel';
 import { directorySchools, type SchoolsLoader } from './hq-contests-list';
 import styles from '../hq-access/hq-access.module.css';
 import local from './contests.module.css';
@@ -32,11 +33,12 @@ export function HqContest({ contestId, api = contestApi, schools: loadSchools = 
   const [state, setState] = useState<ContestState>(valid ? { state: 'LOADING' } : { state: 'INVALID' });
   const [refresh, setRefresh] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [chaseOpen, setChaseOpen] = useState(false);
   const [schools, setSchools] = useState<SchoolChoices>({ state: 'LOADING' });
   const generation = useRef(0), mounted = useRef(false), dropRef = useRef<() => void>(() => {});
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
   const { concealed, privacy, reveal } = useConcealment(() => {
-    generation.current++; dropRef.current(); setEditing(false); setState(valid ? { state: 'LOADING' } : { state: 'INVALID' });
+    generation.current++; dropRef.current(); setEditing(false); setChaseOpen(false); setState(valid ? { state: 'LOADING' } : { state: 'INVALID' });
   });
   const after = useCallback((outcome: ContestOutcome) => {
     if (outcome?.kind === 'DONE') {
@@ -86,7 +88,8 @@ export function HqContest({ contestId, api = contestApi, schools: loadSchools = 
   return <HqContestView language={preferences.language} formattingLocale={formattingLocale} concealed={concealed} state={state} editing={editing} schools={schools}
     outcome={command.outcome} locked={command.locked} canRetry={command.canRetry} now={Date.now()}
     onRefresh={() => setRefresh(n => n + 1)} onReveal={reveal} onEdit={setEditing} onUpdate={onUpdate} onInvalid={() => localInvalid('update')}
-    onStep={onStep} onDuplicate={onDuplicate} onTryAgain={command.tryAgain}/>;
+    onStep={onStep} onDuplicate={onDuplicate} onTryAgain={command.tryAgain} onChase={() => setChaseOpen(o => !o)}
+    chase={chaseOpen && view ? <HqHonPanel agentKey="chase" name="Chase" initialQuestion={chaseQuestion(view.contest)} compact/> : null}/>;
 }
 
 const field = (form: HTMLFormElement, name: string) => String(new FormData(form).get(name) ?? '');
@@ -94,7 +97,7 @@ const field = (form: HTMLFormElement, name: string) => String(new FormData(form)
 export function HqContestView(p: Readonly<{ language: string; formattingLocale: string; concealed: boolean; state: ContestState; editing: boolean; schools: SchoolChoices;
   outcome: ContestOutcome; locked: boolean; canRetry: boolean; now: number; onRefresh: () => void; onReveal: () => void; onEdit: (on: boolean) => void;
   onUpdate: (c: ChampionsContestConfig) => void; onInvalid: () => void; onStep: (s: Step) => void; onDuplicate: (name: string, startsOn: string, endsOn: string) => void;
-  onTryAgain: () => void }>): React.ReactElement {
+  onTryAgain: () => void; chase: React.ReactNode; onChase: () => void }>): React.ReactElement {
   const t = (key: ContestKey, vars?: Record<string, string>) => contestText(p.language, key, vars);
   const money = (minor: number) => formatMoney(minor, p.formattingLocale);
   const time = (iso: string) => formatTime(p.formattingLocale, iso);
@@ -113,6 +116,7 @@ export function HqContestView(p: Readonly<{ language: string; formattingLocale: 
   const button = (label: ContestKey, step: Step, owner = false, danger = false) => <button type="button" className={danger ? styles.danger : styles.secondary} disabled={lock}
     data-contest-step={step.action} onClick={() => p.onStep(step)}>{t(label)}{owner ? ` · ${t('ownerOnly')}` : ''}</button>;
   const blockers = c.status === 'DRAFT' ? scheduleBlockers(c, p.now) : [];
+  const setup = c.status === 'DRAFT' || c.status === 'SCHEDULED';
   const early = (c.status === 'ACTIVE' || c.status === 'PAUSED') && Date.parse(c.endsAt) > p.now;
   const eligible = v.standings.filter(s => s.eligible);
   const cancelForm = ['DRAFT', 'SCHEDULED', 'ACTIVE', 'PAUSED'].includes(c.status) && <form className={`${styles.form} ${local.inline}`} data-contest-form="cancel"
@@ -122,7 +126,12 @@ export function HqContestView(p: Readonly<{ language: string; formattingLocale: 
     <button type="submit" className={styles.danger} disabled={lock}>{t('cancel')} · {t('ownerOnly')}</button></form>;
 
   return <section className={styles.access} data-hq-contest="ready">{head}
-    <Outcome language={p.language} outcome={p.outcome} canRetry={p.canRetry} onTryAgain={p.onTryAgain}/>
+    {setup && <GoLiveGuide language={p.language} states={goLiveSteps(c, p.now)} missing={blockers.map(b => t(`block${b}` as ContestKey))}>
+      <div className={styles.actions}><button type="button" className={styles.secondary} data-contest-chase="" aria-expanded={p.chase !== null} onClick={p.onChase}>
+        {t(p.chase === null ? 'askChase' : 'closeChase')}</button></div>
+      <p className={styles.meta}>{t('chaseHelp')}</p>
+      {p.chase}
+    </GoLiveGuide>}
 
     <article className={styles.card} aria-labelledby="contest-facts"><div className={styles.cardHead}><h2 id="contest-facts">{t('facts')}</h2>
       <span className={styles.status} data-tone={statusTone(c.status)} data-contest-status={c.status}>{t(c.status)}</span></div>
@@ -136,6 +145,7 @@ export function HqContestView(p: Readonly<{ language: string; formattingLocale: 
     </article>
 
     <article className={styles.card} aria-labelledby="contest-actions" data-contest-actions><div className={styles.cardHead}><h2 id="contest-actions">{t('actions')}</h2></div>
+      <Outcome language={p.language} outcome={p.outcome} canRetry={p.canRetry} onTryAgain={p.onTryAgain}/>
       {c.status === 'DRAFT' && <>
         {!p.editing && <div className={styles.actions}><button type="button" className={styles.secondary} disabled={lock} onClick={() => p.onEdit(true)}>{t('edit')}</button></div>}
         {blockers.length > 0 && <p className={styles.meta} data-contest-blockers={blockers.join(' ')}>{t('blockersTitle')} {blockers.map(b => t(`block${b}` as ContestKey)).join('; ')}.</p>}
@@ -147,7 +157,8 @@ export function HqContestView(p: Readonly<{ language: string; formattingLocale: 
         </form><p className={styles.meta}>{t('scheduleHelp')}</p>
       </>}
       {c.status === 'SCHEDULED' && <><div className={styles.actions}>{button('activate', { action: 'ACTIVATE' })}</div>
-        {Date.parse(c.startsAt) > p.now && <p className={styles.meta}>{t('notStarted', { at: `${time(c.startsAt)} UTC` })}</p>}</>}
+        {Date.parse(c.startsAt) > p.now ? <p className={styles.meta}>{t('notStarted', { at: `${time(c.startsAt)} UTC` })}</p>
+          : <p className={styles.meta} data-contest-start-ready="">{t('startReady')}</p>}</>}
       {c.status === 'ACTIVE' && <div className={styles.actions}>{button('pause', { action: 'PAUSE' })}{button(early ? 'endEarly' : 'end', { action: 'END' })}</div>}
       {c.status === 'PAUSED' && <div className={styles.actions}>{button('resume', { action: 'RESUME' }, true)}{button(early ? 'endEarly' : 'end', { action: 'END' })}</div>}
       {c.status === 'ENDED' && <div className={styles.actions}>{button('proposeWinners', { action: 'PROPOSE_WINNERS' })}</div>}

@@ -413,7 +413,7 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   const lang = honVoiceLang(useLocale().preferences.language);
   const sendTextRef = useRef<(text: string, voice: boolean) => boolean>(() => false);
   const voiceAllowed = useRef(false);
-  const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true));
+  const voice = useHonVoice(lang, (text) => voiceAllowed.current && !concealed.current && sendTextRef.current(text, true), school);
   const { shutdown: voiceShutdown, replyParts } = voice;
   // 0460: HON answers aloud in the voice this person chose for HON (the usual voice until the choices load).
   const { choices: voiceChoices } = useAgentVoices(school, voiceApi);
