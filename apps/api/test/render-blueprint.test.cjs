@@ -176,3 +176,20 @@ test('the web environment from the Blueprint passes the shared OIDC and session 
   // The web server only needs the API address; it never receives a database credential.
   assert.ok(!Object.keys(env).some((key) => /DATABASE/.test(key)));
 });
+
+test('0654: the API build installs pinned, checksum-checked ffmpeg and ffprobe and points the copy job at them', () => {
+  assert.match(api.buildCommand, /pnpm --filter @hon\/api build &&\s*bash \.github\/scripts\/install-video-tools\.sh$/);
+  assert.doesNotMatch(web.buildCommand, /install-video-tools/);
+  const env = resolvedEnv(api);
+  assert.equal(env.HON_FFMPEG_PATH, '/opt/render/project/src/apps/api/.video-tools/ffmpeg');
+  assert.equal(env.HON_FFPROBE_PATH, '/opt/render/project/src/apps/api/.video-tools/ffprobe');
+  assert.equal(env.HON_MEDIA_VIDEO_COPIES_APPROVED, undefined, 'the copy switch is the owner’s, set in the dashboard at deploy');
+  const script = readFileSync(join(ROOT, '.github', 'scripts', 'install-video-tools.sh'), 'utf8');
+  assert.match(script, /^set -euo pipefail$/m);
+  assert.match(script, /RELEASE="https:\/\/github\.com\/eugeneware\/ffmpeg-static\/releases\/download\/b6\.1\.1"/);
+  assert.equal((script.match(/\|[a-f0-9]{64}"/g) ?? []).length, 2, 'each binary has a pinned SHA-256');
+  assert.match(script, /sha256sum --check/);
+  assert.match(script, /--proto '=https'/);
+  for (const feature of ['libx264', 'aac', 'mjpeg', 'mov,mp4', 'matroska,webm', 'https']) assert.ok(script.includes(feature), `checks ${feature}`);
+  assert.match(readFileSync(join(ROOT, '.gitignore'), 'utf8'), /^apps\/api\/\.video-tools\/$/m);
+});

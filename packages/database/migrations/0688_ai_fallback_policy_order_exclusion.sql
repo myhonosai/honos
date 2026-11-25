@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0668 (RA-1 follow-up, review P3 on 0336; was 0342, renumbered by the ledger 2026-11-24): the legacy POLICY_ORDER branch of
+-- 0688 (RA-1 follow-up, review P3 on 0336; was 0342, renumbered by the ledger 2026-11-24): the legacy POLICY_ORDER branch of
 -- the text route selection gains the same failed-model exclusion as the task-profile branch. Since 0474 the selection lives
 -- in the pure helper hon.ai_select_text_route (called by plan_ai_invocation and plan_eian_turn), so this replaces that
 -- helper: body is 0474's with only that one condition added. Grants unchanged (CREATE OR REPLACE keeps the owner-only ACL).
@@ -77,7 +77,7 @@ BEGIN
         AND 'TEXT' = ANY(c.capabilities) AND 'TEXT' = ANY(c.modalities)
         AND c.effective_from <= now() AND (c.effective_until IS NULL OR now() < c.effective_until)
         AND p.state = 'HEALTHY'
-        -- 0668: the legacy policy order also never picks a model that was definitely unavailable for this work item, so a
+        -- 0688: the legacy policy order also never picks a model that was definitely unavailable for this work item, so a
         -- fallback after HQ deactivates the task profile between attempts cannot call the failed model again.
         AND NOT EXISTS (SELECT 1 FROM hon.ai_route_unavailable_attempts ua WHERE ua.work_item_id = p_work_id AND ua.catalog_id = c.catalog_id)
         AND c.unit_cost_micros::numeric * p_units <= LEAST(v_policy.max_cost_micros, p_max_cost)

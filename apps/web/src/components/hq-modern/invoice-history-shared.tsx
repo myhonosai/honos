@@ -24,16 +24,16 @@ export function useInvoiceRead<T>(key: string, load: ((signal: AbortSignal) => P
 export const invoiceStatus = { DRAFT: 'Draft', ISSUED: 'Issued record', VOID: 'Void' };
 export const invoiceOffer = { REGULAR_MONTHLY: 'Regular monthly', FOUNDER_MONTHLY: 'Founder monthly', FOUNDER_LIFETIME: 'Paid founder lifetime offer', REGULAR_ANNUAL: 'HON OS annual', FOUNDER_ANNUAL: 'HON OS founder annual', LIFETIME: 'HON OS lifetime offer' };
 export const settlementLabel = {
-  NOT_ISSUED: 'Not issued', VOID: 'Void', UNPAID: 'No payment recorded', PARTIALLY_PAID: 'Partially paid in recorded evidence',
-  PAID_ATTESTED: 'Recorded as paid by HQ (not processor-confirmed)', PAID_VERIFIED: 'Provider-confirmed payment', REVERSED: 'Reversed in recorded evidence',
+  NOT_ISSUED: 'Not issued', VOID: 'Void', UNPAID: 'No payment recorded', PARTIALLY_PAID: 'Partly paid (recorded)',
+  PAID_ATTESTED: 'Paid (recorded by HQ, not confirmed by processor)', PAID_VERIFIED: 'Provider-confirmed payment', REVERSED: 'Reversed in recorded evidence',
 };
 export const invoiceTime = (value: string | null): string => value === null ? 'Not recorded' : `${new Date(value).toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
 export const invoiceAmount = (value: number | null): string => value === null ? 'Unavailable / tax unresolved' : `${value < 0 ? '−' : ''}${formatSaasMoney(Math.abs(value))}`;
 
 export function InvoiceReadNotice<T>({ state, area }: { state: InvoiceReadState<T>; area: string }): React.ReactElement | null {
   if (state.kind === 'ready' || state.kind === 'idle') return null;
-  const heading = state.kind === 'loading' ? `Loading ${area}…` : state.failure === 'UNAUTHORIZED' ? 'Sign in to review HON billing records'
+  const heading = state.kind === 'loading' ? `Loading ${area}…` : state.failure === 'UNAUTHORIZED' ? 'Sign in to see invoices'
     : state.failure === 'FORBIDDEN' ? 'HON billing access denied' : state.failure === 'INVALID_RESPONSE' ? `${area} could not be verified`
     : state.failure === 'INVALID_SELECTION' ? 'Choose a valid invoice or status' : `${area} unavailable`;
-  return <section className={base.panel} role="status"><h2>{heading}</h2><p>Previous facts are cleared. Refresh to request current authorized records. No cached or sample result is substituted.</p>{state.kind === 'failed' && state.failure === 'UNAUTHORIZED' && <Link href="/auth/login">Sign in to HON</Link>}</section>;
+  return <section className={base.panel} role="status"><h2>{heading}</h2><p>Press Refresh to try again.</p>{state.kind === 'failed' && state.failure === 'UNAUTHORIZED' && <Link href="/auth/login">Sign in to HON</Link>}</section>;
 }

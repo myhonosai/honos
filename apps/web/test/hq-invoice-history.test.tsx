@@ -72,7 +72,7 @@ describe('HON HQ invoice and payment-history integration', () => {
     }
     const history = invoiceAccountFixture(1, { historical: true }); fetch.mockImplementation(async (path) => ok(String(path).includes('/invoices/') ? history.invoice : String(path).endsWith('/subscription') ? history.account : history.standing));
     await expect(loadHqInvoiceAccount(invoiceId(1))).resolves.toEqual(history);
-    const html = renderToStaticMarkup(<InvoiceDetailResults data={history}/>); expect(html).toContain('Invoice is not the current subscription record'); expect(html).toContain('USD 45.10');
+    const html = renderToStaticMarkup(<InvoiceDetailResults data={history}/>); expect(html).toContain('This invoice is for an older subscription'); expect(html).toContain('USD 45.10');
   });
   it('rejects collection, verification, line, private-field and envelope drift through canonical contracts', async () => {
     const fetch = mocks();
@@ -87,7 +87,7 @@ describe('HON HQ invoice and payment-history integration', () => {
   });
   it('binds B4 eligibility/request scope and never exposes unrelated global-window refund records', async () => {
     const fetch = mocks(); const data = await loadHqInvoiceRefunds(invoiceFixture()); expect(data.matchingRequests).toHaveLength(1);
-    const html = renderToStaticMarkup(<InvoiceRefundResults data={data} invoiceId={invoiceId(1)}/>); expect(html).toContain('SYNTHETIC-CUSTOMER-REQUEST'); expect(html).not.toContain('UNRELATED-PRIVATE-REFUND-REFERENCE'); expect(html).toContain('not complete invoice or school history'); expect(html).not.toMatch(/<button|<form/);
+    const html = renderToStaticMarkup(<InvoiceRefundResults data={data} invoiceId={invoiceId(1)}/>); expect(html).toContain('SYNTHETIC-CUSTOMER-REQUEST'); expect(html).not.toContain('UNRELATED-PRIVATE-REFUND-REFERENCE'); expect(html).toContain('Older ones may not show'); expect(html).not.toMatch(/<button|<form/);
     for (const scope of ['eligibility', 'request', 'verified', 'execution']) { const r = invoiceRefundFixture();
       if (scope === 'eligibility') r.eligibility.organizationId = saasId(2);
       else if (scope === 'request') r.requests.refundRequests.find((v) => v.invoiceId === invoiceId(1))!.subscriptionId = saasId(999);
@@ -103,22 +103,22 @@ describe('HON HQ invoice and payment-history integration', () => {
   });
   it('renders exact signed authoritative amounts, lifetime and empty states without financial commands', () => {
     expect(invoiceAmount(-10001)).toBe('−USD 100.01'); expect(invoiceAmount(-1)).toBe('−USD 0.01'); expect(invoiceAmount(null)).toBe('Unavailable / tax unresolved'); expect(invoiceAmount(Number.MAX_SAFE_INTEGER)).toBe('USD 90,071,992,547,409.91');
-    const detail = renderToStaticMarkup(<InvoiceDetailResults data={invoiceAccountFixture()}/>); for (const text of ['−USD 100.00', 'USD 45.10', 'USD 15.00', 'HQ attestation', 'not processor', 'CHARGEBACK', 'Subscription account-credit adjustment']) expect(detail.toLowerCase()).toContain(text.toLowerCase()); expect(detail).not.toMatch(/<button|<form/);
-    const lifetime = renderToStaticMarkup(<InvoiceDetailResults data={invoiceAccountFixture(3)}/>); expect(lifetime).toContain('One-time paid-lifetime offer'); expect(lifetime).toContain('USD 1,896.00'); expect(lifetime).toContain('Reversed in recorded evidence');
+    const detail = renderToStaticMarkup(<InvoiceDetailResults data={invoiceAccountFixture()}/>); for (const text of ['−USD 100.00', 'USD 45.10', 'USD 15.00', 'Recorded by HQ', 'not confirmed by the card processor', 'CHARGEBACK', 'Subscription account-credit adjustment']) expect(detail.toLowerCase()).toContain(text.toLowerCase()); expect(detail).not.toMatch(/<button|<form/);
+    const lifetime = renderToStaticMarkup(<InvoiceDetailResults data={invoiceAccountFixture(3)}/>); expect(lifetime).toContain('One-time lifetime purchase'); expect(lifetime).toContain('USD 1,896.00'); expect(lifetime).toContain('Reversed in recorded evidence');
     const voidedDraft = invoiceAccountFixture(5); voidedDraft.invoice.invoiceNumber = null; voidedDraft.invoice.issuedAt = null; expect(validateSaasInvoiceDetail(voidedDraft.invoice)).toEqual(voidedDraft.invoice);
-    const voided = renderToStaticMarkup(<InvoiceDetailResults data={voidedDraft}/>); expect(voided).toContain('Unnumbered void record'); expect(voided).toContain('Not applicable to an unissued or void invoice');
-    const empty = renderToStaticMarkup(<InvoiceDetailResults data={invoiceAccountFixture(1, { empty: true })}/>); expect(empty).toContain('No payment-evidence entries'); expect(empty).toContain('No subscription status-history events');
+    const voided = renderToStaticMarkup(<InvoiceDetailResults data={voidedDraft}/>); expect(voided).toContain('Unnumbered void record'); expect(voided).toContain('Doesn’t apply to a draft or void invoice');
+    const empty = renderToStaticMarkup(<InvoiceDetailResults data={invoiceAccountFixture(1, { empty: true })}/>); expect(empty).toContain('No payments recorded for this invoice yet'); expect(empty).toContain('No changes yet');
     const list = renderToStaticMarkup(<InvoiceListResults data={invoiceListFixture()} organizationId={saasId(3)} query=""/>); expect(list).toContain('HON Harbor'); expect(list).not.toContain('HON Cedar');
-    expect(renderToStaticMarkup(<InvoiceListResults data={invoiceListFixture({ empty: true })} organizationId="" query=""/>)).toContain('No invoice records');
+    expect(renderToStaticMarkup(<InvoiceListResults data={invoiceListFixture({ empty: true })} organizationId="" query=""/>)).toContain('No invoices match');
   });
   it('distinguishes first-purchase previews and incomplete request history from approval or execution', async () => {
     const fetch = mocks(4); const data = await loadHqInvoiceRefunds(invoiceFixture(4)); expect(data.matchingRequests).toHaveLength(0);
-    const html = renderToStaticMarkup(<InvoiceRefundResults data={data} invoiceId={invoiceId(4)}/>); expect(html).toContain('A different invoice'); expect(html).toContain('Complete refund history is unavailable'); expect(html).toContain('not record a customer request'); expect(fetch).toHaveBeenCalledTimes(2);
+    const html = renderToStaticMarkup(<InvoiceRefundResults data={data} invoiceId={invoiceId(4)}/>); expect(html).toContain('Another invoice started the 30 days'); expect(html).toContain('No refund requests found'); expect(html).toContain('doesn’t start or send a refund'); expect(fetch).toHaveBeenCalledTimes(2);
     const r = invoiceRefundFixture(1, { empty: true }); const empty = renderToStaticMarkup(<InvoiceRefundResults data={{ eligibility: r.eligibility, matchingRequests: [], limit: 200 }} invoiceId={invoiceId(1)}/>); expect(empty).toContain('No recorded paid purchase');
   });
   it('keeps route selectors inert, shared HQ authentication intact and approved appearance labels separate', () => {
-    const fetch = vi.spyOn(globalThis, 'fetch'); const html = renderToStaticMarkup(<><HqInvoiceHistory/><HqInvoiceDetail invoiceId={invoiceId(1)}/></>); expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Load invoice and payment history'); expect(html).not.toContain('HON Cedar');
-    expect(renderToStaticMarkup(<HqInvoiceDetail invoiceId="../refunds"/>)).toContain('Invalid invoice selector'); expect(fetch).not.toHaveBeenCalled();
+    const fetch = vi.spyOn(globalThis, 'fetch'); const html = renderToStaticMarkup(<><HqInvoiceHistory/><HqInvoiceDetail invoiceId={invoiceId(1)}/></>); expect(fetch).not.toHaveBeenCalled(); expect(html).toContain('Load invoice'); expect(html).not.toContain('HON Cedar');
+    expect(renderToStaticMarkup(<HqInvoiceDetail invoiceId="../refunds"/>)).toContain('This invoice link isn’t valid'); expect(fetch).not.toHaveBeenCalled();
     for (const file of ['src/app/hq/revenue/invoices/page.tsx', 'src/app/hq/revenue/invoices/[invoiceId]/page.tsx']) { const source = readFileSync(file, 'utf8'); expect(source).toContain("'force-dynamic'"); expect(source).toContain('index: false'); expect(source).not.toMatch(/fetch\(|process\.env|schoolId|role:/); }
     const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')); for (const path of ['/hq/revenue/invoices', '/hq/revenue/invoices/:invoiceId']) expect(manifest.routes.filter((r: { path: string }) => r.path === path)).toHaveLength(1);
     expect(hqPageLabel(`/hq/revenue/invoices/${invoiceId(1)}`)).toBe('Invoice detail'); expect(hqPageLabel(`/hq/revenue/invoices/${invoiceId(1)}?role=OWNER`)).toBe('HQ workspace');

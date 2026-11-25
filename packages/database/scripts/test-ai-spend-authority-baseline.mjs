@@ -3824,7 +3824,7 @@ try {
     fakes.hon.beforeUnavailable = () => admin.query('UPDATE hon.hq_ai_model_catalog SET active=false WHERE catalog_id=$1', [m.backup]);
     try { r = await ask(); } finally { fakes.hon.beforeUnavailable = null; await admin.query('UPDATE hon.hq_ai_model_catalog SET active=true WHERE catalog_id=$1', [m.backup]); }
     assert.deepEqual([...pick(r.s), fakes.hon.calls - calls], ['BLOCKED', 'NO_ELIGIBLE_ROUTE', null, null, 0, 1, 0, 1, 1], JSON.stringify(r.s));
-    // 3b. 0668: HQ deactivates the task profile between the attempts, so the fallback plans by the legacy policy order.
+    // 3b. 0688: HQ deactivates the task profile between the attempts, so the fallback plans by the legacy policy order.
     //     That order must also skip the failed model: with the baseline model out of the way the order's first entry is
     //     ra1/primary, yet the second call goes to ra1/backup and the turn completes (never the failed model twice).
     unavailable('primary'); calls = fakes.hon.calls;
@@ -3867,7 +3867,7 @@ try {
   await assert.rejects(admin.query('DELETE FROM hon.ai_route_unavailable_attempts WHERE id=$1', [anyAttempt.id]), /AI_ROUTE_ATTEMPT_IMMUTABLE/);
   assert.deepEqual(await row(`SELECT has_table_privilege($1,'hon.ai_route_unavailable_attempts','SELECT') s, has_function_privilege($1,'hon.reopen_hon_reply_for_fallback(text,uuid)','EXECUTE') e,
     (SELECT relforcerowsecurity FROM pg_class WHERE oid='hon.ai_route_unavailable_attempts'::regclass) f`, [runtimeRole]), { s: false, e: true, f: true });
-  pass('INV-41', "0336 (RA-1): when HON's default model is definitely unavailable (PROVIDER_UNAVAILABLE) and its HQ task profile is TRANSIENT_ONCE, the reply is reopened once: the failed attempt is recorded immutably, the next plan never picks that model again and uses the profile's fallback with a new provider request id, and the turn completes with one ledger row; both models unavailable ends FAILED/PROVIDER_UNAVAILABLE after exactly two calls with nothing held; the fallback is planned and prepared live (an inactive backup gives no route, an HQ pause blocks it, no call; 0668: a profile deactivated between attempts falls to the legacy order, which also skips the failed model); retry NONE, UNKNOWN, a rejection and the legacy policy order never fall back; evidence is migration-owner only");
+  pass('INV-41', "0336 (RA-1): when HON's default model is definitely unavailable (PROVIDER_UNAVAILABLE) and its HQ task profile is TRANSIENT_ONCE, the reply is reopened once: the failed attempt is recorded immutably, the next plan never picks that model again and uses the profile's fallback with a new provider request id, and the turn completes with one ledger row; both models unavailable ends FAILED/PROVIDER_UNAVAILABLE after exactly two calls with nothing held; the fallback is planned and prepared live (an inactive backup gives no route, an HQ pause blocks it, no call; 0688: a profile deactivated between attempts falls to the legacy order, which also skips the failed model); retry NONE, UNKNOWN, a rejection and the legacy policy order never fall back; evidence is migration-owner only");
   }
 
   // ---- INV-37 (0284): Maya answers about one at-risk student from that student's 0259 factors only ----
