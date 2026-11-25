@@ -32,8 +32,9 @@ later piece with its own number and its own owner approval.
   on by it. The HQ adapter never sees the publish, inbox or ads switches, so it cannot publish or spend even if they are
   set. The deterministic fake runs only with `HON_ZERNIO_FAKE_PROVIDER=1` outside production and staging.
 - One HQ Zernio profile, found or created by HON's own name `hon-hq` (a retry never makes a second one), never moved.
-- One provider account is HON's or a school's, never both: an account already held by any school (0347/0453 table) is
-  skipped as a conflict and only counted.
+- HQ never takes an account a school holds: an account already held by any school (0347/0453 table) is skipped as a
+  conflict and only counted. This check is one-way; the school flow (0347) does not look at `hq_ad_accounts`, so a school
+  could still connect an account HON already holds. Making it two-way is a follow-up for the school side.
 - No tokens in HON (Zernio holds them). Evidence rows are identifier-only and append-only.
 
 ## 3. Platforms

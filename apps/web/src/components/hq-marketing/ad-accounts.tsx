@@ -113,7 +113,7 @@ export function HqAdAccounts({ api = adAccountsApi, navigate = (url: string) => 
     setBusy(true); setNotice(null);
     api.disconnect(account, globalThis.crypto.randomUUID(), AbortSignal.timeout(30000), () => mounted.current).then(
       r => { if (!mounted.current) return; setBusy(false); setConfirming(null);
-        setNotice(r.providerRemoval === 'NOT_REMOVED' ? { tone: 'blocked', key: 'notRemoved' } : { tone: 'ready', key: 'disconnected', vars: { name: r.account.displayName } });
+        setNotice((r.providerRemoval === 'NOT_REMOVED' || (r.providerRemoval === 'NOT_ATTEMPTED' && !r.replayed)) ? { tone: 'blocked', key: 'notRemoved' } : { tone: 'ready', key: 'disconnected', vars: { name: r.account.displayName } });
         setRefresh(n => n + 1); },
       error => { if (!mounted.current) return; setBusy(false); setConfirming(null); setNotice({ tone: 'blocked', key: failureKey(error) }); setRefresh(n => n + 1); });
   }, [api, busy]);

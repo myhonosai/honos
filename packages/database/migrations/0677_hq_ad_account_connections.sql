@@ -6,7 +6,7 @@ BEGIN;
 -- - One HQ Zernio profile, linked once and never moved. A single-use connect intent holds only the SHA-256 of the random
 --   state, belongs to the person who started it and expires after 10 minutes. Accounts come from HON's own profile.
 -- - Connect and disconnect: a current HON_HQ_OWNER only. Read: anyone who may read HQ marketing (0252 rules).
--- - A provider account is HON's or a school's, never both: an account any school holds is skipped and only counted.
+-- - HQ never takes an account a school holds: such an account is skipped and only counted (one-way; 0347 is unchanged).
 -- - Records only. No account here can publish, run or pay for an ad; there is no switch for it. No token is held.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
