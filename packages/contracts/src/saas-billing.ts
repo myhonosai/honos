@@ -147,6 +147,10 @@ export const SAAS_COMMANDS = {
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
+  // 0678: HQ Creative designs (flyers, posters, social graphics for HON's own marketing).
+  saveHqCreativeDesign: 'hq-creative-design-save',
+  setHqCreativeDesignStatus: 'hq-creative-design-status',
+  addHqCreativeDesignPhoto: 'hq-creative-design-photo',
   // B1 (0263): HQ Ask HON and the HQ AI text budget.
   askHqHon: 'hq-hon-ask',
   setHqHonBudget: 'hq-hon-budget-set',

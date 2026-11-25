@@ -5608,3 +5608,27 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0678 HQ Creative designs: three HQ tables with forced RLS and no runtime privilege; six HQ entry points only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_hq_creative_designs(text,jsonb)','hon.read_hq_creative_design(text,jsonb)','hon.read_hq_creative_design_photo(text,jsonb)',
+    'hon.save_hq_creative_design(text,jsonb,uuid)','hon.set_hq_creative_design_status(text,jsonb,uuid)','hon.add_hq_creative_design_photo(text,jsonb,uuid)'];
+BEGIN
+  IF to_regclass('hon.hq_creative_designs') IS NULL OR to_regclass('hon.hq_creative_design_photos') IS NULL OR to_regclass('hon.hq_creative_design_requests') IS NULL THEN
+    RAISE EXCEPTION 'Apply migration 0678 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.hq_creative_designs','hon.hq_creative_design_photos','hon.hq_creative_design_requests'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_creative_design()','hon.guard_hq_creative_design_append()','hon.hq_creative_design_summary(hon.hq_creative_designs)',
+      'hon.hq_creative_design_json(hon.hq_creative_designs)','hon.hq_creative_design_photo_json(hon.hq_creative_design_photos)',
+      'hon.hq_creative_design_claim(uuid,uuid,text,text)','hon.hq_creative_design_room_check(text,uuid,boolean)','hon.hq_creative_design_id(jsonb,text)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

@@ -321,6 +321,13 @@ const SAAS_BILLING_CALLS = {
   createHqCreativeGeneration: { sql: 'SELECT hon.create_hq_creative_generation($1,$2::jsonb,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   recordHqCreativeGenerationResult: { sql: 'SELECT hon.record_hq_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
   resolveHqCreativeGeneration: { sql: 'SELECT hon.resolve_hq_creative_generation($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0678 HQ Creative designs.
+  readHqCreativeDesigns: { sql: 'SELECT hon.read_hq_creative_designs($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  readHqCreativeDesign: { sql: 'SELECT hon.read_hq_creative_design($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  readHqCreativeDesignPhoto: { sql: 'SELECT hon.read_hq_creative_design_photo($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  saveHqCreativeDesign: { sql: 'SELECT hon.save_hq_creative_design($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  setHqCreativeDesignStatus: { sql: 'SELECT hon.set_hq_creative_design_status($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  addHqCreativeDesignPhoto: { sql: 'SELECT hon.add_hq_creative_design_photo($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readHqHonConversation: { sql: 'SELECT hon.read_hq_hon_conversation($1) AS data', arity: 1, readOnly: true },
   readHqHonAgentPerformance: { sql: 'SELECT hon.read_hq_hon_agent_performance($1,$2) AS data', arity: 2, readOnly: true },
   setHqHonBudget: { sql: 'SELECT hon.set_hq_hon_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
