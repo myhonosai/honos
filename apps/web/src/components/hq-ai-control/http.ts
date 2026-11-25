@@ -123,7 +123,7 @@ export const aiControlApi = {
       return receipt;
     }, signal, owned);
   },
-  /** 0669: schools at 75%, 90% or 100% of their internal AI cost limit. */
+  /** 0689: schools at 75%, 90% or 100% of their internal AI cost limit. */
   costAlerts(signal: AbortSignal, owned: Owned): Promise<AiSchoolCostAlertList> {
     return read('/api/v1/hq/ai/school-cost-alerts', validateAiSchoolCostAlertList, signal, owned);
   },

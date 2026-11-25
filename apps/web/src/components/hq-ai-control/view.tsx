@@ -104,7 +104,7 @@ export function AiCostsView(p: AiCostsViewProps): React.ReactElement {
   </section>;
 }
 
-// ---------- AI cost limit alerts (0669) ----------
+// ---------- AI cost limit alerts (0689) ----------
 export type AlertOutcome = null | Readonly<{ kind: 'SENDING' | 'DONE' | AiControlErrorKind; replayed?: boolean }>;
 export const alertKey = (a: Pick<AiSchoolCostAlert, 'schoolId' | 'level'>) => `${a.schoolId.toLowerCase()}:${a.level}`;
 export type AiCostAlertsViewProps = Readonly<{

@@ -1,6 +1,6 @@
 BEGIN;
 
--- 0669: HQ alerts when a school reaches 75%, 90% and 100% of its internal monthly AI cost ceiling (R2, 0288), and an
+-- 0689: HQ alerts when a school reaches 75%, 90% and 100% of its internal monthly AI cost ceiling (R2, 0288), and an
 -- HQ-owner acknowledgement. Spec: docs/architecture/AI_SCHOOL_COST_ALERTS.md. HON's own provider cost, never a school
 -- balance or charge. Nothing here changes a spend decision, a ceiling or a pause.
 -- Alerts are derived, not written on the spend path: a school with a ceiling above 0 has an alert for every level its

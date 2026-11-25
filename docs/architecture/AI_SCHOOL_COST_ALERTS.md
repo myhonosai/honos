@@ -1,6 +1,6 @@
-# HQ alerts at 75%, 90% and 100% of a school's AI cost limit (migration 0669)
+# HQ alerts at 75%, 90% and 100% of a school's AI cost limit (migration 0689)
 
-Status: built (0669), not deployed. Test providers only. No provider call, no message sent outside HON, no change to any
+Status: built (0689), not deployed. Test providers only. No provider call, no message sent outside HON, no change to any
 limit, pause or spend decision. Builds on the per-school cost ceiling in `AI_SCHOOL_COST_CEILING.md` (0288).
 
 This is HON's own provider cost for the included AI team. It is shown only to HQ and never to a school as credits, a

@@ -44,7 +44,8 @@ services:
       corepack enable && corepack prepare pnpm@10.18.0 --activate &&
       pnpm install --frozen-lockfile --prod=false &&
       pnpm prepare:workspace &&
-      pnpm --filter @hon/api build
+      pnpm --filter @hon/api build &&
+      bash .github/scripts/install-video-tools.sh
     startCommand: pnpm --filter @hon/api start
     maxShutdownDelaySeconds: 30 # SIGTERM drains the runtime pool (Nest shutdown hooks)
     envVars:
@@ -58,6 +59,12 @@ services:
         value: staging
       - key: HON_AUTH_MODE
         value: OIDC
+      # 0654 video copies: the pinned ffmpeg/ffprobe the build puts next to the API (install-video-tools.sh). The copy job
+      # still does nothing until HON_MEDIA_VIDEO_COPIES_APPROVED=true is set in the dashboard.
+      - key: HON_FFMPEG_PATH
+        value: /opt/render/project/src/apps/api/.video-tools/ffmpeg
+      - key: HON_FFPROBE_PATH
+        value: /opt/render/project/src/apps/api/.video-tools/ffprobe
       - key: PORT
         value: "3001"
       - key: HON_API_PORT

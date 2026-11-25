@@ -133,13 +133,13 @@ test('HTTP: school AI cost limit is an exact HQ human command; the database deci
   } finally { await app.close(); if (previous === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = previous; }
 });
 
-// ---------- 0669: HQ alerts at 75%, 90% and 100% of a school's ceiling ----------
+// ---------- 0689: HQ alerts at 75%, 90% and 100% of a school's ceiling ----------
 const alert = (patch = {}) => ({ schoolId: U(), organizationId: U(), schoolName: 'Synthetic Dojo', trial: true, level: 'WARNING_90', ceilingMicros: 15_000_000,
   committedCostMicros: 13_600_000, usedBasisPoints: 9066, crossedAt: '2026-11-10T12:00:00.000Z', windowStart: T, acknowledgement: null, ...patch });
 const alerts = (list, patch = {}) => ({ alerts: list, openCount: list.filter((a) => a.acknowledgement === null).length, asOf: T, ...patch });
 const ackInput = (patch = {}) => ({ schoolId: U(), level: 'WARNING_75', windowStart: T, reason: 'Synthetic HQ alert acknowledgement', ...patch });
 
-test('0669 contracts: an alert must be reached by its numbers; open alerts first; closed acknowledgement input', () => {
+test('0689 contracts: an alert must be reached by its numbers; open alerts first; closed acknowledgement input', () => {
   const ok = alerts([alert(), alert({ level: 'WARNING_75', acknowledgement: { acknowledgedAt: T2, reason: REASON } })]);
   assert.equal(contracts.validateAiSchoolCostAlertList(ok).openCount, 1);
   for (const [bad, label] of [

@@ -1,20 +1,25 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
 import {
-  schoolMediaTitleOk, validateDeleteSchoolMedia, validateRenameSchoolMedia, verifySchoolMediaAsset, verifySchoolMediaLibrary,
-  SCHOOL_MEDIA_LINK_TOKEN, SCHOOL_MEDIA_LIMITS, type SchoolMediaAsset, type SchoolMediaDeleteReceipt, type SchoolMediaLibrary, type SchoolMediaReceipt,
+  schoolMediaTitleOk, validateBeginSchoolVideo, validateDeleteSchoolMedia, validateFinishSchoolVideo, validateRenameSchoolMedia, verifySchoolMediaAsset,
+  verifySchoolMediaLibrary, verifySchoolVideoPage, SCHOOL_MEDIA_LINK_TOKEN, SCHOOL_MEDIA_LIMITS, type SchoolMediaAsset, type SchoolMediaDeleteReceipt,
+  type SchoolMediaLibrary, type SchoolMediaReceipt, type SchoolMediaVideo, type SchoolVideoPage, type SchoolVideoUploadTicket,
 } from '@hon/contracts';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import type { MembershipLifecycleContext } from '../billing/membership.service.js';
 import { MediaImageRefused, prepareMediaImage } from './media-image.js';
-import { MediaStorage, MediaStorageOff } from './media-storage.js';
+import { MediaStorage, MediaStorageOff, videoObjectKeys } from './media-storage.js';
+import { videoSignatureOk } from './media-video.js';
 
 const HUMAN_SETTINGS = "SELECT set_config('app.hon_source','HUMAN_UI',true),set_config('app.hon_external_subject',$1,true),set_config('app.hon_action_request_id','',true),set_config('app.hon_delegated_by_principal_id','',true)";
 const READ_LIMITS = "SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0";
 const WRITE_LIMITS = "SET LOCAL statement_timeout='30s'; SET LOCAL lock_timeout='5s'; SET LOCAL log_parameter_max_length_on_error=0";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const PUBLIC_MEDIA_LINK = 'SELECT hon.resolve_school_media_link($1) AS data';
+export const PUBLIC_VIDEO_POSTER = 'SELECT hon.resolve_school_video_poster($1) AS data';
+export const PUBLIC_VIDEO_PAGE = 'SELECT hon.resolve_school_video_page($1) AS data';
+const LINKED_KEY = /^media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\.720\.mp4|\.poster\.jpg)?$/;
 
 // Exact 0628 error codes; every unknown database failure is unavailable, never success.
 const ERRORS: Record<string, { states: string[]; make: (code: string) => HttpException }> = {
@@ -46,6 +51,9 @@ function unverified(): never { throw new Unverified(); }
 function invalidInput(): never { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
 const storageOff = () => new ServiceUnavailableException({ code: 'MEDIA_STORAGE_OFF', detail: 'Media storage is not switched on for HON yet, so nothing was stored.' });
 const storageFailed = () => new ServiceUnavailableException({ code: 'MEDIA_STORAGE_FAILED', detail: 'The picture could not be stored. Try again.' });
+const videoStorageFailed = () => new ServiceUnavailableException({ code: 'MEDIA_STORAGE_FAILED', detail: 'The video could not be checked or stored. Try again.' });
+/** The files under a deleted item: a video's original, copy and poster, or a picture's one file. */
+const filesOf = (kind: unknown, objectKey: string): string[] => (kind === 'VIDEO' ? videoObjectKeys(objectKey) : [objectKey]);
 
 /** A database answer that carries the picture plus its fixed storage key (and replayed=true on a replay). */
 interface KeyedAnswer { row: Record<string, unknown>; objectKey: string; replayed: boolean; state: string }
@@ -139,26 +147,108 @@ export class SchoolMediaService {
     const deleted = await this.write(context, 'SELECT hon.delete_school_media($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data', [JSON.stringify(input), context.idempotencyKey],
       data => keyed(data, input.assetId));
     if (deleted.state === 'PENDING' || deleted.state === 'READY') unverified();
-    const removed = deleted.state === 'REMOVED' || await this.removeFile(context, input.assetId, deleted.objectKey);
+    const removed = deleted.state === 'REMOVED' || await this.removeFile(context, input.assetId, filesOf(deleted.row.kind, deleted.objectKey));
     return { assetId: input.assetId, removed, replayed: deleted.replayed };
   }
 
-  /** The public /m/<token> link: a five-minute signed file link, or null when the token names no READY picture. */
+  /**
+   * 0654 step 1: reserve a PENDING video (within the caps) and answer a one-time signed upload link for its fixed key, so the
+   * browser stores the original straight into the private bucket. A replay of a READY video answers it without a link.
+   */
+  async beginVideo(context: MembershipLifecycleContext, value: unknown): Promise<SchoolVideoUploadTicket> {
+    this.assertHumanContext(context, true);
+    let input;
+    try { input = validateBeginSchoolVideo(value); } catch { invalidInput(); }
+    if (!this.storage.configured) throw storageOff();
+    const begun = await this.write(context, 'SELECT hon.begin_school_video_upload($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data',
+      [JSON.stringify(input), context.idempotencyKey], data => keyed(data));
+    if (begun.state === 'DELETED' || begun.state === 'REMOVED') throw new ConflictException({ code: 'MEDIA_DELETED', detail: 'This video was deleted.' });
+    const asset = this.video(begun.row, begun.row.assetId as string);
+    if (asset.byteSize !== input.byteSize || asset.mediaType !== input.mediaType) unverified();
+    if (asset.state === 'READY') return { asset, uploadUrl: null, replayed: begun.replayed };
+    let uploadUrl: string;
+    try { uploadUrl = await this.storage.signedUploadUrl(begun.objectKey); }
+    catch (error) { if (error instanceof MediaStorageOff) throw storageOff(); throw videoStorageFailed(); }
+    return { asset, uploadUrl, replayed: begun.replayed };
+  }
+
+  /**
+   * 0654 step 2: the browser says the upload finished. The API reads the stored file's size and first bytes; the database
+   * moves PENDING to READY (copy QUEUED) only when the size is exactly the reserved one. A file that is not a video is
+   * deleted at once.
+   */
+  async finishVideo(context: MembershipLifecycleContext, value: unknown): Promise<SchoolMediaReceipt> {
+    this.assertHumanContext(context, true);
+    let input;
+    try { input = validateFinishSchoolVideo(value); } catch { invalidInput(); }
+    if (!this.storage.configured) throw storageOff();
+    const library = await this.read(context, 'SELECT hon.read_school_media($1) AS data', [context.externalSubject], verifySchoolMediaLibrary);
+    const current = library.assets.find(asset => asset.assetId === input.assetId);
+    if (!current || current.kind !== 'VIDEO') throw new NotFoundException({ code: 'MEDIA_NOT_FOUND' });
+    if (current.state === 'READY') return { asset: current, replayed: true };
+    const objectKey = `media/${current.assetId}`;
+    let stored;
+    try { stored = await this.storage.head(objectKey); }
+    catch (error) { if (error instanceof MediaStorageOff) throw storageOff(); throw videoStorageFailed(); }
+    if (!stored) throw new ConflictException({ code: 'MEDIA_UPLOAD_MISSING', detail: 'The video has not finished uploading. Try again.' });
+    if (stored.totalBytes !== current.byteSize) throw new ConflictException({ code: 'MEDIA_UPLOAD_MISMATCH', detail: 'The uploaded file is not the size this video was started with. Upload it again.' });
+    if (!videoSignatureOk(current.mediaType, stored.head)) {
+      await this.abandon(context, current.assetId, current.version, 'VIDEO');
+      throw new BadRequestException({ code: 'MEDIA_VIDEO_REFUSED', detail: 'Choose an MP4, MOV or WebM video.' });
+    }
+    let ready: SchoolMediaVideo;
+    try {
+      ready = await this.write(context, 'SELECT hon.finish_school_video_upload($1,$2::jsonb,$3::uuid,$4::uuid) AS data',
+        [JSON.stringify({ assetId: current.assetId, byteSize: stored.totalBytes })], data => this.video(data, current.assetId));
+    } catch (error) {
+      if (error instanceof ConflictException && (error.getResponse() as { code?: unknown }).code === 'MEDIA_NOT_PENDING') {
+        await this.removeFile(context, current.assetId, videoObjectKeys(objectKey));
+        throw new ConflictException({ code: 'MEDIA_DELETED', detail: 'This video was deleted.' });
+      }
+      throw error;
+    }
+    if (ready.state !== 'READY' || ready.copyState === null) unverified();
+    return { asset: ready, replayed: false };
+  }
+
+  /**
+   * The public /m/<token> link: a five-minute signed file link, or null when the token names nothing that can be shown. A
+   * picture opens its file; a video opens HON's 720p copy (never the original).
+   */
   async publicLink(token: string): Promise<string | null> {
+    return this.publicFile(PUBLIC_MEDIA_LINK, token, row =>
+      (/^media\/[0-9a-f-]{36}$/.test(row.objectKey) && ['image/jpeg', 'image/png', 'image/gif'].includes(row.mediaType))
+      || (row.objectKey.endsWith('.720.mp4') && row.mediaType === 'video/mp4'));
+  }
+  /** 0654 /m/<token>/poster: a video's poster picture. */
+  async publicPoster(token: string): Promise<string | null> {
+    return this.publicFile(PUBLIC_VIDEO_POSTER, token, row => row.objectKey.endsWith('.poster.jpg') && row.mediaType === 'image/jpeg');
+  }
+  /** 0654 the public video page: the school name, title, size and length of a video that can be shown, or null. */
+  async videoPage(token: string): Promise<SchoolVideoPage | null> {
     if (typeof token !== 'string' || !SCHOOL_MEDIA_LINK_TOKEN.test(token)) return null;
     let data: unknown;
-    try { data = await this.database.runPublicEventCall(PUBLIC_MEDIA_LINK, [token]); }
+    try { data = await this.database.runPublicEventCall(PUBLIC_VIDEO_PAGE, [token]); }
+    catch { throw new ServiceUnavailableException({ result: 'UNAVAILABLE' }); }
+    if (data === null) return null;
+    try { return verifySchoolVideoPage(data); } catch { throw new ServiceUnavailableException({ result: 'UNAVAILABLE' }); }
+  }
+
+  private async publicFile(statement: string, token: string, expected: (row: { objectKey: string; mediaType: string }) => boolean): Promise<string | null> {
+    if (typeof token !== 'string' || !SCHOOL_MEDIA_LINK_TOKEN.test(token)) return null;
+    let data: unknown;
+    try { data = await this.database.runPublicEventCall(statement, [token]); }
     catch { throw new ServiceUnavailableException({ result: 'UNAVAILABLE' }); }
     if (data === null) return null;
     const row = data as { objectKey?: unknown; mediaType?: unknown } | null;
-    if (!row || typeof row !== 'object' || Object.keys(row).length !== 2 || typeof row.objectKey !== 'string' || !/^media\/[0-9a-f-]{36}$/.test(row.objectKey)
-      || !['image/jpeg', 'image/png', 'image/gif'].includes(row.mediaType as string)) throw new ServiceUnavailableException({ result: 'UNAVAILABLE' });
+    if (!row || typeof row !== 'object' || Object.keys(row).length !== 2 || typeof row.objectKey !== 'string' || !LINKED_KEY.test(row.objectKey)
+      || typeof row.mediaType !== 'string' || !expected({ objectKey: row.objectKey, mediaType: row.mediaType })) throw new ServiceUnavailableException({ result: 'UNAVAILABLE' });
     if (!this.storage.configured) return null;
     try { return await this.storage.signedUrl(row.objectKey); }
     catch { throw new ServiceUnavailableException({ result: 'UNAVAILABLE' }); }
   }
 
-  private async removeFile(context: MembershipLifecycleContext, assetId: string, objectKey: string): Promise<boolean> {
+  private async removeFile(context: MembershipLifecycleContext, assetId: string, objectKey: string | string[]): Promise<boolean> {
     if (!this.storage.configured) return false;
     try { await this.storage.remove(objectKey); } catch { return false; }
     try {
@@ -172,12 +262,18 @@ export class SchoolMediaService {
   }
 
   /** A picture whose bytes could not be stored is deleted and any partial file removed (best effort), so it does not hold storage. */
-  private async abandon(context: MembershipLifecycleContext, assetId: string, version: unknown): Promise<void> {
+  private async abandon(context: MembershipLifecycleContext, assetId: string, version: unknown, kind: 'IMAGE' | 'VIDEO' = 'IMAGE'): Promise<void> {
     if (typeof version !== 'number') return;
     const abandon = { ...context, idempotencyKey: `media-abandon:${randomUUID()}` };
     const deleted = await this.write(abandon, 'SELECT hon.delete_school_media($1,$2::jsonb,$3,$4::uuid,$5::uuid) AS data',
       [JSON.stringify({ assetId, expectedVersion: version }), abandon.idempotencyKey], data => keyed(data, assetId)).catch(() => null);
-    if (deleted?.state === 'DELETED') await this.removeFile(context, assetId, deleted.objectKey);
+    if (deleted?.state === 'DELETED') await this.removeFile(context, assetId, filesOf(kind, deleted.objectKey));
+  }
+
+  private video(value: unknown, assetId: string): SchoolMediaVideo {
+    const asset = this.asset(value, assetId);
+    if (asset.kind !== 'VIDEO') unverified();
+    return asset;
   }
 
   private asset(value: unknown, assetId: string): SchoolMediaAsset {

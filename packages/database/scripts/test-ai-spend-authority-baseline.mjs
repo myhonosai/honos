@@ -3615,7 +3615,7 @@ try {
   assert.equal((await row("SELECT has_table_privilege($1,'hon.ai_school_cost_limits','SELECT') OR has_table_privilege($1,'hon.ai_school_cost_limit_commands','SELECT') x", [runtimeRole])).x, false);
   pass('INV-38', 'R2: each school may have an internal monthly agent-AI cost ceiling (none by default for a paying school, $15 on a live trial, HQ-owner editable, versioned, idempotent, immutable command log) counted as verified ledger cost plus every counting hold at its plan maximum; HQ reads NO_CEILING/NORMAL/WARNING_75/WARNING_90/CEILING_REACHED per school; at the ceiling new work is refused before any reservation or provider call (HON prepare, specialist begin, readiness, reserve guard) as AI_PAUSED_BY_HQ while other schools are unaffected and a raised ceiling restores it at once; an HQ single-school pause covers agent and creative AI; only the HQ command and read reach the runtime');
   }
-  // ---- INV-42 (0669): HQ alerts at 75%, 90% and 100% of a school's internal AI cost ceiling, HQ-owner acknowledgement ----
+  // ---- INV-42 (0689): HQ alerts at 75%, 90% and 100% of a school's internal AI cost ceiling, HQ-owner acknowledgement ----
   {
   const o = await makeOrg('inv-42');
   const scope = { organizationId: o.id, schoolId: o.school, principalId: o.principal, externalSubject: o.subject };
@@ -3694,7 +3694,7 @@ try {
     'hon.ai_school_cost_level_rank(text)=false', 'hon.command_ai_school_cost_alert_acknowledgement(text,jsonb,uuid)=true', 'hon.read_ai_school_cost_alerts_from_hq(text)=true']);
   assert.deepEqual(await row(`SELECT has_table_privilege($1,'hon.ai_school_cost_alert_acknowledgements','SELECT') s,
     (SELECT relforcerowsecurity FROM pg_class WHERE oid='hon.ai_school_cost_alert_acknowledgements'::regclass) f`, [runtimeRole]), { s: false, f: true });
-  pass('INV-42', '0669: HQ sees an alert for every level (75%, 90%, 100%) a school with a ceiling above $0 has reached this budget window, derived from the committed cost with crossedAt = the first verified ledger row that reached it, open alerts first; no ceiling or a $0 block raises none and a raised ceiling clears them; the HQ owner alone acknowledges an active current-window alert once (idempotent, key reuse refused, immutable record), HQ billing operators read, school users are refused; only the read and the command reach the runtime');
+  pass('INV-42', '0689: HQ sees an alert for every level (75%, 90%, 100%) a school with a ceiling above $0 has reached this budget window, derived from the committed cost with crossedAt = the first verified ledger row that reached it, open alerts first; no ceiling or a $0 block raises none and a raised ceiling clears them; the HQ owner alone acknowledges an active current-window alert once (idempotent, key reuse refused, immutable record), HQ billing operators read, school users are refused; only the read and the command reach the runtime');
   }
 
   // ---- INV-43 (0353): AI on a free HQ access exception only under an HQ-owner monthly dollar limit ----
