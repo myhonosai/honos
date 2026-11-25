@@ -218,13 +218,15 @@ test('the copy job makes a 720p copy and a poster with no location or camera met
   const stored = {};
   const storage = MediaStorage.withSettings(SETTINGS, async () => new Response('{}'));
   storage.signedUrl = async (key) => { assert.equal(key, `media/${ASSET}`); return `http://127.0.0.1:${port}/original`; };
+  const sourceBytes = readFileSync(source);
+  storage.head = async (key) => { assert.equal(key, `media/${ASSET}`); return { totalBytes: sourceBytes.length, head: sourceBytes.subarray(0, 4096) }; };
   storage.putFile = async (key, path, size, type) => { stored[key] = { bytes: readFileSync(path), size, type }; };
   storage.put = async (key, bytes, type) => { stored[key] = { bytes, size: bytes.length, type }; };
   storage.remove = async () => { throw new Error('nothing should be removed'); };
   const lease = randomUUID(), calls = [];
   const database = { runSchoolVideoCopyCall: async (sql, values) => {
     calls.push([sql, values]);
-    if (sql === VIDEO_COPY_CLAIM) return { assetId: ASSET, lease, mediaType: 'video/quicktime', byteSize: 5000, attempt: 1, sourceKey: `media/${ASSET}`, copyKey: `media/${ASSET}.720.mp4`, posterKey: `media/${ASSET}.poster.jpg` };
+    if (sql === VIDEO_COPY_CLAIM) return { assetId: ASSET, lease, mediaType: 'video/quicktime', byteSize: sourceBytes.length, attempt: 1, sourceKey: `media/${ASSET}`, copyKey: `media/${ASSET}.720.mp4`, posterKey: `media/${ASSET}.poster.jpg` };
     if (sql === VIDEO_COPY_FINISH) return { assetId: ASSET, copyState: 'DONE' };
     throw new Error(`unexpected ${sql} ${JSON.stringify(values)}`);
   } };
@@ -256,6 +258,7 @@ test('a copy that cannot be made goes back to the database, and a video deleted 
   storage.signedUrl = async () => 'https://store.example.test/x';
   storage.remove = async (keys) => { removed.push(keys); };
   storage.putFile = async () => undefined; storage.put = async () => undefined;
+  storage.head = async () => ({ totalBytes: 5000, head: iso('ftyp') });
   const calls = [];
   const database = { runSchoolVideoCopyCall: async (sql, values) => { calls.push([sql, values]); return sql === VIDEO_COPY_CLAIM ? job : { assetId: ASSET, copyState: 'QUEUED' }; } };
   const failing = new SchoolVideoCopyWorker(database, storage).withTools({ run: async (_command, args) => { if (args[0] === '-version') return 'ffmpeg version x'; throw new Error('PROCESS_FAILED'); } });
@@ -263,6 +266,26 @@ test('a copy that cannot be made goes back to the database, and a video deleted 
     assert.equal(await failing.runOnce(), 'RETRY');
     assert.deepEqual(calls.at(-1), [VIDEO_COPY_FAIL, [ASSET, job.lease, 'COPY_FAILED']]);
     assert.deepEqual(removed.at(-1), [job.copyKey, job.posterKey]);
+  } finally { if (before === undefined) delete process.env.HON_MEDIA_VIDEO_COPIES_APPROVED; else process.env.HON_MEDIA_VIDEO_COPIES_APPROVED = before; }
+});
+
+test('an original rewritten after finish (another size or not a video) is never copied', async () => {
+  const before = process.env.HON_MEDIA_VIDEO_COPIES_APPROVED;
+  process.env.HON_MEDIA_VIDEO_COPIES_APPROVED = 'true';
+  const job = { assetId: ASSET, lease: randomUUID(), mediaType: 'video/mp4', byteSize: 5000, attempt: 1, sourceKey: `media/${ASSET}`, copyKey: `media/${ASSET}.720.mp4`, posterKey: `media/${ASSET}.poster.jpg` };
+  try {
+    for (const original of [{ totalBytes: 9000, head: iso('ftyp') }, { totalBytes: 5000, head: Buffer.from('<html>'.padEnd(32, ' ')) }, null]) {
+      const storage = MediaStorage.withSettings(SETTINGS, async () => new Response('{}'));
+      const ran = [], calls = [];
+      storage.head = async () => original;
+      storage.signedUrl = async () => { throw new Error('no link should be signed'); };
+      storage.remove = async () => undefined;
+      const database = { runSchoolVideoCopyCall: async (sql, values) => { calls.push([sql, values]); return sql === VIDEO_COPY_CLAIM ? job : { assetId: ASSET, copyState: 'QUEUED' }; } };
+      const worker = new SchoolVideoCopyWorker(database, storage).withTools({ run: async (_command, args) => { ran.push(args[0]); return 'ffmpeg version x'; } });
+      assert.equal(await worker.runOnce(), 'RETRY');
+      assert.deepEqual(calls.at(-1), [VIDEO_COPY_FAIL, [ASSET, job.lease, 'SIZE_CHANGED']]);
+      assert.deepEqual(ran.filter(a => a !== '-version'), [], 'ffmpeg never ran');
+    }
   } finally { if (before === undefined) delete process.env.HON_MEDIA_VIDEO_COPIES_APPROVED; else process.env.HON_MEDIA_VIDEO_COPIES_APPROVED = before; }
 });
 
