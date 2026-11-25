@@ -177,6 +177,10 @@
       "title": "HON | Social accounts"
     },
     {
+      "path": "/staff/marketing/social/posts",
+      "title": "HON | Posts"
+    },
+    {
       "path": "/staff/marketing/social/return",
       "title": "HON | Finishing connection"
     },
@@ -191,6 +195,14 @@
     {
       "path": "/sites/:slug/:page",
       "title": "School website"
+    },
+    {
+      "path": "/sites/:slug/privacy",
+      "title": "School privacy policy"
+    },
+    {
+      "path": "/sites/:slug/terms",
+      "title": "School terms of use"
     },
     {
       "path": "/staff/creative-studio",
@@ -241,6 +253,10 @@
       "title": "Class calendar"
     },
     {
+      "path": "/v/:token",
+      "title": "School video"
+    },
+    {
       "path": "/agreement/:token",
       "title": "Membership agreement"
     },
@@ -255,6 +271,10 @@
     {
       "path": "/staff/marketing/blasts",
       "title": "HON | Blasts"
+    },
+    {
+      "path": "/staff/marketing/media",
+      "title": "HON | Media"
     },
     {
       "path": "/staff/team/availability",
@@ -287,6 +307,10 @@
     {
       "path": "/staff/attendance/planned-absences",
       "title": "HON | Human Planned Absence Review"
+    },
+    {
+      "path": "/staff/attendance/report",
+      "title": "HON | Attendance report"
     },
     {
       "path": "/staff/attendance/cards",

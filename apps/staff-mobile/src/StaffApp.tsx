@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { StaffApi, StaffFailureState, StaffSchool } from './api/client';
 import type { SessionStore } from './session/session-store';
+import { Hon } from './Hon';
+import { People } from './People';
+import { Texts } from './Texts';
 import { Today } from './Today';
 import { T } from './ui/theme';
 
@@ -21,7 +24,12 @@ type View_ =
   | { kind: 'signed-out'; message?: string }
   | { kind: 'failed'; state: Exclude<StaffFailureState, 'signed-out'> }
   | { kind: 'choose'; schools: StaffSchool[]; generation: number }
-  | { kind: 'home'; school: StaffSchool; schools: StaffSchool[] | null; generation: number };
+  | { kind: 'home'; school: StaffSchool; schools: StaffSchool[] | null; generation: number; tab: Tab };
+type Tab = 'today' | 'people' | 'hon' | 'texts';
+const TABS: { tab: Tab; label: string; kicker: string }[] = [
+  { tab: 'today', label: 'Today', kicker: 'Today' }, { tab: 'people', label: 'People', kicker: 'People' },
+  { tab: 'hon', label: 'HON', kicker: 'Ask HON' }, { tab: 'texts', label: 'Texts', kicker: 'Texts' },
+];
 
 
 function Button({ label, onPress, quiet }: { label: string; onPress: () => void; quiet?: boolean }) {
@@ -47,9 +55,9 @@ const FAILED: Record<Exclude<StaffFailureState, 'signed-out'>, { title: string; 
 };
 
 /**
- * S0b/S1: sign in, find the school the person works at (choose when there are several), and Today. The
- * chosen school lives only in memory: it is where the app will look, never permission. Later phases add
- * People, HON (with Kai and the AI team), Texts and Me.
+ * S0b/S1/S2/S4: sign in, find the school the person works at (choose when there are several), then Today, People,
+ * HON and Texts. The chosen school lives only in memory: it is where the app will look, never permission. Later
+ * phases add Kai's journal and Me.
  */
 export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppProps) {
   const [view, setView] = useState<View_>({ kind: 'loading' });
@@ -75,7 +83,7 @@ export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppPr
       return;
     }
     setView(result.data.kind === 'one'
-      ? { kind: 'home', school: result.data.school, schools: null, generation: mine }
+      ? { kind: 'home', school: result.data.school, schools: null, generation: mine, tab: 'today' }
       : { kind: 'choose', schools: result.data.schools, generation: mine });
   }, [api, session]);
 
@@ -128,7 +136,7 @@ export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppPr
           <Text style={s.title}>Which school are you working at?</Text>
           {view.schools.map(school => (
             <Pressable key={school.schoolId} accessibilityRole="button" accessibilityLabel={school.schoolName ?? 'Your school'} style={s.row}
-              onPress={() => setView({ kind: 'home', school, schools: view.schools, generation: view.generation })}>
+              onPress={() => setView({ kind: 'home', school, schools: view.schools, generation: view.generation, tab: 'today' })}>
               <Text style={s.rowText}>{school.schoolName ?? 'Your school'}</Text>
               <Text style={s.rowArrow}>›</Text>
             </Pressable>
@@ -145,13 +153,20 @@ export function StaffApp({ api, session, onSignIn, version, newKey }: StaffAppPr
             <Image source={require('../assets/hon-mark.png')} style={s.mark} accessibilityLabel="HON" />
             {schools ? <Pill label="Switch school" onPress={() => setView({ kind: 'choose', schools, generation: view.generation })} /> : null}
           </View>
-          <Text style={s.kicker}>Today</Text>
-          <Text style={s.hero}>{view.school.schoolName ?? 'Your school'}</Text>
-          <Today key={`${view.generation}:${view.school.schoolId}`} api={api} school={view.school} newKey={newKey} onSignedOut={ended} />
-          <View style={s.panel}>
-            <Text style={s.panelTitle}>HON and your AI team</Text>
-            <Text style={s.panelBody}>HON, Kai and the AI team come in the next update. Your owner chooses which ones you can use.</Text>
+          <View style={s.tabs} accessibilityRole="tablist">
+            {TABS.map(({ tab, label }) => (
+              <Pressable key={tab} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: view.tab === tab }}
+                onPress={() => setView({ ...view, tab })} style={[s.tab, view.tab === tab && s.tabOn]}>
+                <Text style={[s.tabText, view.tab === tab && s.tabTextOn]}>{label}</Text>
+              </Pressable>
+            ))}
           </View>
+          <Text style={s.kicker}>{TABS.find(t => t.tab === view.tab)!.kicker}</Text>
+          <Text style={s.hero}>{view.school.schoolName ?? 'Your school'}</Text>
+          {view.tab === 'today' ? <Today key={`${view.generation}:${view.school.schoolId}`} api={api} school={view.school} newKey={newKey} onSignedOut={ended} /> : null}
+          {view.tab === 'people' ? <People key={`${view.generation}:${view.school.schoolId}`} api={api} school={view.school} onSignedOut={ended} /> : null}
+          {view.tab === 'hon' ? <Hon key={`${view.generation}:${view.school.schoolId}`} api={api} school={view.school} newKey={newKey} onSignedOut={ended} /> : null}
+          {view.tab === 'texts' ? <Texts key={`${view.generation}:${view.school.schoolId}`} api={api} school={view.school} newKey={newKey} onSignedOut={ended} /> : null}
           <Button label="Sign out" quiet onPress={() => void signOut()} />
         </View>
       );
@@ -186,8 +201,10 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.soft, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 18 },
   rowText: { color: T.ink, fontSize: 17, fontWeight: '600', flexShrink: 1 },
   rowArrow: { color: T.muted, fontSize: 24 },
-  panel: { backgroundColor: T.panel, borderRadius: T.radius.card, padding: 22, gap: 8 },
-  panelTitle: { color: T.panelText, fontSize: 18, fontWeight: '700' },
-  panelBody: { color: T.panelMuted, fontSize: 15, lineHeight: 21 },
+  tabs: { flexDirection: 'row', backgroundColor: T.soft, borderRadius: T.radius.pill, padding: 4, gap: 4 },
+  tab: { flex: 1, alignItems: 'center', borderRadius: T.radius.pill, paddingVertical: 10 },
+  tabOn: { backgroundColor: T.pill },
+  tabText: { color: T.ink, fontSize: 15, fontWeight: '700' },
+  tabTextOn: { color: T.pillText },
   version: { color: T.muted, fontSize: 12, textAlign: 'center', marginTop: 16 },
 });

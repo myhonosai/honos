@@ -6,7 +6,8 @@ import { StudentPicker } from '../school-pickers/pickers';
 import type { PickerStudent } from '../school-pickers/http';
 import { useShellSchoolInto } from '../school-shell/page-school';
 import { rankSetupApi as api, requirementCode } from './http';
-import { QuickSetup } from './quick-setup';
+import { QuickSetup, type QuickSetupAi } from './quick-setup';
+import { rankChartApi } from './ai-draft-http';
 import s from '../curriculum-look/look.module.css';
 
 /**
@@ -45,7 +46,14 @@ export function StaffRankSetup(): React.ReactElement {
   const [view, setView] = useState<View | null>(null), [selected, setSelected] = useState(''), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [loading, setLoading] = useState(true);
   const school = useRef(''), org = useRef(''), gate = useRef(false), reads = useRef(0), keys = useRef(new Map<string, string>());
-  const shell = useShellSchoolInto((signedIn) => { school.current = signedIn.schoolId; org.current = signedIn.organizationId; void refresh(); });
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null), aiKeys = useRef(new Map<string, string>());
+  const shell = useShellSchoolInto((signedIn) => { school.current = signedIn.schoolId; org.current = signedIn.organizationId; setAiAvailable(null); void refresh();
+    const asked = signedIn.schoolId; void rankChartApi.available(asked).then((on) => { if (school.current === asked) setAiAvailable(on); }); });
+  /** One turn (the words and the list they apply to) keeps one idempotency key until it is answered, so a retry is never a second paid request. */
+  const ai: QuickSetupAi = { available: aiAvailable,
+    draft: async (description, current) => { const turn = JSON.stringify([description, current]), key = aiKeys.current.get(turn) ?? crypto.randomUUID(); aiKeys.current.set(turn, key);
+      const view = await rankChartApi.draft(school.current, description, current, key); aiKeys.current.delete(turn); return view; },
+    used: (id) => { void rankChartApi.close(school.current, id, 'APPLIED', crypto.randomUUID()).catch(() => {}); } };
 
   async function refresh(): Promise<void> {
     const token = ++reads.current; setLoading(true);
@@ -82,12 +90,12 @@ export function StaffRankSetup(): React.ReactElement {
       return `${x.givenName}'s belt is now ${p.ranks.find((r) => r.id === rankId)?.name ?? 'not set'}.`; }, true),
   };
   return <RankSetupPage view={view} selected={selected} onSelect={setSelected} busy={busy} loading={loading && !!shell} error={error} notice={notice}
-    scope={shell ? { organizationId: shell.organizationId, schoolId: shell.schoolId } : null} onRefresh={() => void refresh()} actions={actions} />;
+    scope={shell ? { organizationId: shell.organizationId, schoolId: shell.schoolId } : null} onRefresh={() => void refresh()} actions={actions} ai={ai} />;
 }
 
 /** Pure page: everything it shows comes from props, so it renders the same in tests. */
 export function RankSetupPage(p: { view: View | null; selected: string; onSelect: (id: string) => void; busy: boolean; loading: boolean; error: string; notice: string;
-  scope: { organizationId: string; schoolId: string } | null; onRefresh: () => void; actions: RankSetupActions }): React.ReactElement {
+  scope: { organizationId: string; schoolId: string } | null; onRefresh: () => void; actions: RankSetupActions; ai?: QuickSetupAi }): React.ReactElement {
   const current = p.view?.programs.find((x) => x.id === p.selected) ?? null;
   const [quick, setQuick] = useState(false);
   const create = (name: string, ranks: RankSetupRankInput[]) => p.actions.quickSetup(name, ranks).then((ok) => { if (ok) setQuick(false); return ok; });
@@ -105,7 +113,7 @@ export function RankSetupPage(p: { view: View | null; selected: string; onSelect
       <h2 id="first-program">Start with your first program</h2>
       <p className={s.muted}>A program is one set of belts, for example &ldquo;Kids Taekwondo&rdquo; or &ldquo;Adult BJJ&rdquo;. Quick setup builds the belts for you. After that you write what each belt needs and place your students on their belt.</p>
     </section>}
-    {p.view && !p.view.programs.length && <QuickSetup busy={p.busy} onCreate={create} />}
+    {p.view && !p.view.programs.length && <QuickSetup busy={p.busy} onCreate={create} {...(p.ai ? { ai: p.ai } : {})} />}
     {p.view && !p.view.programs.length && <section className={s.panel} aria-labelledby="blank-program">
       <h2 id="blank-program">Or start from an empty program</h2>
       <NewProgram busy={p.busy} actions={p.actions} />
@@ -118,7 +126,7 @@ export function RankSetupPage(p: { view: View | null; selected: string; onSelect
         </button></li>)}
         <li><button type="button" className={s.primary} disabled={p.busy} aria-expanded={quick} onClick={() => setQuick(true)}>Quick setup for a new program</button></li>
         <li><NewProgram busy={p.busy} actions={p.actions} compact /></li></ul></nav>
-      {quick && <div className={s.detail}><QuickSetup busy={p.busy} onCreate={create} onCancel={() => setQuick(false)} /></div>}
+      {quick && <div className={s.detail}><QuickSetup busy={p.busy} onCreate={create} onCancel={() => setQuick(false)} {...(p.ai ? { ai: p.ai } : {})} /></div>}
       {!quick && current && <div className={s.detail}>
         <ProgramName key={`${current.id}:${current.version}`} program={current} busy={p.busy} actions={p.actions} />
         <Belts program={current} busy={p.busy} actions={p.actions} />

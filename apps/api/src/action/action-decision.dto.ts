@@ -6,6 +6,11 @@ export class ActionDecisionDto {
   @IsIn(['APPROVED', 'DENIED']) decision!: 'APPROVED' | 'DENIED';
   @Allow() binding!: ActionReviewBinding;
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
+  /** 0647: how an approval was given (BUTTON default, or VOICE with the voice turn id); validated exactly by the contracts. */
+  @IsOptional() @IsIn(['BUTTON', 'VOICE']) approvalMethod?: 'BUTTON' | 'VOICE';
+  @IsOptional() @IsString() @MaxLength(36) voiceTurnId?: string;
+  /** 0647: the Chad send plan version the reviewer saw, or null for none; validated exactly by the contracts. */
+  @IsOptional() @Allow() sendPlanVersion?: number | null;
 }
 @Injectable()
 export class ActionReviewHumanUiGuard extends CurriculumHumanUiGuard {

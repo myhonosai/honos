@@ -5074,6 +5074,159 @@ DO $$ DECLARE r text; f text; BEGIN
   END IF;
 END $$;
 
+-- 0639 Alex delegation plans (P1): the ALEX_DELEGATION_PLAN kind on the shared AI text proposals; eight runtime entry points,
+-- every helper closed, and no runtime access to the two evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_alex_plan(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0639 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_alex_plan_rows()','hon.alex_plan_areas()','hon.alex_plan_keys_are(jsonb,text[])','hon.alex_plan_line_ok(text,integer)',
+    'hon.alex_plan_brief_ok(jsonb)','hon.alex_plan_ok(jsonb)','hon.alex_plan_actor(text)','hon.alex_plan_reader(text)','hon.alex_plan_fix_refs(uuid)',
+    'hon.alex_plan_facts(text,uuid,jsonb)','hon.alex_plan_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.alex_plan_staff_refs','hon.alex_plan_created_tasks'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_alex_plan(text,jsonb,uuid), hon.plan_alex_plan(text,uuid), hon.prepare_alex_plan(text,uuid,uuid,boolean),
+      hon.fail_alex_plan(text,uuid,text,text), hon.record_alex_plan(text,uuid,jsonb), hon.read_alex_plans(text,uuid),
+      hon.create_alex_plan_tasks(text,uuid,jsonb,text,uuid,uuid), hon.close_alex_plan(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0640 Jordan follow-through (P2): the JORDAN_FOLLOW_UP kind on the shared AI text proposals; eight runtime entry points,
+-- every helper closed, and no runtime access to the two evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_jordan_follow_up(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0640 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.jordan_follow_up_brief_ok(jsonb)','hon.jordan_follow_up_ok(jsonb)','hon.jordan_follow_up_actor(text)',
+    'hon.jordan_follow_up_reader(text)','hon.jordan_follow_up_fix_refs(uuid,text)','hon.jordan_follow_up_facts(text,uuid,jsonb)',
+    'hon.jordan_follow_up_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.jordan_follow_up_refs','hon.jordan_follow_up_applied'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_jordan_follow_up(text,jsonb,uuid), hon.plan_jordan_follow_up(text,uuid), hon.prepare_jordan_follow_up(text,uuid,uuid,boolean),
+      hon.fail_jordan_follow_up(text,uuid,text,text), hon.record_jordan_follow_up(text,uuid,jsonb), hon.read_jordan_follow_ups(text,uuid),
+      hon.apply_jordan_follow_ups(text,uuid,jsonb,text,uuid,uuid), hon.close_jordan_follow_up(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0641 Marcus marketing review (P3): the MARCUS_MARKETING_REVIEW kind on the shared AI text proposals; seven runtime entry
+-- points and every helper closed. Text only; no tables.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_marcus_review(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0641 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.marcus_review_brief_ok(jsonb)','hon.marcus_review_ok(jsonb)','hon.marcus_review_actor(text)',
+    'hon.marcus_review_reader(text)','hon.marcus_review_facts(jsonb)','hon.marcus_review_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_marcus_review(text,jsonb,uuid), hon.plan_marcus_review(text,uuid), hon.prepare_marcus_review(text,uuid,uuid,boolean),
+      hon.fail_marcus_review(text,uuid,text,text), hon.record_marcus_review(text,uuid,jsonb), hon.read_marcus_reviews(text,uuid),
+      hon.close_marcus_review(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0643 Claire KPI report (P4): the CLAIRE_KPI_REPORT kind on the shared AI text proposals; seven runtime entry points,
+-- every helper closed, and no runtime access to the counted-numbers evidence table.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_claire_kpi_report(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0643 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.claire_kpi_codes()','hon.claire_kpi_brief_ok(jsonb)','hon.claire_kpi_ok(jsonb)','hon.claire_kpi_actor(text)',
+    'hon.claire_kpi_reader(text)','hon.claire_kpi_count(integer)','hon.claire_kpi_facts(text,uuid,jsonb)','hon.claire_kpi_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.claire_kpi_report_numbers FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.claire_kpi_report_numbers FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_claire_kpi_report(text,jsonb,uuid), hon.plan_claire_kpi_report(text,uuid), hon.prepare_claire_kpi_report(text,uuid,uuid,boolean),
+      hon.fail_claire_kpi_report(text,uuid,text,text), hon.record_claire_kpi_report(text,uuid,jsonb), hon.read_claire_kpi_reports(text,uuid),
+      hon.close_claire_kpi_report(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0646 Maya renewal prep (P5): the MAYA_RENEWAL_PREP kind on the shared AI text proposals; eight runtime entry points,
+-- every helper closed, and no runtime access to the alias or applied-link evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_maya_renewal_prep(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0646 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.maya_renewal_brief_ok(jsonb)','hon.maya_renewal_ok(jsonb)','hon.maya_renewal_reader(text)','hon.maya_renewal_actor(text)',
+    'hon.maya_renewal_open_review(uuid)','hon.maya_renewal_fix_refs(uuid,text)','hon.maya_renewal_facts(text,uuid,jsonb)','hon.maya_renewal_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.maya_renewal_refs','hon.maya_renewal_applied'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_maya_renewal_prep(text,jsonb,uuid), hon.plan_maya_renewal_prep(text,uuid), hon.prepare_maya_renewal_prep(text,uuid,uuid,boolean),
+      hon.fail_maya_renewal_prep(text,uuid,text,text), hon.record_maya_renewal_prep(text,uuid,jsonb), hon.read_maya_renewal_preps(text,uuid),
+      hon.apply_maya_renewal_preps(text,uuid,jsonb,text,uuid,uuid), hon.close_maya_renewal_prep(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0647 Chad approved-draft send (P7): plan, read and cancel entry points; the approval transition stays a runtime entry point;
+-- every helper closed, and no runtime access to the plan or send evidence tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.set_chad_draft_send_plan(text,uuid,jsonb,text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0647 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_ai_draft_send_rows()','hon.ai_draft_reachable(uuid,text)','hon.chad_draft_send_view(uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.ai_draft_send_plans','hon.ai_draft_sends'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.set_chad_draft_send_plan(text,uuid,jsonb,text), hon.read_chad_draft_send(text,uuid), hon.cancel_chad_draft_send(text,uuid),
+      hon.transition_chad_follow_up_draft(uuid,text), hon.read_chad_draft_send_for_review(uuid) TO hon_runtime;
+  END IF;
+END $$;
+-- 0649 Maya check-in drafts (P8): nine entry points; every helper closed, and no runtime access to the target or send tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_maya_check_in_draft(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0649 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.guard_maya_check_in_rows()','hon.maya_check_in_text_ok(text,integer)','hon.maya_check_in_line_ok(text,integer)',
+    'hon.maya_check_in_brief_ok(jsonb)','hon.maya_check_in_ok(jsonb,text)','hon.maya_check_in_reader(text)','hon.maya_check_in_actor(text)',
+    'hon.maya_check_in_at_risk_row(text,uuid)','hon.maya_check_in_recipient(uuid,text)','hon.maya_check_in_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.maya_check_in_targets','hon.maya_check_in_sends'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_maya_check_in_draft(text,jsonb,uuid), hon.plan_maya_check_in_draft(text,uuid), hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean),
+      hon.fail_maya_check_in_draft(text,uuid,text,text), hon.record_maya_check_in_draft(text,uuid,jsonb), hon.read_maya_check_in_drafts(text,uuid),
+      hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid), hon.cancel_maya_check_in_send(text,uuid), hon.close_maya_check_in_draft(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+-- 0650 Chad lead next steps (P9): eight entry points; every helper closed, and no runtime access to the alias or applied tables.
+DO $$ DECLARE r text; f regprocedure; t text; BEGIN
+  IF to_regprocedure('hon.begin_chad_lead_plan(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0650 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.chad_lead_plan_brief_ok(jsonb)','hon.chad_lead_plan_ok(jsonb)','hon.chad_lead_plan_trial_ahead(uuid)',
+    'hon.chad_lead_plan_fix_refs(uuid,text)','hon.chad_lead_plan_facts(uuid,jsonb)','hon.chad_lead_plan_fits(uuid,jsonb)','hon.chad_lead_plan_view(uuid,uuid)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hon.chad_lead_plan_refs','hon.chad_lead_plan_applied'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_chad_lead_plan(text,jsonb,uuid), hon.plan_chad_lead_plan(text,uuid), hon.prepare_chad_lead_plan(text,uuid,uuid,boolean),
+      hon.fail_chad_lead_plan(text,uuid,text,text), hon.record_chad_lead_plan(text,uuid,jsonb), hon.read_chad_lead_plans(text,uuid),
+      hon.record_chad_lead_plan_step(text,uuid,integer,jsonb), hon.close_chad_lead_plan(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+
+
 -- 0620 checkout page share links: one private table and two private helpers; two runtime entry points (staff issue, public read).
 DO $$ DECLARE r text; f text;
   entry text[]:=ARRAY['hon.issue_school_checkout_links(text)','hon.read_public_school_checkout(text)'];
@@ -5169,6 +5322,195 @@ BEGIN
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
       EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
   END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0628 school media library: one private table reached only through seven runtime entry points (list, upload start and
+-- finish, rename, delete, removal confirm, public link).
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_media(text)',
+    'hon.begin_school_media_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_media_upload(text,jsonb,uuid,uuid)',
+    'hon.rename_school_media(text,jsonb,text,uuid,uuid)','hon.delete_school_media(text,jsonb,text,uuid,uuid)',
+    'hon.confirm_school_media_removed(text,uuid,uuid,uuid)','hon.resolve_school_media_link(text)'];
+  helpers text[]:=ARRAY['hon.school_media_title_ok(jsonb)','hon.school_media_new_token()','hon.guard_school_media_asset()',
+    'hon.require_school_media_actor(text,text)','hon.school_media_json(hon.school_media_assets)','hon.school_media_usage(uuid,uuid)',
+    'hon.school_media_begin(text,text,jsonb,text,uuid)','hon.school_media_current(uuid,uuid,jsonb)','hon.school_media_finish(text,text,uuid,text,hon.school_media_assets,jsonb,uuid,uuid)'];
+  tables text[]:=ARRAY['hon.school_media_assets'];
+BEGIN
+  IF to_regprocedure('hon.resolve_school_media_link(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0628 first'; END IF;
+  FOREACH t IN ARRAY tables LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- AR1 0633 attendance report: one read-only runtime entry point (the 0331 actor check and 0520 members helper stay private).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_attendance_report(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0633 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_attendance_report(text,jsonb) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_attendance_report(text,jsonb) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_attendance_report(text,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0634 intake contact consent (IC1): one runtime entry point for staff adds and imports, and a read of the capture
+-- evidence (forced RLS, tenant-scoped). The writer and the deferred lead trigger stay migration-owner only.
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.record_staff_intake_consent(text,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0634 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.record_intake_consent(uuid,text,text,jsonb,uuid,boolean)','hon.intake_consent_after_lead()','hon.record_staff_intake_consent(text,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.communication_consent_captures FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.communication_consent_captures FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.record_staff_intake_consent(text,jsonb) TO hon_runtime;
+    GRANT SELECT ON TABLE hon.communication_consent_captures TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0636 rank chart AI draft: the RANK_CHART kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_rank_chart_draft(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0636 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.rank_chart_brief_ok(jsonb)','hon.rank_chart_ok(jsonb)','hon.rank_chart_ai_actor(text)','hon.rank_chart_facts(jsonb)','hon.rank_chart_view(uuid,uuid)',
+    'hon.begin_rank_chart_draft(text,jsonb,uuid)','hon.plan_rank_chart_draft(text,uuid)','hon.prepare_rank_chart_draft(text,uuid,uuid,boolean)',
+    'hon.fail_rank_chart_draft(text,uuid,text,text)','hon.record_rank_chart_draft(text,uuid,jsonb)','hon.read_rank_chart_drafts(text,uuid)',
+    'hon.close_rank_chart_draft(text,uuid,text)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_rank_chart_draft(text,jsonb,uuid), hon.plan_rank_chart_draft(text,uuid),
+      hon.prepare_rank_chart_draft(text,uuid,uuid,boolean), hon.fail_rank_chart_draft(text,uuid,text,text),
+      hon.record_rank_chart_draft(text,uuid,jsonb), hon.read_rank_chart_drafts(text,uuid), hon.close_rank_chart_draft(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0638 Eian natural voice: one private table, two private helpers and five runtime entry points. The runtime gets no
+-- table privilege; the shared S4 functions it re-creates keep the grants set in their own sections above.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_eian_speech_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0638 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.eian_speech_limits()','hon.eian_speech_unavailable_reason(uuid,uuid,boolean)',
+      'hon.read_eian_speech_status(text,boolean)','hon.begin_eian_speech(text,text,text,integer)','hon.prepare_eian_speech(text,uuid,boolean)',
+      'hon.fail_eian_speech(text,uuid,text,text)','hon.record_eian_speech_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.eian_speech_clips FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.eian_speech_clips FROM %I',r); END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_eian_speech_status(text,boolean), hon.begin_eian_speech(text,text,text,integer),
+      hon.prepare_eian_speech(text,uuid,boolean), hon.fail_eian_speech(text,uuid,text,text), hon.record_eian_speech_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0652 staff agent speech: one private table, two private helpers and five runtime entry points. The runtime gets no
+-- table privilege; the shared S4 functions it re-creates keep the grants set in their own sections above.
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regprocedure('hon.record_agent_speech_result(text,uuid,jsonb)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0652 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.agent_speech_limits()','hon.agent_speech_actor(text,text)',
+      'hon.read_agent_speech_status(text,text,boolean)','hon.begin_agent_speech(text,text,text,text,integer)','hon.prepare_agent_speech(text,uuid,boolean)',
+      'hon.fail_agent_speech(text,uuid,text,text)','hon.record_agent_speech_result(text,uuid,jsonb)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  REVOKE ALL ON TABLE hon.agent_speech_clips FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker') LOOP EXECUTE format('REVOKE ALL ON TABLE hon.agent_speech_clips FROM %I',r); END LOOP;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_agent_speech_status(text,text,boolean), hon.begin_agent_speech(text,text,text,text,integer),
+      hon.prepare_agent_speech(text,uuid,boolean), hon.fail_agent_speech(text,uuid,text,text), hon.record_agent_speech_result(text,uuid,jsonb) TO hon_runtime;
+  END IF;
+END $$;
+
+-- 0642 Membership plan payment options: three staff entry points (setups read, publish with options, revise with options).
+-- Both tables keep forced RLS with no runtime privilege; every helper stays migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.read_school_membership_plan_setups(text)','hon.create_school_membership_plan_with_options(text,jsonb,uuid,uuid,uuid)',
+    'hon.revise_school_membership_plan_with_options(text,uuid,jsonb,uuid,uuid,uuid)'];
+BEGIN
+  IF to_regclass('hon.membership_plan_version_setups') IS NULL OR to_regclass('hon.membership_plan_payment_options') IS NULL THEN
+    RAISE EXCEPTION 'Apply migration 0642 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.membership_plan_version_setups','hon.membership_plan_payment_options'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_membership_plan_setup()','hon.membership_plan_setup_int(jsonb,integer,integer,boolean)','hon.membership_plan_validated_setup(jsonb)',
+      'hon.membership_plan_setup_summary(uuid,integer)','hon.membership_plan_setup_terms(jsonb,jsonb)','hon.membership_plan_insert_setup(uuid,integer,jsonb,uuid)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+-- 0653 pictures inside email blasts: three private helpers; the campaign picture lookup is runnable only by the
+-- communication worker (013). save_school_blast and send_school_blast keep their 0621 grants.
+DO $$ DECLARE r text; f text;
+  helpers text[]:=ARRAY['hon.school_blast_picture_ids(text)','hon.school_blast_body_ok(jsonb,text)','hon.school_blast_pictures_ready(uuid,uuid,text)',
+    'hon.communication_email_pictures(uuid,uuid)'];
+BEGIN
+  IF to_regprocedure('hon.communication_email_pictures(uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0653 first'; END IF;
+  FOREACH f IN ARRAY helpers LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker') THEN
+    FOREACH f IN ARRAY helpers[1:3] LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM hon_communication_worker',f); END LOOP;
+  END IF;
+END $$;
+-- 0654 school videos: seven runtime entry points (video upload start and finish, the in-process copy job's claim, finish
+-- and fail, the public poster and page lookups) and two private helpers. The 0628 and 0653 functions it replaces keep
+-- their grants.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.begin_school_video_upload(text,jsonb,text,uuid,uuid)','hon.finish_school_video_upload(text,jsonb,uuid,uuid)',
+    'hon.claim_school_video_copy()','hon.finish_school_video_copy(uuid,uuid,jsonb)','hon.fail_school_video_copy(uuid,uuid,text)',
+    'hon.resolve_school_video_poster(text)','hon.resolve_school_video_page(text)'];
+  helpers text[]:=ARRAY['hon.school_video_copy_record(hon.school_media_assets,text,jsonb)','hon.school_blast_video_ids(text)'];
+BEGIN
+  IF to_regprocedure('hon.resolve_school_video_page(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0654 first'; END IF;
+  FOREACH f IN ARRAY helpers||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0656 profile details on the contact card's Edit profile pop-up: two runtime entry points (read, save); the contact-list and
+-- read-shape helpers are private; the details table has no runtime privilege.
+DO $$ DECLARE r text; f text;
+  entry text[]:=ARRAY['hon.read_school_person_details(text,uuid,uuid)','hon.update_school_person_details(text,jsonb,uuid)'];
+  fns text[]:=ARRAY['hon.person_profile_contact_list(jsonb,text,text)','hon.person_profile_details_json(uuid,text)']||entry; BEGIN
+  IF to_regprocedure('hon.update_school_person_details(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0656 first'; END IF;
+  FOREACH f IN ARRAY fns LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  EXECUTE 'REVOKE ALL ON TABLE hon.person_profile_details FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.person_profile_details FROM %I',r); END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;

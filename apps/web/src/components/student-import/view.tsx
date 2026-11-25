@@ -22,6 +22,7 @@ export type StudentImportViewProps = Readonly<{
   onCancelUpload?: (() => void) | undefined; onStage?: (() => void) | undefined;
   onChoice?: ((index: number, choice: Choice) => void) | undefined; onAll?: ((which: 'VALID' | 'SKIP') => void) | undefined;
   onSave?: (() => void) | undefined; onFinalize?: (() => void) | undefined; onTryAgain?: (() => void) | undefined;
+  consent?: boolean | undefined; onConsent?: ((consent: boolean) => void) | undefined;
 }>;
 
 const day = (language: string, value: string) => new Date(`${value}T00:00:00Z`).toLocaleDateString(language, { dateStyle: 'medium', timeZone: 'UTC' });
@@ -146,6 +147,8 @@ function Review({ p, t }: { p: StudentImportViewProps; t: T }) {
           <h3>{t('finalizeTitle')}</h3>
           <p>{t('finalizeHelp', { n: String(b.importCount) })}</p>
           {!canFinalize ? <p className={styles.meta}>{unsaved.length || b.undecidedCount ? t('finalizeNeedsDecisions') : t('finalizeNothing')}</p> : null}
+          <label className={styles.meta}><input type="checkbox" name="record-consent" checked={p.consent ?? true} disabled={p.locked}
+            onChange={(e) => p.onConsent?.(e.target.checked)}/> {t('consentLabel')}</label>
           <div className={styles.row}><button type="button" className={styles.primary} disabled={p.locked || !canFinalize} onClick={p.onFinalize}>{t('finalizeConfirm', { n: String(b.importCount) })}</button></div>
         </div> : null}
       </>}

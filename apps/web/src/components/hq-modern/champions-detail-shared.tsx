@@ -45,7 +45,7 @@ export function DetailState<T>({ state }: { state: DetailRead<T> }): React.React
     : state.failure === 'INVALID_RESPONSE' ? 'Records could not be verified'
     : state.failure === 'INVALID_SELECTION' ? 'Select a verified school or reward status'
     : 'Authorized records unavailable';
-  return <section className={base.panel} role="status"><h2>{title}</h2><p>Previous facts are cleared. Independent current HQ authorization and verified service responses are required. Refresh to check again.</p>{state.kind === 'failed' && state.failure === 'UNAUTHORIZED' && <Link href="/auth/login">Sign in to HON</Link>}</section>;
+  return <section className={base.panel} role="status"><h2>{title}</h2><p>Press Refresh to try again.</p>{state.kind === 'failed' && state.failure === 'UNAUTHORIZED' && <Link href="/auth/login">Sign in to HON</Link>}</section>;
 }
 
 export function ChampionsDetailNav(): React.ReactElement {

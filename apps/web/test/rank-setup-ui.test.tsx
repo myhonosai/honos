@@ -5,7 +5,9 @@ import type { RankSetupProgram, StaffRankSetup } from '@hon/contracts';
 import { RankSetupPage, ruleText, studentsIn, plural, type RankSetupActions } from '../src/components/rank-setup/rank-setup';
 import { rankSetupApi, RankSetupRefusal, requirementCode } from '../src/components/rank-setup/http';
 import { RANK_TEMPLATES, beltListProblem, buildBelts, choicesFor } from '../src/components/rank-setup/templates';
-import { QuickSetup } from '../src/components/rank-setup/quick-setup';
+import { AI_EXAMPLES, AI_FOLLOW_UPS, QuickSetup, type QuickSetupAi } from '../src/components/rank-setup/quick-setup';
+import { rankChartApi, rankChartOutcome } from '../src/components/rank-setup/ai-draft-http';
+import { RANK_CHART_LIMITS, validateRankChartBrief, type RankChartView } from '@hon/contracts';
 import { SCHOOL_SHELL_NAV, schoolShellActiveItem } from '../src/components/school-shell/catalog';
 
 const u = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -182,5 +184,97 @@ describe('quick setup starting points', () => {
     expect(ruleText({ classes: 48, days: 90 })).toBe('48 classes and 90 days');
     expect(ruleText({ classes: 1, days: 0 })).toBe('1 class');
     expect(ruleText({ classes: 0, days: 0 })).toBe('');
+  });
+});
+
+describe('describe your martial art (AI draft)', () => {
+  const chart: RankChartView = { id: u(700), status: 'RESULT_RECORDED', reason: null, brief: { description: 'Kids Taekwondo. White, yellow, black.', current: null }, mine: true,
+    draft: { name: 'Kids Taekwondo', summary: 'Three belts from white to black.', ranks: [{ name: 'White belt', color: '#FFFFFF', classes: 24, days: 60 }, { name: 'Black belt', color: '#111111', classes: 0, days: 0 }] },
+    problems: [], createdAt: '2026-11-22T00:00:00.000Z', updatedAt: '2026-11-22T00:00:00.000Z' };
+  const ai = (available: boolean | null): QuickSetupAi => ({ available, draft: vi.fn(), used: vi.fn() });
+  const box = (available: boolean | null) => renderToStaticMarkup(<QuickSetup busy={false} onCreate={vi.fn()} ai={ai(available)} />);
+
+  it('offers the box above the choices and keeps the button off until words are typed', () => {
+    const html = box(true);
+    expect(html).toContain('Set it up by talking to Kai');
+    expect(html).toContain('keep talking to change it');
+    expect(html).not.toContain('Tell Kai what to change');
+    expect(html.indexOf('Set it up by talking to Kai')).toBeLessThan(html.indexOf('1. Or pick what you teach'));
+    expect(html).toMatch(/<button type="button" class="[^"]*" disabled="">Draft my ranks with AI<\/button>/);
+    expect(html).toContain(`maxLength="${RANK_CHART_LIMITS.description}"`);
+    expect(html).toContain('You check it before anything is saved');
+    expect(html).toContain('uses your school&#x27;s AI allowance');
+    expect(html).not.toContain('3. Check the list');
+    // Voice appears only in a browser that has speech recognition (checked after mount), never in the server render.
+    expect(html).not.toContain('Talk to Kai');
+  });
+  it('says plainly when AI drafting is off and still shows every built-in choice', () => {
+    const html = box(false);
+    expect(html).toContain('Kai is not available on your account yet');
+    expect(html).not.toContain('AI allowance');
+    for (const t of RANK_TEMPLATES) expect(html).toContain(t.art.replace(/&/g, '&amp;'));
+    expect(box(null)).not.toContain('not available on your account');
+  });
+  it('the page hands the box to quick setup only when it is given one', () => {
+    expect(render(view({ programs: [], students: [] }), { ai: ai(false) })).toContain('Set it up by talking to Kai');
+    expect(render(view({ programs: [], students: [] }))).not.toContain('Set it up by talking to Kai');
+  });
+  it('every example is a brief the server accepts', () => {
+    expect(AI_EXAMPLES.length).toBe(3);
+    for (const x of [...AI_EXAMPLES, ...AI_FOLLOW_UPS]) expect(validateRankChartBrief({ description: x })).toEqual({ description: x, current: null });
+  });
+  it('asks with the rank-chart-draft command and an idempotency key, and reads availability without one', async () => {
+    const fetchMock = vi.fn(async (_u: string, init?: RequestInit) => ok(init?.method === 'POST' ? chart : { aiAvailable: true, requests: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await rankChartApi.available(school)).toBe(true);
+    const got = await rankChartApi.draft(school, chart.brief.description, null, u(501));
+    expect(got.draft?.ranks).toHaveLength(2);
+    const [readUrl, readInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(readUrl).toBe(`/api/v1/staff/schools/${school}/rank-setup/ai-drafts`);
+    expect(readInit.method).toBe('GET');
+    expect((readInit.headers as Record<string, string>)['Idempotency-Key']).toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe(readUrl);
+    expect((init.headers as Record<string, string>)['X-Hon-Human-Command']).toBe('rank-chart-draft');
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(u(501));
+    expect(init.credentials).toBe('same-origin');
+    expect(JSON.parse(String(init.body))).toEqual({ description: chart.brief.description, current: null });
+    // A later turn sends the list on screen for Kai to change.
+    const current = { name: 'Kids Taekwondo', ranks: chart.draft!.ranks };
+    await rankChartApi.draft(school, 'Add a yellow belt in the middle.', current, u(509));
+    expect(JSON.parse(String((fetchMock.mock.calls[2] as unknown as [string, RequestInit])[1].body))).toEqual({ description: 'Add a yellow belt in the middle.', current });
+    await rankChartApi.close(school, chart.id, 'APPLIED', u(502));
+    const [closeUrl, closeInit] = fetchMock.mock.calls[3] as unknown as [string, RequestInit];
+    expect(closeUrl).toBe(`/api/v1/staff/schools/${school}/rank-setup/ai-drafts/${chart.id}/close`);
+    expect(JSON.parse(String(closeInit.body))).toEqual({ status: 'APPLIED' });
+  });
+  it('treats any failed availability read as off, refuses a bad description before sending, and never trusts an odd answer', async () => {
+    const fetchMock = vi.fn(async () => fail(403, 'RANK_CHART_FORBIDDEN'));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await rankChartApi.available(school)).toBe(false);
+    expect(await rankChartApi.available('not-a-school')).toBe(false);
+    await expect(rankChartApi.draft(school, chart.brief.description, null, u(503))).rejects.toThrow(/Complete plan/);
+    const before = fetchMock.mock.calls.length;
+    await expect(rankChartApi.draft(school, 'x'.repeat(601), null, u(504))).rejects.toThrow();
+    await expect(rankChartApi.draft(school, 'Shorter.', { name: 'Long', ranks: Array.from({ length: 60 }, (_, i) => ({ name: `${'Rank '.repeat(20)}${i}`, color: '#FFFFFF', classes: 10, days: 10 })) }, u(510))).rejects.toThrow(/change it by hand/);
+    await expect(rankChartApi.draft(school, 'Fix it.', { name: 'Two', ranks: [{ name: 'White', color: null, classes: 0, days: 0 }, { name: 'white', color: null, classes: 0, days: 0 }] }, u(511))).rejects.toThrow(/change it by hand/);
+    expect(fetchMock.mock.calls.length).toBe(before);
+    vi.stubGlobal('fetch', vi.fn(async () => fail(403, 'RANK_CHART_SPEND_STOPPED')));
+    await expect(rankChartApi.draft(school, chart.brief.description, null, u(505))).rejects.toThrow(/Nothing was sent/);
+    vi.stubGlobal('fetch', vi.fn(async () => fail(401)));
+    await expect(rankChartApi.draft(school, chart.brief.description, null, u(506))).rejects.toThrow(/Sign in again/);
+    vi.stubGlobal('fetch', vi.fn(async () => ok({ ...chart, extra: 1 })));
+    await expect(rankChartApi.draft(school, chart.brief.description, null, u(507))).rejects.toThrow();
+    vi.stubGlobal('fetch', vi.fn(async () => ok({ ...chart, draft: { ...chart.draft!, ranks: [{ name: 'White', color: 'white', classes: 0, days: 0 }] } })));
+    await expect(rankChartApi.draft(school, chart.brief.description, null, u(508))).rejects.toThrow();
+  });
+  it('explains in plain words why a draft cannot be shown', () => {
+    expect(rankChartOutcome(chart)).toBe('');
+    const none = (status: RankChartView['status']) => rankChartOutcome({ ...chart, status, draft: null });
+    expect(none('CONFIGURATION_REQUIRED')).toMatch(/not switched on yet. Nothing was sent/);
+    expect(none('BLOCKED')).toMatch(/Nothing was sent/);
+    expect(none('RESULT_REJECTED')).toMatch(/not a usable rank chart/);
+    expect(none('FAILED')).toMatch(/Try again/);
+    expect(none('PENDING')).toMatch(/held for HON to check and is not sent again/);
   });
 });

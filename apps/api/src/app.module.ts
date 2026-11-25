@@ -31,7 +31,7 @@ import { MembershipPlanService } from './billing/membership-plan.service.js';
 import { GuardianChildEnrollmentController, GuardianChildMembershipDraftController } from './crm/guardian-child-enrollment.controller.js';
 import { GuardianChildEnrollmentService } from './crm/guardian-child-enrollment.service.js';
 import { CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard } from './crm/guardian-child-enrollment.dto.js';
-import { CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard } from './billing/membership-plan.dto.js';
+import { CrmAdultMembershipDraftFromPlanHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, MembershipPlanSetupsHumanUiGuard, MembershipPlanCreateWithOptionsHumanUiGuard, MembershipPlanReviseWithOptionsHumanUiGuard } from './billing/membership-plan.dto.js';
 import { CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipNoStoreGuard } from './billing/crm-adult-membership-draft.dto.js';
 import { OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard } from './owner-launch/owner-launch-human-ui.guard.js';
 import { OwnerLaunchController } from './owner-launch/owner-launch.controller.js';
@@ -41,6 +41,8 @@ import { ParentAppCurriculumService } from './curriculum/parent-app-curriculum.s
 import { StaffParentAppCurriculumController, ParentCurriculumAppController, ParentAppCurriculumHumanUiGuard } from './curriculum/parent-app-curriculum.controller.js';
 import { RankSetupService } from './curriculum/rank-setup.service.js';
 import { StaffRankSetupController, RankSetupHumanUiGuard } from './curriculum/rank-setup.controller.js';
+import { RankChartDraftService } from './curriculum/rank-chart-draft.service.js';
+import { StaffRankChartDraftController, RankChartDraftHumanUiGuard } from './curriculum/rank-chart-draft.controller.js';
 import { StaffCurriculumLibraryController, ParentCurriculumLibraryController, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard } from './curriculum/library.controller.js';
 import { ParentClassPassViewController, ParentClassPassReadGuard } from './families/parent-classpass-view.controller.js';
 import { ParentClassPassViewService } from './families/parent-classpass-view.service.js';
@@ -55,7 +57,12 @@ import { ChadFollowUpAssistantService } from './chad-follow-up-assistant/chad-fo
 import { CHAD_PROVIDER_RUNTIME, OpenRouterChadRuntime } from './ai/chad-provider-runtime.js';
 import { HON_REPLY_PROVIDER_RUNTIME, OpenRouterHonReplyRuntime } from './ai/hon-reply-provider-runtime.js';
 import { HonReplyService } from './hon-conversation/hon-reply.service.js';
-import { EianController, EianAskGuard, EianReadGuard } from './eian/eian.controller.js';
+import { EianController, EianAskGuard, EianReadGuard, EianSpeakGuard } from './eian/eian.controller.js';
+import { EianSpeechService, EIAN_SPEECH_COST_DELAYS, DEFAULT_COST_DELAYS_MS } from './eian/eian-speech.service.js';
+import { EIAN_SPEECH_RUNTIME, OpenRouterEianSpeechRuntime } from './eian/eian-speech-runtime.js';
+import { AgentSpeechController, AgentSpeechReadHumanUiGuard, AgentSpeechSpeakHumanUiGuard } from './agent-speech/agent-speech.controller.js';
+import { AgentSpeechService, AGENT_SPEECH_COST_DELAYS, DEFAULT_AGENT_SPEECH_COST_DELAYS_MS } from './agent-speech/agent-speech.service.js';
+import { AGENT_SPEECH_RUNTIME, OpenRouterAgentSpeechRuntime } from './agent-speech/agent-speech-runtime.js';
 import { EianService } from './eian/eian.service.js';
 import { ParentInvoicePayCancelGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayController, ParentInvoicePayStartGuard } from './parent-pay/parent-invoice-pay.controller.js';
 import { ParentInvoicePayService } from './parent-pay/parent-invoice-pay.service.js';
@@ -151,9 +158,30 @@ import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
 import { MerchAiController } from './commerce/shopify/merch-ai.controller.js';
 import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
-import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime } from './commerce/shopify/merch-provider-runtime.js';
+import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime, RANK_CHART_PROVIDER_RUNTIME, RANK_CHART_TEXT_PROFILE } from './commerce/shopify/merch-provider-runtime.js';
 import { CommerceReviewController } from './commerce/shopify/commerce-review.controller.js';
 import { CommerceReviewService } from './commerce/shopify/commerce-review.service.js';
+import { AlexPlanController } from './alex-delegation/alex-plan.controller.js';
+import { AlexPlanService } from './alex-delegation/alex-plan.service.js';
+import { ALEX_PLAN_PROVIDER_RUNTIME, ALEX_PLAN_TEXT_PROFILE } from './alex-delegation/alex-plan-provider.js';
+import { JordanFollowUpController } from './jordan-follow-through/jordan-follow-up.controller.js';
+import { JordanFollowUpService } from './jordan-follow-through/jordan-follow-up.service.js';
+import { JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, JORDAN_FOLLOW_UP_TEXT_PROFILE } from './jordan-follow-through/jordan-follow-up-provider.js';
+import { MarcusReviewController } from './marcus-review/marcus-review.controller.js';
+import { MarcusReviewService } from './marcus-review/marcus-review.service.js';
+import { MARCUS_REVIEW_PROVIDER_RUNTIME, MARCUS_REVIEW_TEXT_PROFILE } from './marcus-review/marcus-review-provider.js';
+import { ClaireKpiController } from './claire-kpi/claire-kpi.controller.js';
+import { ClaireKpiService } from './claire-kpi/claire-kpi.service.js';
+import { CLAIRE_KPI_PROVIDER_RUNTIME, CLAIRE_KPI_TEXT_PROFILE } from './claire-kpi/claire-kpi-provider.js';
+import { MayaRenewalController } from './maya-renewal/maya-renewal.controller.js';
+import { MayaRenewalService } from './maya-renewal/maya-renewal.service.js';
+import { MAYA_RENEWAL_PROVIDER_RUNTIME, MAYA_RENEWAL_TEXT_PROFILE } from './maya-renewal/maya-renewal-provider.js';
+import { ChadLeadPlanController } from './chad-lead-plan/chad-lead-plan.controller.js';
+import { ChadLeadPlanService } from './chad-lead-plan/chad-lead-plan.service.js';
+import { CHAD_LEAD_PLAN_PROVIDER_RUNTIME, CHAD_LEAD_PLAN_TEXT_PROFILE } from './chad-lead-plan/chad-lead-plan-provider.js';
+import { MayaCheckInController } from './maya-check-in/maya-check-in.controller.js';
+import { MayaCheckInService } from './maya-check-in/maya-check-in.service.js';
+import { MAYA_CHECK_IN_PROVIDER_RUNTIME, MAYA_CHECK_IN_TEXT_PROFILE } from './maya-check-in/maya-check-in-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
@@ -180,7 +208,7 @@ import { SchoolMembershipListService } from './billing/school-membership-list.se
 import { CrmSchoolClockController, CrmSchoolClockHumanUiGuard, CrmSessionSchoolClockController } from './crm/crm-school-clock.controller.js';
 import { CrmSchoolClockService } from './crm/crm-school-clock.service.js';
 import { MembershipStatusReportController } from './reports/membership-status-report.controller.js';
-import { SchoolReportsController, SchoolReportsDashboardController } from './reports/school-reports.controller.js';
+import { AttendanceReportController, SchoolReportsController, SchoolReportsDashboardController } from './reports/school-reports.controller.js';
 import { SchoolContactsController } from './people/school-contacts.controller.js';
 import { SchoolContactsService } from './people/school-contacts.service.js';
 import { SchoolContactAdminController } from './people/school-contact-admin.controller.js';
@@ -241,6 +269,11 @@ import { StaffTimeService } from './staff-time/staff-time.service.js';
 import { StaffTimeEntrySaveHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeReadHumanUiGuard, StaffTimesheetDecideHumanUiGuard } from './staff-time/staff-time-human-ui.guard.js';
 import { SchoolBlastController } from './school-blasts/school-blast.controller.js';
 import { SchoolBlastService } from './school-blasts/school-blast.service.js';
+import { PublicSchoolMediaController, SchoolMediaController } from './school-media/school-media.controller.js';
+import { SchoolMediaService } from './school-media/school-media.service.js';
+import { SchoolVideoCopyScheduler, SchoolVideoCopyWorker } from './school-media/school-video-copy.js';
+import { MediaStorage } from './school-media/media-storage.js';
+import { SchoolMediaDeleteHumanUiGuard, SchoolMediaReadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaUploadHumanUiGuard, SchoolMediaVideoBeginHumanUiGuard, SchoolMediaVideoFinishHumanUiGuard } from './school-media/school-media-human-ui.guard.js';
 import { SchoolBlastCancelHumanUiGuard, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard } from './school-blasts/school-blast-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
 import { SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard } from './school-demo-data/school-demo-data-human-ui.guard.js';
@@ -537,7 +570,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   imports: [ClassPassModule, KioskModule],
   controllers: [HonOsSignupController,HonOsTrialController,HonOsAdmissionHqController,SchoolOwnerInvitationController,SchoolOwnershipController,SchoolStaffInvitationController,SchoolFamilyAccessInvitationController,OwnerLaunchController,
     CurrentStaffReportingSchoolController,
-    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController, StaffRankSetupController,
+    StaffCurriculumLibraryController, ParentCurriculumLibraryController, StaffParentAppCurriculumController, ParentCurriculumAppController, StaffRankChartDraftController, StaffRankSetupController,
     AchievementsController, ParentAchievementsController,
     TeachingStudioController,
     RetentionReviewController,
@@ -668,6 +701,14 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolWebsiteAiController,
     MerchAiController,
     CommerceReviewController,
+    AlexPlanController,
+    JordanFollowUpController,
+    MarcusReviewController,
+    ClaireKpiController,
+    MayaRenewalController,
+    AgentSpeechController,
+    ChadLeadPlanController,
+    MayaCheckInController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -695,6 +736,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StaffShiftController,
     StaffTimeController,
     SchoolBlastController,
+    SchoolMediaController,
+    PublicSchoolMediaController,
     CrmPipelineBoardController,
     SchoolMembershipListController,
     CrmSchoolClockController,
@@ -702,6 +745,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MembershipStatusReportController,
     SchoolReportsController,
     SchoolReportsDashboardController,
+    AttendanceReportController,
     SchoolContactsController,
     SchoolContactAdminController,
     PersonMembershipStartController,
@@ -725,7 +769,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
   providers: [BookableStudentsService, SchoolPickersService, HonOsSignupService, HonOsSignupHumanGuard, HonOsTrialService, HonOsTrialHumanGuard, HonOsAdmissionService, HonOsAdmissionHumanGuard, SchoolOwnerInvitationService, SchoolOwnershipService, SchoolAccountHumanGuard, SchoolStaffInvitationService, SchoolStaffAccountHumanGuard, SchoolFamilyAccessInvitationService, SchoolFamilyAccountHumanGuard, SchoolPersonRecordService, SchoolPersonRecordHumanGuard, SchoolPersonPhotoService, SchoolPersonPhotoHumanGuard, SchoolPosService, SchoolPosHumanGuard, AttendanceCardsService, AttendanceCardsHumanGuard, AttendanceScanHumanGuard, FaceCheckInService, FaceCheckInHumanGuard, FaceCheckInScanHumanGuard, FamilyFaceCheckInSignGuard, FamilyFaceCheckInWithdrawGuard, MembershipAgreementService, MembershipAgreementHumanGuard, MembershipAgreementLinkHumanGuard, FamilyMembershipAgreementSignGuard, FamilyPersonPhotoGuard,
     SaasSubscriptionGenerationService, SaasScheduleBillingService, SaasPaidReviewService, SaasFounderService, SaasPriceAcceptanceService, SaasTrialsService, OwnerLaunchService, OwnerLaunchHumanUiGuard, OwnerLaunchGuardianChildHumanUiGuard, OwnerLaunchFirstClassBookingHumanUiGuard, OwnerLaunchMembershipDraftHumanUiGuard,
     CurrentStaffReportingSchoolNoStoreGuard,
-    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard, RankSetupService, RankSetupHumanUiGuard,
+    CurriculumLibraryService, CurriculumLibraryHumanUiGuard, ParentCurriculumLibraryReadGuard, ParentAppCurriculumService, ParentAppCurriculumHumanUiGuard, RankSetupService, RankSetupHumanUiGuard, RankChartDraftService, RankChartDraftHumanUiGuard,
     AchievementsService, AchievementHumanUiGuard,
     TeachingStudioService, TeachingStudioHumanUiGuard,
     RetentionReviewService, RetentionReviewHumanUiGuard,
@@ -751,6 +795,12 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: HON_REPLY_PROVIDER_RUNTIME, useFactory: () => new OpenRouterHonReplyRuntime() },
     // E-AI1: Eian family AI. The same OpenRouter rules: off until the key and the paid-call approval flag are both set.
     { provide: EIAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterEianRuntime() }, EianService, EianAskGuard, EianReadGuard,
+    // E-V2: Eian natural voice. Off until the key, the paid-call flag and HON_EIAN_NATURAL_VOICE_APPROVED are all set.
+    { provide: EIAN_SPEECH_RUNTIME, useFactory: () => new OpenRouterEianSpeechRuntime() }, { provide: EIAN_SPEECH_COST_DELAYS, useValue: DEFAULT_COST_DELAYS_MS },
+    EianSpeechService, EianSpeakGuard,
+    // 0652: staff agent natural voices. Off until the key, the paid-call flag and HON_AGENT_NATURAL_VOICE_APPROVED are all set.
+    { provide: AGENT_SPEECH_RUNTIME, useFactory: () => new OpenRouterAgentSpeechRuntime() }, { provide: AGENT_SPEECH_COST_DELAYS, useValue: DEFAULT_AGENT_SPEECH_COST_DELAYS_MS },
+    AgentSpeechService, AgentSpeechReadHumanUiGuard, AgentSpeechSpeakHumanUiGuard,
     ParentInvoicePayService, ParentInvoicePayStartGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayCancelGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
@@ -970,7 +1020,22 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     MerchAiService,
     { provide: MERCH_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime() },
     CommerceReviewService,
+    AlexPlanService,
+    JordanFollowUpService,
+    MarcusReviewService,
+    ClaireKpiService,
+    MayaRenewalService,
+    ChadLeadPlanService,
+    MayaCheckInService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
+    { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
+    { provide: JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, JORDAN_FOLLOW_UP_TEXT_PROFILE) },
+    { provide: MARCUS_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MARCUS_REVIEW_TEXT_PROFILE) },
+    { provide: CLAIRE_KPI_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CLAIRE_KPI_TEXT_PROFILE) },
+    { provide: MAYA_RENEWAL_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_RENEWAL_TEXT_PROFILE) },
+    { provide: CHAD_LEAD_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CHAD_LEAD_PLAN_TEXT_PROFILE) },
+    { provide: MAYA_CHECK_IN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_CHECK_IN_TEXT_PROFILE) },
+    { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,
@@ -1047,6 +1112,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolDemoDataService, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard,
     StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
     StaffTimeService, StaffTimeReadHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeEntrySaveHumanUiGuard, StaffTimesheetDecideHumanUiGuard,
+    SchoolMediaService, MediaStorage, SchoolMediaReadHumanUiGuard, SchoolMediaUploadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaDeleteHumanUiGuard,
+    SchoolMediaVideoBeginHumanUiGuard, SchoolMediaVideoFinishHumanUiGuard, SchoolVideoCopyWorker, SchoolVideoCopyScheduler,
     SchoolBlastService, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard, SchoolBlastCancelHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,
@@ -1054,7 +1121,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CrmSchoolClockService,
     CrmSchoolClockHumanUiGuard,
     CrmAdultMembershipDraftService, CrmAdultMembershipDraftHumanUiGuard, CrmAdultMembershipPreparationHumanUiGuard, CrmAdultMembershipConfirmationHumanUiGuard, CrmAdultMembershipNoStoreGuard,
-    MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
+    MembershipPlanService, MembershipPlanCatalogHumanUiGuard, MembershipPlanCreateHumanUiGuard, MembershipPlanReviseHumanUiGuard, MembershipPlanSetupsHumanUiGuard, MembershipPlanCreateWithOptionsHumanUiGuard, MembershipPlanReviseWithOptionsHumanUiGuard, CrmAdultMembershipPlanOptionsHumanUiGuard, CrmAdultMembershipDraftFromPlanHumanUiGuard,
     GuardianChildEnrollmentService, CrmGuardianChildEnrollmentReadHumanUiGuard, CrmGuardianChildPayerDesignationHumanUiGuard, CrmGuardianChildAdditionHumanUiGuard, CrmGuardianChildMembershipDraftFromPlanHumanUiGuard,
     MembershipActivationHumanUiGuard,
     TuitionPaymentRecordHumanUiGuard,
