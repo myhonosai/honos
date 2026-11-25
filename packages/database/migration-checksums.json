@@ -404,6 +404,7 @@
     "0645_class_session_minimum_duration.sql": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe",
     "0646_maya_renewal_prep.sql": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0",
     "0647_chad_approved_draft_send.sql": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9",
+    "0649_maya_check_in_draft_send.sql": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90",
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
   }
 }

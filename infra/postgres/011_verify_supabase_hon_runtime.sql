@@ -6885,3 +6885,53 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END IF;
 END $$;
 -- End Chad approved-draft send exact verification.
+-- Maya check-in draft send exact verification (0649): the nine entry points, the closed helpers, the kind row and the closed
+-- target and send tables with their guard triggers.
+DO $$ DECLARE f record; safe boolean; t text; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.approve_maya_check_in_draft(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','aada1c58af4322b946b9c70dcb27a964d576f91c64412b4b2543c31038eff53b'),
+('hon.begin_maya_check_in_draft(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','8037d9c4b56871bd19ade58735294aa96ba75dff5207426eff5f1aeb7d583e91'),
+('hon.cancel_maya_check_in_send(text,uuid)',true,true,'search_path=pg_catalog, hon','b71c1b2766bce14b6c67a7406f29b0f3d6eb387638201a7b33fc5dc843ac2c82'),
+('hon.close_maya_check_in_draft(text,uuid,text)',true,true,'search_path=pg_catalog, hon','a429793d4fee573c13a532ddeff626fbf87a8148467ccebb8c169733a1a703f1'),
+('hon.fail_maya_check_in_draft(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','b8422adca7f8e57b0eebab3a0d543043e29ca6236e1258abc20046a78e1e4168'),
+('hon.guard_maya_check_in_rows()',false,false,'search_path=pg_catalog, hon','70e42942870b082d29dc5496d7bb2eb3e09bca3cb4c98d5d0cb9ae3a2eb09353'),
+('hon.maya_check_in_actor(text)',true,false,'search_path=pg_catalog, hon','b2a4b663d6b2fdb642de874c8c2ffd20f4044030c0e9e8f21933e8199439923c'),
+('hon.maya_check_in_at_risk_row(text,uuid)',true,false,'search_path=pg_catalog, hon','8fca542d01446bd487737686e1972e1cf81349b7a90ee831e3c02d659efa98fd'),
+('hon.maya_check_in_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','6bb1010760d5aaf80a0bc12c53899ced64423bd426b98fcd1a22e066c78d0d4f'),
+('hon.maya_check_in_line_ok(text,integer)',false,false,'search_path=pg_catalog, hon','f880816eaac6b43db7c9d8f828d52d938181084365368e77b231d7f66ecb49e8'),
+('hon.maya_check_in_ok(jsonb,text)',false,false,'search_path=pg_catalog, hon','e4303630580f63bafe823229cdc3c6263ae30ba70f13c052d63153a196e2e174'),
+('hon.maya_check_in_reader(text)',true,false,'search_path=pg_catalog, hon','d4ae80cd2f829677b5030ebde2361235c42cacc067e4cda2f21074c222a794fe'),
+('hon.maya_check_in_recipient(uuid,text)',true,false,'search_path=pg_catalog, hon','88b9f3e004238666313f70a25da1c3d17f098b370a25925b5554d768d63482a7'),
+('hon.maya_check_in_text_ok(text,integer)',false,false,'search_path=pg_catalog, hon','3268ff4cc006a90b58ca4da62caa43597df2ae29558d09dfbaef9ab4526d3877'),
+('hon.maya_check_in_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','a8662bbe94fa0421845a5a525753b45463a8dbf99053afb144e82b2c549a1511'),
+('hon.plan_maya_check_in_draft(text,uuid)',true,true,'search_path=pg_catalog, hon','51fe6925bfeb5036120b0bedee7e467a36126f5ba2bfab11ab4f526cc2e98ab3'),
+('hon.prepare_maya_check_in_draft(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','b7c8a4842b1311aa713a4ab2de54aa277a77d633daa4a91df0f08a1ef3ad34c1'),
+('hon.read_maya_check_in_drafts(text,uuid)',true,true,'search_path=pg_catalog, hon','43a10962a748aa72834d9f8a58c8389c6f0b3da05261bbcb191c1f521ce6f87d'),
+('hon.record_maya_check_in_draft(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','d905a582ab535f67d0ffc3d5b22b30a3bc66b1186b623a36f8c086e3603a7a0a'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Maya check-in draft function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='MAYA_CHECK_IN_DRAFT' AND k.agent_key='maya' AND k.task_class='ANALYZE'
+      AND k.input_budget=6000 AND k.output_budget=2000 AND k.max_cost_microunits=60000 AND k.max_result_bytes=8192
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='RETENTION') THEN
+    RAISE EXCEPTION 'Maya check-in draft kind row missing or changed';
+  END IF;
+  FOREACH t IN ARRAY ARRAY['hon.maya_check_in_targets','hon.maya_check_in_sends'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=t::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=t::regclass)
+      OR has_table_privilege('hon_runtime',t,'SELECT') OR has_table_privilege('hon_runtime',t,'INSERT')
+      OR has_table_privilege('hon_runtime',t,'UPDATE') OR has_table_privilege('hon_runtime',t,'DELETE')
+      OR (SELECT count(*) FROM pg_trigger g WHERE g.tgrelid=t::regclass AND NOT g.tgisinternal AND g.tgenabled='O'
+        AND g.tgfoid='hon.guard_maya_check_in_rows()'::regprocedure)<>2 THEN
+      RAISE EXCEPTION 'Maya check-in draft table % is not closed',t;
+    END IF;
+  END LOOP;
+END $$;
+-- End Maya check-in draft send exact verification.
