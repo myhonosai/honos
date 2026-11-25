@@ -1,4 +1,4 @@
-// C3 (0671): HON's private storage for real creative provider results. The database authorizes every read and delete
+// C3 (0691): HON's private storage for real creative provider results. The database authorizes every read and delete
 // from the asset's own row (exact school, the 0216 creative actor) and fixes each object key; the API turns a read grant
 // into a short-lived signed URL. A storage key is never shown to a browser.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsIsTimestamp as isTimestamp,
@@ -39,7 +39,7 @@ export function validateCreativeAssetDeletion(value: unknown): CreativeAssetDele
   return r as unknown as CreativeAssetDeletion;
 }
 
-// ---------- C4 (0672): human review ----------
+// ---------- C4 (0692): human review ----------
 export const CREATIVE_REVIEW_DECISIONS = ['APPROVED', 'REJECTED'] as const;
 export type CreativeReviewDecision = typeof CREATIVE_REVIEW_DECISIONS[number];
 export interface CreativeAssetReviewInput { decision: CreativeReviewDecision }

@@ -1,6 +1,6 @@
 BEGIN;
 
--- C4 (0672): human approval of creative assets. docs/architecture/CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md §6 / §13.
+-- C4 (0692): human approval of creative assets. docs/architecture/CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md §6 / §13.
 -- Provider-free: nothing here calls a provider, a storage service or an AI model, and no program is activated.
 --
 -- Every asset starts PENDING_REVIEW (no review row). A direct human of the asset's exact school who is a creative
@@ -18,7 +18,7 @@ DO $$ BEGIN
   IF to_regprocedure('hon.creative_school_object(text,uuid,uuid,boolean)') IS NULL
     OR to_regclass('hon.creative_stored_objects') IS NULL
     OR NOT EXISTS (SELECT 1 FROM hon.permissions WHERE code = 'marketing.social.manage' AND is_staff_assignable) THEN
-    RAISE EXCEPTION 'HON creative asset review requires creative media storage (0671) and school social permissions (0347)';
+    RAISE EXCEPTION 'HON creative asset review requires creative media storage (0691) and school social permissions (0347)';
   END IF;
 END $$;
 
@@ -87,7 +87,7 @@ BEGIN
     'reviewedBySelf', rec.reviewed_by_principal_id = scope.principal_id);
 END $$;
 
--- A read grant (0671 replaced, same shape): an asset that is not APPROVED is visible only to its requester and to
+-- A read grant (0691 replaced, same shape): an asset that is not APPROVED is visible only to its requester and to
 -- reviewers of the school.
 CREATE OR REPLACE FUNCTION hon.authorize_creative_asset_read(p_subject text, p_school uuid, p_asset uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
@@ -106,7 +106,7 @@ BEGIN
   RETURN jsonb_build_object('assetId', obj.asset_id, 'storageKey', obj.storage_key, 'mediaType', obj.media_type, 'byteSize', obj.byte_size);
 END $$;
 
--- DELETE (0671 replaced, same shape): only the asset's requester or a reviewer of the school may delete it.
+-- DELETE (0691 replaced, same shape): only the asset's requester or a reviewer of the school may delete it.
 CREATE OR REPLACE FUNCTION hon.delete_creative_asset(p_subject text, p_school uuid, p_asset uuid) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE obj hon.creative_stored_objects%ROWTYPE; scope record; requester uuid;
@@ -148,7 +148,7 @@ BEGIN
       ORDER BY date_trunc('milliseconds', o.stored_at), o.asset_id LIMIT p_limit) q), '[]'::jsonb));
 END $$;
 
--- School view (0671 replaced): each listed asset carries its review status.
+-- School view (0691 replaced): each listed asset carries its review status.
 CREATE OR REPLACE FUNCTION hon.creative_generation_json(g hon.creative_generations) RETURNS jsonb
 LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
   SELECT jsonb_build_object('generationId', g.id, 'schoolId', g.school_id, 'operationCode', g.operation_code, 'mediaKind', g.media_kind,

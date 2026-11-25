@@ -16,7 +16,7 @@ export const CREATIVE_GENERATION_FAILURE_REASONS = ['PROVIDER_NOT_CONNECTED', 'I
 export type CreativeGenerationFailureReason = typeof CREATIVE_GENERATION_FAILURE_REASONS[number];
 export const CREATIVE_ASSET_MEDIA_TYPES = { IMAGE: ['image/png', 'image/webp'], VIDEO: ['video/mp4'] } as const;
 export type CreativeAssetMediaType = 'image/png' | 'image/webp' | 'video/mp4';
-/** C4 (0672): every asset waits for a human reviewer; only APPROVED assets may be used in posts, ads or avatar looks. */
+/** C4 (0692): every asset waits for a human reviewer; only APPROVED assets may be used in posts, ads or avatar looks. */
 export const CREATIVE_ASSET_REVIEW_STATES = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'] as const;
 export type CreativeAssetReviewState = typeof CREATIVE_ASSET_REVIEW_STATES[number];
 /** Limits shared by the database (0216) and the API. */

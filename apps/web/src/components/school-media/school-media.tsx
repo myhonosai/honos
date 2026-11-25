@@ -5,13 +5,13 @@ import { useLocale } from '../localization/provider';
 import { useSchoolShell } from '../school-shell/context';
 import { concealShellPrivateNow, onShellPrivacyEvent } from '../school-shell/privacy';
 import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
-import { MediaError, keepForRetry, mediaApi, mediaFileProblem, mediaLink, type MediaApi, type MediaScope, type MediaUpload } from './http';
+import { MediaError, isVideoFile, keepForRetry, mediaApi, mediaFileProblem, mediaLink, videoFileProblem, videoPageLink, type MediaApi, type MediaScope, type MediaUpload, type VideoUpload } from './http';
 import type { MediaOutcomeKind } from './copy';
 import { SchoolMediaView, type LibraryRead, type MediaEditing, type MediaOutcome } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server answers the first result). */
 type Pending = Readonly<{ key: string; scope: MediaScope } & (
-  { kind: 'upload'; input: MediaUpload } | { kind: 'rename'; input: RenameSchoolMediaInput } | { kind: 'delete'; input: DeleteSchoolMediaInput })>;
+  { kind: 'upload'; input: MediaUpload } | { kind: 'video'; input: VideoUpload } | { kind: 'rename'; input: RenameSchoolMediaInput } | { kind: 'delete'; input: DeleteSchoolMediaInput })>;
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 const readState = (error: unknown) => error instanceof MediaError && error.kind === 'DENIED' ? 'DENIED' as const : 'UNAVAILABLE' as const;
 
@@ -62,12 +62,17 @@ export function SchoolMedia({ api = mediaApi }: { api?: MediaApi }): React.React
     const request = pending.current;
     if (!request || sending.current) return;
     sending.current = true; const shown = privacy.current;
-    setLock('SENDING'); setOutcome({ kind: request.kind === 'upload' ? 'UPLOADING' : 'WORKING' });
+    setLock('SENDING'); setOutcome(request.kind === 'video' ? { kind: 'UPLOADING', percent: 0 } : { kind: request.kind === 'upload' ? 'UPLOADING' : 'WORKING' });
     let next: MediaOutcomeKind, keep = false;
     try {
       const owned = () => mounted.current && shown === privacy.current && pending.current?.key === request.key;
-      const signal = AbortSignal.timeout(request.kind === 'upload' ? 180000 : 30000);
+      // A video goes straight to storage and may be large: up to six hours.
+      const signal = AbortSignal.timeout(request.kind === 'video' ? 6 * 3600000 : request.kind === 'upload' ? 180000 : 30000);
       if (request.kind === 'upload') { await api.upload(request.scope, request.input, request.key, signal, owned); next = 'UPLOADED'; }
+      else if (request.kind === 'video') {
+        await api.uploadVideo(request.scope, request.input, request.key, signal, owned, (percent) => { if (owned()) setOutcome({ kind: 'UPLOADING', percent }); });
+        next = 'VIDEO_UPLOADED';
+      }
       else if (request.kind === 'rename') { await api.rename(request.scope, request.input, request.key, signal, owned); next = 'RENAMED'; }
       else { next = (await api.remove(request.scope, request.input, request.key, signal, owned)).removed ? 'DELETED' : 'DELETED_WAITING'; }
     } catch (error) {
@@ -80,7 +85,7 @@ export function SchoolMedia({ api = mediaApi }: { api?: MediaApi }): React.React
     setOutcome({ kind: next });
     if (!keep) { setEditing(null); setRefresh((n) => n + 1); }
     // The next picked file goes only after this one is settled; a failure stops the rest.
-    if (!keep && request.kind === 'upload' && next === 'UPLOADED') nextUpload.current();
+    if (!keep && ((request.kind === 'upload' && next === 'UPLOADED') || (request.kind === 'video' && next === 'VIDEO_UPLOADED'))) nextUpload.current();
     else waiting.current = [];
   }, [api]);
 
@@ -93,6 +98,12 @@ export function SchoolMedia({ api = mediaApi }: { api?: MediaApi }): React.React
     const scope = scopeNow();
     const file = waiting.current.shift();
     if (!file || !scope || pending.current || sending.current) return;
+    if (isVideoFile(file)) {
+      const video = videoFileProblem(file);
+      if ('problem' in video) { waiting.current = []; setOutcome({ kind: video.problem }); return; }
+      queue({ kind: 'video', input: { file, title: schoolMediaTitleFromFileName(file.name), mediaType: video.mediaType } }, scope);
+      return;
+    }
     const problem = mediaFileProblem(file);
     if (problem) { waiting.current = []; setOutcome({ kind: problem }); return; }
     queue({ kind: 'upload', input: { file, title: schoolMediaTitleFromFileName(file.name) } }, scope);
@@ -107,7 +118,8 @@ export function SchoolMedia({ api = mediaApi }: { api?: MediaApi }): React.React
   }, [lock, startNextUpload]);
   const onCopy = useCallback((asset: SchoolMediaAsset) => {
     if (!asset.linkToken) return;
-    const link = mediaLink(globalThis.location?.origin ?? '', asset.linkToken);
+    const origin = globalThis.location?.origin ?? '';
+    const link = asset.kind === 'VIDEO' ? videoPageLink(origin, asset.linkToken) : mediaLink(origin, asset.linkToken);
     void globalThis.navigator?.clipboard?.writeText(link).then(() => { if (mounted.current) setOutcome({ kind: 'COPIED' }); }, () => undefined);
   }, []);
   const onRename = useCallback((asset: SchoolMediaAsset) => { if (lock === 'NONE') { setOutcome(null); setEditing({ assetId: asset.assetId, mode: 'RENAME', title: asset.title }); } }, [lock]);
