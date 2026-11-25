@@ -1,5 +1,5 @@
 /**
- * Conversation AI "Try it" test chat (0667, piece CE2; docs/architecture/CONVERSATION_AI_EASY_SETUP.md section 6). A staff
+ * Conversation AI "Try it" test chat (0687, piece CE2; docs/architecture/CONVERSATION_AI_EASY_SETUP.md section 6). A staff
  * member asks a question a family might send and sees how Chad would answer from the school's training. Nothing is sent to
  * anyone. One test is one CONVERSATION_TEST proposal on the shared AI text caller (0550), metered by S4.
  */
@@ -35,7 +35,7 @@ export function validateConversationAiTestAsk(value: unknown): ConversationAiTes
   return { question };
 }
 
-/** The answer shape the database accepts (0667 hon.conversation_ai_test_answer_ok). Anything else is a rejected answer. */
+/** The answer shape the database accepts (0687 hon.conversation_ai_test_answer_ok). Anything else is a rejected answer. */
 export function validateConversationAiTestAnswer(value: unknown): ConversationAiTestAnswer {
   if (!isObject(value) || !keysAre(value, ['needsStaff', 'reply']) || typeof value.reply !== 'string' || typeof value.needsStaff !== 'boolean') throw new Error('Invalid test answer.');
   const reply = value.reply.trim();

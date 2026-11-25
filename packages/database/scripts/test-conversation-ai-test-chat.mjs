@@ -1,5 +1,5 @@
 /**
- * CE2 (0667): the Conversation AI "Try it" test chat, one CONVERSATION_TEST kind on the shared AI text proposal table
+ * CE2 (0687): the Conversation AI "Try it" test chat, one CONVERSATION_TEST kind on the shared AI text proposal table
  * (0550), through the real API services, the restricted runtime role and the S4 spend controls on a fresh disposable AI-0
  * fixture. The provider is a counted in-process fake: nothing leaves the machine, and fetch is refused. Synthetic names only.
  */
@@ -217,10 +217,10 @@ try {
   pass('isolation: another school cannot see or move a test; a co-owner at the same school sees none of the asker\'s tests and cannot move them');
 
   { const verify = await (await import('node:fs/promises')).readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    const section = verify.split('-- Conversation AI test chat exact verification (0667)')[1]?.split('-- End Conversation AI test chat exact verification.')[0];
-    assert.ok(section, '0667 verify section present');
+    const section = verify.split('-- Conversation AI test chat exact verification (0687)')[1]?.split('-- End Conversation AI test chat exact verification.')[0];
+    assert.ok(section, '0687 verify section present');
     await admin.query(section.slice(section.indexOf('\n')).replaceAll('hon_runtime', runtimeRole)); }
-  pass('011: the 0667 exact verification (bodies, ACLs, kind row) passes');
+  pass('011: the 0687 exact verification (bodies, ACLs, kind row) passes');
   console.log(`CE2 Conversation AI test chat: ${groups} groups passed, ${fake.calls} fake provider calls, 0 network calls`);
 } finally {
   await admin.end().catch(() => {});

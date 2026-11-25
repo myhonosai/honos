@@ -33,6 +33,12 @@ export class ActionApprovalWorkbenchController {
     if (Object.keys(q).length) throw new BadRequestException({code:'VALIDATION_FAILED'});
     const c=await context(this.database,school,req);return envelope(c,await this.actions.getForReview(c,id));
   }
+  /** 0647: the send plan on a Chad draft under review, so the reviewer sees what approving will send. */
+  @Header('Cache-Control','private, no-store') @Get(':actionRequestId/chad-send')
+  async chadSend(@Param('schoolId',new ParseUUIDPipe()) school:string,@Param('actionRequestId',new ParseUUIDPipe()) id:string,@Query() q:Record<string,unknown>,@Req() req:HonRequest) {
+    if (Object.keys(q).length) throw new BadRequestException({code:'VALIDATION_FAILED'});
+    const c=await context(this.database,school,req);return envelope(c,await this.actions.chadSendForReview(c,id));
+  }
   @Header('Cache-Control','private, no-store') @Post(':actionRequestId/decision') @HttpCode(200)
   async decide(@Param('schoolId',new ParseUUIDPipe()) school:string,@Param('actionRequestId',new ParseUUIDPipe()) id:string,@Body() input:ActionDecisionDto,@Headers('idempotency-key') header:string|undefined,@Query() q:Record<string,unknown>,@Req() req:HonRequest) {
     if (Object.keys(q).length) throw new BadRequestException({code:'VALIDATION_FAILED'});

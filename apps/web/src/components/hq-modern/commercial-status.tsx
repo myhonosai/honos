@@ -26,7 +26,7 @@ function useRead<T>(load: (signal: AbortSignal) => Promise<T>): Read<T> {
 
 function FailureText({ failure }: { failure: CommercialStatusFailure }): React.ReactElement {
   const { t } = useLocale();
-  return <span className={styles.badge}>{failure === 'FORBIDDEN' ? t("Not available for this HQ account") : failure === 'UNAUTHORIZED' ? t("Sign in again to verify") : t("Could not be verified")}</span>;
+  return <span className={styles.badge}>{failure === 'FORBIDDEN' ? t("Your HQ role can't see this") : failure === 'UNAUTHORIZED' ? t("Sign in again to see this") : t("Couldn't load. Try again later.")}</span>;
 }
 
 /**
@@ -38,24 +38,23 @@ export function CommercialStatus(): React.ReactElement {
   const payments = useRead<PaymentProgramStatus>(loadHqPaymentProgramStatus);
   const credits = useRead<CreditProgramStatus>(loadHqCreditProgramStatus);
   return <section className={`${styles.panel} ${styles.commercialStatus}`} aria-labelledby="hq-commercial-title" aria-busy={payments.kind === 'loading' || credits.kind === 'loading'}>
-    <div className={styles.sectionHeader}><h2 id="hq-commercial-title"><HqIcon name="shield" size={18}/>{t("Commercial programs")}</h2><span className={styles.badge}>{t("Read-only · server reported")}</span></div>
+    <div className={styles.sectionHeader}><h2 id="hq-commercial-title"><HqIcon name="shield" size={18}/>{t("Payments & credits")}</h2><a href="/hq/pricing-offers">{t("Open Plans & Billing")}</a></div>
     <dl className={styles.commercialList}>
       <div>
-        <dt>{t("Payment program")}</dt>
-        <dd>{payments.kind === 'loading' ? <span role="status">{t("Verifying…")}</span> : payments.kind === 'failed' ? <FailureText failure={payments.failure}/>
+        <dt>{t("Taking payments")}</dt>
+        <dd>{payments.kind === 'loading' ? <span role="status">{t("Loading…")}</span> : payments.kind === 'failed' ? <FailureText failure={payments.failure}/>
           : <><strong data-commercial-state={payments.value.status}>{payments.value.status === 'TEST_MODE' ? t("Test mode") : t("Disabled")}</strong><small>{t("Changed {date}", { date: date(payments.value.changedAt) })}</small></>}</dd>
       </div>
       <div>
-        <dt>{t("Live checkout")}</dt>
-        <dd>{payments.kind === 'loading' ? <span role="status">{t("Verifying…")}</span> : payments.kind === 'failed' ? <FailureText failure={payments.failure}/>
-          : <><strong data-commercial-state={payments.value.liveMode}>{t("Unavailable")}</strong><small>{payments.value.status === 'TEST_MODE' ? t("Only test-mode checkouts can run, and each still needs a published offer and an eligible school.") : t("No checkout can start while the payment program is disabled.")}</small></>}</dd>
+        <dt>{t("Real-money checkout")}</dt>
+        <dd>{payments.kind === 'loading' ? <span role="status">{t("Loading…")}</span> : payments.kind === 'failed' ? <FailureText failure={payments.failure}/>
+          : <><strong data-commercial-state={payments.value.liveMode}>{t("Unavailable")}</strong><small>{payments.value.status === 'TEST_MODE' ? t("Only test checkouts work. A school also needs a published offer.") : t("Checkout is off until payments are turned on.")}</small></>}</dd>
       </div>
       <div>
-        <dt>{t("AI credit program")}</dt>
-        <dd>{credits.kind === 'loading' ? <span role="status">{t("Verifying…")}</span> : credits.kind === 'failed' ? <FailureText failure={credits.failure}/>
-          : <><strong data-commercial-state={credits.value.status}>{credits.value.status === 'ACTIVE' ? t("Active") : t("Inactive")}</strong><small>{t("Top-ups unavailable · overage and purchases disabled")}</small></>}</dd>
+        <dt>{t("AI credits")}</dt>
+        <dd>{credits.kind === 'loading' ? <span role="status">{t("Loading…")}</span> : credits.kind === 'failed' ? <FailureText failure={credits.failure}/>
+          : <><strong data-commercial-state={credits.value.status}>{credits.value.status === 'ACTIVE' ? t("Active") : t("Inactive")}</strong><small>{t("Schools can't buy extra credits yet.")}</small></>}</dd>
       </div>
     </dl>
-    <p className={styles.finePrint}>{t("Nothing on this panel changes billing, checkout or credits.")}</p>
-  </section>;
+      </section>;
 }

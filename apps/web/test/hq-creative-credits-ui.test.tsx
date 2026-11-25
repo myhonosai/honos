@@ -6,7 +6,7 @@ import { validateSaasCreativeHqWallet, validateSaasCreativeHqWalletList } from '
 import { CREDITS_LANGUAGES } from '../src/components/hq-creative-credits/copy';
 import { CreditsError, creditsApi } from '../src/components/hq-creative-credits/http';
 import { CreditsView, type CreditsViewProps } from '../src/components/hq-creative-credits/view';
-import { HQ_AI } from '../src/components/hq-modern/catalog';
+import { HQ_REVENUE } from '../src/components/hq-modern/catalog';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { list, school, school2, wallet } from './hq-creative-credits-fixtures';
 
@@ -140,7 +140,7 @@ it('has every wording key in Korean and Spanish, and is listed under AI', () => 
   for (const language of ['ko', 'es'] as const) expect(Object.keys(CREDITS_LANGUAGES[language]).sort()).toEqual(keys);
   expect(text(view({ language: 'ko' }))).toContain('크리에이티브 크레딧');
   expect(text(view({ language: 'es' }))).toContain('Créditos creativos');
-  expect(HQ_AI.some((entry) => entry.path === '/hq/creative-credits' && entry.title === 'Creative Credits')).toBe(true);
+  expect(HQ_REVENUE.some((entry) => entry.path === '/hq/creative-credits' && entry.title === 'Creative Credits')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')) as { routes: { path: string }[] };
   expect(manifest.routes.filter((r) => r.path === '/hq/creative-credits')).toHaveLength(1);
 });

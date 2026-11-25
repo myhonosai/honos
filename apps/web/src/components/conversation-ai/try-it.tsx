@@ -8,7 +8,7 @@ import s from './setup.module.css';
 const newKey = () => crypto.randomUUID();
 
 /**
- * CE2 "Try it" (0667). A staff member asks a question a family might send and sees how the AI answers from the school's
+ * CE2 "Try it" (0687). A staff member asks a question a family might send and sees how the AI answers from the school's
  * training. Nothing is sent to anyone. "Use a better answer" saves a coaching card through the 0420 item save (onCoach).
  * The server decides who may test (conversation.ai.configure, Chad, the Complete plan) and meters every answer (S4).
  */

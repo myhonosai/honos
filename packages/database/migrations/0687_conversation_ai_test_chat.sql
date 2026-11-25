@@ -1,6 +1,6 @@
 BEGIN;
 
--- Conversation AI "Try it" test chat, piece CE2 (0667, allocated by the coordinator 2026-11-19; 0546 released).
+-- Conversation AI "Try it" test chat, piece CE2 (0687, allocated by the coordinator 2026-11-19; 0546 released).
 -- Spec: docs/architecture/CONVERSATION_AI_EASY_SETUP.md section 6. A staff member with conversation.ai.configure types a
 -- question a family might send and sees how Chad, the school's front-desk AI, would answer from the school's own training
 -- (0420 knowledge pack). The answer is shown only to that staff member: nothing is sent, and no conversation, contact or
@@ -28,7 +28,7 @@ DO $$ BEGIN
   IF to_regclass('hon.ai_text_proposals') IS NULL OR to_regprocedure('hon.require_conversation_ai_actor(text,boolean)') IS NULL
     OR to_regprocedure('hon.school_ai_knowledge(uuid,uuid)') IS NULL OR to_regprocedure('hon.hon_reply_complete_live(uuid)') IS NULL
     OR EXISTS (SELECT 1 FROM hon.ai_text_kinds WHERE kind='CONVERSATION_TEST') THEN
-    RAISE EXCEPTION '0667 requires 0210, 0420 and 0550 and applies once';
+    RAISE EXCEPTION '0687 requires 0210, 0420 and 0550 and applies once';
   END IF;
 END $$;
 

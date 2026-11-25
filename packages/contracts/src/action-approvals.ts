@@ -11,7 +11,8 @@ export interface ActionReviewBinding {
   approvalExpiresAt: string;
   effectiveAuthorityMode: ActionAuthorityMode;
 }
-export interface HumanActionDecision { decision: 'APPROVED' | 'DENIED'; binding: ActionReviewBinding; reason?: string }
+/** approvalMethod (0647): how the reviewer approved, recorded with an approved-draft send. VOICE carries the voice turn id. Default BUTTON. */
+export interface HumanActionDecision { decision: 'APPROVED' | 'DENIED'; binding: ActionReviewBinding; reason?: string; approvalMethod?: 'BUTTON' | 'VOICE'; sendPlanVersion?: number | null; voiceTurnId?: string }
 export interface ActionReviewItem {
   id: string; actionCode: string; status: ActionReviewStatus; requestedByPrincipalId: string;
   effectiveAuthorityMode: ActionAuthorityMode; policyVersion: number; approvalExpiresAt: string | null; createdAt: string;
@@ -55,7 +56,12 @@ export function safeActionReviewPayload(value: unknown): value is Record<string,
 export function validateHumanActionDecision(value: unknown): asserts value is HumanActionDecision {
   const closed = (v: unknown, required: string[], optional: string[] = []): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v) && required.every(k => Object.hasOwn(v,k)) && Object.keys(v).every(k => [...required,...optional].includes(k));
   const invalid = () => { throw new Error('INVALID_ACTION_REVIEW_BINDING'); };
-  if (!closed(value,['decision','binding'],['reason'])) return invalid();
+  if (!closed(value,['decision','binding'],['reason','approvalMethod','voiceTurnId','sendPlanVersion'])) return invalid();
+  // sendPlanVersion (0647): the Chad send plan the reviewer saw (its version, or null for none). A changed plan refuses the decision.
+  if (value.sendPlanVersion !== undefined && value.sendPlanVersion !== null && (!Number.isSafeInteger(value.sendPlanVersion) || Number(value.sendPlanVersion) < 1 || Number(value.sendPlanVersion) > 1000)) return invalid();
+  if (value.approvalMethod !== undefined && value.approvalMethod !== 'BUTTON' && value.approvalMethod !== 'VOICE') return invalid();
+  if ((value.approvalMethod === 'VOICE') !== (value.voiceTurnId !== undefined) || (value.voiceTurnId !== undefined && (typeof value.voiceTurnId !== 'string' || !ACTION_REVIEW_UUID.test(value.voiceTurnId)))) return invalid();
+  if (value.approvalMethod === 'VOICE' && value.decision !== 'APPROVED') return invalid();
   if (!['APPROVED','DENIED'].includes(String(value.decision)) || (value.reason !== undefined && (typeof value.reason !== 'string' || value.reason.length > 1000 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value.reason)))) return invalid();
   const b = value.binding;
   if (!closed(b,['actionRequestId','actionCode','requestedByPrincipalId','payloadHash','policyVersion','approvalExpiresAt','effectiveAuthorityMode'])) return invalid();

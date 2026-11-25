@@ -117,7 +117,7 @@ export async function setTrainingItemStatus(scope: TrainAiScope, input: Conversa
   return { receipt: checked(() => verifyConversationAiItemReceipt(out.data, { itemId: body.itemId, status: body.status })), replayed: replayed(out.meta) };
 }
 
-/** CE2 (0667): whether the AI can answer a test now, and the signed-in staff member's own last 10 tests. */
+/** CE2 (0687): whether the AI can answer a test now, and the signed-in staff member's own last 10 tests. */
 export async function loadTestChat(scope: TrainAiScope): Promise<ConversationAiTestState> {
   const { data } = await call(`${base(scope)}/test`, 'GET');
   return checked(() => verifyConversationAiTestState(data));

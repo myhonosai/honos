@@ -88,3 +88,15 @@ test('old direct session API path cannot bypass strict transport, unknown-field 
     assert.deepEqual(scopes.at(-1), ['verified-human-subject', schoolId, 'schedule.session.manage']); assert.deepEqual({ ...calls[0].body }, input); assert.equal(calls[0].context.source, 'HUMAN_UI'); assert.equal(calls[0].context.principalType, 'HUMAN_USER'); assert.equal(calls[0].context.principalId, principalId); assert.equal(calls[0].context.idempotencyKey, browserKey);
   } finally { await app.close(); if (prior === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = prior; }
 });
+
+test('0645: a class session shorter than one minute is refused with 400 before any database work; exactly one minute is accepted', async () => {
+  let transactions = 0;
+  const service = new ClassSessionService({ withTenantTransaction: async () => { transactions += 1; return { classSession: null, replayed: false }; } });
+  const context = { organizationId, schoolId, principalId, source: 'HUMAN_UI', principalType: 'HUMAN_USER', idempotencyKey: randomUUID() };
+  for (const endsAt of ['2026-10-16T12:00:00.001Z', '2026-10-16T12:00:59.999Z']) {
+    await assert.rejects(() => service.create(context, { ...input, endsAt }), (error) => status(400)(error) && error.getResponse().detail === 'Class session must last at least one minute.');
+  }
+  assert.equal(transactions, 0);
+  await service.create(context, { ...input, endsAt: '2026-10-16T12:01:00.000Z' });
+  assert.equal(transactions, 1);
+});

@@ -60,6 +60,9 @@ import { HonReplyService } from './hon-conversation/hon-reply.service.js';
 import { EianController, EianAskGuard, EianReadGuard, EianSpeakGuard } from './eian/eian.controller.js';
 import { EianSpeechService, EIAN_SPEECH_COST_DELAYS, DEFAULT_COST_DELAYS_MS } from './eian/eian-speech.service.js';
 import { EIAN_SPEECH_RUNTIME, OpenRouterEianSpeechRuntime } from './eian/eian-speech-runtime.js';
+import { AgentSpeechController, AgentSpeechReadHumanUiGuard, AgentSpeechSpeakHumanUiGuard } from './agent-speech/agent-speech.controller.js';
+import { AgentSpeechService, AGENT_SPEECH_COST_DELAYS, DEFAULT_AGENT_SPEECH_COST_DELAYS_MS } from './agent-speech/agent-speech.service.js';
+import { AGENT_SPEECH_RUNTIME, OpenRouterAgentSpeechRuntime } from './agent-speech/agent-speech-runtime.js';
 import { EianService } from './eian/eian.service.js';
 import { ParentInvoicePayCancelGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayController, ParentInvoicePayStartGuard } from './parent-pay/parent-invoice-pay.controller.js';
 import { ParentInvoicePayService } from './parent-pay/parent-invoice-pay.service.js';
@@ -167,6 +170,18 @@ import { JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, JORDAN_FOLLOW_UP_TEXT_PROFILE } from
 import { MarcusReviewController } from './marcus-review/marcus-review.controller.js';
 import { MarcusReviewService } from './marcus-review/marcus-review.service.js';
 import { MARCUS_REVIEW_PROVIDER_RUNTIME, MARCUS_REVIEW_TEXT_PROFILE } from './marcus-review/marcus-review-provider.js';
+import { ClaireKpiController } from './claire-kpi/claire-kpi.controller.js';
+import { ClaireKpiService } from './claire-kpi/claire-kpi.service.js';
+import { CLAIRE_KPI_PROVIDER_RUNTIME, CLAIRE_KPI_TEXT_PROFILE } from './claire-kpi/claire-kpi-provider.js';
+import { MayaRenewalController } from './maya-renewal/maya-renewal.controller.js';
+import { MayaRenewalService } from './maya-renewal/maya-renewal.service.js';
+import { MAYA_RENEWAL_PROVIDER_RUNTIME, MAYA_RENEWAL_TEXT_PROFILE } from './maya-renewal/maya-renewal-provider.js';
+import { ChadLeadPlanController } from './chad-lead-plan/chad-lead-plan.controller.js';
+import { ChadLeadPlanService } from './chad-lead-plan/chad-lead-plan.service.js';
+import { CHAD_LEAD_PLAN_PROVIDER_RUNTIME, CHAD_LEAD_PLAN_TEXT_PROFILE } from './chad-lead-plan/chad-lead-plan-provider.js';
+import { MayaCheckInController } from './maya-check-in/maya-check-in.controller.js';
+import { MayaCheckInService } from './maya-check-in/maya-check-in.service.js';
+import { MAYA_CHECK_IN_PROVIDER_RUNTIME, MAYA_CHECK_IN_TEXT_PROFILE } from './maya-check-in/maya-check-in-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
 import { CONVERSATION_TEST_PROVIDER_RUNTIME, OpenRouterConversationTestRuntime } from './ai/conversation-test-provider-runtime.js';
 import { ConversationAiTestService } from './conversations/conversation-ai-test.service.js';
@@ -258,8 +273,9 @@ import { SchoolBlastController } from './school-blasts/school-blast.controller.j
 import { SchoolBlastService } from './school-blasts/school-blast.service.js';
 import { PublicSchoolMediaController, SchoolMediaController } from './school-media/school-media.controller.js';
 import { SchoolMediaService } from './school-media/school-media.service.js';
+import { SchoolVideoCopyScheduler, SchoolVideoCopyWorker } from './school-media/school-video-copy.js';
 import { MediaStorage } from './school-media/media-storage.js';
-import { SchoolMediaDeleteHumanUiGuard, SchoolMediaReadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaUploadHumanUiGuard } from './school-media/school-media-human-ui.guard.js';
+import { SchoolMediaDeleteHumanUiGuard, SchoolMediaReadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaUploadHumanUiGuard, SchoolMediaVideoBeginHumanUiGuard, SchoolMediaVideoFinishHumanUiGuard } from './school-media/school-media-human-ui.guard.js';
 import { SchoolBlastCancelHumanUiGuard, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard } from './school-blasts/school-blast-human-ui.guard.js';
 import { SchoolDemoDataService } from './school-demo-data/school-demo-data.service.js';
 import { SchoolDemoDataLoadHumanUiGuard, SchoolDemoDataReadHumanUiGuard, SchoolDemoDataRemoveHumanUiGuard } from './school-demo-data/school-demo-data-human-ui.guard.js';
@@ -690,6 +706,11 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AlexPlanController,
     JordanFollowUpController,
     MarcusReviewController,
+    ClaireKpiController,
+    MayaRenewalController,
+    AgentSpeechController,
+    ChadLeadPlanController,
+    MayaCheckInController,
     PublishedSchoolWebsiteController,
     SchoolOnboardingController,
     SchoolSupportController,
@@ -779,6 +800,9 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     // E-V2: Eian natural voice. Off until the key, the paid-call flag and HON_EIAN_NATURAL_VOICE_APPROVED are all set.
     { provide: EIAN_SPEECH_RUNTIME, useFactory: () => new OpenRouterEianSpeechRuntime() }, { provide: EIAN_SPEECH_COST_DELAYS, useValue: DEFAULT_COST_DELAYS_MS },
     EianSpeechService, EianSpeakGuard,
+    // 0652: staff agent natural voices. Off until the key, the paid-call flag and HON_AGENT_NATURAL_VOICE_APPROVED are all set.
+    { provide: AGENT_SPEECH_RUNTIME, useFactory: () => new OpenRouterAgentSpeechRuntime() }, { provide: AGENT_SPEECH_COST_DELAYS, useValue: DEFAULT_AGENT_SPEECH_COST_DELAYS_MS },
+    AgentSpeechService, AgentSpeechReadHumanUiGuard, AgentSpeechSpeakHumanUiGuard,
     ParentInvoicePayService, ParentInvoicePayStartGuard, ParentInvoicePayConfirmGuard, ParentInvoicePayCancelGuard,
     // CS1: no creative provider is connected; the synthetic runtime is test-only and never selected here.
     // C2: real adapters exist, but stay off until results can be copied into HON storage (C3).
@@ -1001,10 +1025,18 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     AlexPlanService,
     JordanFollowUpService,
     MarcusReviewService,
+    ClaireKpiService,
+    MayaRenewalService,
+    ChadLeadPlanService,
+    MayaCheckInService,
     { provide: COMMERCE_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, COMMERCE_REVIEW_TEXT_PROFILE) },
     { provide: ALEX_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, ALEX_PLAN_TEXT_PROFILE) },
     { provide: JORDAN_FOLLOW_UP_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, JORDAN_FOLLOW_UP_TEXT_PROFILE) },
     { provide: MARCUS_REVIEW_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MARCUS_REVIEW_TEXT_PROFILE) },
+    { provide: CLAIRE_KPI_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CLAIRE_KPI_TEXT_PROFILE) },
+    { provide: MAYA_RENEWAL_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_RENEWAL_TEXT_PROFILE) },
+    { provide: CHAD_LEAD_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CHAD_LEAD_PLAN_TEXT_PROFILE) },
+    { provide: MAYA_CHECK_IN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_CHECK_IN_TEXT_PROFILE) },
     { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
     ConversationAiTestService,
     { provide: CONVERSATION_TEST_PROVIDER_RUNTIME, useFactory: () => new OpenRouterConversationTestRuntime() },
@@ -1085,6 +1117,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     StaffShiftService, StaffShiftReadHumanUiGuard, StaffShiftSaveHumanUiGuard,
     StaffTimeService, StaffTimeReadHumanUiGuard, StaffTimePunchHumanUiGuard, StaffTimeEntrySaveHumanUiGuard, StaffTimesheetDecideHumanUiGuard,
     SchoolMediaService, MediaStorage, SchoolMediaReadHumanUiGuard, SchoolMediaUploadHumanUiGuard, SchoolMediaRenameHumanUiGuard, SchoolMediaDeleteHumanUiGuard,
+    SchoolMediaVideoBeginHumanUiGuard, SchoolMediaVideoFinishHumanUiGuard, SchoolVideoCopyWorker, SchoolVideoCopyScheduler,
     SchoolBlastService, SchoolBlastReadHumanUiGuard, SchoolBlastSaveHumanUiGuard, SchoolBlastSendHumanUiGuard, SchoolBlastCancelHumanUiGuard,
     CrmPipelineBoardService, CrmPipelineBoardReadHumanUiGuard, CrmLeadStageMoveHumanUiGuard, CrmPipelineStagesSaveHumanUiGuard,
     SchoolMembershipListService,

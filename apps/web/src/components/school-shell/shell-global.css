@@ -31,3 +31,46 @@ body:has([data-hon-ui='school']) [data-hon-launcher] { display: none; }
 [data-hon-ui='school'] #hon-main aside[data-plain-note] details { margin-top: 8px; }
 [data-hon-ui='school'] #hon-main aside[data-plain-note] summary { cursor: pointer; font-weight: 600; font-size: 0.92em; }
 [data-hon-ui='school'] #hon-main aside[data-plain-note] details:not([open]) > :not(summary) { display: none; }
+
+/*
+ * Consistent look C1 (owner 2026-11-19): older pages were written for a light body. The shell tags their elements
+ * from the colours they were written with (legacy-recolor.ts) and these rules map the tags onto the dark tokens, so
+ * every school page shares one look. Important is needed to beat inline styles; the rules only apply to tagged
+ * elements on pages the shell marked legacy-light. Spec: docs/architecture/SCHOOL_APP_CONSISTENT_LOOK_SPEC.md.
+ */
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-ink='text'] { color: var(--hon-text) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-ink='muted'] { color: var(--hon-text-muted) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-ink='danger'] { color: var(--hon-danger) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-ink='success'] { color: var(--hon-success) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-ink='warning'] { color: var(--hon-warning) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-ink='info'] { color: var(--hon-info) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] a[data-hon-ink='info'] { color: var(--hon-accent-2) !important; }
+
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='page'] { background: transparent !important; box-shadow: none !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='panel'] { background: var(--hon-surface) !important; box-shadow: none !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='panel'] [data-hon-fill='panel'] { background: var(--hon-surface-2) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='info'] { background: var(--hon-info-soft) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='danger'] { background: var(--hon-danger-soft) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='success'] { background: var(--hon-success-soft) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='warning'] { background: var(--hon-warning-soft) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-fill='accent'] { background: var(--hon-accent-strong) !important; border-color: var(--hon-accent-strong) !important; color: var(--hon-accent-contrast) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] [data-hon-line='line'] { border-color: var(--hon-border) !important; }
+
+/* Fields: one dark control. Secondary buttons (written white): a quiet outline. */
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] :is(input, select, textarea)[data-hon-fill] {
+  background: var(--hon-surface-solid) !important; border-color: var(--hon-border-strong) !important; color: var(--hon-text) !important;
+}
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] :is(button, a)[data-hon-fill='panel'] {
+  background: transparent !important; border-color: var(--hon-border-strong) !important;
+}
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] :is(button, a)[data-hon-fill='panel']:hover:not(:disabled) { background: var(--hon-surface-2) !important; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] ::placeholder { color: var(--hon-text-subtle); }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] :is(input[type='checkbox'], input[type='radio']) { accent-color: var(--hon-accent); }
+
+/* One title size, no spaced-out area label above it (the menu and tabs already say where you are). */
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] h1 {
+  font-size: var(--hon-text-2xl); font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; margin: 0 0 var(--hon-space-2);
+}
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] header > p:first-child:has(+ h1) { display: none; }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] h2 { font-size: var(--hon-text-lg); }
+[data-hon-ui='school'] #hon-main[data-canvas='legacy-light'] aside[data-plain-note] strong { font-weight: 600; }

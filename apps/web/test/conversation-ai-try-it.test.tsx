@@ -9,7 +9,7 @@ import { setupCopy } from '../src/components/conversation-ai/setup-copy';
 import { setupChecklist } from '../src/components/conversation-ai/setup-model';
 import { Checklist } from '../src/components/conversation-ai/setup-parts';
 
-// CE2 "Try it" (0667): the test chat's browser calls, strings and checklist step.
+// CE2 "Try it" (0687): the test chat's browser calls, strings and checklist step.
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const ORG = '11111111-1111-4111-8111-111111111111', SCHOOL = '22222222-2222-4222-8222-222222222222', KEY = '33333333-3333-4333-8333-333333333333', ID = '44444444-4444-4444-8444-444444444444';
 const scope = { organizationId: ORG, schoolId: SCHOOL };
