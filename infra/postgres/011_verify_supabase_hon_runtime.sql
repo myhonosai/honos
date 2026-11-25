@@ -7021,3 +7021,23 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End staff agent speech exact verification.
+-- Blast pictures exact verification (0653)
+-- Three private helpers, the worker-only campaign picture lookup, and the 0653 body check on hon.school_blasts in place of
+-- the 0621 one.
+DO $$ DECLARE f record; worker_oid oid:=(SELECT oid FROM pg_roles WHERE rolname='hon_communication_worker'); BEGIN
+  FOR f IN SELECT * FROM (VALUES
+    ('hon.school_blast_picture_ids(text)',false,false),('hon.school_blast_body_ok(jsonb,text)',false,false),
+    ('hon.school_blast_pictures_ready(uuid,uuid,text)',false,false),('hon.communication_email_pictures(uuid,uuid)',true,true)) e(signature,definer,worker_allowed) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f.signature::regprocedure AND p.prosecdef=f.definer
+        AND (NOT f.definer OR o.rolsuper OR o.rolbypassrls) AND NOT has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.privilege_type<>'EXECUTE' OR NOT (f.worker_allowed AND a.grantee IS NOT DISTINCT FROM worker_oid)))) THEN
+      RAISE EXCEPTION 'Unsafe blast picture function: %',f.signature; END IF;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.school_blasts'::regclass AND contype='c' AND pg_get_constraintdef(oid) LIKE '%school_blast_text_ok(to_jsonb(body)%')
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.school_blasts'::regclass AND conname='school_blasts_body_ok' AND convalidated
+      AND pg_get_constraintdef(oid) LIKE '%school_blast_body_ok(to_jsonb(body), channel)%') THEN
+    RAISE EXCEPTION 'Unsafe blast picture body check';
+  END IF;
+END $$;
+-- End blast pictures exact verification.

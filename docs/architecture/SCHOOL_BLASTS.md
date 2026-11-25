@@ -50,11 +50,38 @@ Marketing > Blasts (`/staff/marketing/blasts`):
 - AI help writing a blast is not part of this piece. When it is added, an AI-written blast needs a second person's approval
   (David 2026-11-15).
 
+## Pictures in email blasts (BL3b, migration 0653)
+
+Owner decisions (David): 2026-11-18 "Email pictures, video as a link"; 2026-11-22 "Allow media storage". Pictures come from
+the school's media library (BL3a, `docs/architecture/SCHOOL_MEDIA_LIBRARY.md`).
+
+- **In the composer.** An email has a Pictures row: Insert picture opens the school's READY pictures (read with
+  `marketing.media.read`) and puts the chosen one on its own line where the cursor is. The pictures already in the email are
+  listed with Remove. The audience sample and a sent blast show each picture in place. Texts have no pictures.
+- **In the body.** A picture is a whole line `{{picture:<assetId>}}` (lower-case id), at most 10 per email. For the 0621
+  plain-text rules each picture line counts as one character, and the body is still at most 3,500 characters. The table
+  check `school_blasts_body_ok` (`hon.school_blast_body_ok`) replaces the 0621 body check; `@hon/contracts`
+  `schoolBlastBodyOk` mirrors it.
+- **Save and send** both check that every picture is a READY picture of the same school, else `409
+  BLAST_PICTURE_NOT_READY` and nothing changes. Each queued message keeps the picture lines; merge tags are filled as before.
+- **The worker.** The claim also reads `hon.communication_email_pictures(delivery, lease)`, runnable only by
+  `hon_communication_worker`. It answers only for the lease holder of a SENDING email delivery of a CAMPAIGN message of an
+  EMAIL blast, and only READY pictures of that school whose id is in the blast body: id, link token, title and size, never a
+  storage key. It answers nothing (text only) for a blast without pictures and for any other email.
+- **The email.** With pictures, SendGrid gets a text part, where each picture line becomes `<HON_PUBLIC_ORIGIN>/m/<token>`,
+  and an HTML part from a fixed template: escaped paragraphs, and each picture as an image of that link, at most 600 pixels
+  wide, with its title as alt text. A picture line that matches no listed picture (deleted since sending, or produced by a
+  merge tag) is dropped. Open and click tracking stay off. If `HON_PUBLIC_ORIGIN` is not set, the email is retried later and
+  never sent half-built. HQ mail never gets pictures.
+- **Staff history** shows a sent blast message with its picture lines as text.
+
+Evidence: `packages/database/scripts/test-school-blast-pictures-integrity.mjs` (`db:test-school-blast-pictures`),
+`apps/api/test/school-blast-pictures.test.cjs`, `apps/web/test/school-blast-pictures-ui.test.tsx`.
+
 ## Later pieces
 
 - **BL2:** `{{checkout:<slug>}}` for a LIVE checkout page of the school, checked at save and at send, plus per-recipient
   attribution tokens.
-- **BL3:** a school media library (pictures up to 25 MB and videos up to 5 GB, uploaded resumably straight to the private
-  bucket), email with safe HTML picture blocks, a hosted video page with a 720p playback copy, and stable `/m/<token>` links.
-  It stays off until David approves the storage and compute cost.
+- **BL3c (0654):** video: resumable uploads up to 5 GB, a thumbnail, a hosted video page with the approved 720p playback copy,
+  shown in email as a thumbnail that opens the page and sent in a text as a link.
 - Belt-rank audience filter, contact-list segments (with the contacts list work), and AI-written blasts with approval.

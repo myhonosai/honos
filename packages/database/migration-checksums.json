@@ -408,6 +408,7 @@
     "0650_chad_lead_plan.sql": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487",
     "0652_staff_agent_speech.sql": "fdb50164a94331c08a57e6e034953a3c4c5addc68c16d764c8705736f960d408",
     "0655_mobile_handoff_single_use.sql": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83",
-    "0651_hq_creative_cost_basis.sql": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219"
+    "0651_hq_creative_cost_basis.sql": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219",
+    "0653_school_blast_pictures.sql": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397"
   }
 }
