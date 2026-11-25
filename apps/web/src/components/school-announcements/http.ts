@@ -5,7 +5,8 @@ import {
 
 /**
  * School announcements (0576): same-origin browser commands only. Staff send the shell's school scope, which the server
- * checks again with family_messages.manage. Posting shows the announcement in the HON Family app; nothing is texted, emailed or pushed.
+ * checks again with family_messages.manage. Posting shows the announcement in the HON Family app; nothing is texted or emailed, and a
+ * phone alert is asked for only with phoneAlert true (0658).
  */
 export class AnnouncementsAccessError extends Error { constructor(message: string, readonly status: number) { super(message); } }
 /** A definite refusal: nothing was stored, so a retry is a new command. Other failures keep the key for an exact retry. */
@@ -46,9 +47,9 @@ function base(scope: AnnouncementsScope): string {
 export async function loadSchoolAnnouncements(scope: AnnouncementsScope): Promise<SchoolAnnouncements> {
   return verifySchoolAnnouncements((await call(base(scope), 'GET')).data);
 }
-export async function publishSchoolAnnouncement(scope: AnnouncementsScope, title: string, body: string, key: string): Promise<SchoolAnnouncementReceipt> {
-  const input = validatePublishSchoolAnnouncementInput({ title, body });
-  return verifySchoolAnnouncementReceipt((await call(base(scope), 'POST', 'school_announcements.publish', input, key)).data, { ...input, status: 'PUBLISHED' });
+export async function publishSchoolAnnouncement(scope: AnnouncementsScope, title: string, body: string, key: string, phoneAlert = false): Promise<SchoolAnnouncementReceipt> {
+  const input = validatePublishSchoolAnnouncementInput({ title, body, phoneAlert });
+  return verifySchoolAnnouncementReceipt((await call(base(scope), 'POST', 'school_announcements.publish', input, key)).data, { title: input.title, body: input.body, status: 'PUBLISHED' });
 }
 export async function withdrawSchoolAnnouncement(scope: AnnouncementsScope, announcementId: string, expectedVersion: number, key: string): Promise<SchoolAnnouncementReceipt> {
   const input = validateWithdrawSchoolAnnouncementInput({ announcementId: announcementId.toLowerCase(), expectedVersion });

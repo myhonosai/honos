@@ -51,7 +51,7 @@ export async function verifySaasViewport({ page, origin, label, check, screensho
       assert.equal(calls.length, 0, 'URL values must not select an organization');
       await page.getByText('Paid founder lifetime', { exact: true }).first().waitFor();
       assert.equal(await page.locator('[data-founder-available="monthly"]').textContent(), '26');
-      const costs = page.getByText('Verified provider-cost evidence and premium program', { exact: true });
+      const costs = page.getByText('AI provider bills and premium credits', { exact: true });
       await costs.focus(); await page.keyboard.press('Enter'); await page.getByText('USD 50.000000', { exact: true }).waitFor();
       await noOverflow(page, `${label} provider evidence`); await page.keyboard.press('Enter');
       await page.getByLabel('Subscription status', { exact: true }).selectOption('SUSPENDED');
@@ -59,9 +59,9 @@ export async function verifySaasViewport({ page, origin, label, check, screensho
       assert.equal(await page.getByRole('button', { name: /^Review HON .* account$/ }).count(), 1);
       assert.equal(await page.locator('[data-founder-available="monthly"]').textContent(), '26');
       await page.getByLabel('Subscription status', { exact: true }).selectOption(''); await page.locator('[data-saas-inventory]').waitFor();
-      await page.getByLabel('Find organization in returned records', { exact: true }).fill('does-not-match');
-      await page.getByText('No subscription records in the returned window match this selection.', { exact: true }).waitFor();
-      await page.getByLabel('Find organization in returned records', { exact: true }).fill('');
+      await page.getByLabel('Find a business', { exact: true }).fill('does-not-match');
+      await page.getByText('No subscriptions match.', { exact: true }).waitFor();
+      await page.getByLabel('Find a business', { exact: true }).fill('');
       for (const name of ['Big Button', 'Classic', 'Modern']) { await page.getByRole('group', { name: 'Platform view' }).getByRole('button', { name, exact: true }).click(); await noOverflow(page, `${label} subscriptions ${name}`); }
       await costs.focus(); await page.keyboard.press('Enter'); await page.getByText('USD 50.000000', { exact: true }).waitFor();
       await screenshot(page, `${label}-subscription-overview`);
@@ -74,7 +74,7 @@ export async function verifySaasViewport({ page, origin, label, check, screensho
     assert(await page.getByRole('heading', { name: 'Selected organization', exact: true }).evaluate((node) => node === document.activeElement));
     await page.locator('[data-saas-account] dd').filter({ hasText: /^3,800$/ }).waitFor();
     await page.getByRole('heading', { name: 'Provider-verified standing', exact: true }).waitFor();
-    await page.getByText(/Provider usage cost not recorded/, { exact: false }).waitFor();
+    await page.getByText(/No cost recorded/, { exact: false }).waitFor();
     assert.equal(await page.getByRole('button', { name: /charge|collect|grant|activate|reserve|publish|resolve|purchase|refund/i }).count(), 0);
     await noOverflow(page, `${label} subscription account`);
     const heading = await page.getByRole('heading', { name: 'Selected organization', exact: true }).boundingBox();
@@ -108,7 +108,7 @@ export async function verifySaasStates({ contextFor, origin, check, delay }) {
       for (const mode of ['401', '403', '503', 'catalog-denied', 'subscriptions-denied', 'credits-denied', 'malformed', 'invalid-json']) {
         saasState.overview = 'ready'; await open(); await select(); saasState.overview = mode;
         await page.getByRole('button', { name: 'Refresh subscription overview', exact: true }).click();
-        await page.getByRole('heading', { name: mode === '401' ? 'Sign in to review HON subscriptions' : mode === '403' || mode.endsWith('-denied') ? 'HON billing access denied' : mode === '503' ? 'HON subscription records unavailable' : 'Subscription records could not be verified', exact: true }).waitFor();
+        await page.getByRole('heading', { name: mode === '401' ? 'Sign in to see subscriptions' : mode === '403' || mode.endsWith('-denied') ? 'HON billing access denied' : mode === '503' ? 'Subscriptions aren’t available right now' : 'Subscriptions couldn’t load', exact: true }).waitFor();
         assert.equal(await page.locator('[data-saas-account], [data-saas-inventory]').count(), 0); assert(!(await page.locator('body').innerText()).includes('private-billing-note'));
       }
     });
@@ -117,16 +117,16 @@ export async function verifySaasStates({ contextFor, origin, check, delay }) {
       for (const mode of ['401', '403', '503', 'subscription-denied', 'payment-standing-denied', 'credits-denied', 'wrong-org', 'subscription-race', 'malformed', 'invalid-json']) {
         saasState.account = 'ready'; await open(); await select(); saasState.account = mode;
         await page.getByRole('button', { name: 'Refresh account records', exact: true }).click();
-        await page.getByRole('heading', { name: mode === '401' ? 'Sign in to review HON subscriptions' : mode === '403' || mode.endsWith('-denied') ? 'HON billing access denied' : mode === '503' ? 'HON subscription records unavailable' : 'Subscription records could not be verified', exact: true }).waitFor();
+        await page.getByRole('heading', { name: mode === '401' ? 'Sign in to see subscriptions' : mode === '403' || mode.endsWith('-denied') ? 'HON billing access denied' : mode === '503' ? 'Subscriptions aren’t available right now' : 'Subscriptions couldn’t load', exact: true }).waitFor();
         assert.equal(await page.locator('[data-saas-account]').count(), 0); assert(!(await page.locator('body').innerText()).includes('private-billing-note'));
       }
     });
     await check('Billing empty and mismatched entitlement records stay explicit; no allowances or costs are invented', async () => {
       saasState.overview = 'empty'; saasState.account = 'ready'; await open();
-      await page.getByText('No subscription records in the returned window match this selection.', { exact: true }).waitFor();
+      await page.getByText('No subscriptions match.', { exact: true }).waitFor();
       assert.equal(await page.locator('[data-founder-available="monthly"]').textContent(), 'Unavailable / undecided');
       saasState.overview = 'ready'; saasState.account = 'empty'; await open(); await select();
-      await page.getByText('No current subscription', { exact: true }).waitFor(); await page.getByText('No allowance records were returned. A planned catalog allowance is not a granted balance.', { exact: true }).waitFor();
+      await page.getByText('No current subscription', { exact: true }).waitFor(); await page.getByText('No credit balances yet.', { exact: true }).waitFor();
       saasState.account = 'alignment'; await page.getByRole('button', { name: 'Refresh account records', exact: true }).click(); await page.locator('dd').filter({ hasText: /^MISMATCH/ }).waitFor();
     });
     await check('Every billing read independently denies school, family, support, non-billing HQ and unsigned sessions', async () => {

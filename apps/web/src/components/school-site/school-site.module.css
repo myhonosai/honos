@@ -363,3 +363,5 @@
 .site[data-mode="preview"] .hero, .site[data-mode="demo"] .hero { min-height: 0; }
 .site[data-mode="preview"] .header, .site[data-mode="demo"] .header { position: static; }
 .site[data-mode="preview"] .stickyAction, .site[data-mode="demo"] .stickyAction { position: static; }
+.footerLinks { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.footerLinks a { color: inherit; }
