@@ -25,6 +25,7 @@ describe('HQ Schools list like agency sub-accounts', () => {
     expect(html).toContain('data-action="PAUSE"'); expect(html).toContain('data-action="RESUME"'); expect(html).toContain('data-action="ARCHIVE"');
     expect(html).not.toContain('data-action="RESTORE"');
     expect(html).toContain(`href="/hq/schools/${ids[0]}"`);
+    expect(html).toContain(`data-menu="plan" href="/hq/schools/${ids[0]}#plan"`); expect(html).toContain('Plan…');
     expect(html).not.toMatch(/not a selector|impersonation session/);
   });
   it('the confirm step gates Pause on the acknowledgement and Remove on the exact typed name', () => {

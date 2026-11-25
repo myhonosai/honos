@@ -9,6 +9,7 @@ import { HqSchoolLifecycleError, loadHqSchoolArchiveDates, sendHqSchoolLifecycle
 import { HqSchoolDirectoryController, bindHqSchoolDirectoryPrivacy } from './hq-school-directory-controller';
 import { useHqModern } from './hq-modern/shell';
 import styles from './hq-school-directory.module.css';
+import { schoolPlanText } from './hq-school-plan/copy';
 
 function formatDate(value: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
@@ -68,6 +69,7 @@ function RowMenu({ school, onPick }: { school: HqSchoolDirectoryEntry; onPick: (
     <summary aria-label={`${l('actions')} ${school.schoolDisplayName}`}>⋯</summary>
     <div role="menu">
       {school.schoolOperationalStatus !== 'ARCHIVED' && <a role="menuitem" href={`/hq/schools/${encodeURIComponent(school.schoolId)}`}>{l('open')}</a>}
+      {school.schoolOperationalStatus !== 'ARCHIVED' && <a role="menuitem" data-menu="plan" href={`/hq/schools/${encodeURIComponent(school.schoolId)}#plan`}>{schoolPlanText(preferences.language, 'menuPlan')}</a>}
       {hqSchoolLifecycleActionsFor(school.schoolOperationalStatus).map(action => <button key={action} type="button" role="menuitem" data-action={action}
         className={action === 'ARCHIVE' ? styles.dangerText : undefined} onClick={event => { (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); onPick(action); }}>{label(action)}</button>)}
     </div>
