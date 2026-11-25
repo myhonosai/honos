@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { HqPlatformOverview } from '@hon/contracts';
 import { HqOverviewAccessError, loadHqOverview } from '../hq-overview-http';
-import { HQ_ART, HQ_NAV, HQ_NAV_GROUPS, HQ_VIEWS, hqGroupContains, hqPageLabel, type HqArt, type HqView } from './catalog';
+import { HQ_ART, HQ_NAV, HQ_NAV_GROUPS, HQ_VIEWS, hqGroupContains, hqNavMatch, hqPageLabel, type HqArt, type HqView } from './catalog';
 import { HqIcon } from './icon';
 import { SignOutButton } from '../auth/sign-out-button';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
@@ -110,15 +110,15 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     });
   };
   const nav = <>
-    <Link href="/hq" className={styles.brand}><img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={38} height={38}/><div><strong>{t("HON HQ")}</strong><span>{t("Company control plane")}</span></div></Link>
+    <Link href="/hq" className={styles.brand}><img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={38} height={38}/><div><strong>{t("HON HQ")}</strong><span>{t("Owner workspace")}</span></div></Link>
     <nav className={styles.navigation} aria-label={t("HQ navigation")}>
       {HQ_NAV.map((item) => {
         const group = HQ_NAV_GROUPS[item.path];
-        if (!group) return <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={(item.path === '/hq' ? path === item.path : path === item.path || path.startsWith(`${item.path}/`)) ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>;
+        if (!group) return <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={hqNavMatch(path) === item.path ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>;
         const links = [...(group.overview ? [group.overview] : []), ...group.children];
         return <details className={styles.growthNav} key={`${group.key}:${hqGroupContains(group, path)}`} open={hqGroupContains(group, path)} data-hq-nav-group={group.key}>
           <summary><HqIcon name={group.icon}/><span>{text(group.title)}</span></summary>
-          {links.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={path === child.path || (child !== group.overview && child.path !== '/hq/revenue' && child.path !== '/hq/schools' && path.startsWith(`${child.path}/`)) ? 'page' : undefined}>{child === group.overview ? null : <HqIcon name={child.icon} size={17}/>}{text(child.title)}</Link>)}
+          {links.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={hqNavMatch(path) === child.path ? 'page' : undefined}>{child === group.overview ? null : <HqIcon name={child.icon} size={17}/>}{text(child.title)}</Link>)}
         </details>;
       })}
     </nav>
@@ -134,15 +134,13 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
     <div className={styles.workspace} data-hq-background>
       <header className={styles.topbar}>
         <button ref={menuButton} type="button" className={styles.menuButton} aria-label={t("Open HQ navigation")} aria-expanded={menu} onClick={() => setMenu(true)}><HqIcon name="menu"/></button>
-        <div><p className={styles.eyebrow}>HON HQ / {path === '/hq' ? t("Company command center") : text(hqPageLabel(path))}</p><h1>{path === '/hq' ? t("Your company. In command.") : text(hqPageLabel(path))}</h1><p className={styles.subtitle}>{path === '/hq' ? t("One workspace for HON and your executive team.") : t("Your company. One governed workspace.")}</p></div>
-        <span className={styles.ownerAvatar} title={t("Company control plane")} aria-label={t("HQ workspace")}>{t("HQ")}</span>
-      </header>
+        <div><p className={styles.eyebrow}>HON HQ / {path === '/hq' ? t("Home") : text(hqPageLabel(path))}</p><h1>{path === '/hq' ? t("Your company. In command.") : text(hqPageLabel(path))}</h1>{path === '/hq' ? <p className={styles.subtitle}>{t("Start here: what needs you today and where to go next.")}</p> : null}</div>
       <section className={styles.appearance} data-hq-appearance aria-label={t("HQ appearance")}>
         <div className={styles.appearanceGroup} role="group" aria-label={t("Platform view")}><span>{t("View")}</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{text(option.label)}</button>)}</div>
         <div className={styles.appearanceGroup} role="group" aria-label={t("AI portrait style")}><span>{t("AI Style")}</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{text(option.label)}</button>)}</div>
         <button type="button" className={styles.motionControl} aria-label={t("Ambient motion")} aria-pressed={!reducedMotion && ambientMotion} disabled={reducedMotion} onClick={() => setAmbientMotion((value) => !value)} title={reducedMotion ? t("Motion is off because your device prefers reduced motion") : t("Pause or resume decorative motion")}><HqIcon name={ambientMotion && !reducedMotion ? 'pause' : 'play'} size={14}/><span>{t("Motion")}</span><small>{!reducedMotion && ambientMotion ? t("On") : t("Off")}</small></button>
-        <small>{t("Presentation only")}</small>
       </section>
+      </header>
       {access.kind === 'ready' ? <HqContext.Provider value={{ overview: access.overview, art, view, draft, setDraft, openAssistant }}>
         <div className={`${styles.contentLayout} ${assistant ? styles.withAssistant : ''}`}>
           <main id="hq-main" tabIndex={-1} className={styles.main}>{children}</main>
@@ -159,7 +157,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         {access.kind === 'limited' ? <p><Link href="/hq/support">{t("Open Support")}</Link> · <Link href="/hq/communications">{t("Open Texts & Email")}</Link></p> : null}
         {access.kind === 'unauthorized' ? <Link href="/auth/login" className={styles.primary}>{t("Sign in to HON")}</Link> : access.kind !== 'loading' && <button type="button" className={styles.primary} onClick={() => setRevision((value) => value + 1)}>{t("Check access again")}</button>}
       </main>}
-      <footer className={styles.pageFooter}><HqIcon name="shield" size={16}/><span>{t("HQ remains separate from school CRM. You retain final approval.")}</span><button type="button" onClick={() => { setAccess({ kind: 'loading' }); setRevision((value) => value + 1); }}>{t("Refresh HQ access")}</button></footer>
+      <footer className={styles.pageFooter}><button type="button" onClick={() => { setAccess({ kind: 'loading' }); setRevision((value) => value + 1); }}>{t("Refresh HQ access")}</button></footer>
     </div>
     <nav className={styles.mobileNav} aria-label={t("Mobile HQ navigation")}>
       <Link href="/hq" aria-current={path === '/hq' ? 'page' : undefined}><HqIcon name="home"/><span>{t("Home")}</span></Link>

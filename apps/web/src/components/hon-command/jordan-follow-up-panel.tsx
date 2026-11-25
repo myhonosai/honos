@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { JordanFollowUpFocus, JordanFollowUpSuggestion, JordanFollowUpView } from '@hon/contracts';
 import { JordanFollowUpError, jordanFollowUpApi as defaultApi, type JordanFollowUpApi, type JordanFollowUpErrorKind, type JordanFollowUpScope } from './jordan-follow-up-http';
 import styles from './hon-command.module.css';
+import { AgentVoiceBar } from './agent-voice-bar';
 
 /**
  * P2 (0640): follow-through with Jordan. A team manager asks Jordan to look over open or overdue tasks; Jordan suggests up to ten
@@ -120,6 +121,7 @@ export function JordanFollowUpPanel({ scope, api = defaultApi }: { scope: Jordan
         {(['OVERDUE', 'OPEN'] as const).map((f) => <label key={f}><input type="radio" name="jordan-focus" checked={focus === f} onChange={() => setFocus(f)} /> {f === 'OVERDUE' ? 'Overdue tasks' : 'All open tasks'}</label>)}
       </fieldset>
       <label>Anything Jordan should know (optional)<textarea value={note} maxLength={300} rows={2} onChange={(e) => setNote(e.target.value)} placeholder="For example: the belt test is Saturday" data-jordan-note /></label>
+      <AgentVoiceBar scope={scope} agentKey="jordan" name="Jordan" value={note} max={300} onChange={setNote} answer={view?.summary ?? null} />
       <button type="submit" className={styles.primary} disabled={busy} data-jordan-ask>{busy && !view ? 'Jordan is looking…' : 'Ask Jordan'}</button>
     </form> : null}
     {notice ? <div className={styles.note} role="alert" data-jordan-notice={notice.kind}>

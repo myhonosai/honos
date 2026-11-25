@@ -21,7 +21,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const stub = (response: Response) => { const f = vi.fn(async () => response); vi.stubGlobal('fetch', f); return f; };
 const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as MediaError; } throw new Error('expected a failure'); };
-const asset = (over: Record<string, unknown> = {}) => ({ assetId, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 2048, width: 640, height: 480,
+const asset = (over: Record<string, unknown> = {}) => ({ assetId, kind: 'IMAGE', mediaType: 'image/png', title: 'Open house', byteSize: 2048, width: 640, height: 480, copyState: null, durationMs: null,
   state: 'READY', version: 2, linkToken: TOKEN, createdAt: '2026-11-22T08:00:00.000Z', readyAt: '2026-11-22T08:00:01.000Z', updatedAt: '2026-11-22T08:00:01.000Z', ...over });
 const usage = { storedBytes: 2048, storedLimitBytes: 5368709120, monthBytes: 4096, monthLimitBytes: 10737418240 };
 const file = (type = 'image/png', size = 10) => new File([new Uint8Array(size)], 'Open house.png', { type });

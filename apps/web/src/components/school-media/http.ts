@@ -1,6 +1,7 @@
 import {
-  SCHOOL_MEDIA_COMMANDS, SCHOOL_MEDIA_LIMITS, SCHOOL_MEDIA_TYPES, schoolMediaTitleOk, validateDeleteSchoolMedia, validateRenameSchoolMedia,
-  verifySchoolMediaAsset, verifySchoolMediaLibrary, type DeleteSchoolMediaInput, type RenameSchoolMediaInput, type SchoolMediaAsset, type SchoolMediaLibrary,
+  SCHOOL_MEDIA_COMMANDS, SCHOOL_MEDIA_LIMITS, SCHOOL_MEDIA_TYPES, schoolMediaTitleOk, schoolVideoTypeOf, validateBeginSchoolVideo, validateDeleteSchoolMedia,
+  validateRenameSchoolMedia, verifySchoolMediaAsset, verifySchoolMediaLibrary, type DeleteSchoolMediaInput, type RenameSchoolMediaInput, type SchoolMediaAsset,
+  type SchoolMediaLibrary, type SchoolMediaVideo, type SchoolVideoType,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -21,11 +22,16 @@ export type MediaErrorKind =
   /** Media storage is not switched on for HON. Nothing stored. */ | 'OFF'
   /** Other pictures are uploading, or too many requests. Nothing stored. */ | 'BUSY'
   /** The request was not accepted as sent. Nothing changed. */ | 'INVALID'
-  /** Busy, or the outcome is not known. Only the identical request (same key) may be sent again. */ | 'UNKNOWN';
+  /** Busy, or the outcome is not known. Only the identical request (same key) may be sent again. */ | 'UNKNOWN'
+  /** 0654: not an MP4, MOV or WebM video. Nothing kept. */ | 'NOT_VIDEO'
+  /** 0654: a video larger than 5 GB. Nothing stored. */ | 'VIDEO_TOO_LARGE'
+  /** 0654: the file did not reach storage. Try again (same key). */ | 'UPLOAD_MISSING'
+  /** 0654: the stored file is not the size the video was started with. */ | 'UPLOAD_MISMATCH';
 export class MediaError extends Error { constructor(readonly kind: MediaErrorKind, readonly code: string | null = null) { super(kind); } }
 export type Owned = () => boolean;
 export type MediaScope = Readonly<{ organizationId: string; schoolId: string }>;
 export type MediaUpload = Readonly<{ file: Blob; title: string }>;
+export type VideoUpload = Readonly<{ file: Blob; title: string; mediaType: SchoolVideoType }>;
 
 const RESPONSE_MAX = 900_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
@@ -61,9 +67,10 @@ export function mediaErrorFor(status: number, code: string | null): MediaError {
   if (status === 404) return new MediaError('GONE', code);
   if (status === 413) return new MediaError('TOO_LARGE', code);
   if (status === 429) return new MediaError('BUSY', code);
-  if (status === 400) return new MediaError(code === 'MEDIA_IMAGE_REFUSED' ? 'NOT_PICTURE' : 'INVALID', code);
+  if (status === 400) return new MediaError(code === 'MEDIA_IMAGE_REFUSED' ? 'NOT_PICTURE' : code === 'MEDIA_VIDEO_REFUSED' ? 'NOT_VIDEO' : 'INVALID', code);
   if (status === 409) {
-    const kind = ({ VERSION_CONFLICT: 'CHANGED', MEDIA_STORAGE_FULL: 'FULL', MEDIA_MONTHLY_LIMIT: 'MONTH', MEDIA_DELETED: 'GONE', IDEMPOTENCY_KEY_REUSED: 'INVALID' } as Record<string, MediaErrorKind>)[code ?? ''];
+    const kind = ({ VERSION_CONFLICT: 'CHANGED', MEDIA_STORAGE_FULL: 'FULL', MEDIA_MONTHLY_LIMIT: 'MONTH', MEDIA_DELETED: 'GONE', IDEMPOTENCY_KEY_REUSED: 'INVALID',
+      MEDIA_UPLOAD_MISSING: 'UPLOAD_MISSING', MEDIA_UPLOAD_MISMATCH: 'UPLOAD_MISMATCH' } as Record<string, MediaErrorKind>)[code ?? ''];
     if (kind) return new MediaError(kind, code);
   }
   if (status === 503 && code === 'MEDIA_STORAGE_OFF') return new MediaError('OFF', code);
@@ -88,6 +95,35 @@ export function mediaFileProblem(file: { type: string; size: number }): 'NOT_PIC
   if (file.size < 1) return 'NOT_PICTURE';
   return file.size > SCHOOL_MEDIA_LIMITS.maxBytes ? 'TOO_LARGE' : null;
 }
+/** 0654: a video file the browser may send (MP4, MOV or WebM up to 5 GB), with its type; or why not. */
+export function videoFileProblem(file: { name: string; type: string; size: number }): { mediaType: SchoolVideoType } | { problem: 'NOT_VIDEO' | 'VIDEO_TOO_LARGE' } {
+  const mediaType = schoolVideoTypeOf(file.name, file.type);
+  if (!mediaType || file.size < 1) return { problem: 'NOT_VIDEO' };
+  return file.size > SCHOOL_MEDIA_LIMITS.videoMaxBytes ? { problem: 'VIDEO_TOO_LARGE' } : { mediaType };
+}
+/** Whether a picked file is a video (by type, or by extension when the browser gives no type). */
+export const isVideoFile = (file: { name: string; type: string }) => file.type.startsWith('video/') || (!file.type && schoolVideoTypeOf(file.name, '') !== null);
+
+/**
+ * 0654: PUT a video straight to the one-time signed storage link (cross-origin, no cookies, no HON headers), reporting
+ * progress. Resolves when storage answers 2xx; rejects otherwise. The server then checks what arrived.
+ */
+export function putVideo(url: string, file: Blob, mediaType: SchoolVideoType, signal: AbortSignal, onProgress: (percent: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!/^https:\/\/[^/?#]+\/storage\/v1\/object\/upload\/sign\/[^?#]+\?token=[A-Za-z0-9._~-]+$/.test(url) && !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?\//.test(url)) { reject(new MediaError('INVALID')); return; }
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.withCredentials = false;
+    xhr.setRequestHeader('Content-Type', mediaType);
+    xhr.setRequestHeader('x-upsert', 'true');
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && e.total > 0) onProgress(Math.min(100, Math.floor((e.loaded / e.total) * 100))); };
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new MediaError('UPLOAD_MISSING')); };
+    xhr.onerror = () => reject(new MediaError('UPLOAD_MISSING'));
+    xhr.onabort = () => reject(new MediaError('UPLOAD_MISSING'));
+    signal.addEventListener('abort', () => xhr.abort(), { once: true });
+    xhr.send(file);
+  });
+}
 
 export const mediaApi = {
   library(scope: MediaScope, signal: AbortSignal, owned: Owned): Promise<SchoolMediaLibrary> {
@@ -102,6 +138,35 @@ export const mediaApi = {
       if (asset.state !== 'READY' || asset.mediaType !== input.file.type) throw new Error('drift');
       return asset;
     }, { name: SCHOOL_MEDIA_COMMANDS.upload, key, body: input.file, headers: { 'Content-Type': input.file.type, 'X-HON-Media-Title': encodeURIComponent(input.title) } });
+  },
+  /**
+   * 0654: start (reserve + one-time link), PUT the file to storage, then finish (the server checks size and signature). A
+   * retry with the same key gets a fresh link for the same video; a finished video answers as it is.
+   */
+  async uploadVideo(scope: MediaScope, input: VideoUpload, key: string, signal: AbortSignal, owned: Owned, onProgress: (percent: number) => void = () => undefined): Promise<SchoolMediaVideo> {
+    const body = checked(validateBeginSchoolVideo, { title: input.title, mediaType: input.mediaType, byteSize: input.file.size });
+    const ticket = await call(`${base(scope)}/video/begin`, signal, owned, (data) => {
+      const row = data as { asset?: unknown; uploadUrl?: unknown } | null;
+      if (!row || typeof row !== 'object' || Object.keys(row).length !== 2 || (row.uploadUrl !== null && typeof row.uploadUrl !== 'string')) throw new Error('drift');
+      const asset = verifySchoolMediaAsset(row.asset);
+      if (asset.kind !== 'VIDEO' || asset.byteSize !== body.byteSize || asset.mediaType !== body.mediaType) throw new Error('drift');
+      if ((asset.state === 'PENDING') !== (row.uploadUrl !== null)) throw new Error('drift');
+      return { asset, uploadUrl: row.uploadUrl as string | null };
+    }, { name: SCHOOL_MEDIA_COMMANDS.videoBegin, key, ...json(body) });
+    if (ticket.asset.state === 'READY') return ticket.asset;
+    let putError: unknown = null;
+    try { await putVideo(ticket.uploadUrl!, input.file, input.mediaType, signal, onProgress); } catch (error) { putError = error; }
+    try {
+      return await call(`${base(scope)}/video/finish`, signal, owned, (data) => {
+        const asset = verifySchoolMediaAsset(data);
+        if (asset.kind !== 'VIDEO' || asset.assetId !== ticket.asset.assetId || asset.state !== 'READY') throw new Error('drift');
+        return asset;
+      }, { name: SCHOOL_MEDIA_COMMANDS.videoFinish, key: globalThis.crypto.randomUUID(), ...json({ assetId: ticket.asset.assetId }) });
+    } catch (error) {
+      // The PUT failing first explains a missing file better than the finish answer.
+      if (putError instanceof MediaError && error instanceof MediaError && error.kind === 'UPLOAD_MISSING') throw putError;
+      throw error;
+    }
   },
   async rename(scope: MediaScope, input: RenameSchoolMediaInput, key: string, signal: AbortSignal, owned: Owned): Promise<SchoolMediaAsset> {
     const body = checked(validateRenameSchoolMedia, input);
@@ -124,5 +189,7 @@ export type MediaApi = typeof mediaApi;
 
 /** The picture's stable link, as staff paste it into a message: /m/<token> on this site. */
 export function mediaLink(origin: string, token: string): string { return `${origin.replace(/\/$/, '')}/m/${token}`; }
+/** 0654: a video's page, as staff paste it into a text or email: /v/<token> on this site. */
+export function videoPageLink(origin: string, token: string): string { return `${origin.replace(/\/$/, '')}/v/${token}`; }
 /** Whether a failed command may be sent again with the same key: only when its outcome is not known, or nothing was sent. */
-export const keepForRetry = (error: unknown) => !(error instanceof MediaError) || error.kind === 'UNKNOWN' || error.kind === 'BUSY';
+export const keepForRetry = (error: unknown) => !(error instanceof MediaError) || error.kind === 'UNKNOWN' || error.kind === 'BUSY' || error.kind === 'UPLOAD_MISSING';

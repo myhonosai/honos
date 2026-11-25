@@ -2,6 +2,8 @@
  * 0243 provider boundary for consent-gated message delivery. An adapter gets exactly one leased send: the
  * address, the body and the school name. It has no database, tenant authority or consent access.
  */
+import type { EmailPicture } from './email-pictures.js';
+
 export const COMMUNICATION_PROVIDER_ADAPTERS = Symbol('COMMUNICATION_PROVIDER_ADAPTERS');
 
 export type CommunicationProviderName = 'FAKE' | 'SENDGRID' | 'TWILIO';
@@ -20,6 +22,11 @@ export interface CommunicationSendRequest {
   attempt: number;
   /** 0424: a school email's subject as its author wrote it; absent, the adapter's standard subject. */
   subject?: string | undefined;
+  /**
+   * 0653: the READY pictures of a blast email (absent: no pictures, text only). The email adapter adds an HTML part with
+   * each picture line as an image and puts the picture links in the text part.
+   */
+  pictures?: readonly EmailPicture[] | undefined;
   /**
    * Who the mail is for. Omitted or SCHOOL: a 0243 school delivery. INTERNAL (staff notices such as the weekly
    * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.

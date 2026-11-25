@@ -257,6 +257,10 @@ async function records(org, school, tag) {
 // jsonb orders keys by length, so compare with sorted keys.
 const sorted = (v) => Array.isArray(v) ? v.map(sorted) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sorted(v[k])])) : v;
 const json = (v) => JSON.stringify(sorted(v));
+// Payment amounts or currency anywhere in a card. Random ids and timestamps are taken out first, so a uuid that happens to
+// contain 5000 or 12900 never counts as an amount.
+const amountsIn = (v) => /(^|[^0-9])(12900|5000)([^0-9]|$)|"USD"|Minor"/.test(json(v)
+  .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, 'ID').replace(/\d{4}-\d{2}-\d{2}T[0-9:.]+Z/g, 'AT'));
 try {
   await cleanup();
   await seed();
@@ -306,7 +310,8 @@ try {
   // family-thread count only with family_messages.manage.
   const M = (await success(() => call(MEMBERSHIP_ONLY, A.avery), 'membership read only')).data;
   ok(M.membership.allowed && M.membership.items.length === 1 && json(M.billing) === '{"allowed":false}', 'membership shown, billing not allowed without an invoice code');
-  ok(json(M.timeline.map((e) => e.kind)) === json(['PERSON_ADDED', 'MEMBERSHIP_STARTED']) && !/12900|5000|USD/.test(json(M)), `no payment rows or amounts ${json(M.timeline)}`);
+  ok(json(M.timeline.map((e) => e.kind)) === json(['PERSON_ADDED', 'MEMBERSHIP_STARTED']) && !amountsIn(M), `no payment rows or amounts ${json(M.timeline)}`);
+  ok(amountsIn(C), 'the amount check does see amounts on a card that has them');
   ok(json(M.messages) === json({ allowed: true, direct: 1, family: null }), 'family-thread count needs family_messages.manage');
   const own = (await success(() => call(OWN, A.avery), 'owner')).data;
   ok(json({ ...own, generatedAt: 0 }) === json({ ...C, generatedAt: 0 }), 'the owner sees the same card');

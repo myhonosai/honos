@@ -105,6 +105,12 @@ test('production never silently falls back to development or unverified settings
   assert.deepEqual(failures(productionEnv({ HON_AUTH_MODE: 'MANUS_DEVELOPMENT' })), ['OIDC_AUTH_REQUIRED']);
   assert.deepEqual(failures(productionEnv({ HON_SESSION_JWT_SECRET: 'short' })), ['SESSION_CONFIGURATION_INVALID']);
   assert.deepEqual(failures(productionEnv({ HON_RUNTIME_DATABASE_POOL_MAX: '500' })), ['RUNTIME_POOL_MAX_INVALID']);
+  // 0653/0654: media storage on needs the https site origin that blast emails link pictures and videos at.
+  assert.deepEqual(failures(productionEnv({ HON_MEDIA_STORAGE_APPROVED: 'true' })), ['MEDIA_PUBLIC_ORIGIN_REQUIRED']);
+  assert.deepEqual(failures(productionEnv({ HON_MEDIA_STORAGE_APPROVED: 'true', HON_PUBLIC_ORIGIN: 'http://app.example.test' })), ['MEDIA_PUBLIC_ORIGIN_REQUIRED']);
+  assert.deepEqual(failures(productionEnv({ HON_MEDIA_STORAGE_APPROVED: 'true', HON_PUBLIC_ORIGIN: 'https://app.example.test/' })), ['MEDIA_PUBLIC_ORIGIN_REQUIRED']);
+  assert.deepEqual(failures(productionEnv({ HON_MEDIA_STORAGE_APPROVED: 'true', HON_PUBLIC_ORIGIN: 'https://app.example.test' })), []);
+  assert.deepEqual(failures(productionEnv({ HON_MEDIA_STORAGE_APPROVED: 'false' })), []);
   // Preview builds are labelled but still require verified TLS for any remote database.
   assert.deepEqual(failures(productionEnv({ HON_DEPLOYMENT_ENVIRONMENT: 'preview', HON_AUTH_MODE: 'MANUS_DEVELOPMENT', HON_DATABASE_CA_CERT: undefined })), ['RUNTIME_DATABASE_TLS_INVALID']);
   for (const code of failures(productionEnv({ HON_DATABASE_CA_CERT: undefined, DATABASE_URL: REMOTE }))) assert.match(code, /^[A-Z_]+$/);
