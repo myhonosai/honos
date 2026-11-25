@@ -1,6 +1,6 @@
 /** HQ school plan wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
-  title: 'Plan', loading: 'Reading this school’s plan…', denied: 'Your HQ access does not include plans. Nothing is shown.',
+  title: 'Plan', menuPlan: 'Plan…', loading: 'Reading this school’s plan…', denied: 'Your HQ access does not include plans. Nothing is shown.',
   unavailable: 'The plan could not be read. Nothing is shown.', retry: 'Try again',
   chargingOff: 'Charging is off. This records the school’s plan; nothing is billed until payments are switched on.',
   readOnly: 'You can view this plan. Only the HQ owner can change it.',
@@ -30,7 +30,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
-  title: '요금제', loading: '이 도장의 요금제를 읽는 중…', denied: 'HQ 권한에 요금제가 포함되어 있지 않습니다. 표시할 내용이 없습니다.',
+  title: '요금제', menuPlan: '요금제…', loading: '이 도장의 요금제를 읽는 중…', denied: 'HQ 권한에 요금제가 포함되어 있지 않습니다. 표시할 내용이 없습니다.',
   unavailable: '요금제를 읽을 수 없습니다. 표시할 내용이 없습니다.', retry: '다시 시도',
   chargingOff: '결제가 꺼져 있습니다. 도장의 요금제만 기록하며, 결제를 켜기 전에는 청구되지 않습니다.',
   readOnly: '이 요금제를 볼 수 있습니다. HQ 소유자만 변경할 수 있습니다.',
@@ -59,7 +59,7 @@ const ko: Record<Key, string> = {
   history: '기록 ({n})', historyAssign: '{date}: {plan}, {price}, {who}', historyRemove: '{date}: 요금제 삭제, {who}',
 };
 const es: Record<Key, string> = {
-  title: 'Plan', loading: 'Leyendo el plan de esta escuela…', denied: 'Tu acceso de HQ no incluye planes. No se muestra nada.',
+  title: 'Plan', menuPlan: 'Plan…', loading: 'Leyendo el plan de esta escuela…', denied: 'Tu acceso de HQ no incluye planes. No se muestra nada.',
   unavailable: 'No se pudo leer el plan. No se muestra nada.', retry: 'Reintentar',
   chargingOff: 'Los cobros están apagados. Esto registra el plan de la escuela; no se cobra nada hasta activar los pagos.',
   readOnly: 'Puedes ver este plan. Solo el dueño de HQ puede cambiarlo.',

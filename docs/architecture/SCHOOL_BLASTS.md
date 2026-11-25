@@ -89,8 +89,18 @@ Evidence: `packages/database/scripts/test-school-blast-pictures-integrity.mjs` (
 - **Text.** Insert video link puts the plain `/v/<token>` page link where the cursor is. It is ordinary text: the link stops
   working if the video is deleted.
 
+## Checkout links in blasts (BL2a, no migration)
+
+- The composer's "Insert checkout link" (email and text) lists the school's Live checkout pages that have a share link
+  (the 0620 links, read with the checkout pages through the existing staff routes, so it needs `school_checkout.manage`;
+  without it the picker says so). It puts the page's plain share link, `<site>/checkout/<publicId>`, where the cursor is.
+- Whether the page opens is decided on every public read (0620): a page taken off Live after the blast went out shows as
+  not available. Nothing is checked at save or send.
+- In an email with pictures or videos, HON's own `/checkout/<48 hex>` and `/v/<token>` links written in the message become
+  links in the HTML part; anything else stays text. Text-only emails and texts keep the plain link.
+
 ## Later pieces
 
-- **BL2:** `{{checkout:<slug>}}` for a LIVE checkout page of the school, checked at save and at send, plus per-recipient
-  attribution tokens.
+- **BL2b:** per-recipient attribution tokens on checkout links (which blast brought which order), and a save/send check
+  that the linked page is still Live. Needs a migration.
 - Belt-rank audience filter, contact-list segments (with the contacts list work), and AI-written blasts with approval.

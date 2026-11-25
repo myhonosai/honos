@@ -4,7 +4,7 @@ import { readParentPushData } from '@hon/contracts/parent-push';
 import type { PhonePush } from './push';
 
 /**
- * expo-notifications for the HON Family app. Announcements show as a normal banner even while the app is open. The
+ * expo-notifications for the HON Family app. Announcements and school message alerts show as a normal banner even while the app is open. The
  * token is Expo's for this app's EAS project; Android needs the project's Firebase key (FCM V1) uploaded to EAS first.
  */
 export function createExpoPhonePush(projectId: string): PhonePush | null {
@@ -16,16 +16,17 @@ export function createExpoPhonePush(projectId: string): PhonePush | null {
   return {
     platform: Platform.OS,
     async token(ask) {
-      if (Platform.OS === 'android') channel ??= Notifications.setNotificationChannelAsync('default', { name: 'School announcements', importance: Notifications.AndroidImportance.DEFAULT });
+      if (Platform.OS === 'android') channel ??= Notifications.setNotificationChannelAsync('default', { name: 'School alerts', importance: Notifications.AndroidImportance.DEFAULT });
       await channel;
       let permission = await Notifications.getPermissionsAsync();
       if (!permission.granted && ask && permission.canAskAgain) permission = await Notifications.requestPermissionsAsync();
       if (!permission.granted) return null;
       return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     },
-    onOpenAnnouncement(listener) {
+    onOpenAlert(listener) {
       const open = (response: Notifications.NotificationResponse | null) => {
-        if (response && readParentPushData(response.notification.request.content.data)) listener();
+        const data = response ? readParentPushData(response.notification.request.content.data) : null;
+        if (data) listener(data.type === 'school_message' ? 'message' : 'announcement');
       };
       // A tap that opened the app from closed, then every tap while it runs.
       void Notifications.getLastNotificationResponseAsync().then(open).catch(() => undefined);

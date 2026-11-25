@@ -1,14 +1,18 @@
 import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Pool } from 'pg';
-import { isParentPushToken } from '@hon/contracts';
+import { isParentPushToken, type ParentPushData } from '@hon/contracts';
 import { runtimePoolOptions } from '../foundation/runtime-pool-options.js';
 import { emitTelemetry } from '../observability/telemetry.js';
 import {
   EXPO_PUSH_TRANSPORT, EXPO_RECEIPT_BATCH, EXPO_SEND_BATCH, type ExpoPushTransport, type ExpoReceiptOutcome, type ExpoSendOutcome,
 } from './expo-push-client.js';
 
-/** One leased delivery as claim_parent_push_deliveries (0601) returns it: a token, the school name and the title only. */
-export interface ClaimedParentPush { deliveryId: string; leaseToken: string; expoToken: string; title: string; body: string; announcementId: string; attempts: number }
+/**
+ * One leased delivery as claim_parent_push_deliveries (0601, 0658) returns it: a token, the school name and either the
+ * announcement title (school_announcement) or a fixed "new message" line (school_message, never the message text).
+ */
+export type ClaimedParentPush = { deliveryId: string; leaseToken: string; expoToken: string; title: string; body: string; attempts: number }
+  & ({ kind: 'school_announcement'; announcementId: string } | { kind: 'school_message'; threadId: string });
 export interface ClaimedParentPushReceipt { deliveryId: string; leaseToken: string; ticketId: string }
 
 export interface ParentPushWorkerStore {
@@ -21,6 +25,11 @@ export interface ParentPushWorkerStore {
 export const PARENT_PUSH_WORKER_STORE = Symbol('PARENT_PUSH_WORKER_STORE');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function itemId(c: ClaimedParentPush): string { return c.kind === 'school_message' ? c.threadId : c.announcementId; }
+/** The notification's data: the kind and one id, exactly what the app's readParentPushData accepts. */
+function pushData(c: ClaimedParentPush): ParentPushData {
+  return c.kind === 'school_message' ? { type: 'school_message', threadId: c.threadId } : { type: 'school_announcement', announcementId: c.announcementId };
+}
 
 /**
  * Connects as hon_communication_worker (HON_COMMUNICATION_WORKER_DATABASE_URL), never as the runtime or migration role.
@@ -54,10 +63,12 @@ export class ParentPushWorkerDatabase implements ParentPushWorkerStore, OnModule
   }
 
   async claim(limit: number, leaseSeconds: number): Promise<ClaimedParentPush[]> {
-    const rows = await this.query<{ delivery_id: string; lease_token: string; expo_token: string; title: string; body: string; announcement_id: string; attempts: number }>(
-      'SELECT * FROM hon.claim_parent_push_deliveries($1, $2)', [limit, leaseSeconds]);
-    return rows.map(r => ({ deliveryId: r.delivery_id, leaseToken: r.lease_token, expoToken: r.expo_token, title: r.title, body: r.body,
-      announcementId: r.announcement_id, attempts: r.attempts }));
+    const rows = await this.query<{ delivery_id: string; lease_token: string; expo_token: string; title: string; body: string; push_kind: string;
+      announcement_id: string | null; thread_id: string | null; attempts: number }>('SELECT * FROM hon.claim_parent_push_deliveries($1, $2)', [limit, leaseSeconds]);
+    // An unexpected kind is kept as an announcement with no id, so the worker records it FAILED (UNVERIFIED_CLAIM), never sends it.
+    return rows.map(r => ({ deliveryId: r.delivery_id, leaseToken: r.lease_token, expoToken: r.expo_token, title: r.title, body: r.body, attempts: r.attempts,
+      ...(r.push_kind === 'school_message' ? { kind: 'school_message' as const, threadId: r.thread_id ?? '' }
+        : { kind: 'school_announcement' as const, announcementId: r.push_kind === 'school_announcement' ? r.announcement_id ?? '' : '' }) }));
   }
   async recordSend(deliveryId: string, leaseToken: string, outcome: ExpoSendOutcome): Promise<{ recorded: boolean }> {
     const rows = await this.query<{ data: { recorded: boolean } }>('SELECT hon.record_parent_push_send($1::uuid, $2::uuid, $3::jsonb) AS data',
@@ -98,7 +109,7 @@ export class ParentPushWorker {
     if (!this.store.isConfigured() || this.expo.readiness() !== 'READY' || Date.now() < this.pausedUntil) return summary;
     const claimed = await this.store.claim(Math.min(limit, EXPO_SEND_BATCH), leaseSeconds);
     summary.claimed = claimed.length;
-    const sendable = claimed.filter(c => UUID.test(c.deliveryId) && UUID.test(c.leaseToken) && UUID.test(c.announcementId) && isParentPushToken(c.expoToken)
+    const sendable = claimed.filter(c => UUID.test(c.deliveryId) && UUID.test(c.leaseToken) && UUID.test(itemId(c)) && isParentPushToken(c.expoToken)
       && typeof c.title === 'string' && c.title.length > 0 && typeof c.body === 'string' && c.body.length > 0);
     for (const bad of claimed.filter(c => !sendable.includes(c))) {
       await this.record(summary, bad, { outcome: 'FAILED', failureCode: 'UNVERIFIED_CLAIM' });
@@ -106,7 +117,7 @@ export class ParentPushWorker {
     if (sendable.length) {
       let outcomes: ExpoSendOutcome[];
       try {
-        outcomes = await this.expo.send(sendable.map(c => ({ to: c.expoToken, title: c.title, body: c.body, data: { type: 'school_announcement', announcementId: c.announcementId } })));
+        outcomes = await this.expo.send(sendable.map(c => ({ to: c.expoToken, title: c.title, body: c.body, data: pushData(c) })));
       } catch { outcomes = sendable.map(() => ({ outcome: 'UNKNOWN', failureCode: 'NO_ANSWER' })); }
       if (outcomes.length !== sendable.length) outcomes = sendable.map(() => ({ outcome: 'UNKNOWN', failureCode: 'UNVERIFIED_ANSWER' }));
       for (let i = 0; i < sendable.length; i += 1) await this.record(summary, sendable[i]!, outcomes[i]!);

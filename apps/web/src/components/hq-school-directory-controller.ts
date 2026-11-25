@@ -43,12 +43,16 @@ export class HqSchoolDirectoryController {
 /** Hide facts synchronously before React commits, then invalidate and clear their read state. */
 export function bindHqSchoolDirectoryPrivacy(controller: HqSchoolDirectoryController, concealDom: () => void, browser: EventTarget, documentTarget: EventTarget & { readonly visibilityState: string }): () => void {
   const conceal = (event: Event) => { concealDom(); controller.conceal(event.type === HON_SESSION_INVALIDATED_EVENT); };
-  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); };
+  // Coming back to the page reads again (both principal checks run); signed-out stays signed-out.
+  const restore = () => { if (controller.snapshot().kind === 'concealed') void controller.load(); };
+  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); else restore(); };
   const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
   for (const event of events) browser.addEventListener(event, conceal);
+  browser.addEventListener('focus', restore);
   documentTarget.addEventListener('visibilitychange', visibility);
-  visibility();
+  if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange'));
   return () => {
+    browser.removeEventListener('focus', restore);
     conceal(new Event('unmount'));
     for (const event of events) browser.removeEventListener(event, conceal);
     documentTarget.removeEventListener('visibilitychange', visibility);
