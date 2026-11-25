@@ -11,10 +11,10 @@ const sent = (patch = {}) => ({ outcome: 'QUEUED', messageId: MSG, channel: 'EMA
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'Content-Type': 'application/json' } });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it('marks Chad sending available and leaves only booking and lead changes as backend required', () => {
+it('marks Chad sending and lead next steps available with nothing backend required', () => {
   const chad = HON_COMMAND_ROSTER.find((a) => a.id === 'chad')!;
   expect(chad.capabilities.find((c) => /approved follow-up/.test(c.label))?.state).toBe('AVAILABLE');
-  expect(chad.capabilities.filter((c) => c.state === 'BACKEND_REQUIRED').map((c) => c.label)).toEqual(['Book trials or change lead records']);
+  expect(chad.capabilities.filter((c) => c.state === 'BACKEND_REQUIRED').map((c) => c.label)).toEqual([]);
 });
 
 it('verifies the send view strictly', () => {

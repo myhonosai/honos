@@ -296,6 +296,8 @@ const expectedRlsTables = [
   'ai_draft_sends',
   'maya_check_in_targets',
   'maya_check_in_sends',
+  'chad_lead_plan_refs',
+  'chad_lead_plan_applied',
   'school_onboarding_profiles',
   'school_onboarding_requests',
   'school_support_requests',

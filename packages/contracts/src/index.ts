@@ -1184,6 +1184,7 @@ export * from './marcus-marketing-review.js';
 export * from './claire-kpi-report.js';
 export * from './maya-renewal-prep.js';
 export * from './maya-check-in-draft.js';
+export * from './chad-lead-plan.js';
 export * from './walk-in-kiosk.js';
 export * from './face-checkin.js';
 export * from './membership-agreement.js';
