@@ -66,7 +66,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'email', titleKey: 'navEmail', section: 'communication', routes: [r('/staff/email', 'routeTextsSend'), r('/staff/email/history', 'routeTextsHistory'),
     r('/staff/email/templates', 'routeTextsTemplates'), r('/staff/email/opted-out', 'routeTextsOptedOut')] },
   { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements'), r('/staff/parent-app/curriculum', 'routeParentAppCurriculum')] },
-  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
+  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial'), r('/staff/marketing/social/posts', 'routeSocialPosts')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/checkout-orders', 'routeCheckoutOrders')] },
   { key: 'pos', titleKey: 'navPos', section: 'finance', routes: [r('/staff/billing/pos', 'routePointOfSale')] },
   // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.
@@ -84,9 +84,9 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
     r('/staff/testing/candidates/register', 'routeTestRegister'), r('/staff/testing/candidates/grade', 'routeTestGrade'),
     r('/staff/testing/scorecards', 'routeScorecards'), r('/staff/testing/certificates', 'routeCertificates')] },
   { key: 'promotions', titleKey: 'navPromotions', section: 'ranks', routes: [r('/staff/testing/promotion-decisions', 'routePromotions')] },
-  { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), r('/staff/memberships', 'routeMembershipList'),
-    // Owner (2026-11-16): a membership is started, paused and cancelled on the contact card; old links to these two still work.
-    h('/staff/billing/memberships', 'routeMemberships'), r('/staff/billing/membership-dates', 'routeDates'), h('/staff/billing/membership-changes', 'routeChanges'),
+  { key: 'billing', titleKey: 'navBilling', section: 'business', routes: [r('/staff/billing/membership-plans', 'routePlans'), h('/staff/memberships', 'routeMembershipList'),
+    // Owner (2026-11-22): memberships live on the contact card; activation happens when the agreement is signed. Old links still work.
+    h('/staff/billing/memberships', 'routeMemberships'), h('/staff/billing/membership-dates', 'routeDates'), h('/staff/billing/membership-changes', 'routeChanges'),
     r('/staff/billing/renewals', 'routeRenewals'), r('/staff/migration/memberships', 'routeBillingImport')] },
   { key: 'analytics', titleKey: 'navAnalytics', section: 'business', routes: [r('/staff/reports', 'routeSchoolReports'), r('/staff/operations', 'routeOperationsReport', true), r('/staff/health-score', 'routeHealthScore'),
     r('/staff/planning/revenue', 'routeRevenuePlanning'), r('/staff/retention/review', 'routeRetention')] },

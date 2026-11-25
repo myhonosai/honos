@@ -12,7 +12,7 @@ import { HqExecutiveRecords, type HqExecutiveTab } from '../hq-hon/hq-executive-
 import styles from './hq-modern.module.css';
 
 export function HqModernExecutives(): React.ReactElement {
-  return <><ExecutiveCards/><div className={`${styles.panel} ${styles.explanation}`}><HqIcon name="shield"/><div><h2>Coordinated, governed, separate.</h2><p>HON coordinates the six HQ specialists. A portrait or workspace never grants tools or access to school records. Durable work and delegated execution remain unavailable.</p></div></div></>;
+  return <><ExecutiveCards/><div className={`${styles.panel} ${styles.explanation}`}><HqIcon name="shield"/><div><h2>How the AI team works</h2><p>HON leads six helpers, each with one job. Open a helper to ask it a question. They answer and suggest; they don’t change records or reach schools on their own.</p></div></div></>;
 }
 
 const WORKSPACE_TABS: readonly (readonly [HqExecutiveTab, string])[] = [['tasks', 'Task history'], ['recommendations', 'Recommendations'], ['approvals', 'Approvals'], ['performance', 'Performance']];
@@ -31,7 +31,7 @@ export function HqExecutiveWorkspace({ executiveKey }: { executiveKey: string })
     {/* 0338 (HX-1): recorded questions, this month's aggregate, and plain statements that an HQ executive never acts. */}
     <section className={styles.panel} aria-live="polite">{isHqHonAgent(executive.executiveKey)
       ? <HqExecutiveRecords agentKey={executive.executiveKey} name={executive.displayName} tab={tab}/>
-      : <p>This executive has no recorded HQ work.</p>}</section>
+      : <p>No questions asked yet.</p>}</section>
   </>;
 }
 
@@ -42,7 +42,7 @@ export function HqPlannedPage({ pagePath }: { pagePath: string }): React.ReactEl
     <section className={`${styles.panel} ${styles.moduleIntro}`}><span className={styles.badge}>Planned</span><h2>{page.title}</h2><p>{page.description}</p></section>
     {pagePath === '/hq/growth' && <GrowthLinks/>}
     {pagePath.startsWith('/hq/growth/') && <nav className={styles.moduleLinks} aria-label="Growth modules">{HQ_GROWTH.map((item) => <Link key={item.path} href={item.path} aria-current={pagePath === item.path ? 'page' : undefined}>{item.title}</Link>)}</nav>}
-    <div className={styles.plannedGrid}>{page.areas.map((area) => <section key={area} className={styles.panel}><HqIcon name="database"/><h3>{area}</h3><p>Unavailable</p><small>An authorized HQ data source is required.</small></section>)}</div>
-    <p className={styles.finePrint}>No service is called and no business action is performed by this planned interface.</p>
+    <div className={styles.plannedGrid}>{page.areas.map((area) => <section key={area} className={styles.panel}><HqIcon name="database"/><h3>{area}</h3><p>Unavailable</p><small>Coming later.</small></section>)}</div>
+    <p className={styles.finePrint}>This page is a preview of what’s coming. Nothing here does anything yet.</p>
   </>;
 }
