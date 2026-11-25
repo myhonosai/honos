@@ -2,12 +2,12 @@ BEGIN;
 
 -- HQ goes inside a customer school (owner, 2026-11-25; like agency sub-account access).
 -- David chose: "Full access anytime, logged"; "No, owner keeps money settings"; "Let HQ logins work in schools"; and
--- "No, owner keeps these" (card charges, saved payment methods and refunds).
+-- "No, owner keeps these" (card charges, saved payment methods and refunds); and "Block, lose store help" (POS refunds).
 -- - "Go inside" gives the HQ person a 4-hour grant of the organization's system role SUPPORT_VISIT ("HON HQ support"):
 --   the organization's OWNER permissions minus money (school_pay.connection.manage: the school's own payment processor,
 --   payouts and credentials; billing.hon.purchase: the school's HON plan and top-ups; school_pay.autopay.manage and
 --   billing.payment.initiate: charging families; school_pay.method.manage: saved cards and banks; billing.refund.create
---   and billing.membership.refund.record: refunds). Owner-only features
+--   and billing.membership.refund.record: refunds; pos.manage: POS refunds, which also covers products, stock and tax). Owner-only features
 --   gated on role code OWNER stay with the owner (owner invitations and handoff, A2P registration, role administration
 --   of OWNER-equivalent roles, suspended-owner reads).
 -- - Until now about 60 school features refused ANY principal holding an hq_operator_grants row. Those checks now let an
@@ -125,9 +125,9 @@ $$;
 CREATE FUNCTION hon.ensure_hq_support_role(p_org uuid) RETURNS uuid
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE v_owner uuid; v_role uuid;
-  -- Owner decisions 2026-11-25: money settings, card charges, saved payment methods and refunds stay with the owner.
+  -- Owner decisions 2026-11-25: money settings, card charges, saved payment methods and refunds (POS too) stay with the owner.
   excluded constant text[] := ARRAY['school_pay.connection.manage','billing.hon.purchase','school_pay.autopay.manage',
-    'school_pay.method.manage','billing.payment.initiate','billing.refund.create','billing.membership.refund.record'];
+    'school_pay.method.manage','billing.payment.initiate','billing.refund.create','billing.membership.refund.record','pos.manage'];
 BEGIN
   SELECT id INTO v_owner FROM hon.roles WHERE organization_id = p_org AND code = 'OWNER' AND is_system_role;
   IF v_owner IS NULL THEN RAISE EXCEPTION 'HQ_SCHOOL_VISIT_UNAVAILABLE' USING ERRCODE = 'P0002'; END IF;
