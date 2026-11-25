@@ -1,7 +1,8 @@
 /**
  * Family messages (0330): a signed-in guardian writes to their school inside HON, and staff with family_messages.manage read
- * every family thread of the school and reply. VIEWER grants read only. Families never see staff names. Nothing is texted,
- * emailed or pushed, and no AI drafts anything.
+ * every family thread of the school and reply. VIEWER grants read only. Families never see staff names. Nothing is texted or
+ * emailed, and no AI drafts anything. A staff reply is pushed to the family's phones only when staff tick "Also send as a phone
+ * alert" (phoneAlert true, 0658); the alert never carries the message text.
  */
 
 export const FAMILY_MESSAGE_LIMITS = { bodyMax: 2000, perThread: 200, inbox: 200, familyPerHour: 30, schoolPerHour: 600 } as const;
@@ -20,7 +21,7 @@ export interface FamilyMessageThread { threadId: string; familyId: string; famil
 export interface FamilyMessageReadMark { threadId: string; version: number; unreadCount: number }
 export interface SendFamilyMessageInput { body: string }
 /** throughMessageId is the newest message the staff member loaded: the read mark moves up to it and never past it. */
-export interface ReplyFamilyMessageInput { threadId: string; body: string; throughMessageId: string }
+export interface ReplyFamilyMessageInput { threadId: string; body: string; throughMessageId: string; phoneAlert?: boolean }
 export interface MarkFamilyMessageReadInput { threadId: string; throughMessageId: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -57,9 +58,10 @@ export function validateSendFamilyMessageInput(value: unknown): SendFamilyMessag
   return { body: row.body };
 }
 export function validateReplyFamilyMessageInput(value: unknown): ReplyFamilyMessageInput {
-  const row = record(value, ['threadId', 'body', 'throughMessageId']);
-  if (!familyMessageBodyOk(row.body)) invalid();
-  return { threadId: uuid(row.threadId), body: row.body, throughMessageId: uuid(row.throughMessageId) };
+  const withAlert = !!value && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, 'phoneAlert');
+  const row = record(value, withAlert ? ['threadId', 'body', 'throughMessageId', 'phoneAlert'] : ['threadId', 'body', 'throughMessageId']);
+  if (!familyMessageBodyOk(row.body) || (withAlert && typeof row.phoneAlert !== 'boolean')) invalid();
+  return { threadId: uuid(row.threadId), body: row.body, throughMessageId: uuid(row.throughMessageId), ...(row.phoneAlert === true ? { phoneAlert: true } : {}) };
 }
 export function validateMarkFamilyMessageReadInput(value: unknown): MarkFamilyMessageReadInput {
   const row = record(value, ['threadId', 'throughMessageId']);

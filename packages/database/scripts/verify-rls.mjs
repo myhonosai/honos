@@ -167,6 +167,7 @@ const expectedRlsTables = [
   'parent_push_devices',
   'parent_push_fanouts',
   'parent_push_deliveries',
+  'parent_push_requests',
   'school_referral_programs',
   'school_referral_program_versions',
   'school_referral_requests',
