@@ -13,14 +13,12 @@ const files = (dir: string): string[] => readdirSync(dir).flatMap(name => {
   const path = join(dir, name);
   return statSync(path).isDirectory() ? files(path) : /\.(ts|tsx)$/.test(name) ? [path] : [];
 });
-// The HQ plan editor (hq-modern/pricing-offers) is being rebuilt in its own change and drops this there.
-const pending = new Set([join(root, 'hq-modern/pricing-offers.tsx')]);
 const hqFiles = [
   ...hqDirs.flatMap(dir => files(join(root, dir))),
   ...readdirSync(root).filter(name => /^hq-.*\.(ts|tsx)$/.test(name)).map(name => join(root, name)),
   join(root, 'school-ownership/hq-school-ownership.tsx'),
   join(root, 'zernio-integration/workbench.tsx'),
-].filter(path => !pending.has(path));
+];
 
 describe('HQ pages do not hide when the person looks away', () => {
   it('covers the HQ pages that used to hide', () => {
