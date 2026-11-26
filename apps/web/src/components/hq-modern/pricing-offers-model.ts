@@ -1,4 +1,4 @@
-import { validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
+import { HON_OS_PLAN_CAPABILITIES, validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
   type SaasHonOsOfferKind, type SaasHonOsOfferSet, type SaasHonOsOfferSetContent, type SaasHonOsOfferSetDraftInput } from '@hon/contracts';
 import { pricingOfferInput } from './pricing-offers-http';
 
@@ -7,6 +7,8 @@ export type OfferFields = {
   salesOpensAt:string; salesClosesAt:string; eligibility:string; saleLimit:string; priceLock:string;
   priceLockMonths:string; annualRenewal:string; plannedMonthlyPremiumCredits:string;
   aiFairUseReference:string; refundWindowDays:string; cancellationTiming:string;
+  /** The plan's features (0697), canonical HON OS order. */
+  capabilities:string[];
 };
 export type OfferSetForm = { key:string; setId:string|null; revision:number|null; basedOnSetId:string|null;
   termsReference:string; founderTotalLimit:string; offers:OfferFields[] };
@@ -17,7 +19,7 @@ export function blankOffer(kind:SaasHonOsOfferKind, existing:OfferFields[]): Off
   let code:string = kind; for(let i=2;existing.some(o=>o.offerCode===code);i++) code=kind+'_'+i;
   return { key:crypto.randomUUID(),offerKind:kind,offerCode:code,displayName:'HON OS',amount:'',salesOpensAt:'',salesClosesAt:'',
     eligibility:'ANY_ACTIVE_ORGANIZATION',saleLimit:'',priceLock:'NONE',priceLockMonths:'',annualRenewal:'',
-    plannedMonthlyPremiumCredits:'',aiFairUseReference:'',refundWindowDays:'',cancellationTiming:'' };
+    plannedMonthlyPremiumCredits:'',aiFairUseReference:'',refundWindowDays:'',cancellationTiming:'',capabilities:[...HON_OS_PLAN_CAPABILITIES] };
 }
 export function formFromSet(set:SaasHonOsOfferSet, clone=false):OfferSetForm {
   return { key:clone?crypto.randomUUID():set.setId,setId:clone?null:set.setId,revision:clone?null:set.revision,
@@ -46,7 +48,7 @@ export function formContent(form:OfferSetForm):SaasHonOsOfferSetContent {
       salesOpensAt:utc(o.salesOpensAt),salesClosesAt:utc(o.salesClosesAt),eligibility:o.eligibility,saleLimit:integer(o.saleLimit),
       priceLock:o.priceLock,priceLockMonths:o.priceLock==='FIXED_MONTHS'?integer(o.priceLockMonths):null,annualRenewal:optionalText(o.annualRenewal),
       plannedMonthlyPremiumCredits:integer(o.plannedMonthlyPremiumCredits),aiFairUseReference:optionalText(o.aiFairUseReference),
-      refundWindowDays:integer(o.refundWindowDays),cancellationTiming:optionalText(o.cancellationTiming),
+      refundWindowDays:integer(o.refundWindowDays),cancellationTiming:optionalText(o.cancellationTiming),capabilities:o.capabilities,
     })) });
   const {basedOnSetId,...content}=input;return content;
 }

@@ -423,6 +423,7 @@
     "0680_membership_activates_on_signing.sql": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb",
     "0626_pgcrypto_public_gen_random_bytes.sql": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13",
     "0681_staff_timesheet_no_self_approval.sql": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5",
-    "0682_crm_board_text_opt_out.sql": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7"
+    "0682_crm_board_text_opt_out.sql": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7",
+    "0697_hon_os_plan_features.sql": "4b8afcfa294062fc3a3f31af72a476b109179c371d129ba81854e619c8b09ebc"
   }
 }

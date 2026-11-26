@@ -7371,3 +7371,18 @@ BEGIN
     RAISE EXCEPTION 'Staff timesheet self-approval block missing'; END IF;
 END $$;
 -- End staff timesheet no-self-approval exact verification.
+-- HON OS plan features exact verification (0697)
+DO $$ DECLARE f text:='hon.saas_offer_input_capabilities(jsonb)';
+BEGIN
+  IF to_regprocedure(f) IS NULL OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+    RAISE EXCEPTION 'Unsafe HON OS plan feature helper: %',f; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='hon.saas_offer_set_offers'::regclass AND attname='capabilities' AND attnotnull AND NOT attisdropped)
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.saas_offer_set_offers'::regclass AND conname='saas_offer_set_offers_capabilities_check')
+    OR has_column_privilege('hon_runtime','hon.saas_offer_set_offers','capabilities','SELECT') THEN
+    RAISE EXCEPTION 'HON OS plan feature column drift'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.saas_offer_set_write_content(uuid,jsonb)'::regprocedure AND position('saas_offer_input_capabilities' IN p.prosrc)>0)
+    OR NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.saas_offer_json(hon.saas_offer_set_offers)'::regprocedure AND position('''capabilities''' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'HON OS plan features not written or reported'; END IF;
+END $$;
+-- End HON OS plan features exact verification.
