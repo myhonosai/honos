@@ -118,6 +118,7 @@ const expectedRlsTables = [
   'ai_school_cost_limit_commands',
   'ai_exception_school_allowances',
   'ai_exception_school_allowance_commands',
+  'ai_school_cost_alert_acknowledgements',
   'ai_invocation_plans',
   'chad_follow_up_invocations',
   'chad_follow_up_drafts',
