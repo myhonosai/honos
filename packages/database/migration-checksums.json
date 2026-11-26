@@ -428,6 +428,7 @@
     "0684_creative_studio_photo_avatars.sql": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e",
     "0685_kai_teaching_journal.sql": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a",
     "0686_monthly_goal_plan.sql": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42",
-    "0687_conversation_ai_test_chat.sql": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6"
+    "0687_conversation_ai_test_chat.sql": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6",
+    "0688_ai_fallback_policy_order_exclusion.sql": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4"
   }
 }
