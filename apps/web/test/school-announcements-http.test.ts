@@ -18,6 +18,13 @@ describe('school announcements http', () => {
     expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', mode: 'same-origin', body: JSON.stringify({ title: 'Closed Monday', body: 'No classes.' }) });
     expect((init as RequestInit).headers).toMatchObject({ 'X-HON-Human-Command': 'school_announcements.publish', 'Idempotency-Key': 'key-1' });
   });
+  it('sends phoneAlert only when staff ticked it (0658)', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(201, { data: { announcement: live }, meta: { replayed: false } }));
+    await publishSchoolAnnouncement(scope, 'Closed Monday', 'No classes.', 'key-1', true);
+    await publishSchoolAnnouncement(scope, 'Closed Monday', 'No classes.', 'key-2', false);
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({ body: JSON.stringify({ title: 'Closed Monday', body: 'No classes.', phoneAlert: true }) });
+    expect(fetcher.mock.calls[1]![1]).toMatchObject({ body: JSON.stringify({ title: 'Closed Monday', body: 'No classes.' }) });
+  });
   it('refuses bad text before any call and refuses an answer for another post', async () => {
     const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(201, { data: { announcement: { ...live, title: 'Other' } }, meta: { replayed: false } }));
     await expect(publishSchoolAnnouncement(scope, 'a\nb', 'x', 'k')).rejects.toThrow();

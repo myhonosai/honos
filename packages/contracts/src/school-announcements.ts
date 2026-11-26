@@ -1,7 +1,8 @@
 /**
  * School announcements (0576). Staff with family_messages.manage post a short announcement to every family of their school
  * from the CRM; families see the live ones from the last 60 days on the HON Family app's Home screen. A posted announcement
- * never changes; staff can take it down once. Nothing is texted, emailed or pushed. Families never see who posted it.
+ * never changes; staff can take it down once. Nothing is texted or emailed, and families never see who posted it. A phone alert
+ * (0658) goes out only when staff tick "Also send as a phone alert" (phoneAlert true) on that post.
  */
 export const SCHOOL_ANNOUNCEMENT_STATUSES = ['PUBLISHED', 'WITHDRAWN'] as const;
 export type SchoolAnnouncementStatus = (typeof SCHOOL_ANNOUNCEMENT_STATUSES)[number];
@@ -12,7 +13,8 @@ export interface ParentSchoolAnnouncements { schoolName: string; announcements: 
 export interface SchoolAnnouncement extends FamilySchoolAnnouncement { status: SchoolAnnouncementStatus; withdrawnAt: string | null; version: number }
 export interface SchoolAnnouncements { announcements: SchoolAnnouncement[] }
 export interface SchoolAnnouncementReceipt { announcement: SchoolAnnouncement }
-export interface PublishSchoolAnnouncementInput { title: string; body: string }
+/** phoneAlert (0658): staff ticked "Also send as a phone alert". Omitted means no alert. */
+export interface PublishSchoolAnnouncementInput { title: string; body: string; phoneAlert?: boolean }
 export interface WithdrawSchoolAnnouncementInput { announcementId: string; expectedVersion: number }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -47,8 +49,10 @@ function newestFirst<T extends { publishedAt: string }>(list: T[]): T[] {
 }
 
 export function validatePublishSchoolAnnouncementInput(value: unknown): PublishSchoolAnnouncementInput {
-  const row = record(value, ['title', 'body']);
-  return { title: title(row.title), body: body(row.body) };
+  const withAlert = !!value && typeof value === 'object' && !Array.isArray(value) && Object.hasOwn(value, 'phoneAlert');
+  const row = record(value, withAlert ? ['title', 'body', 'phoneAlert'] : ['title', 'body']);
+  if (withAlert && typeof row.phoneAlert !== 'boolean') invalid();
+  return { title: title(row.title), body: body(row.body), ...(row.phoneAlert === true ? { phoneAlert: true } : {}) };
 }
 export function validateWithdrawSchoolAnnouncementInput(value: unknown): WithdrawSchoolAnnouncementInput {
   const row = record(value, ['announcementId', 'expectedVersion']);

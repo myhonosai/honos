@@ -1,3 +1,4 @@
+import { planBuilderEn } from './plan-builder.js';
 import { pricingOperationsEn } from './pricing-operations.js';
 import { pricingEn } from './pricing-offers.js';
 import { honOsPricesEn } from './hon-os-prices.js';
@@ -7,6 +8,7 @@ export const en = {
   ...pricingEn,
   ...honOsPricesEn,
   ...pricingOperationsEn,
+  ...planBuilderEn,
   " · Deterministic simulator, not Stripe sandbox": " · Deterministic simulator, not Stripe sandbox",
   " · Reservation recorded": " · Reservation recorded",
   " · Stripe provider": " · Stripe provider",
@@ -257,6 +259,7 @@ export const en = {
   "Zernio connection": "Zernio connection",
   "Creative Studio": "Creative Studio",
   "Plan promotions": "Plan promotions",
+  "Flyers & posters": "Flyers & posters",
   "Owner workspace": "Owner workspace",
   "Start here: what needs you today and where to go next.": "Start here: what needs you today and where to go next.",
   "How can HON help here?": "How can HON help here?",

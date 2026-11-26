@@ -64,10 +64,10 @@ it('reads one school wallet only for the school asked, and a 401 ends the sessio
   expect(ended).toHaveBeenCalledTimes(1);
 });
 
-it('shows the program, packages, rates and school wallets, with no command anywhere', () => {
+it('shows the program, packages, rates and school wallets, with only the program switch as a command', () => {
   const html = view(), t = text(html);
   expect(t).toContain('Creative Credits');
-  expect(t).toContain('Nothing here turns the program on, charges a card or changes a purchase: payment collection is not connected.');
+  expect(t).toContain('Only the HQ owner can publish credit prices and turn the program on or off. Nothing here charges a card or changes a purchase: payment collection is not connected.');
   expect(html).toMatch(/data-testid="credits-program"[^>]*data-state="INACTIVE"/);
   expect(t).toContain('Once the program is on, each eligible paying school would receive 12,000 included credits a month.');
   expect(t).not.toContain('Each eligible paying school receives');
@@ -87,7 +87,7 @@ it('shows the program, packages, rates and school wallets, with no command anywh
   expect([...html.matchAll(/data-testid="credits-wallet"[^>]*data-attention="(\w+)"/g)].map((m) => m[1])).toEqual(['true', 'false']);
   // Read only: the only buttons are Refresh and one View wallet per school.
   const buttons = [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
-  expect(buttons).toEqual(['Refresh', 'View wallet', 'View wallet']);
+  expect(buttons).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet']);
   expect(html).toContain('aria-label="View wallet for Synthetic Dojo North"');
   expect(html).not.toMatch(/<form|<input|<textarea|<select/);
 });
@@ -115,7 +115,7 @@ it('shows one school wallet: balance, provider expense, unknown outcomes, adjust
   expect(t).toContain('Waiting for a verified payment');
   expect(t).toContain('Payment collection: not connected');
   const buttons = [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
-  expect(buttons).toEqual(['Refresh', 'View wallet', 'View wallet', 'Close']);
+  expect(buttons).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet', 'Close']);
   // An unknown provider cost is shown as unknown, never as zero.
   const unknown = wallet({ reservations: [{ ...wallet().reservations[1], status: 'RELEASED', statusReason: 'HQ_RESOLVED_NOT_CHARGED', settledAt: '2026-11-08T10:00:00.000Z', costStatus: 'UNKNOWN' }] });
   expect(text(view({ detail: { state: 'READY', schoolId: school, wallet: validateSaasCreativeHqWallet(unknown) } }))).toContain('Cost unknown (never counted as zero)');

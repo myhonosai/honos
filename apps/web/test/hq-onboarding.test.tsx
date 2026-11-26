@@ -239,9 +239,9 @@ describe('existing HQ transport and verified receipt', () => {
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: { principalId, hqRole: 'HON_HQ_OWNER', permission: '*' } })));
     await expect(schoolCreationApi.authorize(new AbortController().signal)).rejects.toThrow();
   });
-  it('mounts the reused panel beside the unchanged minimized directory and renders no automatic command or public tier choice', () => {
+  it('mounts the panel with no Verify button; the owner check starts only after mount, with no public tier choice', () => {
     const spy = vi.spyOn(globalThis, 'fetch'); const html = renderToStaticMarkup(<HqOnboardingPanel />);
-    expect(spy).not.toHaveBeenCalled(); expect(html).toContain('Verify HQ-owner access'); expect(html).toContain('SUSPENDED');
+    expect(spy).not.toHaveBeenCalled(); expect(html).not.toContain('Verify HQ-owner access'); expect(html).toContain('Checking that you are the HQ owner'); expect(html).toContain('SUSPENDED');
     expect(html).not.toMatch(/<form|<select|\$|ONBOARDING COMPLETE|Harbor LLC/);
     expect(html).toContain('role="status" aria-live="polite" aria-atomic="true"');
     expect(html).toContain('exception requires an approved policy and verified eligibility');

@@ -1,5 +1,6 @@
 'use client';
 
+import { SchoolSwitcher } from '../school-switcher/switcher';
 import { useLocale } from '../localization/provider';
 import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -41,7 +42,7 @@ export function HonCore({ small = false }: { small?: boolean }): React.ReactElem
 }
 
 export function HqModernShell({ children }: { children: ReactNode }): React.ReactElement {
-  const { t,text,number,money,date,formattingLocale } = useLocale();
+  const { t,text,number,money,date,formattingLocale,preferences } = useLocale();
   const path = usePathname();
   useEffect(()=>{document.title=(path==='/hq'?t('Overview'):text(hqPageLabel(path)))+' | HON HQ';},[path,t,text]);
   const [access, setAccess] = useState<AccessState>({ kind: 'loading' });
@@ -111,6 +112,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   };
   const nav = <>
     <Link href="/hq" className={styles.brand}><img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={38} height={38}/><div><strong>{t("HON HQ")}</strong><span>{t("Owner workspace")}</span></div></Link>
+    <SchoolSwitcher language={preferences?.language ?? 'en'} current={{ kind: 'hq' }} inHq />
     <nav className={styles.navigation} aria-label={t("HQ navigation")}>
       {HQ_NAV.map((item) => {
         const group = HQ_NAV_GROUPS[item.path];

@@ -144,13 +144,13 @@ const view = (over: Partial<CreditsViewProps> = {}) => renderToStaticMarkup(<Cre
 
 it('offers each correction only where it applies, and opens its form in place', () => {
   const html = view(), t = text(html);
-  expect(buttons(html)).toEqual(['Refresh', 'View wallet', 'View wallet', 'Close', 'Grant credits', 'Remove credits', 'Settle: it worked', 'Settle: not charged']);
+  expect(buttons(html)).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet', 'Close', 'Grant credits', 'Remove credits', 'Settle: it worked', 'Settle: not charged']);
   expect(t).toContain('HQ owner only. Each correction is permanent and recorded with your name and note.');
   // A finished generation offers nothing; the generation list is always shown.
   expect(html).toMatch(/<h3 id="hq-credits-generations">Generations \(2\)<\/h3>/);
   const purchased = validateSaasCreativeHqWallet(wallet({ reservations: [wallet().reservations[0], resolved()], lots: [lotJson({ availableCredits: 0, heldCredits: 0, consumedCredits: 40, debitedCredits: 460 })],
     balance: { ...balance, availableCredits: 0, heldCredits: 0, byKind: balance.byKind.map((k) => k.kind === 'PROMOTIONAL' ? { ...k, availableCredits: 0, heldCredits: 0, debitedCredits: 460 } : k) } }));
-  expect(buttons(view({ detail: { state: 'READY', schoolId: school, wallet: purchased } }))).toEqual(['Refresh', 'View wallet', 'View wallet', 'Close', 'Grant credits', 'Record provider cost']);
+  expect(buttons(view({ detail: { state: 'READY', schoolId: school, wallet: purchased } }))).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet', 'Close', 'Grant credits', 'Record provider cost']);
   const grant = view({ form: { kind: 'grant' } });
   expect(grant).toMatch(/data-testid="credit-form" data-form="grant"/);
   expect(text(grant)).toContain('I am adding these credits to Synthetic Dojo North.');
@@ -167,5 +167,5 @@ it('offers each correction only where it applies, and opens its form in place', 
   expect(buttons(locked)).toContain('Try again');
   expect(text(view({ outcome: { kind: 'DONE', action: 'cost', replayed: true } }))).toContain('The provider cost is recorded. This was already done with the same request.');
   // Without command handlers the page stays read only.
-  expect(buttons(view({ onOpenForm: undefined }))).toEqual(['Refresh', 'View wallet', 'View wallet', 'Close']);
+  expect(buttons(view({ onOpenForm: undefined }))).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet', 'Close']);
 });
