@@ -47,7 +47,7 @@ async function call(url: string, method: 'GET' | 'POST', command?: string, body?
   if (!Object.hasOwn(root, 'data')) invalid();
   return root as { data: unknown; meta?: unknown };
 }
-function base(scope: DesignsScope): string {
+function schoolBase(scope: DesignsScope): string {
   if (!UUID.test(scope.organizationId) || !UUID.test(scope.schoolId)) invalid();
   return `/api/v1/organizations/${scope.organizationId.toLowerCase()}/schools/${scope.schoolId.toLowerCase()}/creative-studio/designs`;
 }
@@ -63,45 +63,55 @@ function guard<T>(fn: () => Promise<T>): Promise<T> {
   });
 }
 
-export function loadDesigns(scope: DesignsScope, query: CreativeDesignsQuery = {}, signal?: AbortSignal): Promise<CreativeDesignList> {
-  return guard(async () => {
-    const q = validateCreativeDesignsQuery(query);
-    const url = base(scope) + (q.status ? `?status=${q.status}` : '');
-    return verifyCreativeDesignList((await call(url, 'GET', undefined, undefined, undefined, signal)).data, q);
-  });
+/**
+ * One designs client for a place: the school editor (0617) or HQ (0678). Only the address and command names differ; the
+ * same contract checks every request and answer.
+ */
+export function designsClient(base: (scope: DesignsScope) => string, commands: Readonly<{ save: string; status: string; photo: string }>) {
+  function loadDesigns(scope: DesignsScope, query: CreativeDesignsQuery = {}, signal?: AbortSignal): Promise<CreativeDesignList> {
+    return guard(async () => {
+      const q = validateCreativeDesignsQuery(query);
+      const url = base(scope) + (q.status ? `?status=${q.status}` : '');
+      return verifyCreativeDesignList((await call(url, 'GET', undefined, undefined, undefined, signal)).data, q);
+    });
+  }
+  function loadDesign(scope: DesignsScope, designId: string, signal?: AbortSignal): Promise<CreativeDesign> {
+    return guard(async () => {
+      if (!UUID.test(designId)) invalid();
+      const design = verifyCreativeDesign((await call(`${base(scope)}/${designId.toLowerCase()}`, 'GET', undefined, undefined, undefined, signal)).data);
+      if (design.designId !== designId.toLowerCase()) invalid();
+      return design;
+    });
+  }
+  function loadDesignPhoto(scope: DesignsScope, photoId: string, signal?: AbortSignal): Promise<CreativeDesignPhoto> {
+    return guard(async () => {
+      if (!UUID.test(photoId)) invalid();
+      return verifyCreativeDesignPhoto((await call(`${base(scope)}/photos/${photoId.toLowerCase()}`, 'GET', undefined, undefined, undefined, signal)).data, photoId.toLowerCase());
+    });
+  }
+  function saveDesign(scope: DesignsScope, input: SaveCreativeDesignInput, key: string): Promise<CreativeDesignReceipt> {
+    return guard(async () => {
+      const body = validateSaveCreativeDesignInput(input);
+      const r = await call(base(scope), 'POST', commands.save, body, key);
+      return verifyCreativeDesignReceipt({ design: r.data, replayed: replayed(r.meta) }, { version: body.expectedVersion + 1, designId: body.designId, sizeCode: body.sizeCode, status: 'ACTIVE' });
+    });
+  }
+  function setDesignStatus(scope: DesignsScope, input: SetCreativeDesignStatusInput, key: string): Promise<CreativeDesignReceipt> {
+    return guard(async () => {
+      const body = validateSetCreativeDesignStatusInput(input);
+      const r = await call(`${base(scope)}/${body.designId}/status`, 'POST', commands.status, { expectedVersion: body.expectedVersion, status: body.status }, key);
+      return verifyCreativeDesignReceipt({ design: r.data, replayed: replayed(r.meta) }, { version: body.expectedVersion + 1, designId: body.designId, status: body.status });
+    });
+  }
+  function addDesignPhoto(scope: DesignsScope, input: AddCreativeDesignPhotoInput, key: string): Promise<CreativeDesignPhotoReceipt> {
+    return guard(async () => {
+      const body = validateAddCreativeDesignPhotoInput(input);
+      const r = await call(`${base(scope)}/photos`, 'POST', commands.photo, body, key);
+      return verifyCreativeDesignPhotoReceipt({ photo: r.data, replayed: replayed(r.meta) }, { mediaType: body.mediaType });
+    });
+  }
+  return { loadDesigns, loadDesign, loadDesignPhoto, saveDesign, setDesignStatus, addDesignPhoto };
 }
-export function loadDesign(scope: DesignsScope, designId: string, signal?: AbortSignal): Promise<CreativeDesign> {
-  return guard(async () => {
-    if (!UUID.test(designId)) invalid();
-    const design = verifyCreativeDesign((await call(`${base(scope)}/${designId.toLowerCase()}`, 'GET', undefined, undefined, undefined, signal)).data);
-    if (design.designId !== designId.toLowerCase()) invalid();
-    return design;
-  });
-}
-export function loadDesignPhoto(scope: DesignsScope, photoId: string, signal?: AbortSignal): Promise<CreativeDesignPhoto> {
-  return guard(async () => {
-    if (!UUID.test(photoId)) invalid();
-    return verifyCreativeDesignPhoto((await call(`${base(scope)}/photos/${photoId.toLowerCase()}`, 'GET', undefined, undefined, undefined, signal)).data, photoId.toLowerCase());
-  });
-}
-export function saveDesign(scope: DesignsScope, input: SaveCreativeDesignInput, key: string): Promise<CreativeDesignReceipt> {
-  return guard(async () => {
-    const body = validateSaveCreativeDesignInput(input);
-    const r = await call(base(scope), 'POST', CREATIVE_DESIGN_SAVE_COMMAND, body, key);
-    return verifyCreativeDesignReceipt({ design: r.data, replayed: replayed(r.meta) }, { version: body.expectedVersion + 1, designId: body.designId, sizeCode: body.sizeCode, status: 'ACTIVE' });
-  });
-}
-export function setDesignStatus(scope: DesignsScope, input: SetCreativeDesignStatusInput, key: string): Promise<CreativeDesignReceipt> {
-  return guard(async () => {
-    const body = validateSetCreativeDesignStatusInput(input);
-    const r = await call(`${base(scope)}/${body.designId}/status`, 'POST', CREATIVE_DESIGN_STATUS_COMMAND, { expectedVersion: body.expectedVersion, status: body.status }, key);
-    return verifyCreativeDesignReceipt({ design: r.data, replayed: replayed(r.meta) }, { version: body.expectedVersion + 1, designId: body.designId, status: body.status });
-  });
-}
-export function addDesignPhoto(scope: DesignsScope, input: AddCreativeDesignPhotoInput, key: string): Promise<CreativeDesignPhotoReceipt> {
-  return guard(async () => {
-    const body = validateAddCreativeDesignPhotoInput(input);
-    const r = await call(`${base(scope)}/photos`, 'POST', CREATIVE_DESIGN_PHOTO_COMMAND, body, key);
-    return verifyCreativeDesignPhotoReceipt({ photo: r.data, replayed: replayed(r.meta) }, { mediaType: body.mediaType });
-  });
-}
+
+const SCHOOL = designsClient(schoolBase, { save: CREATIVE_DESIGN_SAVE_COMMAND, status: CREATIVE_DESIGN_STATUS_COMMAND, photo: CREATIVE_DESIGN_PHOTO_COMMAND });
+export const { loadDesigns, loadDesign, loadDesignPhoto, saveDesign, setDesignStatus, addDesignPhoto } = SCHOOL;

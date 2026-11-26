@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "b59fd99f91cae0e8aadb1f78cc860eb36da9326174471d2730a64f76befa807a",
+  "chainSha256": "11ee8e4450a26c907ed7980de8dd6aa10a78f907dd4610a57185661b25d5f025",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -843,6 +843,10 @@
       "sha256": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1"
     },
     {
+      "file": "0626_pgcrypto_public_gen_random_bytes.sql",
+      "sha256": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13"
+    },
+    {
       "file": "0627_public_checkout_orders.sql",
       "sha256": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
     },
@@ -961,6 +965,50 @@
     {
       "file": "0657_school_conversations_person_filter.sql",
       "sha256": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e"
+    },
+    {
+      "file": "0658_parent_push_staff_choice.sql",
+      "sha256": "4a6cc907ac65dd0ecd598e3708a13a2617ef7b840e92559bb6b43f04f6e2a8cc"
+    },
+    {
+      "file": "0659_school_contact_membership_details.sql",
+      "sha256": "7664c2da2c5603dc4bb2d0c35fbf014a974ed68c981b5563bd040b1f5006b63f"
+    },
+    {
+      "file": "0660_website_starter_art.sql",
+      "sha256": "26fe9c89a8d32379f32e3c579a1b29375579f46ba8c2e1fb5b71fb4d3be248d3"
+    },
+    {
+      "file": "0675_hq_school_lifecycle.sql",
+      "sha256": "22c1f1983591b669efa7fbbefa1d6571120ace94b4322e19c1a32f9fa6b02e60"
+    },
+    {
+      "file": "0676_hq_school_plan_assignments.sql",
+      "sha256": "ec678f629f21222ff612462ceb151e821938b4aaa602d08dd64e928b2cb91dc6"
+    },
+    {
+      "file": "0677_hq_ad_account_connections.sql",
+      "sha256": "680101b594c865cede1c7ae422f0acab5f1dea0f54b27b2316edd47731ac0dbf"
+    },
+    {
+      "file": "0678_hq_creative_designs.sql",
+      "sha256": "db2386168b7e785baf3bab1ff902b11e31278126d400fc160920a95834579970"
+    },
+    {
+      "file": "0680_membership_activates_on_signing.sql",
+      "sha256": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb"
+    },
+    {
+      "file": "0681_staff_timesheet_no_self_approval.sql",
+      "sha256": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
+    },
+    {
+      "file": "0682_crm_board_text_opt_out.sql",
+      "sha256": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7"
+    },
+    {
+      "file": "0683_hon_os_trial_creative_credits.sql",
+      "sha256": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5"
     },
     {
       "file": "0684_creative_studio_photo_avatars.sql",

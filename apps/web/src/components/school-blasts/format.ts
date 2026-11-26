@@ -1,6 +1,6 @@
 import {
   SCHOOL_BLAST_LIMITS, schoolBlastBodyMax, schoolBlastBodyOk, schoolBlastNameOk, schoolBlastMediaCount, schoolBlastPictureIds, schoolBlastPictureLine, schoolBlastVideoIds, schoolBlastVideoLine, schoolBlastTextOk, type SaveSchoolBlastInput, type SchoolBlast,
-  type SchoolBlastAudienceGroup, type SchoolBlastChannel, type SchoolBlastMergeField,
+  type SchoolBlastAudienceGroup, type SchoolBlastChannel, type SchoolBlastMergeField, type SchoolCheckoutLinks, type SchoolCheckoutPages,
 } from '@hon/contracts';
 
 /** The composer's working copy, in memory only. Tags are typed as one comma-separated line. */
@@ -109,4 +109,16 @@ export function scheduleOk(instant: string | null, now: number = Date.now()): bo
   if (!instant) return false;
   const at = Date.parse(instant);
   return at > now + 60_000 && at <= now + SCHOOL_BLAST_LIMITS.scheduleDays * 86_400_000;
+}
+
+/** BL2: the share link of a checkout page (0620), the same address Copy link gives on the checkout pages screen. */
+export const checkoutPageLink = (origin: string, publicId: string): string => `${origin.replace(/\/+$/, '')}/checkout/${publicId}`;
+
+/** BL2: the Live pages that have a share link, in the staff order, titled in the staff member's language (English otherwise). */
+export function liveCheckoutLinks(read: Pick<SchoolCheckoutPages, 'pages'>, issued: SchoolCheckoutLinks, language: string): { pageId: string; publicId: string; title: string }[] {
+  const byPage = new Map(issued.links.map(l => [l.pageId, l.publicId]));
+  return read.pages.filter(pg => pg.status === 'PUBLISHED' && byPage.has(pg.pageId)).map(pg => {
+    const title = pg.content.title as Record<string, string | undefined>;
+    return { pageId: pg.pageId, publicId: byPage.get(pg.pageId)!, title: title[language] || pg.content.title.en };
+  });
 }

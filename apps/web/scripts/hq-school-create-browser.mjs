@@ -35,6 +35,8 @@ const overview = { asOf: '2026-11-01T00:00:00.000Z', callerHqRole: 'OWNER', orga
   onboarding: { availability: 'AVAILABLE', requestCount: 0, inProgressRequestCount: 0, completedRequestCount: 0 }, configuredProviderStates: { disabled: 0, configured: 0, healthy: 0, degraded: 0, unavailable: 0 }, taskProfileCount: 0,
   financialMetrics: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics }, aiUsage: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage }, durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork } };
 const fixtures = new Map();
+// Mount reads /v1/hq/session for the directory principal and again for the automatic HQ-owner check.
+const READS_ON_MOUNT = 3;
 const api = createServer(async (req, res) => {
   const send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
   try {
@@ -82,15 +84,21 @@ async function open(name, viewport, configure = () => {}, language = 'en') {
   await context.addCookies([{ name: HON_SESSION_COOKIE, value: issueSession({ externalSubject: name }, session), url: origin, httpOnly: true, sameSite: 'Lax' },
     { name: localeCookieName(scope), value: encodeURIComponent(JSON.stringify({ ...DEFAULT_LOCALE, language })), url: origin, sameSite: 'Lax' }]);
   const page = await context.newPage(); page.on('pageerror', error => report.pageErrors.push(error.message));
-  await page.goto(origin + '/hq/schools'); await page.getByRole('button', { name: hqSchoolText(language, 'verifyOwner'), exact: true }).waitFor();
+  // No Verify button (owner, 2026-11-24): the panel runs the HQ-owner read by itself and opens the form, or shows Try again.
+  await page.goto(origin + '/hq/schools');
+  await page.waitForFunction(() => { const panel = document.querySelector('[data-school-create]'); return !!panel && panel.getAttribute('data-school-create-busy') === 'false' && !!(panel.querySelector('input[name="legalName"]') || panel.querySelector(':scope > button')); });
   if (!f.directoryGate) await page.locator('[data-hq-directory-facts]').getByText('Private Synthetic School', { exact: true }).waitFor();
   const panel = page.locator('[data-school-create]');
   return { context, page, panel, f, language };
 }
+/** Bring the form back the way a person would: return to the page (focus), or press Try again when the page offers it. */
 async function authorize(s) {
-  await s.panel.getByRole('button', { name: 'Verify HQ-owner access', exact: true }).focus();
-  await s.page.keyboard.press('Enter');
-  await s.panel.getByLabel('Legal organization name', { exact: true }).waitFor();
+  const legal = s.panel.getByLabel(hqSchoolText(s.language, 'legalName'), { exact: true });
+  if (await legal.count()) return;
+  const again = s.panel.getByRole('button', { name: hqSchoolText(s.language, 'tryAgain'), exact: true });
+  if (await again.count()) { await again.focus(); await s.page.keyboard.press('Enter'); }
+  else await s.page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await legal.waitFor();
 }
 async function fill(s) {
   for (const [label, value] of [['Legal organization name', 'Harbor Synthetic LLC'], ['School-facing organization name', 'Harbor Synthetic'], ['First school name', 'Harbor Synthetic Main'], ['School slug', 'harbor-synthetic-main']]) await s.panel.getByLabel(label, { exact: true }).fill(value);
@@ -121,8 +129,8 @@ try {
         await s.page.getByRole('group', { name: 'Platform view', exact: true }).getByRole('button', { name: label, exact: true }).click();
         if (width === 390) {
           const region = s.page.getByRole('region', { name: 'School directory table', exact: true });
-          await region.focus(); await s.page.keyboard.press('ArrowRight');
-          await s.page.waitForFunction(() => document.querySelector('[role="region"][aria-label="School directory table"]')?.scrollLeft > 0);
+          // Phones hide the secondary columns instead of scrolling sideways; the table stays keyboard-focusable.
+          await region.focus(); assert(await region.evaluate(el => el === document.activeElement && el.scrollWidth <= el.clientWidth + 1));
         }
         await capture(s, `create-${width}-${label.toLowerCase().replaceAll(' ', '-')}`);
       }
@@ -134,8 +142,6 @@ try {
     await check(`${language}/${mode}/${width}: localized, keyboard-operable private school management`, async () => {
       const s = await open(`localized-${language}-${width}-${mode}`, { width, height: 1000 }, () => {}, language);
       const t = key => hqSchoolText(language, key);
-      await s.panel.getByRole('button', { name: t('verifyOwner'), exact: true }).click();
-      await s.panel.getByLabel(t('legalName'), { exact: true }).waitFor();
       await s.panel.getByLabel(t('legalName'), { exact: true }).fill('Private Synthetic Legal Name');
       const reads = s.f.reads, directoryReads = s.f.directoryReads;
       await s.page.getByRole('group', { name: translate(language, 'Platform view'), exact: true }).getByRole('button', { name: translateUiText(language, mode), exact: true }).click();
@@ -145,12 +151,11 @@ try {
       await capture(s, `localized-${language}-${width}-${mode.replaceAll(' ', '-')}`);
       assert(await s.page.evaluate(() => {
         const creation = document.querySelector('[data-hq-create-private]'), directory = document.querySelector('[data-hq-directory-facts]');
-        window.dispatchEvent(new Event('blur'));
+        window.dispatchEvent(new Event('hon:school-context-changed'));
         return creation.hidden && creation.inert && directory.hidden && directory.inert;
       }), 'Private DOM must conceal in the same event turn');
       assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic Legal Name'));
-      await s.panel.getByRole('button', { name: t('verifyOwner'), exact: true }).click();
-      await s.panel.getByLabel(t('legalName'), { exact: true }).waitFor();
+      await authorize(s);
       assert.equal(await s.panel.getByLabel(t('legalName'), { exact: true }).inputValue(), '');
       await s.context.close();
     });
@@ -158,7 +163,8 @@ try {
   for (const [size, viewport] of [['desktop', { width: 1440, height: 1000 }], ['mobile', { width: 390, height: 844 }]]) {
     const s = await open('create-' + size, viewport, f => { f.mode = 'unknown'; });
     await check(size + ': mount performs only independent directory reads and offers no creation command or tier selector', async () => {
-      assert.equal(s.f.reads, 2); assert.equal(s.f.directoryReads, 1); assert.equal(s.f.commands.length, 0); assert.equal(await s.panel.locator('form,select').count(), 0); await capture(s, size + '-idle');
+      assert.equal(s.f.reads, READS_ON_MOUNT); assert.equal(s.f.directoryReads, 1); assert.equal(s.f.commands.length, 0); assert.equal(await s.panel.locator('select').count(), 0);
+      assert(await s.panel.getByRole('button', { name: 'Create school', exact: true }).isDisabled()); await capture(s, size + '-idle');
     });
     await authorize(s); await fill(s);
     await check(size + ': form requires confirmation and clears confirmation after edited details', async () => {
@@ -170,13 +176,14 @@ try {
     await check(size + ': unknown outcome locks details and explicit retry preserves exact payload/key', async () => {
       assert.equal(s.f.commands.length, 1); assert(await s.panel.getByLabel('Legal organization name', { exact: true }).isDisabled());
       const original = s.f.commands[0]; assert.equal(original.marker, 'hq-school-provisioning'); assert.equal(original.expectedPrincipalId, principalId); assert.equal(JSON.parse(original.body).initialTier, 'COMPLETE');
-      await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await s.page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed')));
       assert(await s.page.locator('[data-hq-directory-facts]').evaluate(node => node.hidden && node.inert));
       assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic School'));
+      // Coming back re-runs both reads by themselves: the owner check and one directory read.
       const directoryReads = s.f.directoryReads; await s.page.evaluate(() => window.dispatchEvent(new Event('focus')));
-      await authorize(s); assert.equal(s.f.directoryReads, directoryReads);
-      await s.page.getByRole('button', { name: 'Verify and read school directory', exact: true }).click();
+      await authorize(s);
       await s.page.locator('[data-hq-directory-facts]').getByText('Private Synthetic School', { exact: true }).waitFor();
+      assert.equal(s.f.directoryReads, directoryReads + 1);
       assert(await s.panel.getByRole('button', { name: 'Retry exact creation request', exact: true }).isVisible());
       await s.panel.getByRole('checkbox').check(); await s.panel.getByRole('button', { name: 'Retry exact creation request', exact: true }).click();
       await s.panel.getByRole('heading', { name: 'School creation receipt', exact: true }).waitFor();
@@ -202,8 +209,8 @@ try {
     let started; const commandStarted = new Promise(done => { started = done; });
     const s = await open('create-inflight', { width: 390, height: 844 }, f => { f.gate = gate; f.commandStarted = started; });
     await authorize(s); await fill(s); await submit(s); await commandStarted;
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    assert(await s.panel.getByRole('button', { name: 'Verify HQ-owner access', exact: true }).isDisabled());
+    await s.page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed')));
+    assert.equal(await s.panel.locator('input').count(), 0);
     release(); await idle(s); assert.equal(await s.panel.locator('input').count(), 0); assert.equal(await s.panel.getByRole('heading', { name: 'School creation receipt', exact: true }).count(), 0);
     await authorize(s); assert(await s.panel.getByRole('button', { name: 'Retry exact creation request', exact: true }).isVisible()); assert.equal(s.f.commands.length, 1);
     await s.context.close();
@@ -228,7 +235,7 @@ try {
       assert.equal(await s.panel.locator('input').count(), 0);
       assert((await s.panel.innerText()).includes(hqSchoolText('en', 'principalChanged')));
       s.f.mode = 'ready'; s.f.principalId = '10000000-0000-4000-8000-000000000002';
-      await s.panel.getByRole('button', { name: hqSchoolText('en', 'verifyOwner'), exact: true }).click(); await idle(s);
+      await s.panel.getByRole('button', { name: hqSchoolText('en', 'tryAgain'), exact: true }).click(); await idle(s);
       assert.equal(await s.panel.locator('input').count(), 0); assert.equal(s.f.commands.length, 1);
       s.f.principalId = principalId; await authorize(s);
     } else s.f.mode = 'ready';
@@ -247,7 +254,7 @@ try {
     assert.equal(s.f.commands.length, 2); assert.deepEqual(s.f.commands[1], original);
     assert.equal(s.f.requests.size, 1); assert.equal(await s.panel.locator('input').count(), 0);
     assert.equal(await s.panel.getByRole('heading', { name: hqSchoolText('en', 'receiptTitle'), exact: true }).count(), 0);
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await s.page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed')));
     s.f.mode = 'ready'; await authorize(s);
     assert(!(await s.panel.getByRole('checkbox').isChecked()));
     assert(await s.panel.getByLabel(hqSchoolText('en', 'schoolName'), { exact: true }).isDisabled());
@@ -273,8 +280,8 @@ try {
   });
   await check('an operator cannot open the owner-only creation form', async () => {
     const s = await open('create-operator', { width: 390, height: 844 }, f => { f.role = 'HON_HQ_OPERATOR'; });
-    await s.panel.getByRole('button', { name: 'Verify HQ-owner access', exact: true }).click(); await idle(s);
-    assert.equal(await s.panel.locator('form').count(), 0); assert.equal(s.f.commands.length, 0); await s.context.close();
+    assert.equal(await s.panel.locator('form').count(), 0);
+    assert((await s.panel.innerText()).includes(hqSchoolText('en', 'forbidden'))); assert.equal(s.f.commands.length, 0); await s.context.close();
   });
   assert.deepEqual(report.pageErrors, []);
   report.completed = true;

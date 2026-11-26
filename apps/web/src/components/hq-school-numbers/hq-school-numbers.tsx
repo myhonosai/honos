@@ -39,8 +39,8 @@ export function HqSchoolNumbersPage({ api = hqNumberApi }: { api?: HqNumberApi }
 
   useEffect(() => {
     const conceal = () => { generation.current++; privacy.current++; setConcealed(true); setForm(null); setOutcome(null); setState({ state: 'LOADING' }); };
-    window.addEventListener('pagehide', conceal); window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('pagehide', conceal); window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {

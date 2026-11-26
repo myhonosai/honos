@@ -13,7 +13,8 @@ it.each(['en', 'ko', 'es'].flatMap(language => ['modern', 'classic', 'big-button
   const fetch = vi.spyOn(globalThis, 'fetch');
   const creation = renderToStaticMarkup(<HqOnboardingPanel />), directory = renderToStaticMarkup(<HqSchoolDirectory />);
   expect(creation).toContain(hqSchoolText(language!, 'createTitle'));
-  expect(creation).toContain(hqSchoolText(language!, 'verifyOwner'));
+  expect(creation).toContain(hqSchoolText(language!, 'concealed'));
+  expect(creation).not.toContain(hqSchoolText(language!, 'tryAgain'));
   expect(creation).toContain(hqSchoolText(language!, 'provisionPolicy'));
   expect(directory).toContain(hqSchoolText(language!, 'directoryTitle'));
   for (const html of [creation, directory]) {

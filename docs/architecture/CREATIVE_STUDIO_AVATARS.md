@@ -32,7 +32,7 @@ A3). Still out of scope: voices or voice cloning, editing an avatar after creati
 **Price**: the avatar is one CS1 generation with operation code `avatar.create`, priced by whatever rate the HQ owner
 publishes (media kind `IMAGE`, 1 unit, `PORTRAIT`). If HQ has not published `avatar.create`, creating is refused with
 `SAAS_OPERATION_NOT_PRICED` and the card says avatars are not available yet. Trial schools pay from their trial lot
-(0275) like any other operation; nothing here changes funding, eligibility or rates.
+(0683) like any other operation; nothing here changes funding, eligibility or rates.
 
 **Database (0276)**
 - `hon.creative_avatars`: school, organization, creator, idempotency key + fingerprint, name, style, description,
