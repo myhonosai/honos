@@ -10,7 +10,7 @@ import { MarketingError, marketingExchange, marketingRead, type Owned } from '..
 export { MarketingError as PlanError, type Owned };
 const CHANGED = new Set(['SAAS_VERSION_CONFLICT']);
 const REFUSED = new Set(['HQ_SCHOOL_PLAN_OFFER_NOT_AVAILABLE', 'HQ_SCHOOL_PLAN_NO_CHANGE', 'HQ_SCHOOL_PLAN_NONE', 'HQ_SCHOOL_PLAN_SCHOOL_ARCHIVED',
-  'HQ_SCHOOL_PLAN_FREE_END_INVALID', 'HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE']);
+  'HQ_SCHOOL_PLAN_FREE_END_INVALID', 'HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE', 'HQ_SCHOOL_PLAN_START_INVALID']);
 const codeOf = (v: unknown): string | null => v && typeof v === 'object' && !Array.isArray(v) && typeof (v as { code?: unknown }).code === 'string' ? (v as { code: string }).code : null;
 /** What a refused command means. Only these exact answers are definitive; anything else is UNKNOWN (retry with the same key). */
 export function planCommandError(status: number, code: string | null): MarketingError {

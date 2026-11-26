@@ -21,10 +21,10 @@ const custom = (patch = {}) => ({ source: 'CUSTOM', name: 'Dojo partner deal', b
 const offer = (patch = {}) => ({ offerId: U(), offerCode: 'FOUNDER_MONTHLY', offerKind: 'FOUNDER_MONTHLY', billingInterval: 'MONTHLY', founder: true,
   displayName: 'HON OS founder monthly', priceMinor: 19920, currency: 'USD', offerSetVersion: 1, ...patch });
 const rec = (schoolId, patch = {}) => ({ revision: 1, action: 'ASSIGN', source: 'CUSTOM', offerId: null, offerKind: null, offerSetVersion: null,
-  planName: 'Dojo partner deal', billingInterval: 'MONTHLY', priceMinor: 15000, currency: 'USD', founder: false, freeUntil: null, note: null,
+  planName: 'Dojo partner deal', billingInterval: 'MONTHLY', priceMinor: 15000, currency: 'USD', founder: false, freeUntil: null, startDate: '2026-12-01', note: null,
   schoolId, recordedBy: person(), recordedAt: T, ...patch });
 const removed = (schoolId, revision) => rec(schoolId, { revision, action: 'REMOVE', source: null, planName: null, billingInterval: null, priceMinor: null,
-  currency: null, founder: null });
+  currency: null, founder: null, startDate: null });
 const view = (schoolId, patch = {}) => { const cur = rec(schoolId); return { schoolId, organizationId: U(), schoolName: 'Ideal Martial Arts',
   schoolStatus: 'ACTIVE', organizationStatus: 'ACTIVE', revision: 1, current: cur, history: [cur], onNow: 'NONE', offers: [offer()],
   viewer: { ...person(), canManage: true }, effect: 'RECORD_ONLY', charging: 'OFF', asOf: T, ...patch }; };
@@ -36,7 +36,7 @@ test('contracts: command values match the SaaS command table', () => {
 });
 
 test('contracts: assign/remove inputs are closed; free may last forever; an end date only when free', () => {
-  const ok = { expectedRevision: 0, plan: custom(), note: null };
+  const ok = { expectedRevision: 0, plan: custom(), startDate: '2026-12-01', note: null };
   assert.deepEqual(contracts.validateHqSchoolPlanAssignInput(ok), ok);
   assert.equal(contracts.validateHqSchoolPlanAssignInput({ ...ok, plan: custom({ priceMinor: 0 }) }).plan.freeUntil, null);
   assert.equal(contracts.validateHqSchoolPlanAssignInput({ ...ok, plan: custom({ priceMinor: 0, freeUntil: '2027-01-31' }) }).plan.freeUntil, '2027-01-31');
@@ -45,7 +45,8 @@ test('contracts: assign/remove inputs are closed; free may last forever; an end 
   for (const bad of [{ ...ok, extra: 1 }, { ...ok, expectedRevision: -1 }, { ...ok, note: ' x' }, { ...ok, plan: custom({ priceMinor: 15000, freeUntil: '2027-01-31' }) },
     { ...ok, plan: custom({ priceMinor: 0, freeUntil: '2027-02-30' }) }, { ...ok, plan: custom({ priceMinor: 10_000_001 }) }, { ...ok, plan: custom({ priceMinor: 1.5 }) },
     { ...ok, plan: custom({ billingInterval: 'ONE_TIME' }) }, { ...ok, plan: custom({ name: 'ab' }) }, { ...ok, plan: { source: 'OFFER', offerId: 'x' } },
-    { ...ok, plan: { source: 'OFFER', offerId: id, priceMinor: 1 } }, { ...ok, plan: { source: 'FREE' } }])
+    { ...ok, plan: { source: 'OFFER', offerId: id, priceMinor: 1 } }, { ...ok, plan: { source: 'FREE' } },
+    { expectedRevision: 0, plan: custom(), note: null }, { ...ok, startDate: null }, { ...ok, startDate: '2026-02-30' }, { ...ok, startDate: '12/01/2026' }])
     assert.throws(() => contracts.validateHqSchoolPlanAssignInput(bad), JSON.stringify(bad).slice(0, 80));
   assert.deepEqual(contracts.validateHqSchoolPlanRemoveInput({ expectedRevision: 3, note: 'Closed' }), { expectedRevision: 3, note: 'Closed' });
   for (const bad of [{ expectedRevision: 3 }, { expectedRevision: 3, note: null, plan: custom() }]) assert.throws(() => contracts.validateHqSchoolPlanRemoveInput(bad));
@@ -61,7 +62,10 @@ test('contracts: views and receipts are closed and consistent', () => {
     view(S, { history: [rec(S, { revision: 2 }), rec(S, { revision: 2 })], revision: 2 }), view(S, { onNow: 'PAID' }),
     view(S, { offers: [offer({ priceMinor: 50 })] }), view(S, { current: rec(S, { offerId: U() }) }),
     view(S, { history: [rec(S, { priceMinor: 5000, freeUntil: '2027-01-01' })], current: rec(S, { priceMinor: 5000, freeUntil: '2027-01-01' }) }),
-    view(S, { history: [removed(S, 1)], current: null, revision: 1, extra: 1 })])
+    view(S, { history: [removed(S, 1)], current: null, revision: 1, extra: 1 }),
+    view(S, { history: [rec(S, { startDate: null })], current: rec(S, { startDate: null }) }),
+    view(S, { history: [rec(S, { priceMinor: 0, freeUntil: '2026-12-01' })], current: rec(S, { priceMinor: 0, freeUntil: '2026-12-01' }) }),
+    view(S, { history: [{ ...removed(S, 1), startDate: '2026-12-01' }], current: null, revision: 1 })])
     assert.throws(() => contracts.validateHqSchoolPlanView(bad));
   assert.equal(contracts.validateHqSchoolPlanReceipt(receipt(S)).assignment.revision, 1);
   for (const bad of [receipt(S, { operation: 'REMOVE' }), receipt(S, { assignment: rec(U()) }), receipt(S, { charging: 'ON' })])
@@ -94,7 +98,7 @@ test('HTTP: routes forward only the verified subject, the school id and the vali
     reply = () => view(U());
     assert.equal((await send(`${base}/hq/schools/${school}/plan`)).status, 503, 'another school\'s answer is never shown');
     assert.equal((await send(`${base}/hq/schools/not-a-uuid/plan`)).status, 400);
-    const input = { expectedRevision: 0, plan: custom(), note: null }, key = U();
+    const input = { expectedRevision: 0, plan: custom(), startDate: '2026-12-01', note: null }, key = U();
     reply = () => receipt(school);
     const a = await send(`${base}/hq/schools/${school}/plan/assign`, { method: 'POST', headers: command('hq-school-plan-assign', key), body: JSON.stringify(input) });
     assert.equal(a.status, 200, a.body);
@@ -114,6 +118,7 @@ test('HTTP: routes forward only the verified subject, the school id and the vali
       ['23505', 'SAAS_KEY_REUSED', 409, 'IDEMPOTENCY_KEY_REUSED'], ['P0002', 'SAAS_UNAVAILABLE', 404, 'SAAS_UNAVAILABLE'],
       ['23514', 'HQ_SCHOOL_PLAN_OFFER_NOT_AVAILABLE', 422, 'HQ_SCHOOL_PLAN_OFFER_NOT_AVAILABLE'], ['23514', 'HQ_SCHOOL_PLAN_NO_CHANGE', 422, 'HQ_SCHOOL_PLAN_NO_CHANGE'],
       ['23514', 'HQ_SCHOOL_PLAN_SCHOOL_ARCHIVED', 422, 'HQ_SCHOOL_PLAN_SCHOOL_ARCHIVED'], ['23514', 'HQ_SCHOOL_PLAN_FREE_END_INVALID', 422, 'HQ_SCHOOL_PLAN_FREE_END_INVALID'],
+      ['23514', 'HQ_SCHOOL_PLAN_START_INVALID', 422, 'HQ_SCHOOL_PLAN_START_INVALID'],
       ['23514', 'HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE', 422, 'HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE'], ['23514', 'HQ_SCHOOL_PLAN_NONE', 422, 'HQ_SCHOOL_PLAN_NONE']]) {
       reply = () => { const e = new Error(message); e.code = code; throw e; };
       const r = await send(`${base}/hq/schools/${school}/plan/assign`, { method: 'POST', headers: command('hq-school-plan-assign'), body: JSON.stringify(input) });
