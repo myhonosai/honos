@@ -236,6 +236,8 @@ const SAAS_BILLING_CALLS = {
   // CA2a (0420): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
   readConversationAiProgram: { sql: 'SELECT hon.read_conversation_ai_program_from_hq($1) AS data', arity: 1, readOnly: true },
   commandConversationAiProgram: { sql: 'SELECT hon.command_conversation_ai_program($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readAiSchoolCostAlerts: { sql: 'SELECT hon.read_ai_school_cost_alerts_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiSchoolCostAlertAck: { sql: 'SELECT hon.command_ai_school_cost_alert_acknowledgement($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },

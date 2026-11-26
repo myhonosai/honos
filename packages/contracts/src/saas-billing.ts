@@ -107,6 +107,7 @@ export const SAAS_COMMANDS = {
   aiSpendPause: 'ai-spend-pause',
   aiSchoolCostLimit: 'ai-school-cost-limit',
   aiExceptionAllowance: 'ai-exception-allowance',
+  aiSchoolCostAlertAck: 'ai-school-cost-alert-ack',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   // CA2a (0420): the Conversation AI program switch (HQ owner).
