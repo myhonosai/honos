@@ -427,6 +427,7 @@
     "0683_hon_os_trial_creative_credits.sql": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5",
     "0684_creative_studio_photo_avatars.sql": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e",
     "0685_kai_teaching_journal.sql": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a",
-    "0686_monthly_goal_plan.sql": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42"
+    "0686_monthly_goal_plan.sql": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42",
+    "0687_conversation_ai_test_chat.sql": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6"
   }
 }

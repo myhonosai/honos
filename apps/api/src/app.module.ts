@@ -183,6 +183,8 @@ import { MayaCheckInController } from './maya-check-in/maya-check-in.controller.
 import { MayaCheckInService } from './maya-check-in/maya-check-in.service.js';
 import { MAYA_CHECK_IN_PROVIDER_RUNTIME, MAYA_CHECK_IN_TEXT_PROFILE } from './maya-check-in/maya-check-in-provider.js';
 import { PAPER_VISION_RUNTIME, OpenRouterPaperVisionRuntime } from './ai/paper-vision-runtime.js';
+import { CONVERSATION_TEST_PROVIDER_RUNTIME, OpenRouterConversationTestRuntime } from './ai/conversation-test-provider-runtime.js';
+import { ConversationAiTestService } from './conversations/conversation-ai-test.service.js';
 import { SchoolOnboardingController } from './onboarding/school-onboarding.controller.js';
 import { SchoolOnboardingService } from './onboarding/school-onboarding.service.js';
 import { SchoolSupportController } from './support/school-support.controller.js';
@@ -1051,6 +1053,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: CHAD_LEAD_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CHAD_LEAD_PLAN_TEXT_PROFILE) },
     { provide: MAYA_CHECK_IN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_CHECK_IN_TEXT_PROFILE) },
     { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
+    ConversationAiTestService,
+    { provide: CONVERSATION_TEST_PROVIDER_RUNTIME, useFactory: () => new OpenRouterConversationTestRuntime() },
     SchoolOnboardingService,
     SchoolSupportService,
     CustomToolService,

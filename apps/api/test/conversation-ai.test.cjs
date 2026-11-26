@@ -76,7 +76,7 @@ test('0420 service and controller refuse before any database call', async () => 
   await assert.rejects(() => failing.overview(staff), (e) => e.response.code === 'CONVERSATION_AI_UNAVAILABLE' && !JSON.stringify(e.response).includes('secret'));
 
   // Controller: commands need an Idempotency-Key, reads refuse one, and no query selectors are accepted.
-  const controller = new ConversationAiController(database, service);
+  const controller = new ConversationAiController(database, service, {});
   const req = { honIdentity: { externalSubject: 'subject' }, originalUrl: '/x' };
   const res = { status: () => res };
   await assert.rejects(() => controller.overview(A, B, {}, 'k', req), (e) => e.response.code === 'IDEMPOTENCY_KEY_NOT_ACCEPTED');
@@ -89,7 +89,7 @@ test('0420 service and controller refuse before any database call', async () => 
   assert.equal(calls, 0);
   // A scope resolved for another school is refused; so is no scope at all.
   await assert.rejects(() => controller.overview(A, B, {}, undefined, req), (e) => e.response.code === 'CONVERSATION_AI_FORBIDDEN');
-  const scoped = new ConversationAiController({ resolveAuthorizedScope: async () => ({ organizationId: A, schoolId: C, principalId: C }) }, service);
+  const scoped = new ConversationAiController({ resolveAuthorizedScope: async () => ({ organizationId: A, schoolId: C, principalId: C }) }, service, {});
   await assert.rejects(() => scoped.setItemStatus(A, B, {}, {}, 'k', req, res), (e) => e.response.code === 'CONVERSATION_AI_FORBIDDEN');
 });
 
