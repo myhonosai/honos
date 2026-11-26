@@ -6,12 +6,12 @@ import styles from './hq-creative-credits.module.css';
 
 /**
  * Credit prices David approved on 2026-11-14 (docs/architecture/CREATIVE_AI_IMAGE_VIDEO_PROVIDERS.md §3); 1 credit = $0.01.
- * Max units follow the generation limits: up to 8 images, 10-second clips, one avatar, 60-second avatar videos.
+ * Max units follow the providers doc §4: up to 4 images, 10-second clips, one avatar, 60-second avatar videos.
  */
 export const APPROVED_CREATIVE_RATES: SaasCreativeRatesInput = Object.freeze({
   termsReference: 'https://myhonos.com/terms/',
   rates: [
-    { operationCode: 'image.generate', mediaKind: 'IMAGE', displayName: 'AI image', billingUnit: 'IMAGE', creditsPerUnit: 10, maxUnitsPerRequest: 8, costEvidenceId: null },
+    { operationCode: 'image.generate', mediaKind: 'IMAGE', displayName: 'AI image', billingUnit: 'IMAGE', creditsPerUnit: 10, maxUnitsPerRequest: 4, costEvidenceId: null },
     { operationCode: 'video.generate', mediaKind: 'VIDEO', displayName: 'AI video clip', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 20, maxUnitsPerRequest: 10, costEvidenceId: null },
     { operationCode: 'avatar.create', mediaKind: 'IMAGE', displayName: 'AI avatar', billingUnit: 'IMAGE', creditsPerUnit: 10, maxUnitsPerRequest: 1, costEvidenceId: null },
     { operationCode: 'avatar.video', mediaKind: 'VIDEO', displayName: 'Talking avatar video', billingUnit: 'VIDEO_SECOND', creditsPerUnit: 15, maxUnitsPerRequest: 60, costEvidenceId: null },
