@@ -111,3 +111,9 @@ it('a failed copy tells HQ to copy by hand and the token field selects itself on
  await hqReady();click('Copy token');await settle();expect(text(render())).toContain('Copy failed');
  const select=vi.fn();tokenField().props.onFocus({target:{select}});expect(select).toHaveBeenCalled();
 });
+it('HQ invitations do not hide on pagehide; school owners still do; both hide on a session end',()=>{
+ const listened=()=>{const spy=vi.spyOn(window,'addEventListener');render();const events=spy.mock.calls.map(c=>c[0]);spy.mockRestore();return events;};
+ hqMode=true;const hq=listened();expect(hq).not.toContain('pagehide');expect(hq).not.toContain('blur');expect(hq).toContain('hon:session-invalidated');
+ for(const v of hooks.values)v?.cleanup?.();hooks.values=[];hooks.effects=[];hqMode=false;
+ const school=listened();expect(school).toContain('pagehide');expect(school).toContain('hon:session-invalidated');
+});

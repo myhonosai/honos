@@ -47,6 +47,7 @@ const OPEN_BY_DESIGN={
  'hon.read_saas_hon_os_offers_for_school(text,uuid)':'billing recovery: the published HON OS offers and the server eligibility decision for this school (read only)',
  'hon.read_school_plan_promotions(text,uuid)':'billing recovery (0308): HQ plan promotions shown only where the HON OS offer read already lists the promoted offer as ELIGIBLE for this school (read only)',
  'hon.read_saas_founder_availability_for_school(text,uuid)':'billing recovery: founder spot availability for this organization, so a suspended school sees the prices it can resubscribe at (read only, reserves nothing)',
+ 'hon.read_creative_avatar_photos(text,uuid)':'personal likeness (A3 0684): a staff member always sees their own consented photo so they can delete it (owner decision: delete option at any time), and a live owner sees staff consents to delete them, even while the school is suspended; read only, no image bytes, grants nothing',
  'hon.read_my_language_preference(text,uuid)':'personal interface setting',
  'hon.read_my_hq_contact(text)':'personal HQ-texts setting (0282): the signed-in person sees only their own phone and HQ texting choice, no school data; must stay reachable so a suspended school\'s owner can turn HQ texts off or remove the number',
  'hon.read_my_hq_school_visits(text)':'own HQ school visits (0696): the signed-in person sees only their own live HQ visits (an empty list for anyone else, school owners included), read only, grants nothing; the school banner needs it, and every school page still decides access itself',

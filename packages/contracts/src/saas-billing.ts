@@ -124,6 +124,7 @@ export const SAAS_COMMANDS = {
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
   // C1 (0354): HON's daily provider spend guard and per-school daily caps (HQ owner).
   creativeProviderDailyLimit: 'saas-creative-provider-daily-limit', creativeSchoolDailyCaps: 'saas-creative-school-daily-caps',
+  uploadCreativeAvatarPhoto: 'saas-creative-avatar-photo-upload', deleteCreativeAvatarPhoto: 'saas-creative-avatar-photo-delete', createCreativePhotoAvatar: 'saas-creative-photo-avatar-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',

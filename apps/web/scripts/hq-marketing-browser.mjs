@@ -270,18 +270,17 @@ try {
     assert.equal(await s.page.getByRole('button', { name: t('newCampaign'), exact: true }).count(), 0);
     await s.context.close();
   });
-  await check('leaving the tab hides every campaign and the open form; Show again reads fresh', async () => {
+  await check('leaving the tab hides nothing in HQ: campaigns and the open form stay, with no new read', async () => {
     const s = await open('marketing-conceal', { width: 1280, height: 900 }); await ready(s);
     await s.page.getByRole('button', { name: t('newCampaign'), exact: true }).click();
     await s.page.getByLabel(t('name'), { exact: true }).fill('Private draft name');
     const reads = s.f.reads.length;
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    await s.page.locator('[data-hq-marketing="concealed"]').waitFor();
-    const body = await s.page.locator('body').innerText();
-    assert(!body.includes('Spring founder push') && !body.includes('Private draft name'));
-    await s.page.getByRole('button', { name: t('reveal'), exact: true }).click(); await ready(s);
-    assert(s.f.reads.length > reads);
-    assert.equal(await s.page.locator('[data-marketing-form]').count(), 0, 'the draft is not restored');
+    await s.page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    await s.page.waitForTimeout(300);
+    assert.equal(await s.page.locator('[data-hq-marketing="concealed"]').count(), 0);
+    assert((await s.page.locator('body').innerText()).includes('Spring founder push'));
+    assert.equal(await s.page.getByLabel(t('name'), { exact: true }).inputValue(), 'Private draft name', 'the draft is kept');
+    assert.equal(s.f.reads.length, reads);
     await s.context.close();
   });
   await check('a person without HQ marketing access sees nothing', async () => {

@@ -422,6 +422,14 @@
     "0678_hq_creative_designs.sql": "db2386168b7e785baf3bab1ff902b11e31278126d400fc160920a95834579970",
     "0680_membership_activates_on_signing.sql": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb",
     "0626_pgcrypto_public_gen_random_bytes.sql": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13",
+    "0681_staff_timesheet_no_self_approval.sql": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5",
+    "0682_crm_board_text_opt_out.sql": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7",
+    "0683_hon_os_trial_creative_credits.sql": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5",
+    "0684_creative_studio_photo_avatars.sql": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e",
+    "0685_kai_teaching_journal.sql": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a",
+    "0686_monthly_goal_plan.sql": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42",
+    "0687_conversation_ai_test_chat.sql": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6",
+    "0688_ai_fallback_policy_order_exclusion.sql": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4",
     "0696_hq_enter_school.sql": "2e38b91671c07cd55e2a1bd7ed3579ddf3be6bf3b654511c7f8dca56856bb909"
   }
 }

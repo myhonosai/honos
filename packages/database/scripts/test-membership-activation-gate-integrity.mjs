@@ -693,22 +693,25 @@ try {
   // The 0623 read_school_contact_list reader only shows the current membership's state on the staff contacts list and filters
   // by it; it is read-only and grants no booking, attendance or check-in benefit.
   const readers = (await sql("SELECT proname FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc ~* '\\mmemberships\\M' ORDER BY proname")).map((r) => r.proname);
-  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'apply_maya_renewal_preps', 'approve_maya_check_in_draft', 'automation_condition_holds', 'automation_date_candidates',
-    'automation_enrolled', 'automation_event_subject', 'begin_hon_turn_0284', 'billing_import_has_membership', 'cancel_school_membership', 'claire_kpi_count', 'crm_adult_membership_draft_is_current',
+  assert.deepEqual(readers, ['acknowledge_retention_review_evidence', 'activate_school_membership', 'apply_billing_import_row', 'apply_maya_renewal_preps',
+    'approve_maya_check_in_draft', 'automation_condition_holds', 'automation_date_candidates', 'automation_enrolled', 'automation_event_subject',
+    'begin_hon_turn_0284', 'billing_import_has_membership', 'cancel_school_membership', 'claire_kpi_count', 'crm_adult_membership_draft_is_current',
     'crm_guardian_child_membership_draft_current', 'demo_data_person_tables', 'draft_crm_adult_membership', 'draft_crm_adult_membership_from_plan',
     'draft_crm_guardian_child_membership_from_plan', 'draft_owner_launch_membership', 'eian_facts_ok', 'evaluate_membership_activation', 'evaluate_membership_date_revision',
     'guard_membership_date_revision_insert', 'guard_membership_pause', 'guard_person_membership_overlap', 'list_retention_review_members', 'maya_check_in_recipient', 'maya_check_in_view', 'maya_renewal_facts', 'maya_renewal_fix_refs', 'maya_renewal_view',
     'membership_agreement_covered', 'membership_agreement_signed_starts', 'membership_start_on_signing',
     'parent_invoice_pay_invoices', 'pause_school_membership', 'person_membership_start_item', 'prepare_school_pay_autopay_cycle', 'read_crm_adult_membership_draft_confirmation',
     'read_crm_adult_membership_preparation', 'read_crm_guardian_child_enrollment', 'read_crm_lead_memberships', 'read_crm_lead_registration_recovery', 'read_maya_at_risk_students',
-    'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds', 'read_owner_launch_membership_draft', 'read_parent_billing_view',
+    'read_membership_date_confirmation_queue', 'read_membership_date_history', 'read_membership_pauses_and_refunds', 'read_monthly_goal_plan', 'read_owner_launch_membership_draft', 'read_parent_billing_view',
     'read_parent_testing_status', 'read_person_membership_start', 'read_retention_review_signals', 'read_school_command_center', 'read_school_contact_card', 'read_school_contact_list',
     'read_school_contact_membership_details', 'read_school_health_score', 'read_school_membership_list', 'read_school_membership_status_summary', 'read_school_reports', 'read_school_reports_locations',
     'read_specialist_school_facts', 'record_maya_renewal_prep', 'record_membership_refund', 'record_retention_attention_alert', 'renewal_membership_facts', 'resolve_retention_attention_alert',
     'resume_school_membership', 'revenue_plan_snapshot', 'revise_membership_dates', 'save_school_onboarding', 'school_blast_resolve', 'school_contact_archive_plan', 'school_contact_facts',
-    'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_demo_data_write', 'school_pay_autopay_due', 'school_report_periods', 'start_person_membership']);
+    'school_contact_merge_plan', 'school_dashboard_kpis', 'school_dashboard_members', 'school_demo_data_write', 'school_pay_autopay_due', 'school_renewals_due', 'school_report_periods', 'start_person_membership']);
   // 0659 read_school_contact_membership_details is a read-only staff view of each membership's payer, schedule and payments
   // on the contact card; it books, checks in and grants nothing.
+  // 0686 (G1) read_monthly_goal_plan and school_renewals_due are read-only goal and renewal counts: they read term dates,
+  // plan selections and payment schedules, and book, check in and grant nothing.
   // 0323 save_school_onboarding names the closed import-wish code 'MEMBERSHIPS' only; it never reads hon.memberships.
   // 0220 (U6) read_school_membership_list is a read-only school list: no booking, check-in or benefit path.
   // 0407 list_retention_review_members is a read-only name list for the retention review picker: no booking, check-in or benefit path.

@@ -10,7 +10,7 @@ import { HqSchoolPlanCard } from '../hq-school-plan/plan-card';
 import { schoolPlanApi as defaultPlanApi, type SchoolPlanApi } from '../hq-school-plan/http';
 
 /**
- * HQ school detail (C-HQ-3). Read only. Leaving the tab (blur, hidden tab, page hide) or a session end hides every fact
+ * HQ school detail (C-HQ-3). Read only. A session end hides every fact
  * and retires the read; "Show again" reads fresh. The server decides who may read, on every read.
  */
 export function HqSchoolDetail({ schoolId, api = schoolDetailApi, healthApi = defaultHealthApi, planApi = defaultPlanApi }:
@@ -26,11 +26,8 @@ export function HqSchoolDetail({ schoolId, api = schoolDetailApi, healthApi = de
 
   useEffect(() => {
     const conceal = () => { generation.current++; setConcealed(true); setBusy(false); setState(valid ? { state: 'LOADING' } : { state: 'INVALID' }); };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, [valid]);
 
   useEffect(() => {

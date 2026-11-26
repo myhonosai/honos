@@ -147,14 +147,14 @@ try {
     for (const expected of [t('cardTitle'), t('NO_ACTIVE_STUDENTS'), t('never')]) assert(text.includes(expected), expected);
     await capture(s, 'detail-health-mobile', '[data-hq-school-health]'); await s.context.close();
   });
-  await check('leaving the tab hides every school; Show again reads fresh', async () => {
+  await check('leaving the tab hides nothing in HQ: every school stays, with no new read', async () => {
     const s = await open('attention-conceal', { width: 1280, height: 900 }); await ready(s);
     const reads = s.f.reads.length;
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    await s.page.locator('[data-hq-attention="concealed"]').waitFor();
-    assert(!(await s.page.locator('body').innerText()).includes('Synthetic School'));
-    await s.page.getByRole('button', { name: t('reveal'), exact: true }).click(); await ready(s);
-    assert(s.f.reads.length > reads); await s.context.close();
+    await s.page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    await s.page.waitForTimeout(300);
+    assert.equal(await s.page.locator('[data-hq-attention="concealed"]').count(), 0);
+    assert((await s.page.locator('body').innerText()).includes('Synthetic School'));
+    assert.equal(s.f.reads.length, reads); await s.context.close();
   });
   await check('a person without HQ health access sees nothing', async () => {
     const s = await open('attention-denied', { width: 390, height: 844 }, f => { f.denied = true; });

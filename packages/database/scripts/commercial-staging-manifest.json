@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bc71a2df199d38315e06f791b37114eeae0f1b39a34d066c9945475c4d13ceb1",
+  "chainSha256": "e9a659a17bc142e744fcda74901e5b776c21896ff229a14a1ecb3b14a52a6a41",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -997,6 +997,38 @@
     {
       "file": "0680_membership_activates_on_signing.sql",
       "sha256": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb"
+    },
+    {
+      "file": "0681_staff_timesheet_no_self_approval.sql",
+      "sha256": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
+    },
+    {
+      "file": "0682_crm_board_text_opt_out.sql",
+      "sha256": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7"
+    },
+    {
+      "file": "0683_hon_os_trial_creative_credits.sql",
+      "sha256": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5"
+    },
+    {
+      "file": "0684_creative_studio_photo_avatars.sql",
+      "sha256": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e"
+    },
+    {
+      "file": "0685_kai_teaching_journal.sql",
+      "sha256": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a"
+    },
+    {
+      "file": "0686_monthly_goal_plan.sql",
+      "sha256": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42"
+    },
+    {
+      "file": "0687_conversation_ai_test_chat.sql",
+      "sha256": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6"
+    },
+    {
+      "file": "0688_ai_fallback_policy_order_exclusion.sql",
+      "sha256": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4"
     },
     {
       "file": "0696_hq_enter_school.sql",

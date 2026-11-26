@@ -9,7 +9,7 @@ import { budgetInputFrom, requestInputFrom, resolveInputFrom, type BudgetDraft, 
 import { HqCreativeView, type CreativeDone, type CreativeOutcome, type CreativeState } from './view';
 
 /**
- * HQ Creative Studio (M2). Leaving the tab or a session end hides everything and drops any kept command; "Show again"
+ * HQ Creative Studio (M2). A session end hides everything and drops any kept command; "Show again"
  * reads fresh. Every command answer is followed by a fresh read. The server decides who may read, request, set the cap or
  * resolve; the open HQ campaigns are only offered as an optional link.
  */

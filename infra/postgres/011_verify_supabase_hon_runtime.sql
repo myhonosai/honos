@@ -2845,6 +2845,46 @@ DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
     END LOOP;
   END LOOP;
 END $$;
+-- A3 0684 Creative Studio photo avatars: exact posture of the four private tables and the five runtime entry points.
+DO $$ DECLARE t text; safe boolean; expected record; r text; BEGIN
+  FOR t IN SELECT unnest(ARRAY['creative_avatar_photo_consents','creative_avatar_photos','creative_avatar_photo_withdrawals','creative_avatar_photo_links']) LOOP
+    SELECT c.relrowsecurity AND c.relforcerowsecurity
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=c.oid)
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl WHERE acl.grantee<>c.relowner)
+      AND NOT EXISTS(SELECT 1 FROM pg_attribute a CROSS JOIN LATERAL aclexplode(a.attacl) acl WHERE a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped AND acl.grantee<>c.relowner)
+    INTO safe FROM pg_class c JOIN pg_roles owner_role ON owner_role.oid=c.relowner WHERE c.oid=('hon.'||t)::regclass;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio photo avatar private table: %',t; END IF;
+  END LOOP;
+  FOR expected IN SELECT * FROM (VALUES
+    ('hon.creative_photo_signature_ok(text)',false,false,'i'),
+    ('hon.creative_photo_bytes_ok(text,bytea)',false,false,'i'),
+    ('hon.guard_creative_avatar_photo()',false,false,'v'),
+    ('hon.creative_photo_principal(text)',false,true,'v'),
+    ('hon.creative_photo_subject_live(uuid,uuid,uuid)',false,true,'v'),
+    ('hon.creative_photo_consent_live(uuid)',false,true,'v'),
+    ('hon.creative_avatar_withdrawn(uuid)',false,true,'v'),
+    ('hon.creative_generation_withdrawn(uuid)',false,true,'v'),
+    ('hon.creative_photo_consent_json(hon.creative_avatar_photo_consents,uuid)',false,true,'v'),
+    ('hon.creative_photo_fingerprint(uuid,jsonb,text)',false,false,'i'),
+    ('hon.upload_creative_avatar_photo(text,uuid,jsonb,text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_photos(text,uuid)',true,true,'v'),
+    ('hon.read_creative_avatar_photo_image(text,uuid,uuid)',true,true,'v'),
+    ('hon.delete_creative_avatar_photo(text,uuid,uuid)',true,true,'v'),
+    ('hon.creative_photo_avatar_fingerprint(uuid,jsonb)',false,false,'i'),
+    ('hon.create_creative_photo_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)',true,true,'v')
+  ) AS x(signature,runtime_execute,security_definer,volatility) LOOP
+    SELECT p.prosecdef=expected.security_definer AND p.provolatile=expected.volatility AND p.proconfig=ARRAY['search_path=pg_catalog, hon']::text[]
+      AND (owner_role.rolsuper OR owner_role.rolbypassrls) AND owner_role.rolname<>'hon_runtime'
+      AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=expected.runtime_execute
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl WHERE acl.grantee<>p.proowner AND (acl.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT expected.runtime_execute OR acl.is_grantable OR acl.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner_role ON owner_role.oid=p.proowner WHERE p.oid=expected.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Creative Studio photo avatar function: %',expected.signature; END IF;
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN('anon','authenticated','service_role') LOOP
+      IF has_function_privilege(r,expected.signature,'EXECUTE') THEN RAISE EXCEPTION 'Creative Studio photo avatar function exposed to %: %',r,expected.signature; END IF;
+    END LOOP;
+  END LOOP;
+END $$;
 -- End Creative Studio generations exact verification.
 
 -- School membership list exact verification (0220, U6): one read-only definer projection, runtime EXECUTE only.
@@ -4856,9 +4896,10 @@ END $$;
 -- Eian family AI exact verification (0474): the private turn table and its four S4 triggers, the pure route helper and the
 -- re-pinned planner that calls it, private Eian helpers and seven runtime entry points. The S4 shared functions that gained
 -- EIAN were redefined again by 0550 (adding TEXT_PROPOSAL) and are pinned in the 0550 section below.
+-- ai_select_text_route body hash re-pinned by 0688 (legacy policy order skips definitely unavailable models).
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','223c2ace3f9235f3997c960f4e223e0a237145ad71246e2a88e97e9f502bbde1'),
+('hon.ai_select_text_route(uuid,uuid,uuid,text,text,integer,bigint)',true,false,'search_path=pg_catalog, hon','c89d83535415ee132d37c8a026d7dc80b51a154b83bc23e7d5f9fe7178662acb'),
 ('hon.plan_ai_invocation(uuid,jsonb,uuid,uuid,uuid)',true,true,'search_path=pg_catalog, hon','17675880148308085f1317d6a88561cdf86dd47d3fa9036d8100b4ceee155635'),
 ('hon.eian_turn_limits()',false,false,'search_path=pg_catalog','0f454af366b8676c78035cce4722573484eef6ffa7b90921a10258a490827994'),
 ('hon.eian_burst_limit()',false,false,'search_path=pg_catalog','5e6a329b1c71b45fb5674458e87b8f8fd18c5b9916f026435f4b1cba7cae4610'),
@@ -7360,7 +7401,95 @@ BEGIN
     RAISE EXCEPTION 'Membership effective period permission check drift'; END IF;
 END $$;
 -- End membership activates on signing exact verification.
+-- Staff timesheet no-self-approval exact verification (0681)
+DO $$ DECLARE f text:='hon.staff_time_actor_is_owner(uuid,uuid,uuid)';
+BEGIN
+  IF to_regprocedure(f) IS NULL OR EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+    RAISE EXCEPTION 'Unsafe staff time helper: %',f; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.set_staff_timesheet_week(text,jsonb,text,uuid,uuid)'::regprocedure
+      AND position('TIMESHEET_SELF_APPROVAL' IN p.prosrc)>0 AND position('staff_time_actor_is_owner' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'Staff timesheet self-approval block missing'; END IF;
+END $$;
+-- End staff timesheet no-self-approval exact verification.
+-- Kai teaching journal exact verification (0685)
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.read_kai_journal(text,date,date)','hon.read_kai_team_journal(text,date,date)','hon.save_kai_journal_entry(text,jsonb,text,uuid,uuid)'];
+  helpers text[]:=ARRAY['hon.kai_journal_text_ok(text,integer,boolean)','hon.kai_journal_topics_ok(text[])','hon.guard_kai_journal_entry()',
+    'hon.require_kai_journal_actor(text)','hon.kai_journal_json(hon.kai_journal_entries)','hon.kai_journal_display_name(uuid)'];
+BEGIN
+  FOREACH f IN ARRAY entry LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner
+          AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')))) THEN
+      RAISE EXCEPTION 'Unsafe Kai journal entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY helpers LOOP
+    IF EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND (has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE a.grantee<>p.proowner))) THEN
+      RAISE EXCEPTION 'Unsafe Kai journal helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.kai_journal_entries'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid='hon.kai_journal_entries'::regclass)
+    OR has_table_privilege('hon_runtime','hon.kai_journal_entries','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR has_any_column_privilege('hon_runtime','hon.kai_journal_entries','SELECT,INSERT,UPDATE,REFERENCES') THEN
+    RAISE EXCEPTION 'Unsafe Kai journal table'; END IF;
+  IF (SELECT count(*) FROM hon.permissions WHERE code='teaching.journal.use' AND is_staff_assignable AND NOT is_sensitive)<>1 THEN
+    RAISE EXCEPTION 'Kai journal permission missing'; END IF;
+END $$;
+-- End Kai teaching journal exact verification.
 
+-- Monthly goal plan exact verification (G1 0686): one runtime read; the renewals-due helper and the rate and pace builders are private.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.monthly_goal_pace(numeric,numeric,numeric,integer)',false,false,'search_path=pg_catalog, hon','52e59707b1b0588614110a0e5d22907560c831e397973aad8fd0920cf05430c5'),
+('hon.monthly_goal_rate(bigint,bigint,integer,numeric)',false,false,'search_path=pg_catalog, hon','e001224945722db79f76d8dda1692cef5351ffe98f129a71e4002252905a00b9'),
+('hon.school_renewals_due(uuid,uuid,timestamptz,timestamptz,timestamptz)',true,false,'search_path=pg_catalog, hon','b9a001e01a07bd2859bfe5096d005980f136641692b23693f8221ecfa2dfdc98'),
+('hon.read_monthly_goal_plan(text,jsonb)',true,true,'search_path=pg_catalog, hon','5cce372659029086067d4686d3b3d4ce883f7f61281a367b9dade388d69bbf23')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe monthly goal plan function: %',f.signature; END IF;
+  END LOOP;
+END $$;
+-- End monthly goal plan exact verification.
+-- Conversation AI test chat exact verification (0687): the CONVERSATION_TEST kind row (fixed budgets) and its twelve functions,
+-- six of them runtime entry points. The shared AI text core and S4 functions are pinned in the 0550 section above, unchanged.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_conversation_ai_test(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','270dd60e82325d4876fe52031ddaf2876ecac607ccd53fd8a73f3b9a2775bf02'),
+('hon.conversation_ai_test_actor(text)',true,false,'search_path=pg_catalog, hon','ca2f6549c8e40ea3788f9d340fa6bd2794570a35d35b2aeafd47ae0d3e32f063'),
+('hon.conversation_ai_test_allowed(uuid)',true,false,'search_path=pg_catalog, hon','29df31059946fd9ef66aa1a1c2841e453c2c83550b8223cde99b93aba8826b53'),
+('hon.conversation_ai_test_answer_ok(jsonb)',false,false,'search_path=pg_catalog, hon','72b2c592d9447d2bc764b019c8d159074e319be4af2468dee286dfdb34042150'),
+('hon.conversation_ai_test_facts(uuid,uuid)',true,false,'search_path=pg_catalog, hon','d6ecb68135efb6773b42a549cbbfe5f5c7d5f3ec0333f107227a25f8974a7a15'),
+('hon.conversation_ai_test_planning_reference(text,uuid)',true,true,'search_path=pg_catalog, hon','6517dcf07a9eb60ed80135b1a0ab43fbcc141da031dcc28ed5ea7259a4b6f15b'),
+('hon.conversation_ai_test_unavailable_reason(uuid,boolean)',true,false,'search_path=pg_catalog, hon','c207903058dcad4de5a1ba9a008f9809cdfb05afe332c4524464db0f53fadd06'),
+('hon.conversation_ai_test_view(uuid)',true,false,'search_path=pg_catalog, hon','c818398e5cb74ad9dfa3fb57efd1007370b5f03c11cc9c50bd6b8902af73e633'),
+('hon.fail_conversation_ai_test(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','3717ca791019a6f20a0b71f950b139ba585401b51c24a942ec0d6a1b0b1e4e49'),
+('hon.prepare_conversation_ai_test(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','fc60c70090fc4b49060e948ddcc969b2e2fd9b784fa23705cbf15a97e8235cc5'),
+('hon.read_conversation_ai_test(text,boolean)',true,true,'search_path=pg_catalog, hon','04c2b5b87ed46709d8f7e09e833f8c0d3117af6657f917af2bae5e9dc807039f'),
+('hon.record_conversation_ai_test(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','496f88281ae26f369b758a931ba2af024c4c89bf4ab967f41e7e979342edc798'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe Conversation AI test function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds WHERE kind='CONVERSATION_TEST' AND agent_key='chad' AND task_class='DRAFT_FOLLOW_UP' AND input_budget=12000
+      AND output_budget=600 AND max_cost_microunits=20000 AND max_result_bytes=4096 AND caller='HUMAN_UI' AND subject_type='CONVERSATION_AI_TEST' AND usage_agent='CONVERSATION_TEST') THEN
+    RAISE EXCEPTION 'Conversation AI test kind missing or changed';
+  END IF;
+END $$;
+-- End Conversation AI test chat exact verification.
 -- HQ school visits exact verification (0696): three runtime entry points, five private helpers, four forced-RLS tables,
 -- and 63 school checks that carry the live-visit test.
 DO $$ DECLARE f text; t text;

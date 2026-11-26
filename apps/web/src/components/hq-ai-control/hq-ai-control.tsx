@@ -24,17 +24,14 @@ function namesFrom(directory: ReadonlyMap<string, { school: string; org: string 
 }
 const readFailed = (error: unknown): { state: 'DENIED' | 'UNAVAILABLE' } => ({ state: error instanceof AiControlError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' });
 
-/** Blur, a hidden tab, page hide or a session end: hide everything and retire reads. "Show again" reads fresh. */
+/** A session end: hide everything and retire reads. "Show again" reads fresh. */
 function useConceal(onConceal: () => void): [boolean, () => void] {
   const [concealed, setConcealed] = useState(false);
   const callback = useRef(onConceal); callback.current = onConceal;
   useEffect(() => {
     const conceal = () => { callback.current(); setConcealed(true); };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
   return [concealed, useCallback(() => setConcealed(false), [])];
 }
@@ -99,7 +96,7 @@ const FIXABLE = ['INVALID', 'RATE', 'UNKNOWN'];
 /**
  * HQ AI Safety (S4-c, S4-d): emergency spend pauses and lost AI outcomes. The HQ owner pauses or resumes, settles a lost
  * call with the provider's evidence, or records a late provider charge after a write-off. Every answer is followed by fresh
- * reads; an unknown outcome keeps the exact request in memory so Try again replays the same key. Leaving the tab drops it.
+ * reads; an unknown outcome keeps the exact request in memory so Try again replays the same key. A session end drops it.
  */
 export function HqAiSafety({ api = aiControlApi, directoryLoader = loadDirectory, now = systemNow }: { api?: AiControlApi; directoryLoader?: DirectoryLoader; now?: () => number }): React.ReactElement {
   const { preferences } = useLocale();
