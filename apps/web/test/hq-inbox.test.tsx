@@ -122,6 +122,10 @@ describe('HQ inbox screen', () => {
     expect(h).toContain('<option value="SUPPORT" selected="">Support</option>'); expect(h).toContain('>Billing</option>'); expect(h).not.toContain('>Account</option>');
     expect(h).toContain('Show earlier messages');
   });
+  it('New message is not offered while a send is kept for Try again', () => {
+    expect(html(base({ locked: true }))).toMatch(/<button type="button" class="[^"]*" disabled="">New message<\/button>/);
+    expect(html(base())).not.toMatch(/disabled="">New message/);
+  });
   it('is read only without a sending purpose', () => {
     const p = base({ open: { organizationId: id(2), schoolId: id(3), schoolDisplayName: 'Synthetic Academy', supportCaseId: null }, thread: { state: 'READY', messages: [], next: false, loadingMore: false } });
     const h = html({ ...p, list: { ...(p.list as Extract<InboxViewProps['list'], { state: 'READY' }>), purposes: [] } });

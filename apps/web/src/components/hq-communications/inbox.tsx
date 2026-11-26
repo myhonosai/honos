@@ -95,7 +95,7 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
   }, [api, schoolId, refresh, concealed]);
 
   const openSchool = useCallback((school: OpenSchool) => {
-    if (flow.locked && open && open.schoolId.toLowerCase() !== school.schoolId.toLowerCase()) return;
+    if (flow.locked && open && open.schoolId.toLowerCase() !== school.schoolId.toLowerCase()) { setPicker(null); setOpening(null); return; }
     if (!flow.locked) flow.reset();
     setPicker(null); setOpening(null); setThread({ state: 'LOADING' }); setOpen(school);
   }, [flow, open]);
@@ -193,7 +193,7 @@ export function HqInboxView(p: InboxViewProps): React.ReactElement {
   const head = <header className={s.head}><div><h1>{t('title')}</h1><p>{t('intro')}</p>
     <p className={s.actions}><a className={s.ghost} href="/hq/communications/settings">{t('settings')}</a><a className={s.ghost} href="/hq/communications/numbers">{t('numbers')}</a></p></div>
     {!p.concealed && <p className={s.actions}><button type="button" className={s.ghost} onClick={p.onRefresh}>{t('refresh')}</button>
-      {p.list.state === 'READY' && <button type="button" className={`${s.button} ${s.primary}`} onClick={p.onNew}>{t('newMessage')}</button>}</p>}</header>;
+      {p.list.state === 'READY' && <button type="button" className={`${s.button} ${s.primary}`} disabled={p.locked} onClick={p.onNew}>{t('newMessage')}</button>}</p>}</header>;
   if (p.concealed) return <main className={s.page} data-hq-inbox="concealed">{head}
     <p className={s.actions} role="status"><span className={s.muted}>{t('concealed')}</span> <button type="button" className={s.button} onClick={p.onReveal}>{t('reveal')}</button></p></main>;
   if (p.list.state !== 'READY') return <main className={s.page} data-hq-inbox={p.list.state.toLowerCase()} aria-busy={p.list.state === 'LOADING'}>{head}
