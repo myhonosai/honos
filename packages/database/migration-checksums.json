@@ -421,6 +421,7 @@
     "0677_hq_ad_account_connections.sql": "680101b594c865cede1c7ae422f0acab5f1dea0f54b27b2316edd47731ac0dbf",
     "0678_hq_creative_designs.sql": "db2386168b7e785baf3bab1ff902b11e31278126d400fc160920a95834579970",
     "0680_membership_activates_on_signing.sql": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb",
+    "0626_pgcrypto_public_gen_random_bytes.sql": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13",
     "0681_staff_timesheet_no_self_approval.sql": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
   }
 }
