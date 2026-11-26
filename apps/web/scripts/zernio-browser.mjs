@@ -90,7 +90,7 @@ try{
       assert.equal(s.verifies,0);assert(await page.getByRole('button',{name:translate(language,'zernio.verify'),exact:true}).isDisabled());
       await page.getByRole('button',{name:translate(language,'zernio.refresh'),exact:true}).focus();assert(await page.getByRole('button',{name:translate(language,'zernio.refresh'),exact:true}).evaluate(e=>e===document.activeElement));
       await capture(page,`${language}-${size}-zernio-configuration`);
-      await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await page.getByRole('heading',{name:translate(language,'zernio.concealed'),exact:true}).waitFor();await idle(page);await capture(page,`${language}-${size}-zernio-concealed`);
+      await page.evaluate(()=>window.dispatchEvent(new Event('hon:school-context-changed')));await page.getByRole('heading',{name:translate(language,'zernio.concealed'),exact:true}).waitFor();await idle(page);await capture(page,`${language}-${size}-zernio-concealed`);
     }finally{await context.close();}
   });
   for(const save of [false,true])await check(`real language ${save?'save':'GET'} 401 immediately retires READY and requires a fresh authorized page load`,async()=>{
@@ -122,15 +122,23 @@ try{
       s.verifyStatus=401;await page.locator('[data-zernio-workbench] input[type=checkbox]').check();await page.getByRole('button',{name:translate('en','zernio.verify'),exact:true}).click();await retired(page);assert.equal(await page.evaluate(()=>window.__invalidations),1);
       s.verifyStatus=200;await reopen(page,s);await page.evaluate(()=>{window.__invalidations=0;window.addEventListener('hon:session-invalidated',()=>++window.__invalidations);});
       s.configurationStatus=403;await page.getByRole('button',{name:translate('en','zernio.refresh'),exact:true}).click();await idle(page);assert.equal(await page.evaluate(()=>window.__invalidations),0);
-      await page.locator('[data-zernio-workbench] [role=alert]').waitFor();await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));await concealed(page);assert.equal(await page.locator('[data-zernio-workbench] [role=alert]').count(),0);
+      await page.locator('[data-zernio-workbench] [role=alert]').waitFor();await page.evaluate(()=>window.dispatchEvent(new Event('hon:school-context-changed')));await concealed(page);assert.equal(await page.locator('[data-zernio-workbench] [role=alert]').count(),0);
     }finally{await context.close();}
   });
-  for(const event of ['blur','pagehide','hidden','hon:session-invalidated','hon:school-context-changed'])await check(`${event}: mounted privacy clearing and explicit restoration only`,async()=>{
+  // HQ never hides when the tab or window is left (owner, 2026-11-26): blur, pagehide and a hidden tab keep the page as it is.
+  for(const event of ['blur','pagehide','hidden'])await check(`${event}: HQ configuration stays on screen with no new read`,async()=>{
     const {page,context,s}=await open();try{
       const reads=s.reads;await page.evaluate(event=>{if(event==='hidden'){Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});document.dispatchEvent(new Event('visibilitychange'));}else window.dispatchEvent(new Event(event));},event);
+      await page.evaluate(()=>new Promise(done=>setTimeout(done,300)));
+      assert.equal(await shield(page).count(),0);await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();assert.equal(s.reads,reads);assert.equal(s.verifies,0);
+      if(event==='hidden')await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'}));
+    }finally{await context.close();}
+  });
+  for(const event of ['hon:session-invalidated','hon:school-context-changed'])await check(`${event}: mounted privacy clearing and explicit restoration only`,async()=>{
+    const {page,context,s}=await open();try{
+      const reads=s.reads;await page.evaluate(event=>window.dispatchEvent(new Event(event)),event);
       if(event==='hon:session-invalidated'){await retired(page);assert.equal(s.reads,reads);assert.equal(s.verifies,0);await reopen(page,s);return;}
       await concealed(page);await idle(page);assert.equal(s.reads,reads);assert.equal(s.verifies,0);
-      if(event==='hidden')await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'}));
       await restore(page);await idle(page);assert.equal(s.reads,reads+1);await page.getByText(translate('en','zernio.PRESENT'),{exact:true}).waitFor();
     }finally{await context.close();}
   });

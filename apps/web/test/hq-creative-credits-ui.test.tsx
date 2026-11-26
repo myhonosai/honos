@@ -127,7 +127,7 @@ it('shows nothing when a read is denied, unavailable or the session ended', () =
   expect(text(view({ detail: { state: 'DENIED', schoolId: school } }))).toContain('Your HQ access does not include this school\'s wallet. Nothing is shown.');
   expect(text(view({ detail: { state: 'UNAVAILABLE', schoolId: school } }))).toContain('This school\'s wallet could not be read. Nothing is shown.');
   const hidden = view({ concealed: true, detail: ready(), onShowAgain: () => {} });
-  expect(text(hidden)).toContain('Hidden while you were away or because your session ended.');
+  expect(text(hidden)).toContain('Hidden because your session ended. Sign in again, then choose Show again.');
   expect(text(hidden)).not.toContain('Synthetic Dojo');
   expect([...hidden.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual(['Show again']);
   const empty = text(view({ wallets: { state: 'READY', view: validateSaasCreativeHqWalletList(list({ rates: null, wallets: [] })) } }));

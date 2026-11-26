@@ -13,7 +13,7 @@ export const BUSINESS_RANGES = [3, 6, 12] as const;
 const FIRST = 6;
 
 /**
- * HQ business numbers (B-HQ-3). Read only. Leaving the tab (blur, hidden tab, page hide) or a session end hides the
+ * HQ business numbers (B-HQ-3). Read only. A session end hides the
  * numbers and retires the read; "Show again" reads fresh. The server decides who may read, on every read.
  */
 export function HqBusinessNumbersPage({ api = businessApi }: { api?: BusinessApi }): React.ReactElement {
@@ -27,11 +27,8 @@ export function HqBusinessNumbersPage({ api = businessApi }: { api?: BusinessApi
 
   useEffect(() => {
     const conceal = () => { generation.current++; setConcealed(true); setState({ state: 'LOADING' }); };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {

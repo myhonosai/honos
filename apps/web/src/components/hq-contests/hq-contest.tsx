@@ -23,8 +23,8 @@ export type Step = { action: 'ACTIVATE' | 'PAUSE' | 'RESUME' | 'END' | 'PROPOSE_
 
 /**
  * One HQ referral contest: rules, prizes, standings, winners, liabilities and history, with the lifecycle steps that
- * apply now. Every step carries the version that was read and any answer is followed by a fresh read. Leaving the tab
- * or a session end hides the contest, its drafts and any kept command. The server decides who may act, every time.
+ * apply now. Every step carries the version that was read and any answer is followed by a fresh read. A session
+ * end hides the contest, its drafts and any kept command. The server decides who may act, every time.
  */
 export function HqContest({ contestId, api = contestApi, schools: loadSchools = directorySchools, navigate = (href: string) => { window.location.assign(href); } }:
   { contestId: string; api?: ContestApi; schools?: SchoolsLoader; navigate?: (href: string) => void }): React.ReactElement {
