@@ -8,7 +8,7 @@ import { HqSupportCaseView, changeInputFrom, type ChangeDraft, type SupportCaseS
 
 /**
  * One HQ support case (B-HQ-2): facts, history, add a note, change status, priority or assignee. Every command carries
- * the version that was read; any answer is followed by a fresh read. Leaving the tab or a session end hides the case,
+ * the version that was read; any answer is followed by a fresh read. A session end hides the case,
  * its drafts and any kept command. The server decides who may read or write, every time.
  */
 export function HqSupportCase({ caseId, api = supportApi }: { caseId: string; api?: SupportApi }): React.ReactElement {

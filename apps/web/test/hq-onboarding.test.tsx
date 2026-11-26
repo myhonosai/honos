@@ -249,7 +249,9 @@ describe('existing HQ transport and verified receipt', () => {
     const ui = readFileSync('src/components/hq-onboarding-panel.tsx', 'utf8');
     expect(ui).toContain('bindSchoolCreationPrivacy');
     const privacy = readFileSync('src/components/hq-onboarding-controller.ts', 'utf8');
-    for (const event of ['blur', 'pagehide', 'visibilitychange', 'HON_SESSION_INVALIDATED_EVENT', 'HON_SCHOOL_CONTEXT_CHANGED_EVENT']) expect(privacy).toContain(event);
+    for (const event of ['HON_SESSION_INVALIDATED_EVENT', 'HON_SCHOOL_CONTEXT_CHANGED_EVENT']) expect(privacy).toContain(event);
+    // Owner 2026-11-26: leaving the HQ tab or window hides nothing.
+    for (const event of ["'blur'", "'pagehide'"]) expect(privacy).not.toContain(event);
     expect(ui).toContain('useHqModern');
     expect(ui).not.toContain('COMPLETE');
   });

@@ -8,7 +8,7 @@ import { HqMarketingView, type MarketingForm, type MarketingListState } from './
 import { HqAdAccounts } from './ad-accounts';
 
 /**
- * HQ Marketing & Creative (M1). Leaving the tab or a session end hides every campaign, drops the open form and any kept
+ * HQ Marketing & Creative (M1). A session end hides every campaign, drops the open form and any kept
  * command; "Show again" reads fresh. Every command answer is followed by a fresh read. The server decides who may read or write.
  */
 export function HqMarketing({ api = marketingApi }: { api?: MarketingApi }): React.ReactElement {

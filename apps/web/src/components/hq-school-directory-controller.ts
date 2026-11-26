@@ -45,12 +45,13 @@ export function bindHqSchoolDirectoryPrivacy(controller: HqSchoolDirectoryContro
   const conceal = (event: Event) => { concealDom(); controller.conceal(event.type === HON_SESSION_INVALIDATED_EVENT); };
   // Coming back to the page reads again (both principal checks run); signed-out stays signed-out.
   const restore = () => { if (controller.snapshot().kind === 'concealed') void controller.load(); };
-  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); else restore(); };
-  const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
+  // HQ hides nothing when the tab or window loses focus or the page is put away (owner, 2026-11-26: "Hq do not need
+  // hidden"). Only a session end or a school change hides facts; coming back or focusing re-reads after one of those.
+  const visibility = () => { if (documentTarget.visibilityState === 'visible') restore(); };
+  const events = [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
   for (const event of events) browser.addEventListener(event, conceal);
   browser.addEventListener('focus', restore);
   documentTarget.addEventListener('visibilitychange', visibility);
-  if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange'));
   return () => {
     browser.removeEventListener('focus', restore);
     conceal(new Event('unmount'));

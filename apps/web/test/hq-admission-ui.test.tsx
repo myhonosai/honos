@@ -102,7 +102,7 @@ it('opens the change form with the limits in force, and reports each outcome', (
   const kept = view({ outcome: { kind: 'UNKNOWN' }, canRetry: true, locked: true });
   expect(text(kept)).toContain('Try again'); expect(text(kept)).toContain('Stop and read again');
   expect(text(view({ read: { state: 'DENIED' } }))).toContain('does not include sign-up limits');
-  expect(text(view({ concealed: true }))).toContain('Hidden while you were away.');
+  expect(text(view({ concealed: true }))).toContain('Hidden because your session ended. Sign in again, then choose Show again.');
   expect(view({ concealed: true })).not.toContain('Version 2');
 });
 

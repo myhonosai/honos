@@ -11,7 +11,7 @@ export type ContestOutcome = null
 export type Run = (key: string, signal: AbortSignal, owned: Owned) => Promise<ChampionsContestReceipt>;
 
 /**
- * Leaving the tab (blur, hidden tab, page hide) or a session end hides every contest fact. `privacy` counts those moments so
+ * A session end hides every contest fact. `privacy` counts those moments so
  * nothing read or sent before one speaks for the view after it. `onConceal` runs first so callers drop drafts and kept commands.
  */
 export function useConcealment(onConceal: () => void): { concealed: boolean; privacy: React.MutableRefObject<number>; reveal: () => void } {
@@ -20,11 +20,8 @@ export function useConcealment(onConceal: () => void): { concealed: boolean; pri
   callback.current = onConceal;
   useEffect(() => {
     const conceal = () => { privacy.current++; callback.current(); setConcealed(true); };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
   const reveal = useCallback(() => setConcealed(false), []);
   return { concealed, privacy, reveal };

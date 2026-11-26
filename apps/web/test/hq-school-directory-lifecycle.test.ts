@@ -33,8 +33,21 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
     expect(s.controller.snapshot()).toEqual({ kind: 'ready', directory, busy: false });
     expect(s.api.load.mock.calls[0]![0]).toBe(s.api.principal.mock.calls[0]![0]);
   });
-  it('immediately hides/inerts facts and clears them on every privacy signal, restoring by a fresh verified read when the person comes back', async () => {
-    for (const event of ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT, 'visibilitychange']) {
+  // Owner 2026-11-26: "Hq do not need hidden". Leaving the tab or window keeps the HQ directory on screen, unread again.
+  it('keeps facts on screen when the tab or window is left, with no new read', async () => {
+    for (const event of ['blur', 'pagehide', 'visibilitychange']) {
+      const s = setup(); await s.controller.start(); const p = privacy(s.controller);
+      const oldSignal = s.api.load.mock.calls[0]![0];
+      if (event === 'visibilitychange') { p.documentTarget.visibilityState = 'hidden'; p.documentTarget.dispatchEvent(new Event(event)); }
+      else p.browser.dispatchEvent(new Event(event));
+      expect(p.hide).not.toHaveBeenCalled(); expect(p.facts).toEqual({ hidden: false, inert: false }); expect(oldSignal.aborted).toBe(false);
+      p.browser.dispatchEvent(new Event('focus')); p.documentTarget.visibilityState = 'visible'; p.documentTarget.dispatchEvent(new Event('visibilitychange'));
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      expect(s.controller.snapshot()).toEqual({ kind: 'ready', directory, busy: false }); expect(s.api.load).toHaveBeenCalledTimes(1); p.unbind();
+    }
+  });
+  it('immediately hides/inerts facts on a session end or school change, restoring by a fresh verified read when the person comes back', async () => {
+    for (const event of [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]) {
       const s = setup(); await s.controller.start(); const p = privacy(s.controller);
       const oldSignal = s.api.load.mock.calls[0]![0];
       if (event === 'visibilitychange') { p.documentTarget.visibilityState = 'hidden'; p.documentTarget.dispatchEvent(new Event(event)); }
@@ -91,7 +104,7 @@ describe('HQ directory privacy and current-principal read lifetime', () => {
   it('unmount hides facts and detaches listeners without a focus-triggered refresh or presentation dependency', async () => {
     const s = setup(); await s.controller.start(); const p = privacy(s.controller); p.unbind(); s.controller.stop();
     expect(p.facts).toEqual({ hidden: true, inert: true }); const calls = p.hide.mock.calls.length;
-    p.browser.dispatchEvent(new Event('blur')); expect(p.hide).toHaveBeenCalledTimes(calls);
+    p.browser.dispatchEvent(new Event(HON_SCHOOL_CONTEXT_CHANGED_EVENT)); expect(p.hide).toHaveBeenCalledTimes(calls);
     const source = readFileSync('src/components/hq-school-directory.tsx', 'utf8');
     expect(source).toContain('facts.current.hidden = true; facts.current.inert = true;'); expect(source).toContain('}, [controller]);');
     expect(source).toContain("t('directoryRead')"); expect(source).toContain('inert={state.kind');
