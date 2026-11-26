@@ -29,7 +29,7 @@ const en = {
   unknown: 'We could not confirm whether the primary owner changed. Try again sends the exact same request and cannot apply it twice.',
   tryAgain: 'Try again',
   waiting: 'Checking your school…', noSchool: 'Choose a school to see its owners.',
-  concealed: 'Owners are hidden. Come back to this tab, then choose Show again.', reveal: 'Show again',
+  concealed: 'Hidden because your session ended. Sign in again, then choose Show again.', reveal: 'Show again',
 };
 export type OwnershipKey = keyof typeof en;
 const ko: Record<OwnershipKey, string> = {
@@ -62,7 +62,7 @@ const ko: Record<OwnershipKey, string> = {
   unknown: '대표 소유자가 바뀌었는지 확인하지 못했습니다. 다시 시도는 같은 요청을 그대로 보내며 두 번 적용되지 않습니다.',
   tryAgain: '다시 시도',
   waiting: '도장을 확인하는 중…', noSchool: '소유자를 보려면 도장을 선택하세요.',
-  concealed: '소유자 정보가 숨겨졌습니다. 이 탭으로 돌아와 다시 보기를 선택하세요.', reveal: '다시 보기',
+  concealed: '세션이 종료되어 숨겼습니다. 다시 로그인한 뒤 다시 보기를 선택하세요.', reveal: '다시 보기',
 };
 const es: Record<OwnershipKey, string> = {
   hqTitle: 'Propietarios de escuelas', hqIntro: 'Vea quién es propietario de cada escuela y quién es el propietario principal, y designe a otro propietario como principal. El propietario principal es el contacto de facturación y la persona para recuperar la cuenta.',
@@ -94,7 +94,7 @@ const es: Record<OwnershipKey, string> = {
   unknown: 'No pudimos confirmar si cambió el propietario principal. Reintentar envía exactamente la misma solicitud y no puede aplicarse dos veces.',
   tryAgain: 'Reintentar',
   waiting: 'Comprobando su escuela…', noSchool: 'Elija una escuela para ver sus propietarios.',
-  concealed: 'Los propietarios están ocultos. Vuelva a esta pestaña y elija Mostrar de nuevo.', reveal: 'Mostrar de nuevo',
+  concealed: 'Oculto porque su sesión terminó. Inicie sesión de nuevo y elija Mostrar de nuevo.', reveal: 'Mostrar de nuevo',
 };
 export const OWNERSHIP_LANGUAGES = { en, ko, es } as const;
 export function ownershipText(language: string, key: OwnershipKey, vars: Record<string, string> = {}): string {

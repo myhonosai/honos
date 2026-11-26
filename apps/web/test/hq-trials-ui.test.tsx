@@ -149,7 +149,7 @@ it('shows nothing when the read is denied, unavailable or the session ended, and
   expect(text(view({ governance: { state: 'DENIED' } }))).toContain('Your HQ access does not include free-trial governance. Nothing is shown.');
   expect(text(view({ governance: { state: 'UNAVAILABLE' } }))).toContain('This could not be read or checked. Nothing is shown.');
   const hidden = text(view({ concealed: true }));
-  expect(hidden).toContain('Hidden while you were away.');
+  expect(hidden).toContain('Hidden because your session ended. Sign in again, then choose Show again.');
   expect(hidden).not.toContain('Spring pilot schools');
   const none = text(view({ governance: { state: 'READY', view: validateTrialGovernanceView(governance({ policyVersions: [], policyDecisions: [], campaignVersions: [], publications: [] })) } }));
   expect(none).toContain('No decision recorded. Campaigns cannot be published without approved rules.');

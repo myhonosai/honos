@@ -124,6 +124,28 @@ html.story .door .intro{display:flex}
 .bar b{font-family:var(--serif);font-weight:400;font-size:clamp(22px,2.6vw,36px)}
 .bar small{font-size:12px;color:#24365f;margin-top:2px}
 .chart-x{display:grid;grid-template-columns:52px repeat(4,1fr);gap:16px;margin-top:10px;font-size:13px;color:var(--paper-muted);text-align:center}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+.chart-fig{margin:0}
+.chart-fig figcaption{font-size:12px;color:var(--paper-muted);margin-bottom:14px}
+.chart.duo,.chart-x.duo{grid-template-columns:52px repeat(2,1fr)}
+.chart.duo{height:360px}
+.chart-fig.wide{grid-column:1/-1}
+.chart.years,.chart-x.years{grid-template-columns:52px repeat(4,1fr)}
+.chart.years{height:400px}
+.pair{display:flex;gap:6px;align-items:flex-end;height:100%}
+.pair .bar{flex:1}
+.pair .bar b{font-size:clamp(16px,1.9vw,28px)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;list-style:none;margin:0 0 16px;padding:0;font-size:13px;color:var(--paper-muted)}
+.legend i{display:inline-block;width:12px;height:12px;background:#b7d0ff;margin-right:8px;vertical-align:-1px}
+.legend .hot i{background:#7aa7ff}
+.charts .est{margin-top:0;align-self:start}
+.est{width:100%;margin-top:44px;border-collapse:collapse;font-size:14px}
+.est caption{text-align:left;font-size:12px;color:var(--paper-muted);padding-bottom:10px}
+.est th,.est td{padding:10px 8px;border-bottom:1px solid var(--paper-line);text-align:right;font-weight:400}
+.est th[scope=row],.est thead th:first-child{text-align:left}
+.est thead th{font-size:12px;color:var(--paper-muted)}
+.est td:last-child{color:#2c56c8}
+.est .total th,.est .total td{font-weight:600;border-bottom:1px solid var(--ink)}
 .source{margin-top:22px;font-size:12px;color:var(--paper-muted);font-family:var(--mono)}
 
 /* 4. AI team: passes by sideways */
@@ -284,6 +306,15 @@ html:not(.story) .inside .stage{padding:100px 0}
   .facts,.safety{grid-template-columns:1fr 1fr}
   .chart{height:320px;gap:8px;grid-template-columns:40px repeat(4,1fr)}
   .chart-x{gap:8px;grid-template-columns:40px repeat(4,1fr);font-size:11px}
+  .charts{grid-template-columns:1fr}
+  .chart.duo,.chart-x.duo{grid-template-columns:40px repeat(2,1fr)}
+  .chart.duo{height:280px}
+  .chart.years,.chart-x.years{grid-template-columns:40px repeat(4,1fr)}
+  .chart.years{height:300px}
+  .pair{gap:3px}
+  .pair .bar{padding-top:8px}
+  .pair .bar b{font-size:13px}
+  .duo .bar small{display:block}
   .axis{left:40px}.axis span{transform:translateX(-40px);width:calc(100% + 40px)}
   .bar small{display:none}
   .plans{grid-template-columns:1fr}

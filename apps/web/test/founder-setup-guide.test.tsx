@@ -95,7 +95,7 @@ it.each(['en','ko','es'] as const)('all eight %s stages remain guide navigation 
   expect(f).not.toHaveBeenCalled();
 });
 
-it.each(['blur','pagehide','hon:session-invalidated','hon:school-context-changed','visibilitychange'])('HQ clears both protected directory and synthetic overlay on %s', async event => {
+it.each(['hon:session-invalidated','hon:school-context-changed'])('HQ clears both protected directory and synthetic overlay on %s', async event => {
   plane = 'hq';
   const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory })).mockResolvedValueOnce(me());
   button(english.hqLoad).props.onClick(); await settle(); button(english.sample).props.onClick();
@@ -105,11 +105,22 @@ it.each(['blur','pagehide','hon:session-invalidated','hon:school-context-changed
   window.dispatchEvent(new Event('focus')); expect(f).toHaveBeenCalledTimes(3);
 });
 
+// Owner 2026-11-26: "Hq do not need hidden". Leaving the HQ tab or window keeps the page on screen; nothing is re-read.
+it.each(['blur','pagehide','visibilitychange'])('HQ keeps the directory and overlay on screen on %s', async event => {
+  plane = 'hq';
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory })).mockResolvedValueOnce(me());
+  button(english.hqLoad).props.onClick(); await settle(); button(english.sample).props.onClick();
+  expect(text(render())).toContain('PRIVATE_HQ_CANARY'); const calls = f.mock.calls.length;
+  if (event === 'visibilitychange') { Object.assign(document, { visibilityState: 'hidden' }); document.dispatchEvent(new Event(event)); } else window.dispatchEvent(new Event(event));
+  expect(text(render())).toContain('PRIVATE_HQ_CANARY'); expect(text(render())).toContain(english.sampleBanner); expect(text(render())).not.toContain(english.hidden);
+  window.dispatchEvent(new Event('focus')); expect(f).toHaveBeenCalledTimes(calls);
+});
+
 it('HQ rejects a late concealed directory and restores only through a fresh explicit protected read', async () => {
   plane = 'hq'; let finish!: (r: Response) => void;
   const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockImplementationOnce(() => new Promise(r => { finish = r; }));
   const start = button(english.hqLoad).props.onClick; start(); start(); await settle(); expect(f).toHaveBeenCalledTimes(2);
-  window.dispatchEvent(new Event('pagehide')); finish(data({ directory: hqDirectory })); await settle();
+  window.dispatchEvent(new Event('hon:school-context-changed')); finish(data({ directory: hqDirectory })); await settle();
   expect(text(render())).not.toContain('PRIVATE_HQ_CANARY'); window.dispatchEvent(new Event('focus')); expect(f).toHaveBeenCalledTimes(2);
   f.mockReset().mockResolvedValueOnce(me()).mockResolvedValueOnce(data({ directory: hqDirectory })).mockResolvedValueOnce(me());
   button(english.hqLoad).props.onClick(); await settle(); expect(text(render())).toContain('PRIVATE_HQ_CANARY'); expect(f).toHaveBeenCalledTimes(3);

@@ -5,9 +5,10 @@ import { useLocale } from '../localization/provider';
 import { MarketingError, marketingApi, type MarketingApi } from './http';
 import { createInputFrom, updateInputFrom, useConcealment, useMarketingCommand, type MarketingOutcome, type PlanDraft } from './model';
 import { HqMarketingView, type MarketingForm, type MarketingListState } from './view';
+import { HqAdAccounts } from './ad-accounts';
 
 /**
- * HQ Marketing & Creative (M1). Leaving the tab or a session end hides every campaign, drops the open form and any kept
+ * HQ Marketing & Creative (M1). A session end hides every campaign, drops the open form and any kept
  * command; "Show again" reads fresh. Every command answer is followed by a fresh read. The server decides who may read or write.
  */
 export function HqMarketing({ api = marketingApi }: { api?: MarketingApi }): React.ReactElement {
@@ -79,5 +80,5 @@ export function HqMarketing({ api = marketingApi }: { api?: MarketingApi }): Rea
 
   return <HqMarketingView language={preferences.language} formattingLocale={formattingLocale} concealed={concealed} state={state} filter={filter}
     form={form} outcome={command.outcome} locked={command.locked} canRetry={command.canRetry} onFilter={onFilter} onMore={onMore} onRefresh={onRefresh}
-    onReveal={reveal} onForm={onForm} onCreate={onCreate} onUpdate={onUpdate} onStatus={onStatus} onTryAgain={command.tryAgain}/>;
+    onReveal={reveal} onForm={onForm} onCreate={onCreate} onUpdate={onUpdate} onStatus={onStatus} onTryAgain={command.tryAgain} adAccounts={<HqAdAccounts/>}/>;
 }

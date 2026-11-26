@@ -79,6 +79,8 @@ async function capture(page, name, { fullPage = true, resetScroll = true } = {})
   const violations = result.violations.map(v => ({ id: v.id, impact: v.impact })); report.accessibility.push({ name, violations }); assert.equal(violations.length, 0, JSON.stringify(violations));
   await page.screenshot({ path: join(results, name + '.png'), fullPage, animations: 'disabled' }); report.screenshots.push(name + '.png');
 }
+/** The per-option editor now sits in the Plan builder's collapsed Advanced section. */
+async function advanced(page){const d=page.locator('[data-plan-advanced]');await d.waitFor();if(!(await d.evaluate(e=>e.open)))await d.locator('summary').click();}
 // A loaded CSS font name is not enough: inspect the font Chrome actually used for Hangul glyphs.
 async function verifyKoreanFont(page, size) {
   await page.evaluate(() => document.fonts.ready);
@@ -116,13 +118,13 @@ try{
       if(size==='mobile')for(const key of ['overview','editor','preview','history'])await hitTest(page,ui.getByRole('button',{name:tx('pricing.'+key),exact:true}),`${language}/${size}/${key}/initial`);
       await capture(page,`${language}-${size}-offers-overview`);if(size==='mobile')await capture(page,`${language}-${size}-offers-overview-viewport`,{fullPage:false});
       const old=fixture.detail(fixture.originalId).set;fixture.seedCheckout(old.offers[0].offerId);fixture.seedCheckout(old.offers[1].offerId,{expiresAt:'2026-10-22T12:00:00.000Z'});
-      await button('open').nth(1).click();const amount=page.getByLabel(op('price'),{exact:true});await amount.waitFor();await amount.fill('321.45');
+      await button('open').nth(1).click();await advanced(page);const amount=page.getByLabel(op('price'),{exact:true});await amount.waitFor();await amount.fill('321.45');
       await page.locator('#offer-select').selectOption({index:1});await page.locator('#offer-select').selectOption({index:0});assert.equal(await amount.inputValue(),'321.45');
       await button('newSet').click();const dialog=page.getByRole('dialog');await dialog.waitFor();const continueButton=dialog.getByRole('button',{name:tx('pricing.continue-editing'),exact:true});
       assert(await continueButton.evaluate(e=>e===document.activeElement));await page.keyboard.press('Tab');assert(await dialog.evaluate(e=>e.contains(document.activeElement)));await page.keyboard.press('Shift+Tab');assert(await continueButton.evaluate(e=>e===document.activeElement));
       await capture(page,`${language}-${size}-offers-unsaved-dialog`,{resetScroll:false});await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});assert.equal(await amount.inputValue(),'321.45');
       await button('newSet').click();await dialog.getByRole('button',{name:tx('pricing.save-local'),exact:true}).click();await ui.getByRole('heading',{name:op('localCopies'),exact:true}).waitFor();
-      await ui.getByRole('button',{name:translate(language,'pricing.op.restoreLocal',{number:'1'}),exact:true}).click();await amount.waitFor();assert.equal(await amount.inputValue(),'321.45');
+      await ui.getByRole('button',{name:translate(language,'pricing.op.restoreLocal',{number:'1'}),exact:true}).click();await advanced(page);await amount.waitFor();assert.equal(await amount.inputValue(),'321.45');
       await button('save').click();await ui.getByRole('heading',{name:op('receipt'),exact:true}).waitFor();await idle(page);assert.equal(fixture.detail(fixture.draftId).set.revision,2);assert.equal(fixture.detail(fixture.draftId).set.offers.length,6);
       await capture(page,`${language}-${size}-offers-saved-draft`);
       await button('review').click();const review=ui.locator('[data-publication-review]');await review.waitFor();await review.getByRole('checkbox').check();
@@ -141,22 +143,41 @@ try{
       await page.reload();await ui.getByRole('heading',{name:op('drafts'),exact:true}).waitFor();assert.equal(fixture.management().published.setId,fixture.draftId,'Verified fixture backend survives page reload; no browser storage needed');
     }finally{await context.close();}
   });
-  await check('Unknown save after server commit: concealment, settled busy state, exact explicit retry, duplicate prevention, session expiration',async()=>{
+  await check('Unknown save after server commit: no background hiding, settled busy state, exact explicit retry, duplicate prevention, session expiration',async()=>{
     const {context,page,subject,fixture}=await open({width:390,height:844});const ui=page.locator('[data-pricing-design]'),op=key=>translate('en','pricing.op.'+key);
     try{
-      await ui.getByRole('button',{name:op('open'),exact:true}).nth(1).click();await page.getByLabel(op('price'),{exact:true}).fill('333.33');
+      await ui.getByRole('button',{name:op('open'),exact:true}).nth(1).click();await advanced(page);await page.getByLabel(op('price'),{exact:true}).fill('333.33');
       let released,arrived;const hold=new Promise(done=>{released=done;}),received=new Promise(done=>{arrived=done;});let originalBody,originalKey,calls=0;
       await page.route('**/api/v1/hq/saas/offers/sets/*/revise',async route=>{calls++;if(calls===1){originalBody=route.request().postData();originalKey=route.request().headers()['idempotency-key'];await route.fetch();arrived();await hold;await route.abort();}else{assert.equal(route.request().postData(),originalBody);assert.equal(route.request().headers()['idempotency-key'],originalKey);await route.continue();}});
-      await ui.getByRole('button',{name:op('save'),exact:true}).dblclick();await received;await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await page.locator('[data-pricing-concealed]').waitFor();
-      assert(await ui.getByRole('button',{name:op('verify'),exact:true}).isDisabled());assert.equal(await page.getByLabel(op('price'),{exact:true}).count(),0);released();await idle(page);
-      assert.equal(calls,1);await capture(page,'privacy-mobile-unknown-result');await ui.getByRole('button',{name:op('verify'),exact:true}).click();await ui.getByRole('button',{name:op('retry'),exact:true}).waitFor();assert.equal(calls,1,'Restoration must not resend');
+      await ui.getByRole('button',{name:op('save'),exact:true}).dblclick();await received;await page.evaluate(()=>{window.dispatchEvent(new Event('blur'));});
+      assert.equal(await page.locator('[data-pricing-concealed]').count(),0,'HQ never hides itself when the tab loses focus');released();await idle(page);
+      assert.equal(calls,1);await ui.getByRole('button',{name:op('retry'),exact:true}).waitFor();await capture(page,'privacy-mobile-unknown-result');assert.equal(calls,1,'Waiting must not resend');
       await ui.getByRole('button',{name:op('retry'),exact:true}).click();await idle(page);await ui.getByRole('heading',{name:op('receipt'),exact:true}).waitFor();assert.equal(calls,2);assert.equal(fixture.mutations,1);await capture(page,'privacy-mobile-exact-retry-receipt');
-      await context.clearCookies();await page.evaluate(()=>window.dispatchEvent(new Event('blur')));await ui.getByRole('button',{name:op('verify'),exact:true}).click();await ui.getByRole('link',{name:op('signin'),exact:true}).waitFor();assert.equal(await page.getByLabel(op('price'),{exact:true}).count(),0);await capture(page,'privacy-mobile-session-expired');
-      await context.addCookies([token(subject)]);await ui.getByRole('button',{name:op('verify'),exact:true}).click();await page.getByLabel(op('price'),{exact:true}).waitFor();
+      await context.clearCookies();await ui.getByRole('button',{name:op('refresh'),exact:true}).click();await page.locator('[data-pricing-concealed]').waitFor();await ui.getByRole('link',{name:op('signin'),exact:true}).waitFor();assert.equal(await page.getByLabel(op('price'),{exact:true}).count(),0);await capture(page,'privacy-mobile-session-expired');
+      await context.addCookies([token(subject)]);await ui.getByRole('button',{name:op('verify'),exact:true}).click();await advanced(page);await page.getByLabel(op('price'),{exact:true}).waitFor();
     }finally{await context.close();}
   });
+  await check('Plan builder: regular-or-trial start, default prices, savings, live preview, save through the existing command',async()=>{
+    for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]){
+      const {context,page,fixture}=await open(viewport);const ui=page.locator('[data-pricing-design]'),tx=key=>translate('en',key),pb=key=>tx('planBuilder.'+key);
+      try{
+        await ui.getByRole('heading',{name:tx('pricing.op.drafts'),exact:true}).waitFor();const before=fixture.mutations;
+        await ui.getByRole('button',{name:tx('pricing.editor'),exact:true}).click();await ui.locator('[data-plan-create]').click();
+        await ui.locator('[data-plan-step="type"]').waitFor();assert.equal(await ui.locator('a[data-plan-choice="trial"]').getAttribute('href'),'/hq/revenue/trials');await capture(page,`plan-builder-${size}-1-type`);
+        await ui.locator('[data-plan-choice="regular"]').click();await ui.locator('[data-plan-step="pricing"]').waitFor();
+        assert.equal(await ui.getByRole('textbox',{name:pb('monthly'),exact:true}).inputValue(),'249.00');assert.equal(await ui.getByRole('textbox',{name:pb('annual'),exact:true}).inputValue(),'2097.00');
+        await ui.locator('[data-plan-price="founderMonthly"] input[type=checkbox]').check();await ui.getByRole('textbox',{name:pb('founderMonthly'),exact:true}).fill('199.20');await page.locator('#plan-founder-spots').fill('50');
+        await ui.locator('[data-plan-preview]').getByText('$199.20').waitFor();await capture(page,`plan-builder-${size}-2-pricing`);
+        for(const [step,name] of [['included','3-included'],['credits','4-credits'],['terms','5-terms'],['review','6-review']]){await ui.getByRole('button',{name:pb('next'),exact:true}).click();await ui.locator(`[data-plan-step="${step}"]`).waitFor();await capture(page,`plan-builder-${size}-${name}`);}
+        assert.equal(fixture.mutations,before,'Nothing is sent before Save');
+        await ui.locator('[data-plan-save]').click();await idle(page);await ui.getByRole('heading',{name:tx('pricing.op.receipt'),exact:true}).waitFor();assert.equal(fixture.mutations,before+1);
+        const saved=fixture.management().drafts.at(-1);assert.deepEqual(saved.offers.map(o=>[o.offerKind,o.priceMinor]),[['REGULAR_MONTHLY',24900],['REGULAR_ANNUAL',209700],['FOUNDER_MONTHLY',19920]]);assert.equal(saved.founderTotalLimit,50);
+        assert.equal(fixture.management().published.setId,fixture.originalId,'Saving never publishes');await capture(page,`plan-builder-${size}-7-saved`);
+      }finally{await context.close();}
+    }
+  });
   await check('Operator read-only, school denied, signed-out redirect and narrow multilingual navigation',async()=>{
-    const operator=await open({width:390,height:844},'ko','operator');try{const ui=operator.page.locator('[data-pricing-design]');assert(await ui.getByRole('button',{name:translate('ko','pricing.op.newSet'),exact:true}).isDisabled());await ui.getByRole('button',{name:translate('ko','pricing.op.open'),exact:true}).nth(1).click();await operator.page.getByLabel(translate('ko','pricing.op.price'),{exact:true}).waitFor();assert(await operator.page.getByLabel(translate('ko','pricing.op.price'),{exact:true}).isDisabled());await capture(operator.page,'ko-mobile-operator-read-only');}finally{await operator.context.close();}
+    const operator=await open({width:390,height:844},'ko','operator');try{const ui=operator.page.locator('[data-pricing-design]');assert(await ui.getByRole('button',{name:translate('ko','pricing.op.newSet'),exact:true}).isDisabled());await ui.getByRole('button',{name:translate('ko','pricing.op.open'),exact:true}).nth(1).click();await advanced(operator.page);await operator.page.getByLabel(translate('ko','pricing.op.price'),{exact:true}).waitFor();assert(await operator.page.getByLabel(translate('ko','pricing.op.price'),{exact:true}).isDisabled());await capture(operator.page,'ko-mobile-operator-read-only');}finally{await operator.context.close();}
     for(const width of [320,390]){const x=await open({width,height:740},'ko');try{for(const mode of ['Big Button','Modern','Classic']){await x.page.getByRole('group',{name:translate('ko','Platform view'),exact:true}).getByRole('button',{name:translate('ko',mode),exact:true}).click();for(const tab of ['overview','editor','preview','history']){const control=x.page.locator('[data-pricing-design]').getByRole('button',{name:translate('ko','pricing.'+tab),exact:true});await control.scrollIntoViewIfNeeded();await control.focus();await hitTest(x.page,control,`ko/${width}/${mode}/${tab}`);}}}finally{await x.context.close();}}
     const denied=await open({width:390,height:844},'en','school');try{await denied.page.getByText('HQ access denied',{exact:true}).waitFor();assert.equal(await denied.page.locator('[data-pricing-design]').count(),0);}finally{await denied.context.close();}
     const absent=await open({width:390,height:844},'en',null);try{assert(new URL(absent.page.url()).pathname.startsWith('/auth/'));}finally{await absent.context.close();}

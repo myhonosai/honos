@@ -30,7 +30,7 @@ const ownerPool=new pg.Pool({...targets.owner,max:8});
 const creativeTables=['creative_avatars','creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 // creative_avatar_videos (0277) references avatars: delete it first when present.
-const optionalCreativeTables=['saas_creative_cost_events','creative_avatar_videos'];
+const optionalCreativeTables=['saas_creative_cost_events','creative_avatar_videos','creative_avatar_photo_consents','creative_avatar_photo_withdrawals','creative_avatar_photos','creative_avatar_photo_links'];
 const saasTables=['saas_access_transitions','saas_access_states','saas_provider_payment_refs','saas_provider_events','saas_checkout_sessions',
  'saas_referral_payment_alerts','saas_free_periods','saas_account_credit_ledger','saas_reward_applications','saas_refund_history','saas_refund_requests',
  'saas_credit_threshold_events','saas_credit_ledger','saas_credit_reservations','saas_credit_allowances','saas_operation_prices','saas_pricing_versions',
@@ -252,7 +252,7 @@ try{
   assert.deepEqual(p,{rls:true,forced:true,SELECT:false,INSERT:false,UPDATE:false,DELETE:false,TRUNCATE:false});
   const fns=(await admin.query(`SELECT p.oid::regprocedure::text s,has_function_privilege($1,p.oid,'EXECUTE') x,
     coalesce((SELECT bool_or(a.grantee=0) FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a),false) pub
-    FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname ~ 'creative_avatar' AND p.proname !~ 'avatar_video' ORDER BY 1`,[CHAMPIONS_RUNTIME_ROLE])).rows;
+    FROM pg_proc p WHERE p.pronamespace='hon'::regnamespace AND p.proname ~ 'creative_avatar' AND p.proname !~ 'avatar_video|avatar_photo|avatar_withdrawn' ORDER BY 1`,[CHAMPIONS_RUNTIME_ROLE])).rows;
   assert.equal(fns.length,7,JSON.stringify(fns));
   assert.deepEqual(fns.filter(f=>f.x).map(f=>f.s).sort(),['hon.create_creative_avatar(text,uuid,jsonb,jsonb,uuid,uuid,uuid)','hon.read_creative_avatar(text,uuid,uuid)','hon.read_creative_avatars(text,uuid)']);
   assert.ok(fns.every(f=>!f.pub),'nothing is executable through PUBLIC');

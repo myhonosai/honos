@@ -70,6 +70,6 @@ it('signed-out and unavailable overviews open no page at all, Support included',
 });
 
 it('the self-authorizing list is exact', () => {
-  expect(['/hq/support', '/hq/communications'].every(hqPageAuthorizesItself)).toBe(true);
-  for (const path of ['/hq', '/hq/supportx', '/hq/support/', '/hq/support/x/y', '/hq/communications/numbers', '/hq/schools', '/hq/communications?x=1']) expect(hqPageAuthorizesItself(path), path).toBe(false);
+  expect(['/hq/support', '/hq/communications', '/hq/communications/settings'].every(hqPageAuthorizesItself)).toBe(true);
+  for (const path of ['/hq', '/hq/supportx', '/hq/support/', '/hq/support/x/y', '/hq/communications/numbers', '/hq/communications/settings/x', '/hq/schools', '/hq/communications?x=1']) expect(hqPageAuthorizesItself(path), path).toBe(false);
 });
