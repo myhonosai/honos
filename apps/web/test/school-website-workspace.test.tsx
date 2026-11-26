@@ -66,7 +66,7 @@ const noop = () => undefined;
 const props = (patch: Partial<WebsiteViewProps> = {}): WebsiteViewProps => {
   const w = site();
   return { language: 'en', locale: 'en-US', mode: 'modern', waiting: false, concealed: false, hasSchool: true, schoolName: 'Tiger Dojo',
-    read: { state: 'READY', website: w }, draft: w.draft, name: w.name, dirty: false, start: { name: 'Tiger Dojo', slug: 'tiger-dojo', template: 'MODERN_CLEAN' },
+    read: { state: 'READY', website: w }, draft: w.draft, name: w.name, dirty: false, start: { name: 'Tiger Dojo', slug: 'tiger-dojo', template: 'MODERN_CLEAN', describe: '' },
     choices: { forms: [{ id: 'a'.repeat(48), label: 'Free class enquiry' }], bookings: [] }, tab: 'edit', device: 'desktop', pageSlug: 'home', sectionId: null,
     confirming: null, note: '', outcome: null, locked: false, canRetry: false, origin: 'https://app.example.invalid',
     on: { refresh: noop, start: noop, create: noop, tab: noop, device: noop, page: noop, section: noop, edit: noop, name: noop, note: noop, save: noop, discard: noop,
@@ -77,7 +77,7 @@ it('the workspace shows the start screen, then the editor with a draft preview, 
   const start = renderToStaticMarkup(<WebsiteView {...props({ read: { state: 'READY', website: null }, draft: null })} />);
   for (const t of WEBSITE_TEMPLATES) expect(start).toContain(`data-template="${t}"`);
   expect(start).toContain('https://app.example.invalid/sites/tiger-dojo');
-  expect(start).toContain('This is a template, not AI.');
+  expect(start).toContain('Leave it empty to start from the look you pick.');
 
   const editor = renderToStaticMarkup(<WebsiteView {...props()} />);
   expect(editor).toContain('Live');

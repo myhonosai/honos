@@ -118,14 +118,14 @@ try {
     assert.equal(await s.page.getByRole('button', { name: t('months', 'en', { n: '12' }), exact: true }).getAttribute('aria-pressed'), 'true');
     await s.context.close();
   });
-  await check('leaving the tab hides the numbers; Show again reads fresh', async () => {
+  await check('leaving the tab hides nothing in HQ: the numbers stay, with no new read', async () => {
     const s = await open('business-conceal', { width: 1280, height: 900 }); await ready(s);
     const reads = s.f.reads.length;
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    await s.page.locator('[data-hq-business="concealed"]').waitFor();
-    assert(!(await s.page.locator('body').innerText()).includes('$12,903.00'));
-    await s.page.getByRole('button', { name: t('reveal'), exact: true }).click(); await ready(s);
-    assert(s.f.reads.length > reads); await s.context.close();
+    await s.page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    await s.page.waitForTimeout(300);
+    assert.equal(await s.page.locator('[data-hq-business="concealed"]').count(), 0);
+    assert((await s.page.locator('body').innerText()).includes('$12,903.00'));
+    assert.equal(s.f.reads.length, reads); await s.context.close();
   });
   await check('a person without business-numbers access sees nothing', async () => {
     const s = await open('business-denied', { width: 390, height: 844 }, f => { f.denied = true; });

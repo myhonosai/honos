@@ -1,3 +1,4 @@
+import { planBuilderKo } from './plan-builder.js';
 import { pricingOperationsKo } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingKo } from './pricing-offers.js';
@@ -8,6 +9,7 @@ export const ko = {
   ...pricingKo,
   ...honOsPricesKo,
   ...pricingOperationsKo,
+  ...planBuilderKo,
   " · Deterministic simulator, not Stripe sandbox": " · 결정적 시뮬레이터이며 Stripe 샌드박스가 아닙니다",
   " · Reservation recorded": " · 예약 기록됨",
   " · Stripe provider": " · Stripe 결제 제공업체",
@@ -258,6 +260,7 @@ export const ko = {
   "Zernio connection": "Zernio 연결",
   "Creative Studio": "크리에이티브 스튜디오",
   "Plan promotions": "요금제 프로모션",
+  "Flyers & posters": "전단 및 포스터",
   "Owner workspace": "오너 작업 공간",
   "Start here: what needs you today and where to go next.": "여기서 시작하세요: 오늘 확인할 일과 다음에 갈 곳.",
   "How can HON help here?": "HON이 무엇을 도와드릴까요?",

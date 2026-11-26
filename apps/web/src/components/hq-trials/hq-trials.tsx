@@ -89,8 +89,8 @@ function run(api: TrialsApi, r: TrialRequest, key: string, signal: AbortSignal, 
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 
 /**
- * HQ Free Trials: trial rules, decisions and campaign definitions, with the HQ owner's governance commands. Blur, a hidden
- * tab, page hide or a session end hide everything, retire every read and drop a kept command; Show again reads fresh.
+ * HQ Free Trials: trial rules, decisions and campaign definitions, with the HQ owner's governance commands. A session end
+ * hides everything, retire every read and drop a kept command; Show again reads fresh.
  * Every command answer is followed by a fresh read. Nothing here turns trials on, issues credits or charges anyone.
  */
 export function HqTrials({ api = trialsApi, now = systemNow }: { api?: TrialsApi; now?: () => number }): React.ReactElement {
@@ -111,11 +111,8 @@ export function HqTrials({ api = trialsApi, now = systemNow }: { api?: TrialsApi
       generation.current++; privacy.current++; pending.current = null; check.current?.abort();
       setConcealed(true); setGovernance({ state: 'LOADING' }); setPreview(null); setForm(null); setOutcome(null); setLock(sending.current ? 'SENDING' : 'NONE');
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {

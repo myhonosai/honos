@@ -705,6 +705,10 @@
       "title": "HON HQ | School texting numbers"
     },
     {
+      "path": "/hq/communications/settings",
+      "title": "HON HQ | Texts and email settings"
+    },
+    {
       "path": "/hq/growth/prospects",
       "title": "HON HQ | Prospects"
     },
@@ -757,8 +761,16 @@
       "title": "HON HQ | Marketing & Creative"
     },
     {
+      "path": "/hq/marketing/ads/return",
+      "title": "HON HQ | Finishing connection"
+    },
+    {
       "path": "/hq/marketing/creative",
       "title": "HON HQ | Creative Studio"
+    },
+    {
+      "path": "/hq/marketing/creative/designs",
+      "title": "HON HQ | Designs"
     },
     {
       "path": "/hq/marketing/promotions",

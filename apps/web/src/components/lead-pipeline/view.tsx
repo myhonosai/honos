@@ -236,7 +236,7 @@ function Card({ board, lead, scope, language, selectedId, movingId, onOpen, onMo
 
 /** One-tap Call, Text and Book trial (Email too in the panel). Call, Text and Email open the staff member's own app; HON sends nothing. */
 function QuickActions({ lead, scope, name, where, t }: { lead: CrmBoardLead; scope: BoardScope; name: string; where: 'card' | 'panel'; t: T }) {
-  const call = callHref(lead.phoneE164), text = textHref(lead.phoneE164), email = where === 'panel' ? emailHref(lead.email) : null;
+  const call = callHref(lead.phoneE164), text = lead.textOptedOut ? null : textHref(lead.phoneE164), email = where === 'panel' ? emailHref(lead.email) : null;
   const trial = leadTrialHref({ organizationId: scope.organizationId, schoolId: scope.schoolId, leadId: lead.id });
   const id = where === 'card' ? 'quick' : 'panel';
   return <div className={styles.quick} data-where={where}>
@@ -290,6 +290,7 @@ function Panel({ board, lead, scope, language, trials, movingId, onOpen, onMove,
         <div><dt>{t('added')}</dt><dd>{when(language, lead.createdAt, false)}</dd></div>
       </dl>
       {lead.status === 'OPEN' ? <><QuickActions lead={lead} scope={scope} name={fullName(lead)} t={t} where="panel"/>
+        {lead.textOptedOut ? <p className={styles.meta} data-testid="text-opted-out">{t('textOptedOut')}</p> : null}
         {callHref(lead.phoneE164) || emailHref(lead.email) ? <p className={styles.meta}>{t('quickTextHelp')}</p> : null}</> : null}
     </section>
     <section className={styles.field}>
