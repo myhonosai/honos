@@ -1158,6 +1158,7 @@ export * from './school-message-templates.js';
 export * from './school-pay-autopay.js';
 export * from './hq-school-health.js';
 export * from './school-reports.js';
+export * from './monthly-goal-plan.js';
 export * from './school-onboarding.js';
 export * from './school-support.js';
 export * from './automation-workflows.js';
