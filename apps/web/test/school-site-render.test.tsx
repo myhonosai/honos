@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
-import { validateWebsiteDocument, type WebsiteDocument } from '@hon/contracts';
+import { buildWebsiteFromTemplate, validateWebsiteDocument, WEBSITE_STARTER_ART, WEBSITE_TEMPLATES, websiteStarterArtUrl, type WebsiteDocument } from '@hon/contracts';
 vi.mock('server-only', () => ({}));
 import { SiteView } from '../src/components/school-site/site-view';
 import { siteHref, siteSourceNote, siteVideoUrl, siteParagraphs } from '../src/components/school-site/site-links';
@@ -67,6 +67,29 @@ it('renders every section type as escaped text with site links, theme variables 
   expect(render('preview', 'home', empty)).toContain('data-section="TESTIMONIALS"');
 });
 
+it('lays out proven school-site blocks: top announcement bar, offer band, form beside the hero, find-us actions', () => {
+  const d = doc(); const home = d.pages[0]!.sections;
+  // The leading promo banner sits above the header.
+  const html = render('public', 'home', d);
+  expect(html.indexOf('data-section="PROMO_BANNER"')).toBeLessThan(html.indexOf('<header'));
+  // Find-us: call, directions (address encoded, opens safely) and email buttons.
+  expect(html).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=1%20Main%20St" rel="noopener noreferrer" target="_blank"');
+  expect(html).toContain('>Call +1 (555) 010-0000</a>');
+  // Program ages sit on the card picture; testimonial authors get an initial.
+  expect(html).toMatch(/<span class="[^"]*ages[^"]*">4-6<\/span>/);
+  // A form right after the hero becomes an offer band; in HIGH_CONVERSION it moves into the hero itself.
+  const form = home.splice(home.findIndex(s => s.id === 'form'), 1)[0]!;
+  home.splice(2, 0, form);
+  expect(render('public', 'home', d)).toMatch(/<section id="form" data-section="LEAD_FORM" class="[^"]*offerBand/);
+  d.theme.template = 'HIGH_CONVERSION';
+  const conv = render('public', 'home', d);
+  expect(conv).toMatch(/<section id="hero" data-section="HERO"[^>]*>(?:(?!<\/section>).)*<div id="form" data-section="LEAD_FORM"/s);
+  expect(conv.match(/data-section="LEAD_FORM"/g)).toHaveLength(1);
+  // An unconnected form never moves into the hero.
+  (form.props as Record<string, unknown>).publicFormId = '';
+  expect(render('public', 'home', d)).not.toContain('data-section="LEAD_FORM"');
+});
+
 it('preview shows owner notes and never loads the live form; other pages render on their own address', () => {
   const html = render('preview');
   expect(html).toContain('Choose a published form to show it here.');
@@ -112,4 +135,22 @@ it('the public read verifies the published copy and separates missing from unava
   expect((await readPublicSite('../etc', never as unknown as typeof fetch)).kind).toBe('missing');
   expect((await readPublicSite('admin', never as unknown as typeof fetch)).kind).toBe('missing');
   expect(never).not.toHaveBeenCalled();
+});
+
+it('every template starts with shipped starter art that the site renders and the app actually serves', () => {
+  const fs = require('node:fs') as typeof import('node:fs'); const path = require('node:path') as typeof import('node:path');
+  for (const name of WEBSITE_STARTER_ART) expect(fs.existsSync(path.join(__dirname, '..', 'public', 'site-art', `${name}.webp`))).toBe(true);
+  for (const template of WEBSITE_TEMPLATES) {
+    const d = buildWebsiteFromTemplate(template, { schoolName: 'Tiger Dojo' });
+    const home = d.pages[0]!; const hero = home.sections.find(s => s.type === 'HERO')!; const programs = home.sections.find(s => s.type === 'PROGRAMS')!;
+    expect(String(hero.props.imageUrl)).toMatch(/^\/site-art\/hero-[a-z]+\.webp$/);
+    expect((programs.props.items as { imageUrl: string }[]).map(i => i.imageUrl)).toEqual(['program-little', 'program-kids', 'program-adults'].map(n => websiteStarterArtUrl(n as never)));
+    const html = render('public', 'home', d);
+    expect(html).toContain(`src="${String(hero.props.imageUrl)}"`);
+    expect(html).toContain(`src="${websiteStarterArtUrl('program-kids')}"`);
+  }
+  const heroes = WEBSITE_TEMPLATES.map(t => buildWebsiteFromTemplate(t, { schoolName: 'x' }).pages[0]!.sections.find(s => s.type === 'HERO')!.props.imageUrl);
+  expect(new Set(heroes).size).toBe(WEBSITE_TEMPLATES.length);
+  const other = doc(); (other.pages[0]!.sections[0]!.props as Record<string, unknown>).imageUrl = '/site-art/other.webp';
+  expect(() => validateWebsiteDocument(other)).toThrow(/Invalid website/);
 });

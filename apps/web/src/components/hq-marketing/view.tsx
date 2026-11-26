@@ -15,7 +15,9 @@ export type MarketingViewProps = Readonly<{ language: string; formattingLocale: 
   filter: HqMarketingListFilter | null; form: MarketingForm; outcome: MarketingOutcome; locked: boolean; canRetry: boolean;
   onFilter: (f: HqMarketingListFilter | null) => void; onMore: () => void; onRefresh: () => void; onReveal: () => void; onForm: (form: MarketingForm) => void;
   onCreate: (draft: PlanDraft) => void; onUpdate: (campaign: HqMarketingCampaign, draft: PlanDraft) => void;
-  onStatus: (campaign: HqMarketingCampaign, status: HqMarketingTargetStatus) => void; onTryAgain: () => void }>;
+  onStatus: (campaign: HqMarketingCampaign, status: HqMarketingTargetStatus) => void; onTryAgain: () => void;
+  /** 0677: the live ad account cards; without it the fixed not-connected cards show. */
+  adAccounts?: React.ReactNode }>;
 
 const FILTERS: readonly (HqMarketingListFilter | null)[] = ['OPEN', ...HQ_MARKETING_STATUSES, null];
 const statusTone = (s: HqMarketingStatus) => s === 'ACTIVE' ? 'ready' : s === 'ARCHIVED' ? 'blocked' : 'waiting';
@@ -119,7 +121,7 @@ export function HqMarketingView(props: MarketingViewProps): React.ReactElement {
   const count = (f: HqMarketingListFilter | null) => f === null ? s.DRAFT + s.ACTIVE + s.PAUSED + s.ARCHIVED : f === 'OPEN' ? s.DRAFT + s.ACTIVE + s.PAUSED : s[f];
   return <section className={styles.access} data-hq-marketing="ready">{head}
     <p className={styles.meta}>{t('viewer', { name: v.viewer.displayName })}{manage ? '' : ` ${t('readOnly')}`}</p>
-    <AdAccounts language={language}/>
+    {props.adAccounts ?? <AdAccounts language={language}/>}
     <h2>{t('summary')}</h2>
     <Facts rows={[[t('ACTIVE'), String(s.ACTIVE)], [t('DRAFT'), String(s.DRAFT)], [t('PAUSED'), String(s.PAUSED)],
       [t('plannedOpen'), formatUsd(formattingLocale, s.plannedBudgetOpenMinor)]]}/>

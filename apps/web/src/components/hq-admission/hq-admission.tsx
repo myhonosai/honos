@@ -121,7 +121,7 @@ type Pending = Readonly<{ key: string; body: AdmissionLimitsInput }>;
 type Lock = 'NONE' | 'SENDING' | 'KEPT';
 
 /**
- * HQ Sign-up Limits. Blur, a hidden tab, page hide or a session end hide everything, retire every read and drop a kept
+ * HQ Sign-up Limits. A session end hide everything, retire every read and drop a kept
  * change; Show again reads fresh. Every change answer is followed by a fresh read. Nothing here opens sign-up or trials.
  */
 export function HqAdmission({ api = admissionApi }: { api?: AdmissionApi }): React.ReactElement {
@@ -140,11 +140,8 @@ export function HqAdmission({ api = admissionApi }: { api?: AdmissionApi }): Rea
       generation.current++; privacy.current++; pending.current = null;
       setConcealed(true); setRead({ state: 'LOADING' }); setFormOpen(false); setOutcome(null); setLock(sending.current ? 'SENDING' : 'NONE');
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
   useEffect(() => {
     if (concealed) return;

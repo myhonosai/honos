@@ -19,6 +19,8 @@ export interface CrmBoardLead {
   givenName: string; familyName: string; email: string | null; phoneE164: string | null;
   programInterestCode: string | null; sourceCode: string | null;
   createdAt: string; closedAt: string | null; nextTrialAt: string | null; lastTrialAt: string | null;
+  /** The person has opted out of texts (0682): the board must not offer Text. */
+  textOptedOut: boolean;
 }
 export interface CrmPipelineRef { id: string; name: string; version: number }
 export interface CrmPipelineBoard {
@@ -85,13 +87,15 @@ function pipelineRef(value: unknown): CrmPipelineRef {
 }
 function lead(value: unknown): CrmBoardLead {
   const row = record(value, ['closedAt', 'createdAt', 'email', 'familyName', 'givenName', 'id', 'lastTrialAt', 'nextTrialAt', 'personId',
-    'phoneE164', 'programInterestCode', 'sourceCode', 'stageId', 'status', 'version']);
+    'phoneE164', 'programInterestCode', 'sourceCode', 'stageId', 'status', 'textOptedOut', 'version']);
+  if (typeof row.textOptedOut !== 'boolean') invalid();
   if (!['OPEN', 'WON', 'LOST', 'ARCHIVED'].includes(row.status as string)) invalid();
   return {
     id: uuid(row.id), version: version(row.version), status: row.status as CrmBoardLead['status'], stageId: uuid(row.stageId), personId: uuid(row.personId),
     givenName: text(200)(row.givenName), familyName: text(200)(row.familyName), email: maybe(row.email, text(320)), phoneE164: maybe(row.phoneE164, text(32)),
     programInterestCode: maybe(row.programInterestCode, text(200)), sourceCode: maybe(row.sourceCode, text(80)),
     createdAt: instant(row.createdAt), closedAt: maybe(row.closedAt, instant), nextTrialAt: maybe(row.nextTrialAt, instant), lastTrialAt: maybe(row.lastTrialAt, instant),
+    textOptedOut: row.textOptedOut,
   };
 }
 

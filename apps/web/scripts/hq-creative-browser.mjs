@@ -236,12 +236,13 @@ try {
     await s.page.locator('[data-creative-code="HQ_CREATIVE_BUDGET_EXHAUSTED"]').waitFor();
     await s.context.close();
   });
-  await check('a read-only marketer sees no forms; leaving the tab hides everything; no access shows nothing', async () => {
+  await check('a read-only marketer sees no forms; leaving the tab hides nothing in HQ; no access shows nothing', async () => {
     const r = await open('creative-read-only', { width: 390, height: 844 }, f => { f.store = store({ canManage: false }); }); await ready(r);
     assert.equal(await r.page.locator('[data-creative-request-form], [data-creative-budget-form]').count(), 0);
-    await r.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    await r.page.locator('[data-hq-creative="concealed"]').waitFor();
-    assert(!(await r.page.locator('body').innerText()).includes('Founder 50 poster'));
+    await r.page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    await r.page.waitForTimeout(300);
+    assert.equal(await r.page.locator('[data-hq-creative="concealed"]').count(), 0);
+    assert((await r.page.locator('body').innerText()).includes('Founder 50 poster'));
     await r.context.close();
     const d = await open('creative-denied', { width: 390, height: 844 }, f => { f.denied = true; });
     await d.page.locator('[data-hq-creative="denied"]').waitFor();

@@ -11,7 +11,7 @@ import { ProspectDetailView, ProspectListView, consentInputFrom, createInputFrom
 
 const readFailure = (error: unknown) => error instanceof CommsError ? error.kind : 'UNKNOWN';
 
-/** HON prospects (HQ-COMM E1): add one and see the list. Leaving the tab hides contact details and drops any kept command. */
+/** HON prospects (HQ-COMM E1): add one and see the list. A session end hides contact details and drops any kept command. */
 export function HqProspects({ api = prospectsApi }: { api?: ProspectsApi }): React.ReactElement {
   const { preferences, formattingLocale } = useLocale();
   const [state, setState] = useState<ProspectListState>({ state: 'LOADING' });

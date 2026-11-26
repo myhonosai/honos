@@ -193,8 +193,11 @@ try {
       report.hqAffordances.push({ language, width, mode, normal, hover, focused, hierarchy: 'shell h1 / founder h2 / sections h3 / subsections h4' });
     }
     await hq.getByRole('button', { name: t(language, 'modern'), exact: true }).click();
-    await capture(page, `${language}-${width}-hq-proposal`); await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0);
-    report.checks.push(`${language}/${width}: HQ directory separate from synthetic proposal, no staff fanout, unknown progress, pagehide`); await context.close();
+    await capture(page, `${language}-${width}-hq-proposal`);
+    // HQ hides nothing when the page is left (owner, 2026-11-26); a school change still hides it.
+    await page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); }); assert(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count() > 0);
+    await page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed'))); assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0);
+    report.checks.push(`${language}/${width}: HQ directory separate from synthetic proposal, no staff fanout, unknown progress, stays on leave, hides on school change`); await context.close();
   }
   ({ context, page } = await open('en', { width: 834, height: 1000 }, 'hq'));
   const hq = page.locator('[data-founder-plane=hq]');
@@ -205,7 +208,7 @@ try {
   state.status = 200; state.hold = true;
   await hq.getByRole('button', { name: t('en','hqLoad'), exact: true }).click();
   for (let i = 0; !state.settle && i < 30; i++) await page.waitForTimeout(50); assert(state.settle);
-  await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); const readsAfterHide = state.hqReads;
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed'))); const readsAfterHide = state.hqReads;
   state.hold = false; state.settle(); state.settle = null; await page.waitForTimeout(100);
   assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0);
   await page.evaluate(() => window.dispatchEvent(new Event('focus'))); assert.equal(state.hqReads, readsAfterHide);
