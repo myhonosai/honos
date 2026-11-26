@@ -114,7 +114,8 @@
       }
       el.querySelectorAll('[data-count]').forEach(function (c) {
         var to = +c.getAttribute('data-count'), v = Math.round(to * ease(clamp(p * 1.4, 0, 1)));
-        c.textContent = '$' + v.toLocaleString('en-US');
+        var pre = c.hasAttribute('data-pre') ? c.getAttribute('data-pre') : '$';
+        c.textContent = pre + v.toLocaleString('en-US');
       });
     });
     var max = document.documentElement.scrollHeight - vh;

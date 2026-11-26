@@ -29,10 +29,16 @@ done
 
 # The copy job needs exactly these: H.264, AAC and JPEG encoders, the mov/matroska demuxers and https input.
 "$DEST/ffprobe" -hide_banner -version >/dev/null
-"$DEST/ffmpeg" -hide_banner -encoders 2>/dev/null | grep -Eq '^ V.{5} libx264 ' || { echo "install-video-tools: libx264 missing" >&2; exit 1; }
-"$DEST/ffmpeg" -hide_banner -encoders 2>/dev/null | grep -Eq '^ A.{5} aac ' || { echo "install-video-tools: aac missing" >&2; exit 1; }
-"$DEST/ffmpeg" -hide_banner -encoders 2>/dev/null | grep -Eq '^ V.{5} mjpeg ' || { echo "install-video-tools: mjpeg missing" >&2; exit 1; }
-"$DEST/ffmpeg" -hide_banner -demuxers 2>/dev/null | grep -Eq ' mov,mp4' || { echo "install-video-tools: mov demuxer missing" >&2; exit 1; }
-"$DEST/ffmpeg" -hide_banner -demuxers 2>/dev/null | grep -Eq ' matroska,webm' || { echo "install-video-tools: matroska demuxer missing" >&2; exit 1; }
-"$DEST/ffmpeg" -hide_banner -protocols 2>/dev/null | grep -Eq '^ +https$' || { echo "install-video-tools: https input missing" >&2; exit 1; }
+# Each list is captured first and then searched. Piping ffmpeg straight into "grep -q" under pipefail fails the check
+# whenever grep finds its line early and closes the pipe (ffmpeg then exits on SIGPIPE), which is what the first Render
+# build hit ("libx264 missing" on a build that has it).
+ENCODERS="$("$DEST/ffmpeg" -hide_banner -encoders 2>/dev/null)"
+DEMUXERS="$("$DEST/ffmpeg" -hide_banner -demuxers 2>/dev/null)"
+PROTOCOLS="$("$DEST/ffmpeg" -hide_banner -protocols 2>/dev/null)"
+grep -Eq '^ V.{5} libx264 ' <<<"$ENCODERS" || { echo "install-video-tools: libx264 missing" >&2; exit 1; }
+grep -Eq '^ A.{5} aac ' <<<"$ENCODERS" || { echo "install-video-tools: aac missing" >&2; exit 1; }
+grep -Eq '^ V.{5} mjpeg ' <<<"$ENCODERS" || { echo "install-video-tools: mjpeg missing" >&2; exit 1; }
+grep -Eq ' mov,mp4' <<<"$DEMUXERS" || { echo "install-video-tools: mov demuxer missing" >&2; exit 1; }
+grep -Eq ' matroska,webm' <<<"$DEMUXERS" || { echo "install-video-tools: matroska demuxer missing" >&2; exit 1; }
+grep -Eq '^ +https$' <<<"$PROTOCOLS" || { echo "install-video-tools: https input missing" >&2; exit 1; }
 echo "install-video-tools: ffmpeg and ffprobe ready in $DEST"

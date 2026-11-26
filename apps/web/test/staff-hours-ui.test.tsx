@@ -80,6 +80,7 @@ it('each command sends its own name and key; a punch never carries a time; recei
 
 it('maps only exact refusals; busy keeps the same-key retry', () => {
   expect(hoursErrorFor(403, 'STAFF_TIME_FORBIDDEN').kind).toBe('DENIED');
+  expect(hoursErrorFor(403, 'TIMESHEET_SELF_APPROVAL').kind).toBe('SELF_APPROVAL');
   expect(hoursErrorFor(409, 'TIME_CLOCK_STATE_CHANGED').kind).toBe('CHANGED');
   expect(hoursErrorFor(409, 'VERSION_CONFLICT').kind).toBe('CHANGED');
   expect(hoursErrorFor(409, 'TIME_ENTRY_OVERLAP').kind).toBe('OVERLAP');

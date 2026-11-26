@@ -1,5 +1,6 @@
 /** HQ Creative Studio wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
+  designsTitle: 'Flyers, posters and social graphics', designsBody: 'Works now: make HON marketing designs from templates, add photos and download a print PDF. Free, no AI.', designsLink: 'Open designs',
   title: 'HQ Creative Studio', refresh: 'Refresh', cancel: 'Cancel', back: 'Back to Marketing & Creative',
   intro: "Make AI images and short videos to market HON OS. It uses HQ's own credits, never a school's.",
   loading: 'Reading HQ Creative Studio…', denied: 'Your HQ access does not include marketing. Nothing is shown.',
@@ -52,6 +53,7 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  designsTitle: '전단, 포스터, 소셜 그래픽', designsBody: '지금 바로 사용 가능: 템플릿으로 HON 홍보 디자인을 만들고, 사진을 넣고, 인쇄용 PDF로 내려받으세요. 무료이며 AI를 쓰지 않습니다.', designsLink: '디자인 열기',
   title: 'HQ 크리에이티브 스튜디오', refresh: '새로 고침', cancel: '취소', back: '마케팅 및 크리에이티브로 돌아가기',
   intro: 'HON OS를 알리는 HON 자체 마케팅용 이미지와 짧은 동영상입니다. 모든 학교의 크리에이티브 크레딧과 분리된 HQ 자체 월간 크레딧 예산에서 사용합니다. 학교 지갑은 절대 사용하지 않습니다.',
   loading: 'HQ 크리에이티브 스튜디오를 읽는 중…', denied: 'HQ 권한에 마케팅이 포함되어 있지 않습니다. 아무것도 표시되지 않습니다.',
@@ -103,6 +105,7 @@ const ko: Record<Key, string> = {
   refused: '거부되었습니다. 아무것도 저장되지 않았습니다.',
 };
 const es: Record<Key, string> = {
+  designsTitle: 'Volantes, carteles y gráficos sociales', designsBody: 'Ya funciona: crea diseños de marketing de HON con plantillas, añade fotos y descarga un PDF para imprenta. Gratis, sin IA.', designsLink: 'Abrir diseños',
   title: 'Estudio creativo de HQ', refresh: 'Actualizar', cancel: 'Cancelar', back: 'Volver a Marketing y creatividad',
   intro: 'Imágenes y videos cortos para el marketing propio de HON OS. Se pagan con el presupuesto mensual de créditos de HQ, separado de los créditos creativos de cada escuela. Nunca se usa la billetera de una escuela.',
   loading: 'Leyendo el Estudio creativo de HQ…', denied: 'Tu acceso de HQ no incluye marketing. No se muestra nada.',

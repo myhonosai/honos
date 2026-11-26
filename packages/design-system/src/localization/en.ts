@@ -257,6 +257,7 @@ export const en = {
   "Zernio connection": "Zernio connection",
   "Creative Studio": "Creative Studio",
   "Plan promotions": "Plan promotions",
+  "Flyers & posters": "Flyers & posters",
   "Owner workspace": "Owner workspace",
   "Start here: what needs you today and where to go next.": "Start here: what needs you today and where to go next.",
   "How can HON help here?": "How can HON help here?",
