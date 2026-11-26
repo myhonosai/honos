@@ -7,6 +7,7 @@ import { useLocale } from '../localization/provider';
 import { HqIcon } from './icon';
 import { PricingController, type PricingScreen } from './pricing-offers-controller';
 import { kindLabels, type OfferFields } from './pricing-offers-model';
+import { PlanBuilder } from './pricing-plan-builder';
 import base from './hq-modern.module.css';
 import styles from './pricing-offers.module.css';
 
@@ -24,10 +25,10 @@ export function HqPricingOffers():React.ReactElement {
   const [controller]=useState(()=>new PricingController());
   useEffect(()=>{
     controller.start();
-    const conceal=()=>controller.conceal(),visibility=()=>{if(document.visibilityState==='hidden')conceal();};
+    // HQ never hides itself in the background (David, 2026-11-24 and 2026-11-26); access is still checked on every read and command.
     const leave=(e:BeforeUnloadEvent)=>{if(controller.dirty()||controller.snapshot().pending){e.preventDefault();e.returnValue='';}};
-    window.addEventListener('blur',conceal);document.addEventListener('visibilitychange',visibility);window.addEventListener('beforeunload',leave);
-    return()=>{window.removeEventListener('blur',conceal);document.removeEventListener('visibilitychange',visibility);window.removeEventListener('beforeunload',leave);controller.destroy();};
+    window.addEventListener('beforeunload',leave);
+    return()=>{window.removeEventListener('beforeunload',leave);controller.destroy();};
   },[controller]);
   return <PricingOffersView controller={controller}/>;
 }
@@ -99,8 +100,9 @@ export function PricingOffersView({controller}:{controller:PricingController}):R
         {state.management&&<section className={base.panel}><h3>{op('founderInventory')}</h3><p>{op('inventoryNote')}</p><dl className={styles.facts}>{(['limit','allocated','held','remaining'] as const).map(key=><div key={key}><dt>{op(key)}</dt><dd>{state.management!.honOsSales.founderPool[key]===null?op('notRecorded'):number(state.management!.honOsSales.founderPool[key]!)}</dd></div>)}</dl></section>}
         <section className={base.panel}><h3>{op('drafts')}</h3>{state.management?.drafts.length?state.management.drafts.map(s=><div key={s.setId} className={styles.versionRow}><span>{setName(s)} · {label(s.status)}</span><button type="button" disabled={state.busy||!!state.pending} onClick={()=>openSet(s.setId)}>{op('open')}</button></div>):<p>{op('empty')}</p>}</section>
       </>}
-      {state.screen==='editor'&&(!form?<p>{op('choose')}</p>:<>
-        <div className={styles.editorLayout}><section className={`${base.panel} ${styles.editor}`}>
+      {state.screen==='editor'&&(!form?<section className={base.panel}><p>{t('planBuilder.intro')}</p><button type="button" data-plan-create disabled={!state.owner||state.busy||!!state.pending} onClick={()=>void controller.open(null)}>{op('newSet')}</button></section>:<>
+        <PlanBuilder controller={controller} state={state}/>
+        <div className={styles.editorLayout}><details className={`${base.panel} ${styles.editor}`} data-plan-advanced><summary>{t('planBuilder.advanced')}</summary>
           <div className={styles.editorHeading}><h3>{form.setId&&detail?setName(detail.set):op('localOnly')}</h3><span className={styles.status}>{dirty?op('unsaved'):detail?label(detail.set.status):op('localOnly')}</span></div>
           <p className={styles.note}>{op('wholeSet')}</p>{detail&&detail.set.status!=='DRAFT'&&<p className={styles.warning}>{op('immutable')}</p>}
           <form onSubmit={e=>{e.preventDefault();void controller.save();}}><fieldset disabled={!editable}><legend>{op('wholeSet')}</legend>
@@ -119,7 +121,7 @@ export function PricingOffersView({controller}:{controller:PricingController}):R
           <div className={styles.actions}><button type="submit" disabled={!editable||(!dirty&&!!form.setId)||!form.offers.length}>{op('save')}</button><button type="button" disabled={!editable||!offer} onClick={controller.removeOffer}>{op('remove')}</button></div>
           </form>
           <section><h3>{op('add')}</h3><div className={styles.actions}>{SAAS_HON_OS_OFFER_KINDS.map(kind=><button type="button" key={kind} disabled={!editable||form.offers.length>=12} onClick={()=>controller.addOffer(kind)}>{title(kind)}</button>)}</div></section>
-        </section><aside className={styles.designSummary}><div className={base.panel}><h3>HON OS</h3><p>{op('safeguards')}</p><button type="button" disabled={!editable||dirty||!form.setId} onClick={()=>void controller.review()}>{op('review')}</button>{dirty&&<p className={styles.note}>{op('saveFirst')}</p>}
+        </details><aside className={styles.designSummary}><div className={base.panel}><h3>HON OS</h3><p>{op('safeguards')}</p><button type="button" disabled={!editable||dirty||!form.setId} onClick={()=>void controller.review()}>{op('review')}</button>{dirty&&<p className={styles.note}>{op('saveFirst')}</p>}
           {detail&&detail.set.status!=='DRAFT'&&<button type="button" disabled={!state.owner||state.busy||!!state.pending} onClick={()=>openSet(detail.set.setId,true)}>{op('copy')}</button>}
           <button type="button" disabled={!editable||dirty||!form.setId} onClick={()=>setConfirmation('discard')}>{op('discardBackend')}</button>
           {detail&&(detail.set.status==='PUBLISHED'||detail.set.status==='RETIRED')&&detail.set.offers.map(o=>{const retired=detail.set.status==='RETIRED',live=sales(o.offerId)?.openCheckouts,hasLive=live!==undefined&&live>0;return <div key={o.offerId}><p>{o.offerCode} · {saleLabel(o)}</p>{retired&&<p className={styles.warning}>{op(o.salesStop?'retiredStopped':live===undefined?'retiredCountsUnavailable':hasLive?'retiredWarning':'retiredNoLive')}{hasLive?' '+op('liveCheckouts',{count:number(live)}):''}</p>}{(!retired||hasLive)&&<button type="button" data-retired-stop={retired?'true':undefined} disabled={!controller.canStop(o.offerId)} onClick={()=>{setStopReason('OWNER_DISABLED');setConfirmation({offer:o,retired});}}>{op(retired?'emergencyStop':'stop')} · {title(o.offerKind)}</button>}</div>;})}

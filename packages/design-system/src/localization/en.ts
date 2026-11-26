@@ -1,3 +1,4 @@
+import { planBuilderEn } from './plan-builder.js';
 import { pricingOperationsEn } from './pricing-operations.js';
 import { pricingEn } from './pricing-offers.js';
 import { honOsPricesEn } from './hon-os-prices.js';
@@ -7,6 +8,7 @@ export const en = {
   ...pricingEn,
   ...honOsPricesEn,
   ...pricingOperationsEn,
+  ...planBuilderEn,
   " · Deterministic simulator, not Stripe sandbox": " · Deterministic simulator, not Stripe sandbox",
   " · Reservation recorded": " · Reservation recorded",
   " · Stripe provider": " · Stripe provider",

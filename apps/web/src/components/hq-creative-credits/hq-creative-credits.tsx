@@ -71,7 +71,7 @@ type Lock = 'NONE' | 'SENDING' | 'KEPT';
  * HQ Creative Credits: the program state, rates, packages and every school wallet, with the HQ owner's corrections on one
  * school's wallet (grant, remove, settle a generation, record a provider cost). Leaving the window or tab, or a session end,
  * hides everything, retires every read and drops a kept correction; "Show again" reads fresh. Every correction answer is
- * followed by a fresh read. Nothing here changes the program, the rates, a purchase or a payment.
+ * followed by a fresh read. The program switch and credit prices live in ProgramControls. Nothing here changes a purchase or a payment.
  */
 export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): React.ReactElement {
   const { preferences } = useLocale();
