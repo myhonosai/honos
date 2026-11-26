@@ -9,7 +9,7 @@ import { blankOffer, type OfferFields, type OfferSetForm } from './pricing-offer
  */
 export type PriceChoice = { on: boolean; amount: string };
 export type PlanDraft = {
-  /** Local identity only: the key of the plan's first offer, or a fresh id for a new plan. Never sent to the server. */
+  /** Local identity only (the offers' planKey): stable while the name is edited. Never sent to the server. */
   id: string;
   name: string;
   monthly: PriceChoice; annual: PriceChoice; lifetime: PriceChoice;
@@ -68,18 +68,11 @@ export function addedPlan(existing: readonly PlanDraft[]): PlanDraft {
   return { ...emptyPlan(undefined, name), monthly: { on: true, amount: '' }, credits: existing[0]?.credits ?? PLAN_DEFAULTS.credits };
 }
 
-/** The local plan id of each offer: the key of the first offer that has the same display name. */
-function planIds(form: OfferSetForm): Map<string, string> {
-  const first = new Map<string, string>(), out = new Map<string, string>();
-  for (const o of form.offers) { if (!first.has(o.displayName)) first.set(o.displayName, o.key); out.set(o.key, first.get(o.displayName)!); }
-  return out;
-}
-
 /** Reads the plans back out of the form, so the form stays the only source of truth. */
 export function plansFromForm(form: OfferSetForm): PlansDraft {
-  const draft = emptyPlans(), ids = planIds(form), byId = new Map<string, PlanDraft>();
+  const draft = emptyPlans(), byId = new Map<string, PlanDraft>();
   for (const o of form.offers) {
-    const id = ids.get(o.key)!;
+    const id = o.planKey;
     let plan = byId.get(id);
     if (!plan) {
       plan = { ...emptyPlan(id, o.displayName), credits: o.plannedMonthlyPremiumCredits, features: canonicalFeatures(o.capabilities) };
@@ -106,14 +99,14 @@ export function plansFromForm(form: OfferSetForm): PlansDraft {
  * period, lifetime has no recurring terms.
  */
 export function applyPlansToForm(form: OfferSetForm, draft: PlansDraft): OfferSetForm {
-  const ids = planIds(form), offers: OfferFields[] = [];
+  const offers: OfferFields[] = [];
   for (const plan of draft.plans) {
     for (const kind of SAAS_HON_OS_OFFER_KINDS) {
       const key = PRICE_KEYS.find(k => KIND_OF[k] === kind)!, choice = plan[key];
       if (!choice.on) continue;
-      const base = form.offers.find(o => ids.get(o.key) === plan.id && o.offerKind === kind) ?? blankOffer(kind, [...form.offers, ...offers]);
+      const base = form.offers.find(o => o.planKey === plan.id && o.offerKind === kind) ?? blankOffer(kind, [...form.offers, ...offers], plan.id);
       const lifetime = kind.endsWith('LIFETIME'), founder = kind.startsWith('FOUNDER_');
-      offers.push({ ...base, displayName: plan.name, amount: choice.amount, eligibility: draft.who,
+      offers.push({ ...base, planKey: plan.id, displayName: plan.name, amount: choice.amount, eligibility: draft.who,
         salesOpensAt: draft.salesOpensAt, salesClosesAt: draft.salesClosesAt,
         saleLimit: lifetime ? plan.lifetimeSpots : base.saleLimit,
         priceLock: lifetime ? 'NONE' : founder ? 'WHILE_CONTINUOUSLY_SUBSCRIBED' : base.priceLock === 'FIXED_MONTHS' ? 'FIXED_MONTHS' : 'NONE',

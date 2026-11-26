@@ -29,7 +29,7 @@ David chose "Let me pick features per plan" (2026-11-26). An offer set can now h
   `saas_offer_set_content_valid` accepts an optional `capabilities` per offer (absent = full list) and requires the same
   list for offers that share a display name; `saas_offer_set_write_content` stores it through the private helper
   `saas_offer_input_capabilities(jsonb)`.
-- **A plan = the offers that share a display name.** Each plan has its own name, prices, lifetime spots, planned
+- **A plan = the offers that share a display name** (in the database). The builder tracks a local `planKey` per offer, so a plan stays separate while its name is being typed, even through another plan's name. Each plan has its own name, prices, lifetime spots, planned
   credits and feature checklist. Refund days, who can buy, sales window, terms link and the founder pool are shared.
   Up to 6 plans and 12 prices in all.
 - **Contracts.** `HON_OS_PLAN_CAPABILITIES`, `saasHonOsPlanCapabilities()`; offer input `capabilities` optional, offer

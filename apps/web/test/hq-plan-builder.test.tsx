@@ -59,6 +59,18 @@ describe('HQ plan builder model',()=>{
     const one=applyPlansToForm(two,{...plansFromForm(two),plans:plansFromForm(two).plans.slice(0,1)});
     expect(one.offers.every(o=>o.displayName==='HON OS Complete')).toBe(true);
   });
+  it('keeps a plan separate while its name is typed, even through another plan\'s name (review P2)',()=>{
+    let form=applyPlansToForm(blankSet(),defaultPlans());
+    const d=plansFromForm(form),extra={...addedPlan(d.plans),monthly:{on:true,amount:'349'},features:['crm.families_students_prospects']};
+    form=applyPlansToForm(form,{...d,plans:[...d.plans,extra]});
+    for(const name of ['H','HON','HON OS','HON OS P','HON OS Plus']){
+      const now=plansFromForm(form);expect(now.plans.length).toBe(2);
+      form=applyPlansToForm(form,{...now,plans:now.plans.map(x=>x.id===extra.id?{...x,name}:x)});
+    }
+    const end=plansFromForm(form);
+    expect(end.plans.map(x=>[x.name,x.monthly.amount,x.features.length])).toEqual([['HON OS','249.00',16],['HON OS Plus','349',1]]);
+    expect(form.offers.map(o=>[o.displayName,o.amount])).toEqual([['HON OS','249.00'],['HON OS','2097.00'],['HON OS Plus','349']]);
+  });
   it('explains savings and founder discounts in plain numbers',()=>{
     expect(yearlySavings('249','2097')).toEqual({savedMinor:89100,percent:30,monthsFree:3.6});
     expect(yearlySavings('249','2988')).toBeNull();expect(yearlySavings('abc','2097')).toBeNull();

@@ -10,7 +10,6 @@ import styles from './pricing-plan-builder.module.css';
 export const PLAN_STEPS=['type','pricing','included','credits','terms','review'] as const;
 export type PlanStep=typeof PLAN_STEPS[number];
 const PER_PLAN:readonly PlanStep[]=['pricing','included','credits'];
-const LAST='__last__';
 
 /**
  * GoHighLevel-style step editor over the existing whole offer set. Each plan (offers sharing a name) has its own prices,
@@ -26,7 +25,7 @@ export function PlanBuilder({controller,state}:{controller:PricingController;sta
   useEffect(()=>{setStep(form?.offers.length?'pricing':'type');setActiveId(null);},[form?.key]);
   if(!form)return null;
   const editable=controller.editable(),dirty=controller.dirty(),draft=plansFromForm(form),problems=allProblems(draft);
-  const plan=activeId===LAST?draft.plans.at(-1):draft.plans.find(x=>x.id===activeId)??draft.plans[0];
+  const plan=draft.plans.find(x=>x.id===activeId)??draft.plans[0];
   const write=(next:PlansDraft)=>controller.applyPlans(next);
   const update=(patch:Partial<PlanDraft>)=>{if(plan)write({...draft,plans:draft.plans.map(x=>x.id===plan.id?{...x,...patch}:x)});};
   const shared=(patch:Partial<Omit<PlansDraft,'plans'>>)=>write({...draft,...patch});
@@ -34,8 +33,7 @@ export function PlanBuilder({controller,state}:{controller:PricingController;sta
   const index=PLAN_STEPS.indexOf(step);
   const go=(next:PlanStep)=>setStep(next);
   const offerCount=draft.plans.reduce((n,x)=>n+(['monthly','annual','lifetime','founderMonthly','founderAnnual','founderLifetime'] as const).filter(k=>x[k].on).length,0);
-  // A new plan's local id becomes the key of its first offer once written, so select it as "the last plan".
-  const addPlan=()=>{write({...draft,plans:[...draft.plans,addedPlan(draft.plans)]});setActiveId(LAST);go('pricing');};
+  const addPlan=()=>{const added=addedPlan(draft.plans);write({...draft,plans:[...draft.plans,added]});setActiveId(added.id);go('pricing');};
   const removePlan=()=>{if(plan&&draft.plans.length>1){write({...draft,plans:draft.plans.filter(x=>x.id!==plan.id)});setActiveId(null);}};
 
   const priceRow=(key:PriceKey,unit:string,hint?:string|null)=>plan&&<div className={styles.priceRow} data-plan-price={key}>
