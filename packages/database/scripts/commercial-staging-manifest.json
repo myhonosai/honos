@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "3e8d7c59c626add752d3116583f59e6a0f8e09e25e59002c3f752b0a8f7f6542",
+  "chainSha256": "e595118e75df9cd999fa277d982627f6c83cfe51147a55acbbca0364ee1638db",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -1001,6 +1001,10 @@
     {
       "file": "0681_staff_timesheet_no_self_approval.sql",
       "sha256": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
+    },
+    {
+      "file": "0682_crm_board_text_opt_out.sql",
+      "sha256": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7"
     }
   ]
 }
