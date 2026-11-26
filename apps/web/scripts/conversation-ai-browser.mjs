@@ -35,7 +35,7 @@ function reset({ items = true } = {}) {
   const faq = (n, title, question, body, status = 'ACTIVE') => ({ itemId: id(100 + n), kind: 'FAQ', title, question, body, staffNote: null, summary: null, status, version: 1,
     updatedAt: T, updatedBy: 'Coach Kim', file: null });
   state = {
-    seen: new Map(),
+    seen: new Map(), tests: [], testMode: 'AI', testReason: null,
     settings: { enabled: false, modes: { SMS: 'OFF', WEB_CHAT: 'OFF', EMAIL: 'OFF' }, handoffWords: ['human', 'manager', 'cancel', 'refund', 'billing'], afterHoursText: null,
       smsMaxChars: 320, chatMaxChars: 640, languages: ['en'], enabledAt: null, enabledBy: null, version: 1 },
     items: items ? [
@@ -77,11 +77,25 @@ function api(route) {
   const rest = path.slice(`${prefix}/conversation-ai`.length);
   if (method === 'GET' && rest === '') return ok(route, { program, settings: state.settings, items: [...state.items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), canConfigure });
   if (method === 'GET' && rest === '/knowledge') return ok(route, knowledge());
+  // CE2 test chat: a canned synthetic answer from the fixture FAQs. No AI is called anywhere in this proof.
+  if (method === 'GET' && rest === '/test') return ok(route, { mode: state.testMode, reason: state.testReason, tests: state.tests });
   if (method !== 'POST') return json(route, 404, { code: 'NOT_FOUND' });
   const headers = request.headers(), key = headers['idempotency-key'] ?? null, body = JSON.parse(request.postData() ?? 'null');
   report.commands.push({ path: rest, command: headers['x-hon-human-command'], key: key !== null });
   if (key && state.seen.has(key)) return ok(route, state.seen.get(key), true);
   const answer = (data) => { if (key) state.seen.set(key, data); return ok(route, data, false); };
+  if (rest === '/test') {
+    if (state.testMode !== 'AI') return json(route, 403, { code: 'CONVERSATION_AI_TEST_UNAVAILABLE' });
+    if (!body || Object.keys(body).join(',') !== 'question' || typeof body.question !== 'string') return json(route, 400, { code: 'CONVERSATION_AI_TEST_INVALID' });
+    const faq = state.items.find((i) => i.kind !== 'INSTRUCTION' && i.question && body.question.toLowerCase().includes(i.question.toLowerCase().split(' ').slice(-2).join(' ').replace('?', '')));
+    const needsStaff = /refund|cancel|manager/i.test(body.question);
+    const view = { id: randomUUID(), status: 'ANSWERED', reason: null, question: body.question,
+      reply: needsStaff ? 'Thanks for letting us know. A team member will reach out to you today.' : faq ? faq.body : 'Great question! A team member will follow up with the details shortly.',
+      needsStaff, askedAt: now() };
+    state.tests = [view, ...state.tests].slice(0, 10);
+    if (key) state.seen.set(key, view);
+    return json(route, 200, { data: view, meta });
+  }
   if (rest === '/settings') {
     if (body.expectedVersion !== state.settings.version) return json(route, 409, { code: 'CONVERSATION_VERSION_CONFLICT' });
     const { expectedVersion, ...input } = body;
@@ -202,6 +216,41 @@ await check('hand-off: add and remove a word chip, pick a length preset', async 
   await page.getByText('Settings saved.').waitFor();
   assert.deepEqual(state.settings.handoffWords, ['human', 'manager', 'cancel', 'refund', 'injury']);
   assert.equal(state.settings.smsMaxChars, 160);
+  await ctx.close();
+});
+
+await check('try it: ask a sample question, see the answer, hand-off badge, save a better answer as coaching', async () => {
+  reset(); program = 'LIVE';
+  const { ctx, page } = await open({ width: 1440, height: 960 });
+  await page.getByRole('tab', { name: 'Try it' }).click();
+  await page.getByText('Nothing is sent to anyone', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Do you offer a free trial class?' }).click();
+  await page.getByText('Your first class is free.', { exact: false }).waitFor();
+  await page.getByLabel('Your test question').fill('I want to cancel and get a refund');
+  await page.getByRole('button', { name: 'Ask', exact: true }).click();
+  await page.getByText('Would hand off to staff').waitFor();
+  assert.equal(state.tests.length, 2);
+  await shot(page, 'cai-tryit-modern-en', true);
+  await page.getByRole('button', { name: 'Use a better answer' }).nth(1).click();
+  await page.getByLabel('The answer it should give').fill('Yes! The first class is free and you can come to any beginner class this week.');
+  await page.getByRole('button', { name: 'Save so the AI learns it' }).click();
+  await page.getByText('Saved. The AI will use this answer from now on.').waitFor();
+  const coaching = state.items.find((i) => i.kind === 'COACHING');
+  assert.equal(coaching?.question, 'Do you offer a free trial class?');
+  assert.match(coaching?.body ?? '', /any beginner class/);
+  // The last checklist step is now ticked.
+  assert.equal(await page.locator('li[data-done="true"]', { hasText: 'Try it with a question' }).count(), 1);
+  await ctx.close();
+});
+
+await check('try it: not configured yet says so and asks nothing', async () => {
+  reset(); program = 'OFF'; state.testMode = 'UNAVAILABLE'; state.testReason = 'NOT_CONFIGURED';
+  const { ctx, page } = await open({ width: 390, height: 844 }, { mode: 'big-button' });
+  await page.getByRole('tab', { name: 'Try it' }).click();
+  await page.getByText('HON hasn’t connected the AI service yet.', { exact: false }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Ask', exact: true }).isDisabled(), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false, 'try it tab scrolls sideways');
+  await shot(page, 'cai-tryit-not-configured-big-button-en-phone', true);
   await ctx.close();
 });
 

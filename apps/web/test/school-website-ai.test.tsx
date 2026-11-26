@@ -57,10 +57,28 @@ it('the panel explains what Marcus can do, waits for a saved draft, and reads in
   const noop = () => undefined;
   const html = renderToStaticMarkup(<WebsiteAiPanel scope={scope} site={site()} dirty={true} busy={false} language="en" device="desktop" schoolName="Tiger Dojo" onApplied={noop} onBusy={noop}
     api={{ ...websiteAiApi, list: async () => [] }} />);
-  expect(html).toContain('Ask Marcus to edit your website');
+  expect(html).toContain('Build and change your website with Marcus');
+  expect(html).toContain('Message Marcus');
+  expect(html).toContain('He answers with changes you can preview first');
   expect(html).toContain('Save your changes first');
   expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Ask Marcus<\/button>/);
   expect(html).toContain('never picks images, forms, booking pages or outside links');
   for (const lang of ['ko', 'es']) expect(websiteAiText(lang, 'title')).not.toBe(websiteAiText('en', 'title'));
   expect(websiteAiText('ko', 'left', { n: '10' })).toContain('10');
+});
+
+it('the start form lets the owner describe the school so Marcus builds the first draft', async () => {
+  const { WebsiteView } = await import('../src/components/school-website/view');
+  const noop = () => undefined;
+  const on = new Proxy({}, { get: () => noop }) as never;
+  const base = { language: 'en', locale: 'en-US', mode: 'modern', waiting: false, concealed: false, hasSchool: true, schoolName: 'Tiger Dojo',
+    read: { state: 'READY', website: null } as const, draft: null, name: '', dirty: false, choices: { forms: [], bookings: [] }, tab: 'edit' as const, device: 'desktop' as const,
+    pageSlug: 'home', sectionId: null, confirming: null, note: '', outcome: null, locked: false, canRetry: false, origin: 'https://app.example', on };
+  const empty = renderToStaticMarkup(<WebsiteView {...base} start={{ name: 'Tiger Dojo', slug: 'tiger-dojo', template: 'MODERN_CLEAN', describe: '' }} />);
+  expect(empty).toContain('Describe your school and the website you want');
+  expect(empty).toContain('data-website-describe');
+  expect(empty).toMatch(/<button type="submit"[^>]*>Create website<\/button>/);
+  const described = renderToStaticMarkup(<WebsiteView {...base} start={{ name: 'Tiger Dojo', slug: 'tiger-dojo', template: 'MODERN_CLEAN', describe: 'Kids taekwondo in Austin' }} />);
+  expect(described).toMatch(/<button type="submit"[^>]*>Build my website with Marcus<\/button>/);
+  for (const lang of ['ko', 'es']) expect(websiteAiText(lang, 'building')).not.toBe(websiteAiText('en', 'building'));
 });

@@ -12,7 +12,7 @@ export type AttentionState = { state: 'LOADING' } | { state: 'DENIED' } | { stat
 const FIRST = 50, MAX = 200;
 
 /**
- * Schools needing attention (B-HQ-2b). Read only. Leaving the tab (blur, hidden tab, page hide) or a session end hides
+ * Schools needing attention (B-HQ-2b). Read only. A session end hides
  * every school and retires the read; "Show again" reads fresh. The server decides who may read, on every read.
  */
 export function HqSchoolsAttention({ api = healthApi }: { api?: HealthApi }): React.ReactElement {
@@ -26,11 +26,8 @@ export function HqSchoolsAttention({ api = healthApi }: { api?: HealthApi }): Re
 
   useEffect(() => {
     const conceal = () => { generation.current++; setConcealed(true); setLimit(FIRST); setState({ state: 'LOADING' }); };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {

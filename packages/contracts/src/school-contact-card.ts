@@ -87,3 +87,51 @@ export function verifySchoolContactCard(value: unknown, personId: string): Schoo
     return { kind: y.kind as SchoolContactTimelineKind, at: instant(y.at), detail: maybe(y.detail, 200) }; });
   return { generatedAt: instant(s.generatedAt), person, overview, family, appointments, tasks, membership, billing, messages, timeline };
 }
+
+/**
+ * 0659: membership details for the card's Membership tab, one entry per membership the card lists (not DRAFT, newest 20).
+ * Payer and payment schedule need billing.membership.read; paid and due need a receivables-reader code (money true),
+ * otherwise they are null. Nothing about cards, methods or processors.
+ */
+export const SCHOOL_CONTACT_SCHEDULE_FREQUENCIES = ['WEEKLY', 'MONTHLY', 'ANNUAL', 'CUSTOM'] as const;
+export const SCHOOL_CONTACT_SCHEDULE_STATUSES = ['ACTIVE', 'PAUSED', 'CANCELLED'] as const;
+export interface SchoolContactMembershipDetail {
+  membershipId: string;
+  payer: { personId: string; givenName: string; familyName: string } | null;
+  schedule: { frequency: typeof SCHOOL_CONTACT_SCHEDULE_FREQUENCIES[number]; amountMinor: number; currency: string; nextChargeAt: string | null;
+    autoRenew: boolean; status: typeof SCHOOL_CONTACT_SCHEDULE_STATUSES[number] } | null;
+  paid: { currency: string; paidMinor: number; dueMinor: number }[] | null;
+  lastPaidOn: string | null;
+}
+export type SchoolContactMembershipDetails = { allowed: false } | { allowed: true; money: boolean; items: SchoolContactMembershipDetail[] };
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export function verifySchoolContactMembershipDetails(value: unknown): SchoolContactMembershipDetails {
+  if (value && typeof value === 'object' && !Array.isArray(value) && (value as { allowed?: unknown }).allowed === false) { exact(value, ['allowed']); return { allowed: false }; }
+  const s = exact(value, ['allowed', 'money', 'items']);
+  if (s.allowed !== true) fail();
+  const money = bool(s.money);
+  const amount = (v: unknown) => { if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0) fail(); return v; };
+  const currency = (v: unknown) => { const c = text(v, 3); if (!CURRENCY.test(c)) fail(); return c; };
+  const seen = new Set<string>();
+  const items = list(s.items, 20, x => {
+    const y = exact(x, ['membershipId', 'payer', 'schedule', 'paid', 'lastPaidOn']);
+    const membershipId = uuid(y.membershipId);
+    if (seen.has(membershipId)) fail(); seen.add(membershipId);
+    let payer: SchoolContactMembershipDetail['payer'] = null;
+    if (y.payer !== null) { const p = exact(y.payer, ['personId', 'givenName', 'familyName']); payer = { personId: uuid(p.personId), givenName: text(p.givenName, 200), familyName: text(p.familyName, 200) }; }
+    let schedule: SchoolContactMembershipDetail['schedule'] = null;
+    if (y.schedule !== null) {
+      const c = exact(y.schedule, ['frequency', 'amountMinor', 'currency', 'nextChargeAt', 'autoRenew', 'status']);
+      if (!(SCHOOL_CONTACT_SCHEDULE_FREQUENCIES as readonly unknown[]).includes(c.frequency) || !(SCHOOL_CONTACT_SCHEDULE_STATUSES as readonly unknown[]).includes(c.status)) fail();
+      schedule = { frequency: c.frequency as typeof SCHOOL_CONTACT_SCHEDULE_FREQUENCIES[number], amountMinor: amount(c.amountMinor), currency: currency(c.currency),
+        nextChargeAt: maybeInstant(c.nextChargeAt), autoRenew: bool(c.autoRenew), status: c.status as typeof SCHOOL_CONTACT_SCHEDULE_STATUSES[number] };
+    }
+    if (!money && (y.paid !== null || y.lastPaidOn !== null)) fail();
+    const paid = y.paid === null ? null : list(y.paid, 10, z => { const q = exact(z, ['currency', 'paidMinor', 'dueMinor']); return { currency: currency(q.currency), paidMinor: amount(q.paidMinor), dueMinor: amount(q.dueMinor) }; });
+    if (money && paid === null) fail();
+    const lastPaidOn = y.lastPaidOn === null ? null : text(y.lastPaidOn, 10);
+    if (lastPaidOn !== null && !DAY.test(lastPaidOn)) fail();
+    return { membershipId, payer, schedule, paid, lastPaidOn };
+  });
+  return { allowed: true, money, items };
+}

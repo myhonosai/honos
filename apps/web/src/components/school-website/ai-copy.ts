@@ -1,9 +1,9 @@
 /** WB5 "Ask Marcus" wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
-  title: 'Ask Marcus to edit your website',
+  title: 'Build and change your website with Marcus',
   help: 'Describe a change in your own words. Marcus suggests edits to your saved draft; nothing changes until you apply them, and you still publish yourself. Each request uses AI credits.',
   limits: 'Marcus can change text, sections, pages, colours and fonts. He never picks images, forms, booking pages or outside links, and leaves [placeholders] for facts he does not know.',
-  label: 'What should change?', placeholder: 'For example: add a summer camp page and make the welcome warmer for parents.',
+  label: 'Message Marcus', placeholder: 'For example: add a summer camp page and make the welcome warmer for parents.',
   ask: 'Ask Marcus', asking: 'Marcus is working on it. This can take up to a minute…', saveFirst: 'Save your changes first, so Marcus works on your saved draft.',
   left: '{n} characters left',
   suggestion: 'Marcus suggests', changes: '{n} changes', preview: 'Preview the suggestion', hidePreview: 'Hide preview', previewNote: 'Preview of the suggested draft. Nothing is saved yet.',
@@ -23,13 +23,17 @@ const en = {
   e_DOES_NOT_FIT: 'Some suggested changes no longer fit your current draft. Dismiss this suggestion and ask again. Nothing changed.',
   e_GONE: 'This suggestion was already applied or dismissed. Nothing changed.', e_INVALID: 'Describe the change in plain words, up to 1,000 characters. Nothing was sent.',
   e_UNKNOWN: 'We could not confirm whether this went through. While this page stays open, Try again sends exactly the same request, so it cannot happen twice.', tryAgain: 'Try again',
+  conversation: 'Your conversation with Marcus', you: 'You', marcus: 'Marcus', showChanges: 'See each change',
+  empty: 'Tell Marcus what you want in your own words: a new page, a warmer welcome, bolder colours. He answers with changes you can preview first.',
+  building: 'Marcus is building your first draft from your description. This can take up to a minute…',
+  s_RESULT_RECORDED: 'Suggestion ready.', s_RESULT_REJECTED: 'This answer could not be used. Nothing changed.', s_APPLIED: 'Applied to your draft.', s_DISMISSED: 'Skipped. Nothing changed.',
 };
 export type WebsiteAiKey = keyof typeof en;
 const ko: Record<WebsiteAiKey, string> = {
-  title: 'Marcus에게 웹사이트 편집 요청',
+  title: 'Marcus와 웹사이트 만들고 바꾸기',
   help: '바꾸고 싶은 내용을 직접 적어 주세요. Marcus가 저장된 초안에 대한 편집을 제안합니다. 적용하기 전에는 아무것도 바뀌지 않으며, 게시는 직접 하셔야 합니다. 요청할 때마다 AI 크레딧이 사용됩니다.',
   limits: 'Marcus는 글, 섹션, 페이지, 색상, 글꼴을 바꿀 수 있습니다. 이미지, 양식, 예약 페이지, 외부 링크는 고르지 않으며, 모르는 정보는 [안내 문구]로 남깁니다.',
-  label: '무엇을 바꿀까요?', placeholder: '예: 여름 캠프 페이지를 추가하고 학부모를 위한 환영 문구를 더 따뜻하게 바꿔 주세요.',
+  label: 'Marcus에게 메시지', placeholder: '예: 여름 캠프 페이지를 추가하고 학부모를 위한 환영 문구를 더 따뜻하게 바꿔 주세요.',
   ask: 'Marcus에게 요청', asking: 'Marcus가 작업 중입니다. 최대 1분 정도 걸릴 수 있습니다…', saveFirst: 'Marcus가 저장된 초안으로 작업하도록 먼저 변경 내용을 저장하세요.',
   left: '{n}자 남음',
   suggestion: 'Marcus의 제안', changes: '변경 {n}개', preview: '제안 미리보기', hidePreview: '미리보기 숨기기', previewNote: '제안된 초안의 미리보기입니다. 아직 저장되지 않았습니다.',
@@ -49,12 +53,16 @@ const ko: Record<WebsiteAiKey, string> = {
   e_DOES_NOT_FIT: '일부 제안이 현재 초안에 더 이상 맞지 않습니다. 이 제안을 닫고 다시 요청하세요. 바뀐 것은 없습니다.',
   e_GONE: '이 제안은 이미 적용되었거나 닫혔습니다. 바뀐 것은 없습니다.', e_INVALID: '바꿀 내용을 1,000자 이내의 일반 문장으로 적어 주세요. 아무것도 보내지 않았습니다.',
   e_UNKNOWN: '처리되었는지 확인하지 못했습니다. 이 페이지가 열려 있는 동안 다시 시도를 누르면 똑같은 요청을 보내므로 두 번 처리되지 않습니다.', tryAgain: '다시 시도',
+  conversation: 'Marcus와의 대화', you: '나', marcus: 'Marcus', showChanges: '변경 내용 하나씩 보기',
+  empty: '원하는 것을 편하게 말해 주세요. 새 페이지, 더 따뜻한 인사말, 더 강한 색상 등. Marcus가 먼저 미리 볼 수 있는 변경을 제안합니다.',
+  building: 'Marcus가 설명을 바탕으로 첫 초안을 만들고 있습니다. 최대 1분 정도 걸릴 수 있습니다…',
+  s_RESULT_RECORDED: '제안이 준비되었습니다.', s_RESULT_REJECTED: '이 답변은 사용할 수 없었습니다. 바뀐 것은 없습니다.', s_APPLIED: '초안에 적용했습니다.', s_DISMISSED: '건너뛰었습니다. 바뀐 것은 없습니다.',
 };
 const es: Record<WebsiteAiKey, string> = {
-  title: 'Pídale a Marcus que edite su sitio web',
+  title: 'Cree y cambie su sitio web con Marcus',
   help: 'Describa un cambio con sus propias palabras. Marcus sugiere ediciones a su borrador guardado; nada cambia hasta que usted las aplique, y la publicación la hace usted. Cada solicitud usa créditos de IA.',
   limits: 'Marcus puede cambiar textos, secciones, páginas, colores y fuentes. Nunca elige imágenes, formularios, páginas de reservas ni enlaces externos, y deja [marcadores] para los datos que no conoce.',
-  label: '¿Qué debe cambiar?', placeholder: 'Por ejemplo: agregue una página del campamento de verano y haga la bienvenida más cálida para los padres.',
+  label: 'Mensaje para Marcus', placeholder: 'Por ejemplo: agregue una página del campamento de verano y haga la bienvenida más cálida para los padres.',
   ask: 'Pedir a Marcus', asking: 'Marcus está trabajando en ello. Puede tardar hasta un minuto…', saveFirst: 'Guarde sus cambios primero, para que Marcus trabaje sobre su borrador guardado.',
   left: 'Quedan {n} caracteres',
   suggestion: 'Marcus sugiere', changes: '{n} cambios', preview: 'Ver la sugerencia', hidePreview: 'Ocultar vista previa', previewNote: 'Vista previa del borrador sugerido. Todavía no se guardó nada.',
@@ -74,6 +82,10 @@ const es: Record<WebsiteAiKey, string> = {
   e_DOES_NOT_FIT: 'Algunos cambios sugeridos ya no encajan con su borrador actual. Descarte esta sugerencia y vuelva a pedirlo. No cambió nada.',
   e_GONE: 'Esta sugerencia ya se aplicó o se descartó. No cambió nada.', e_INVALID: 'Describa el cambio con palabras sencillas, hasta 1,000 caracteres. No se envió nada.',
   e_UNKNOWN: 'No pudimos confirmar si se completó. Mientras esta página siga abierta, Intentar de nuevo envía exactamente la misma solicitud, así que no puede ocurrir dos veces.', tryAgain: 'Intentar de nuevo',
+  conversation: 'Su conversación con Marcus', you: 'Usted', marcus: 'Marcus', showChanges: 'Ver cada cambio',
+  empty: 'Dígale a Marcus lo que quiere con sus palabras: una página nueva, una bienvenida más cálida, colores más fuertes. Él responde con cambios que puede ver primero.',
+  building: 'Marcus está creando su primer borrador a partir de su descripción. Puede tardar hasta un minuto…',
+  s_RESULT_RECORDED: 'Sugerencia lista.', s_RESULT_REJECTED: 'No se pudo usar esta respuesta. No cambió nada.', s_APPLIED: 'Aplicado a su borrador.', s_DISMISSED: 'Omitido. No cambió nada.',
 };
 const TABLES: Record<string, Record<WebsiteAiKey, string>> = { en, ko, es };
 export function websiteAiText(language: string, key: WebsiteAiKey, vars?: Record<string, string>): string {

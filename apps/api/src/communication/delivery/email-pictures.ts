@@ -56,6 +56,9 @@ export function renderEmailWithPictures(content: string, pictures: readonly Emai
   const text: string[] = [];
   const blocks: string[] = [];
   let paragraph: string[] = [];
+  // BL2: HON's own checkout and video page links written in the message become links in the HTML part (the text part keeps them as is).
+  const own = new RegExp(`${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/(?:checkout/[a-f0-9]{48}|v/[A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])`, 'g');
+  const linked = (line: string) => escapeHtml(line).replace(own, url => `<a href="${url}" style="color:#1f2933">${url}</a>`);
   const close = () => { if (paragraph.length) { blocks.push(`<p style="margin:0 0 16px 0">${paragraph.join('<br>')}</p>`); paragraph = []; } };
   for (const line of content.replace(/\r\n?/g, '\n').split('\n')) {
     const match = LINE.exec(line);
@@ -79,7 +82,7 @@ export function renderEmailWithPictures(content: string, pictures: readonly Emai
       continue;
     }
     text.push(line);
-    if (line.trim() === '') close(); else paragraph.push(escapeHtml(line));
+    if (line.trim() === '') close(); else paragraph.push(linked(line));
   }
   close();
   const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>'

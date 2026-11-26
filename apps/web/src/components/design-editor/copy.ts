@@ -1,6 +1,9 @@
 import type { CreativeDesignFont, CreativeDesignSizeCode } from '@hon/contracts';
 
 const en = {
+  hqTitle: 'Designs for HON', hqIntro: 'Make flyers, posters and social graphics to market HON OS. Drag things around, click to change them, and download when you are done. Nothing here costs anything or uses AI.',
+  hqDenied: 'Your HQ access does not include marketing, so HQ designs are not shown.', hqPhotoLimit: 'HQ has reached its photo limit.',
+  hqRefusedLimit: 'HQ has reached the design limit. Archive one first.', hqColor: 'HON color',
   title: 'Designs', intro: 'Make flyers, posters, postcards and social posts for your school. Drag things around, click to change them, and download when you are done.',
   newTitle: 'New design', newName: 'Name', newSize: 'Size', newCreate: 'Create design', newNameDefault: 'Untitled design',
   listActive: 'Your designs', listArchived: 'Archived', showArchived: 'Show archived', showActive: 'Show current designs',
@@ -38,6 +41,9 @@ const en = {
 export type DesignKey = keyof typeof en;
 
 const ko: Record<DesignKey, string> = {
+  hqTitle: 'HON 디자인', hqIntro: 'HON OS 홍보용 전단, 포스터, 소셜 그래픽을 만드세요. 끌어서 옮기고, 눌러서 바꾸고, 다 되면 내려받으세요. 비용도 AI도 쓰지 않습니다.',
+  hqDenied: 'HQ 권한에 마케팅이 없어 HQ 디자인을 보여 주지 않습니다.', hqPhotoLimit: 'HQ 사진 한도에 도달했습니다.',
+  hqRefusedLimit: 'HQ 디자인 한도에 도달했습니다. 먼저 하나를 보관하세요.', hqColor: 'HON 색상',
   title: '디자인', intro: '학교 전단지, 포스터, 엽서, 소셜 게시물을 만드세요. 끌어서 옮기고, 눌러서 바꾸고, 다 되면 내려받으세요.',
   newTitle: '새 디자인', newName: '이름', newSize: '크기', newCreate: '디자인 만들기', newNameDefault: '제목 없는 디자인',
   listActive: '내 디자인', listArchived: '보관됨', showArchived: '보관된 디자인 보기', showActive: '현재 디자인 보기',
@@ -73,6 +79,9 @@ const ko: Record<DesignKey, string> = {
   photosLoading: '사진을 아직 불러오는 중입니다. 잠시 후 다시 내려받으세요.',
 };
 const es: Record<DesignKey, string> = {
+  hqTitle: 'Diseños para HON', hqIntro: 'Crea volantes, carteles y gráficos sociales para promocionar HON OS. Arrastra, haz clic para cambiar y descarga cuando termines. Aquí nada cuesta ni usa IA.',
+  hqDenied: 'Tu acceso a HQ no incluye marketing, así que no se muestran los diseños de HQ.', hqPhotoLimit: 'HQ llegó a su límite de fotos.',
+  hqRefusedLimit: 'HQ llegó al límite de diseños. Archiva uno primero.', hqColor: 'Color de HON',
   title: 'Diseños', intro: 'Crea volantes, carteles, postales y publicaciones para tu escuela. Arrastra para mover, haz clic para cambiar y descarga al terminar.',
   newTitle: 'Nuevo diseño', newName: 'Nombre', newSize: 'Tamaño', newCreate: 'Crear diseño', newNameDefault: 'Diseño sin título',
   listActive: 'Tus diseños', listArchived: 'Archivados', showArchived: 'Ver archivados', showActive: 'Ver diseños actuales',
