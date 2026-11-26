@@ -29,6 +29,7 @@ export const HQ_GROWTH = [
   { path: '/hq/growth/founder-campaigns', title: 'Founder Campaigns', icon: 'target' },
   { path: '/hq/growth/prospects', title: 'Prospects', icon: 'team' },
   { path: '/hq/marketing', title: 'Marketing & Creative', icon: 'target' },
+  { path: '/hq/marketing/creative/designs', title: 'Flyers & posters', icon: 'gift' },
 ] as const;
 export const HQ_SCHOOLS = [
   { path: '/hq/schools', title: 'All schools', icon: 'school' },
@@ -130,6 +131,7 @@ export function hqPageLabel(path: string): string {
   if (/^\/hq\/growth\/contests\/[0-9a-f-]{36}$/i.test(path)) return 'Contest detail';
   if (path === '/hq/schools') return 'Schools';
   if (path === '/hq/marketing/creative') return 'Creative Studio';
+  if (path === '/hq/marketing/creative/designs') return 'Flyers & posters';
   const fixed = [...HQ_REVENUE, ...HQ_AI, ...HQ_GROWTH, ...HQ_INBOX, ...HQ_SETTINGS, ...HQ_SCHOOLS, ...HQ_NAV].find((item) => item.path === path);
   if (fixed) return fixed.title;
   const executive = HQ_EXECUTIVES.find((entry) => path === `/hq/executives/${entry.executiveKey}`);

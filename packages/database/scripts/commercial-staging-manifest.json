@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "62bb55a8e6940c478cf693de10ac274cf7d874af9df97c6365d8ddfab3916c80",
+  "chainSha256": "bc71a2df199d38315e06f791b37114eeae0f1b39a34d066c9945475c4d13ceb1",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -843,6 +843,10 @@
       "sha256": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1"
     },
     {
+      "file": "0626_pgcrypto_public_gen_random_bytes.sql",
+      "sha256": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13"
+    },
+    {
       "file": "0627_public_checkout_orders.sql",
       "sha256": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
     },
@@ -985,6 +989,14 @@
     {
       "file": "0677_hq_ad_account_connections.sql",
       "sha256": "680101b594c865cede1c7ae422f0acab5f1dea0f54b27b2316edd47731ac0dbf"
+    },
+    {
+      "file": "0678_hq_creative_designs.sql",
+      "sha256": "db2386168b7e785baf3bab1ff902b11e31278126d400fc160920a95834579970"
+    },
+    {
+      "file": "0680_membership_activates_on_signing.sql",
+      "sha256": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb"
     },
     {
       "file": "0696_hq_enter_school.sql",
