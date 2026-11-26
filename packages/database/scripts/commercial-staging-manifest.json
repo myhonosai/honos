@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "96c76c1e072daddb1eef78a8ef2565de733905bf8eb50b0fdd33ecebdead9d41",
+  "chainSha256": "3e8d7c59c626add752d3116583f59e6a0f8e09e25e59002c3f752b0a8f7f6542",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -997,6 +997,10 @@
     {
       "file": "0680_membership_activates_on_signing.sql",
       "sha256": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb"
+    },
+    {
+      "file": "0681_staff_timesheet_no_self_approval.sql",
+      "sha256": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
     }
   ]
 }
