@@ -45,7 +45,9 @@ const one = async (client, sql, params) => (await client.query(sql, params)).row
 const call = async (fn, args, types) => (await one(runtime, `SELECT hon.${fn}(${args.map((_, i) => `$${i + 1}${types?.[i] ?? ''}`).join(',')}) AS d`, args)).d;
 const replies = (who, school = null, limit = 100) => call('read_hq_replies', [H(who), school, limit], ['', '::uuid', '::integer']);
 let ev = 0;
-const inbound = async (from, body, { event = `reply-ev-${++ev}`, at = new Date() } = {}) =>
+// Default receipt time sits a minute ahead: the function clamps it to its own clock, so a reply is
+// always after a delivery the database just accepted (JS ms vs Postgres µs could otherwise race).
+const inbound = async (from, body, { event = `reply-ev-${++ev}`, at = new Date(Date.now() + 60_000) } = {}) =>
   one(worker, 'SELECT * FROM hon.record_hq_inbound_text($1,$2,$3,$4,$5,$6)', ['FAKE', event, from, SID, body, at.toISOString()]);
 const hoursAgo = (n) => new Date(Date.now() - n * 3_600_000);
 
