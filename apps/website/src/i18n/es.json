@@ -263,10 +263,15 @@
  "0.5 h": "0,5 h",
  "1 h": "1 h",
  "2 h": "2 h",
- "Today vs. <em class=\"s\">HON OS</em>": "Hoy vs. <em class=\"s\">HON OS</em>",
- "An estimate built on a real martial arts school in California with 200 students: how many students it could have a year from now, and how many hours of office work a week it could save. Your results will differ.": "Una estimación basada en una escuela de artes marciales real de California con 200 alumnos: cuántos alumnos podría tener dentro de un año y cuántas horas de trabajo de oficina a la semana podría ahorrar. Tus resultados serán distintos.",
- "Estimated students 12 months from now": "Alumnos estimados dentro de 12 meses",
- "at today's pace": "al ritmo actual",
  "Without HON OS": "Sin HON OS",
- "Estimate, not a promise. Starting point: a real martial arts school in California with 200 students. Over its last 12 months it averaged 20 trial appointments a month; 64% showed up, 58% of those joined, and about 3.2% of students left each month. At that pace it reaches about 210 in 12 months. With HON OS, we assume reminders lift show-ups to 75%, follow-ups lift joining to 65%, and absence alerts cut leaving to 2.5% a month, giving about 250. Hours are our estimate of typical weekly office work.": "Estimación, no una promesa. Punto de partida: una escuela de artes marciales real de California con 200 alumnos. En sus últimos 12 meses tuvo en promedio 20 citas de prueba al mes; asistió el 64 %, se inscribió el 58 % de quienes asistieron y cada mes se fue cerca del 3,2 % de los alumnos. A ese ritmo llega a unos 210 en 12 meses. Con HON OS, suponemos que los recordatorios suben la asistencia al 75 %, el seguimiento sube las inscripciones al 65 % y las alertas de ausencia bajan las bajas al 2,5 % al mes, lo que da unos 250. Las horas son nuestra estimación del trabajo de oficina semanal típico."
+ "Real growth vs. <em class=\"s\">HON OS</em>": "Crecimiento real vs. <em class=\"s\">HON OS</em>",
+ "A real martial arts school in California grew from 21 students in September 2022 to 200 in October 2026 without HON OS. Next to it: our estimate of the same school with HON OS, and the office hours a week it could save. Your results will differ.": "Una escuela de artes marciales real en California pasó de 21 alumnos en septiembre de 2022 a 200 en octubre de 2026 sin HON OS. Al lado: nuestra estimación de la misma escuela con HON OS y las horas de oficina por semana que podría ahorrar. Tus resultados serán distintos.",
+ "Students each October: real vs. estimated with HON OS": "Alumnos cada octubre: reales vs. estimados con HON OS",
+ "Real students, without HON OS": "Alumnos reales, sin HON OS",
+ "Estimate with HON OS": "Estimación con HON OS",
+ "Oct 2023": "oct. 2023",
+ "Oct 2024": "oct. 2024",
+ "Oct 2025": "oct. 2025",
+ "Oct 2026": "oct. 2026",
+ "Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, 66% of those joined, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.": "Una estimación, no una promesa. Los números reales son los registros mensuales de la propia escuela de septiembre de 2022 a octubre de 2026: 1266 citas de prueba, el 50 % asistió, el 66 % de ellos se inscribió y cerca del 3,7 % de los alumnos se fue cada mes. Para la estimación con HON OS repetimos los mismos meses con las mismas citas y suponemos que los recordatorios suben la asistencia al 60 % y que las alertas de ausencia bajan las bajas al 2,9 % al mes; la inscripción se queda en el 66 %. Así se llega a unos 275 alumnos en octubre de 2026 en lugar de 200. Las horas son nuestra estimación del trabajo de oficina semanal típico."
 }

@@ -176,21 +176,24 @@
 <section class="chart-sec" id="cost">
   <div class="wrap">
     <div class="chart-head">
-      <h2 data-t>Today vs. <em class="s">HON OS</em></h2>
-      <p>An estimate built on a real martial arts school in California with 200 students: how many students it could have a year from now, and how many hours of office work a week it could save. Your results will differ.</p>
+      <h2 data-t>Real growth vs. <em class="s">HON OS</em></h2>
+      <p>A real martial arts school in California grew from 21 students in September 2022 to 200 in October 2026 without HON OS. Next to it: our estimate of the same school with HON OS, and the office hours a week it could save. Your results will differ.</p>
     </div>
     <div class="charts">
-      <figure class="chart-fig">
-        <figcaption class="mono">Estimated students 12 months from now</figcaption>
+      <figure class="chart-fig wide">
+        <figcaption class="mono">Students each October: real vs. estimated with HON OS</figcaption>
+        <ul class="legend"><li><i aria-hidden="true"></i>Real students, without HON OS</li><li class="hot"><i aria-hidden="true"></i>Estimate with HON OS</li></ul>
         <div data-flow>
-          <div class="chart duo">
+          <div class="chart years">
             <div class="axis" aria-hidden="true"><span>300</span><span>200</span><span>100</span><span></span></div>
             <span></span>
-            <div class="bar" style="--h:70%;--i:0"><b data-count="210" data-pre="">210</b><small>at today's pace</small></div>
-            <div class="bar hot" style="--h:83.3%;--i:1"><b data-count="250" data-pre="">250</b><small>with HON OS</small></div>
+            <div class="pair"><div class="bar" style="--h:39.7%;--i:0"><b data-count="119" data-pre="">119</b></div><div class="bar hot" style="--h:47.7%;--i:0"><b data-count="143" data-pre="">143</b></div></div>
+            <div class="pair"><div class="bar" style="--h:48%;--i:1"><b data-count="144" data-pre="">144</b></div><div class="bar hot" style="--h:62%;--i:1"><b data-count="186" data-pre="">186</b></div></div>
+            <div class="pair"><div class="bar" style="--h:61%;--i:2"><b data-count="183" data-pre="">183</b></div><div class="bar hot" style="--h:81.3%;--i:2"><b data-count="244" data-pre="">244</b></div></div>
+            <div class="pair"><div class="bar" style="--h:66.7%;--i:3"><b data-count="200" data-pre="">200</b></div><div class="bar hot" style="--h:91.7%;--i:3"><b data-count="275" data-pre="">275</b></div></div>
           </div>
         </div>
-        <div class="chart-x duo"><span></span><span>Without HON OS</span><span>HON OS</span></div>
+        <div class="chart-x years"><span></span><span>Oct 2023</span><span>Oct 2024</span><span>Oct 2025</span><span>Oct 2026</span></div>
       </figure>
       <figure class="chart-fig">
         <figcaption class="mono">Estimated office hours a week</figcaption>
@@ -204,20 +207,20 @@
         </div>
         <div class="chart-x duo"><span></span><span>Without HON OS</span><span>HON OS</span></div>
       </figure>
+      <table class="est">
+        <caption class="mono">Where the hours go each week (estimate)</caption>
+        <thead><tr><th scope="col">Task</th><th scope="col">Without HON OS</th><th scope="col">HON OS</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Following up leads and trial students</th><td>4 h</td><td>1.5 h</td></tr>
+          <tr><th scope="row">Attendance and check-in</th><td>3 h</td><td>0.5 h</td></tr>
+          <tr><th scope="row">Tuition and payment records</th><td>3 h</td><td>1 h</td></tr>
+          <tr><th scope="row">Marketing posts and emails</th><td>4 h</td><td>1 h</td></tr>
+          <tr><th scope="row">Belt testing preparation</th><td>2 h</td><td>1 h</td></tr>
+          <tr class="total"><th scope="row">Total</th><td>16 h</td><td>5 h</td></tr>
+        </tbody>
+      </table>
     </div>
-    <table class="est">
-      <caption class="mono">Where the hours go each week (estimate)</caption>
-      <thead><tr><th scope="col">Task</th><th scope="col">Without HON OS</th><th scope="col">HON OS</th></tr></thead>
-      <tbody>
-        <tr><th scope="row">Following up leads and trial students</th><td>4 h</td><td>1.5 h</td></tr>
-        <tr><th scope="row">Attendance and check-in</th><td>3 h</td><td>0.5 h</td></tr>
-        <tr><th scope="row">Tuition and payment records</th><td>3 h</td><td>1 h</td></tr>
-        <tr><th scope="row">Marketing posts and emails</th><td>4 h</td><td>1 h</td></tr>
-        <tr><th scope="row">Belt testing preparation</th><td>2 h</td><td>1 h</td></tr>
-        <tr class="total"><th scope="row">Total</th><td>16 h</td><td>5 h</td></tr>
-      </tbody>
-    </table>
-    <p class="source">Estimate, not a promise. Starting point: a real martial arts school in California with 200 students. Over its last 12 months it averaged 20 trial appointments a month; 64% showed up, 58% of those joined, and about 3.2% of students left each month. At that pace it reaches about 210 in 12 months. With HON OS, we assume reminders lift show-ups to 75%, follow-ups lift joining to 65%, and absence alerts cut leaving to 2.5% a month, giving about 250. Hours are our estimate of typical weekly office work.</p>
+    <p class="source">Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, 66% of those joined, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.</p>
   </div>
 </section>
 </div>

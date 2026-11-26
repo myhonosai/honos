@@ -263,10 +263,15 @@
  "0.5 h": "0.5시간",
  "1 h": "1시간",
  "2 h": "2시간",
- "Today vs. <em class=\"s\">HON OS</em>": "지금 vs. <em class=\"s\">HON OS</em>",
- "An estimate built on a real martial arts school in California with 200 students: how many students it could have a year from now, and how many hours of office work a week it could save. Your results will differ.": "캘리포니아의 실제 도장(수련생 200명)을 바탕으로 한 추정치입니다. 1년 뒤 수련생이 몇 명이 될 수 있는지, 매주 사무 업무를 몇 시간 줄일 수 있는지 보여 줍니다. 실제 결과는 도장마다 다릅니다.",
- "Estimated students 12 months from now": "12개월 뒤 예상 수련생 수",
- "at today's pace": "지금 속도대로",
  "Without HON OS": "HON OS 없이",
- "Estimate, not a promise. Starting point: a real martial arts school in California with 200 students. Over its last 12 months it averaged 20 trial appointments a month; 64% showed up, 58% of those joined, and about 3.2% of students left each month. At that pace it reaches about 210 in 12 months. With HON OS, we assume reminders lift show-ups to 75%, follow-ups lift joining to 65%, and absence alerts cut leaving to 2.5% a month, giving about 250. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 출발점: 수련생 200명인 캘리포니아의 실제 도장. 최근 12개월 동안 매달 평균 체험 예약 20건, 그중 64%가 방문했고 방문자의 58%가 등록했으며, 매달 수련생의 약 3.2%가 그만뒀습니다. 이 속도라면 12개월 뒤 약 210명입니다. HON OS 사용 시 가정: 알림으로 방문율이 75%로, 후속 연락으로 등록률이 65%로 오르고, 결석 알림으로 이탈이 매달 2.5%로 줄어 약 250명. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다."
+ "Real growth vs. <em class=\"s\">HON OS</em>": "실제 성장 vs. <em class=\"s\">HON OS</em>",
+ "A real martial arts school in California grew from 21 students in September 2022 to 200 in October 2026 without HON OS. Next to it: our estimate of the same school with HON OS, and the office hours a week it could save. Your results will differ.": "캘리포니아의 한 실제 도장은 HON OS 없이 2022년 9월 수련생 21명에서 2026년 10월 200명으로 성장했습니다. 그 옆에는 같은 도장이 HON OS를 썼다면 어땠을지에 대한 저희의 추정치와, 매주 줄일 수 있는 사무 업무 시간을 보여 줍니다. 실제 결과는 도장마다 다릅니다.",
+ "Students each October: real vs. estimated with HON OS": "매년 10월 수련생 수: 실제 vs. HON OS 사용 시 추정",
+ "Real students, without HON OS": "실제 수련생 수 (HON OS 없이)",
+ "Estimate with HON OS": "HON OS 사용 시 추정",
+ "Oct 2023": "2023년 10월",
+ "Oct 2024": "2024년 10월",
+ "Oct 2025": "2025년 10월",
+ "Oct 2026": "2026년 10월",
+ "Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, 66% of those joined, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 실제 수치는 이 도장의 2022년 9월부터 2026년 10월까지의 월별 기록입니다. 체험 예약 1,266건, 그중 50%가 방문했고 방문자의 66%가 등록했으며, 매달 수련생의 약 3.7%가 그만뒀습니다. HON OS 추정치는 같은 기간, 같은 예약 수를 그대로 다시 계산하되, 알림으로 방문율이 60%로 오르고 결석 알림으로 이탈이 매달 2.9%로 준다고 가정합니다. 등록률은 66% 그대로입니다. 그러면 2026년 10월에 200명이 아니라 약 275명이 됩니다. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다."
 }
