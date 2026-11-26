@@ -95,7 +95,7 @@ test('the real numbers are the school records and the estimate follows from the 
   assert.match(text, /grew from 21 students in September 2022 to 200 in October 2026/);
   assert.equal(MONTHS[0][2], 21);
   assert.equal(MONTHS.at(-1)[2], 200);
-  assert.match(text, /1,266 trial appointments, 50% showed up, 66% of those joined, and about 3\.7% of students left each month/);
+  assert.match(text, /1,266 trial appointments, 50% showed up, new members equalled 66% of show-ups, and about 3\.7% of students left each month/);
   assert.match(text, /reminders lift show-ups to 60% and absence alerts cut leaving to 2\.9% a month; joining stays at 66%/);
   const hon = withHon({ show: 0.6, leave: 0.029 });
   // Each October bar: index of that month in MONTHS, real count from the records, estimate from the replay.
