@@ -16,6 +16,9 @@ export type BlastOutcome = null | Readonly<{ kind: BlastOutcomeKind }>;
 export type SendAsk = null | Readonly<{ sendAt: string | null; recipients: number }>;
 /** 0653: the school's ready pictures for the email picker (read with marketing.media.read). */
 export type PicturesRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; assets: readonly SchoolMediaAsset[] };
+/** BL2: the school's Live checkout pages with their share links, title in the staff member's language. */
+export type CheckoutLink = Readonly<{ pageId: string; publicId: string; title: string }>;
+export type CheckoutsRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; pages: readonly CheckoutLink[] };
 export type SchoolBlastsViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   list: ListRead; selected: BlastRead; draft: BlastDraft | null; dirty: boolean; problems: readonly BlastProblem[];
@@ -28,6 +31,9 @@ export type SchoolBlastsViewProps = Readonly<{
   videoPickerOpen?: boolean; onToggleVideoPicker?: (() => void) | undefined;
   onInsertVideo?: ((assetId: string, start: number, end: number) => void) | undefined; onRemoveVideo?: ((assetId: string) => void) | undefined;
   onInsertVideoLink?: ((linkToken: string, start: number, end: number) => void) | undefined;
+  /** BL2: a Live checkout page's plain share link, for an email or a text. */
+  checkouts?: CheckoutsRead; checkoutPickerOpen?: boolean; onToggleCheckoutPicker?: (() => void) | undefined;
+  onInsertCheckoutLink?: ((publicId: string, start: number, end: number) => void) | undefined;
   onNew?: ((channel: SchoolBlastChannel) => void) | undefined; onOpen?: ((blastId: string) => void) | undefined;
   onEdit?: ((field: BlastField, value: string) => void) | undefined; onToggleGroup?: ((group: SchoolBlastAudienceGroup) => void) | undefined;
   onInsert?: ((target: 'subject' | 'body', field: SchoolBlastMergeField, start: number, end: number) => void) | undefined;
@@ -122,6 +128,23 @@ function Videos({ p, c, draft, body }: { p: SchoolBlastsViewProps; c: BlastCopy;
   </div>;
 }
 
+function Checkouts({ p, c, draft, body }: { p: SchoolBlastsViewProps; c: BlastCopy; draft: BlastDraft; body: React.RefObject<HTMLTextAreaElement | null> }): React.ReactElement {
+  const read = p.checkouts ?? null;
+  const at = (): [number, number] => [body.current?.selectionStart ?? draft.body.length, body.current?.selectionEnd ?? draft.body.length];
+  return <div className={page.field} role="group" aria-label={c.checkoutTitle} data-testid="blast-checkouts">
+    <span className={styles.tags}>{c.checkoutTitle}:
+      <button type="button" className={styles.small} disabled={p.locked} aria-expanded={!!p.checkoutPickerOpen} onClick={() => p.onToggleCheckoutPicker?.()} data-action="checkouts">{c.insertCheckoutLink}</button></span>
+    {p.checkoutPickerOpen ? read?.state === 'READY' ? read.pages.length
+      ? <ul className={styles.picker} data-testid="blast-checkout-picker">{read.pages.map(l => <li key={l.pageId}>
+        <button type="button" className={styles.pick} disabled={p.locked} onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { const [s, e] = at(); p.onInsertCheckoutLink?.(l.publicId, s, e); }} data-pick-checkout={l.pageId}><span>{l.title}</span></button>
+      </li>)}</ul>
+      : <p className={page.meta}>{c.noCheckouts}</p>
+      : <p className={page.meta}>{read?.state === 'DENIED' ? c.checkoutsDenied : read?.state === 'UNAVAILABLE' ? c.checkoutsUnavailable : c.reading}</p> : null}
+    <span className={page.meta}>{c.checkoutHint}</span>
+  </div>;
+}
+
 function List({ p, c, blasts, current }: { p: SchoolBlastsViewProps; c: BlastCopy; blasts: readonly SchoolBlastSummary[]; current: string | null }): React.ReactElement {
   return <section className={page.card} aria-labelledby="blast-list-title" data-testid="blast-list">
     <div className={page.cardHead}><h2 id="blast-list-title">{c.listTitle}</h2></div>
@@ -177,6 +200,7 @@ function Composer({ p, c, draft }: { p: SchoolBlastsViewProps; c: BlastCopy; dra
       <p className={styles.counter} data-over={used > max ? 'true' : undefined} aria-live="polite">{c.characters(used, max)}</p></label>
     {draft.channel === 'EMAIL' ? <Pictures p={p} c={c} draft={draft} body={body}/> : <p className={page.meta}>{c.smsNote}</p>}
     <Videos p={p} c={c} draft={draft} body={body}/>
+    <Checkouts p={p} c={c} draft={draft} body={body}/>
     <fieldset className={page.form} disabled={p.locked}>
       <legend>{c.audienceTitle}</legend>
       <div className={page.grid}>{SCHOOL_BLAST_AUDIENCE_GROUPS.map(g => <label key={g} className={page.check}>

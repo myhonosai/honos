@@ -56,3 +56,9 @@
   .studio { padding: 14px; }
   .list li { grid-template-columns: minmax(0, 1fr); }
 }
+.consent { display: grid; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid #35506d; border-radius: 12px; min-width: 0; }
+.consent legend { padding: 0 4px; font-size: 13px; font-weight: 700; }
+.consent label { display: flex; align-items: flex-start; gap: 8px; min-height: var(--hon-target, 44px); font-weight: 600; line-height: 1.4; }
+.consent input { flex: none; width: 20px; height: 20px; margin-top: 1px; accent-color: var(--hon-accent, #8de3d8); }
+.form input[type="file"] { max-width: 100%; min-height: var(--hon-target, 44px); color: #eef6fc; font: inherit; font-size: 14px; }
+.photo { display: block; width: 160px; height: 160px; object-fit: cover; border-radius: 14px; border: 1px solid #35506d; }

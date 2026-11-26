@@ -11,7 +11,7 @@ const isMessageReceipt = (r: CommsReceipt): r is HqMessageReceipt => 'message' i
 
 /**
  * HQ texts and email (HQ-COMM): senders, the compose form for the school the person came from, and the message list.
- * Leaving the tab or a session end hides everything and drops any draft or kept command. Every command answer is
+ * A session end hides everything and drops any draft or kept command. Every command answer is
  * followed by a fresh read. The server decides who may read or write, by purpose, every time.
  */
 export function HqCommunications({ target, api = commsApi }: { target: ComposeTarget | null; api?: CommsApi }): React.ReactElement {

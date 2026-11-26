@@ -129,7 +129,7 @@ export class SchoolVideoCopyWorker {
     try {
       await this.tools.run(this.tools.ffmpeg, ['-nostdin', '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', protocols, '-f', videoDemuxer(job.mediaType),
         '-i', source, '-map', '0:v:0', '-map', '0:a:0?', '-t', String(SCHOOL_MEDIA_LIMITS.maxDurationMs / 1000), '-vf', SCALE,
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-threads', '2', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
         '-map_metadata', '-1', '-map_chapters', '-1', '-sn', '-dn', '-fflags', '+bitexact', '-flags:v', '+bitexact', '-flags:a', '+bitexact',
         '-movflags', '+faststart', '-f', 'mp4', '-y', copyPath], VIDEO_COPY_PROCESS_MS);
     } catch { throw new CopyRefused('COPY_FAILED'); }

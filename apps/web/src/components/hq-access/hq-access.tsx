@@ -19,7 +19,7 @@ type Lock = 'NONE' | 'SENDING' | 'KEPT';
 const newKey = () => globalThis.crypto.randomUUID();
 
 /**
- * HQ access overview. Leaving the tab (blur, hidden tab) or a session end hides every customer fact, retires reads
+ * HQ access overview. A session end hides every customer fact, retires reads
  * and drops any kept command; "Show again" reads the overview fresh. Every command answer is followed by a fresh read.
  */
 export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactElement {
@@ -52,11 +52,8 @@ export function HqAccess({ api = accessApi }: { api?: AccessApi }): React.ReactE
       generation.current++; privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE');
       setConcealed(true); setState({ state: 'LOADING' }); setOutcome(null); setForm(null);
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {

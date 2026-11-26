@@ -28,7 +28,9 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
   const orgId = selection?.organizationId ?? null, schoolId = selection?.schoolId ?? null, schoolName = shell.schoolName ?? '';
   const [read, setRead] = useState<ReadState>({ state: 'LOADING' });
   const [draft, setDraft] = useState<WebsiteDocument | null>(null), [name, setName] = useState('');
-  const [start, setStart] = useState<StartForm>({ name: '', slug: '', template: 'MODERN_CLEAN' });
+  const [start, setStart] = useState<StartForm>({ name: '', slug: '', template: 'MODERN_CLEAN', describe: '' });
+  // Build from a prompt: the description is sent to Marcus as the first message once the new site exists (memory only).
+  const [firstAsk, setFirstAsk] = useState<string | null>(null);
   const [choices, setChoices] = useState<WebsiteChoices>(NO_CHOICES);
   const [tab, setTab] = useState<'edit' | 'history'>('edit'), [device, setDevice] = useState<Device>('desktop');
   const [pageSlug, setPage] = useState('home'), [sectionId, setSection] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
 
   useEffect(() => onShellPrivacyEvent(() => {
     concealShellPrivateNow(); gen.current++; privacy.current++; pending.current = null;
-    setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setDraft(null); setConfirming(null); setRead({ state: 'LOADING' }); setChoices(NO_CHOICES);
+    setLock(sending.current ? 'SENDING' : 'NONE'); setFirstAsk(null); setOutcome(null); setDraft(null); setConfirming(null); setRead({ state: 'LOADING' }); setChoices(NO_CHOICES);
   }, [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT]), []);
 
   useEffect(() => {
@@ -94,6 +96,7 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
     void send();
   }, [lock, aiBusy, orgId, schoolId, send]);
 
+  const takeFirstAsk = useCallback(() => setFirstAsk(null), []);
   const site = read.state === 'READY' ? read.website : null;
   const dirty = !!site && !!draft && (JSON.stringify(draft) !== JSON.stringify(site.draft) || name !== site.name);
   const edit = useCallback((change: WebsiteEdit) => {
@@ -111,6 +114,7 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
       confirming={confirming} note={note} outcome={outcome} locked={lock !== 'NONE' || aiBusy} canRetry={lock === 'KEPT'}
       aiPanel={site && draft && scope && read.state === 'READY' ? <WebsiteAiPanel key={site.id} scope={scope} site={site} dirty={dirty} busy={lock !== 'NONE'}
         language={locale.preferences.language} device={device} schoolName={schoolName || name} api={aiApi} onBusy={setAiBusy}
+        firstRequest={firstAsk} onFirstRequestTaken={takeFirstAsk}
         onApplied={(next) => { showSite(next); setOutcome(null); }} /> : null}
       origin={typeof window === 'undefined' ? '' : window.location.origin}
       on={{
@@ -118,6 +122,7 @@ export function SchoolWebsiteWorkspace({ api = websiteApi, choices: loadChoices 
         create: () => {
           let document: WebsiteDocument;
           try { document = buildWebsiteFromTemplate(start.template, { schoolName: start.name.trim() || schoolName }); } catch { setOutcome({ kind: 'EDIT_REFUSED' }); return; }
+          setFirstAsk(start.describe.trim() || null);
           run('create', { publicSlug: start.slug, name: start.name.trim(), document });
         },
         tab: (next) => { setTab(next); setConfirming(null); }, device: setDevice,
