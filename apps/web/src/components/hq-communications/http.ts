@@ -1,6 +1,6 @@
 import { HQ_COMMUNICATION_COMMANDS, encodeHqMessageCursor, saasUuid, validateHqCommunicationsView, validateHqMessageCreateInput, validateHqMessageDetail,
-  validateHqMessageReceipt, validateHqMessageVersionInput, validateHqSenderReceipt, validateHqSenderSetInput,
-  type HqCommunicationsView, type HqMessageCreateInput, type HqMessageCursor, type HqMessageDetail, type HqMessageReceipt, type HqMessageVersionInput,
+  validateHqMessageReceipt, validateHqMessageVersionInput, validateHqRepliesView, validateHqSenderReceipt, validateHqSenderSetInput,
+  type HqCommunicationsView, type HqRepliesView, type HqMessageCreateInput, type HqMessageCursor, type HqMessageDetail, type HqMessageReceipt, type HqMessageVersionInput,
   type HqSenderReceipt, type HqSenderSetInput } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -84,6 +84,7 @@ const BASE = '/api/v1/hq/communications';
 
 export type CommsListRequest = Readonly<{ schoolId: string | null; cursor: HqMessageCursor | null }>;
 export const COMMS_PAGE_SIZE = 25;
+export const REPLIES_PAGE_SIZE = 100;
 export type CommsReceipt = HqMessageReceipt | HqSenderReceipt;
 export const commsApi = {
   async list(request: CommsListRequest, signal: AbortSignal, owned: Owned): Promise<HqCommunicationsView> {
@@ -101,6 +102,15 @@ export const commsApi = {
     if (!id) throw new CommsError('INVALID');
     const view = await commsRead(`${BASE}/messages/${id}`, signal, owned, validateHqMessageDetail);
     if (!same(view.message.messageId, id)) throw new CommsError('UNKNOWN');
+    return view;
+  },
+  /** 0698 owners' text replies to HQ, newest first. A school-filtered answer holds only that school's replies. */
+  async replies(request: Readonly<{ schoolId: string | null }>, signal: AbortSignal, owned: Owned): Promise<HqRepliesView> {
+    const q = new URLSearchParams();
+    if (request.schoolId) q.set('schoolId', saasUuid(request.schoolId));
+    q.set('limit', String(REPLIES_PAGE_SIZE));
+    const view = await commsRead(`${BASE}/replies?${q}`, signal, owned, validateHqRepliesView);
+    if (request.schoolId !== null && view.replies.some((r) => !same(r.schoolId, request.schoolId))) throw new CommsError('UNKNOWN');
     return view;
   },
   async setSender(input: HqSenderSetInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqSenderReceipt> {

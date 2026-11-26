@@ -3365,6 +3365,16 @@ DO $$ DECLARE t text; r text; BEGIN
     hon.remove_my_hq_phone(text,jsonb,uuid) TO hon_runtime;
 END $$;
 
+-- HQ inbox 0698 owners' text replies: no table privileges; one read. The inbound function stays the worker's (013).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_hq_replies(text,uuid,integer)') IS NULL THEN RAISE EXCEPTION 'Apply HQ inbound owner replies migration 0698 first'; END IF;
+  ALTER TABLE hon.hq_inbound_replies ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.hq_inbound_replies FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON hon.hq_inbound_replies FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.hq_inbound_replies FROM %I',r); END LOOP;
+  REVOKE ALL ON FUNCTION hon.hq_inbound_reply_json(hon.hq_inbound_replies) FROM PUBLIC, hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.read_hq_replies(text,uuid,integer) TO hon_runtime;
+END $$;
+
 -- HQ-COMM 0283 HON prospects and their consent: no table privileges; HQ marketing reads and three commands.
 DO $$ DECLARE t text; r text; BEGIN
   IF to_regprocedure('hon.create_hq_prospect(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply HQ prospects migration 0283 first'; END IF;

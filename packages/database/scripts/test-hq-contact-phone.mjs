@@ -56,7 +56,7 @@ const inbound = async (from, body, { to = SID, event = `ev-${++ev}`, at = new Da
 const minutesAgo = (n) => new Date(Date.now() - n * 60_000);
 const pref = async (who) => (await one(admin, "SELECT status, source FROM hon.hq_contact_preferences WHERE user_id=$1 AND channel='SMS'", [Uu(who)])) ?? null;
 
-const tables = ['hq_inbound_texts', 'hq_contact_requests', 'hq_contact_phones', 'hq_message_delivery_events', 'hq_message_deliveries', 'hq_messages',
+const tables = ['hq_inbound_replies', 'hq_inbound_texts', 'hq_contact_requests', 'hq_contact_phones', 'hq_message_delivery_events', 'hq_message_deliveries', 'hq_messages',
   'hq_communication_requests', 'hq_communication_senders', 'hq_contact_preferences'];
 async function cleanup() {
   await admin.query('ROLLBACK').catch(() => {});
@@ -219,7 +219,9 @@ try {
     'CONSENT_MISSING', 'STOP is honored at send time');
   eq(await inbound(PHONE1, 'HELP'), { outcome: 'HELP', reply: 'HELP', replayed: false }, 'HELP');
   eq(await inbound(PHONE2, 'STOP'), { outcome: 'NO_MATCH', reply: null, replayed: false }, 'STOP from an unconfirmed number changes nothing');
-  eq(await inbound(PHONE1, 'what time is class?'), { outcome: 'IGNORED', reply: null, replayed: false }, 'other text ignored');
+  // 0698: an ordinary text from an owner HQ texted (accepted) is kept as a reply; with no accepted HQ text it changes nothing.
+  eq(await inbound(PHONE1, 'what time is class?'), { outcome: hour >= 8 && hour < 21 ? 'REPLY_RECORDED' : 'IGNORED', reply: null, replayed: false },
+    'other text: a reply to the accepted HQ text in daytime, otherwise ignored');
   eq(await inbound(PHONE1, 'Start'), { outcome: 'OPTED_IN', reply: 'STARTED', replayed: false }, 'START');
   eq(await pref('owner1'), { status: 'OPTED_IN', source: 'RECIPIENT' }, 'START recorded');
   eq((await mine('owner1')).contact.stoppedByReply, false, 'START clears it');
@@ -227,7 +229,7 @@ try {
   eq(await pref('owner1'), { status: 'OPTED_IN', source: 'RECIPIENT' }, 'still on');
   const kinds = (await admin.query("SELECT keyword, outcome FROM hon.hq_inbound_texts ORDER BY recorded_at")).rows;
   ok(kinds.length === ev - 1 || kinds.length === ev, 'one row per provider event');
-  ok(!JSON.stringify((await admin.query('SELECT * FROM hon.hq_inbound_texts')).rows).includes('what time'), 'no body stored');
+  ok(!JSON.stringify((await admin.query('SELECT * FROM hon.hq_inbound_texts')).rows).includes('what time'), 'no body in the inbound log (0698 keeps replies apart)');
 
   // ---------- 7. the person's own switch and removal ----------
   view = await mine('owner1');

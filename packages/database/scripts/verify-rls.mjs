@@ -446,6 +446,7 @@ const expectedRlsTables = [
   'hq_communication_requests',
   'hq_contact_phones',
   'hq_inbound_texts',
+  'hq_inbound_replies',
   'hq_contact_requests',
   'hq_prospects',
   'hq_prospect_consents',
