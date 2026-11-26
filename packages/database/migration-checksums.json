@@ -424,6 +424,7 @@
     "0626_pgcrypto_public_gen_random_bytes.sql": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13",
     "0681_staff_timesheet_no_self_approval.sql": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5",
     "0682_crm_board_text_opt_out.sql": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7",
-    "0683_hon_os_trial_creative_credits.sql": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5"
+    "0683_hon_os_trial_creative_credits.sql": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5",
+    "0698_hq_inbound_owner_replies.sql": "cbd99d366661f7f44a2ad05b12cf13766fc928384f142b2c41b5637b9436ccbc"
   }
 }
