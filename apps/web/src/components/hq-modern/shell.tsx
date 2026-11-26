@@ -24,7 +24,7 @@ type AccessState = { kind: 'loading' | 'unauthorized' | 'unavailable' | 'limited
  */
 export function hqPageAuthorizesItself(path: string): boolean {
   return path === '/hq/support' || /^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)
-    || path === '/hq/communications' || /^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path);
+    || path === '/hq/communications' || path === '/hq/communications/settings' || /^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path);
 }
 type HqContextValue = { overview: HqPlatformOverview; view: HqView; art: HqArt; draft: string; setDraft: (value: string) => void; openAssistant: () => void };
 const HqContext = createContext<HqContextValue | null>(null);

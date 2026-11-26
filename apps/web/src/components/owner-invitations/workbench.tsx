@@ -17,11 +17,11 @@ export function SchoolOwnerInvitations({hq=false}:{hq?:boolean}) {
     // Focus loss (window blur, tab hidden) deliberately does NOT conceal: it fires for window.confirm,
     // copying the token into another app and ordinary tab switches, and wiping the form there lost
     // owner work and silently dropped commands. Concealment stays on leaving the page, session
-    // invalidation and school-context change.
-    const events=[['pagehide',conceal],[HON_SESSION_INVALIDATED_EVENT,conceal],[HON_SCHOOL_CONTEXT_CHANGED_EVENT,conceal]] as const;
+    // invalidation and school-context change. HQ does not hide on leaving the page either (owner, 2026-11-26).
+    const events=[...(hq?[]:[['pagehide',conceal]] as const),[HON_SESSION_INVALIDATED_EVENT,conceal],[HON_SCHOOL_CONTEXT_CHANGED_EVENT,conceal]] as const;
     for(const [e,h] of events)window.addEventListener(e,h);
     return ()=>{life.current.mounted=false;life.current.epoch++;read.current?.abort();pending.current=null;for(const[e,h]of events)window.removeEventListener(e,h);};
-  },[]);
+  },[hq]);
   async function verify() {
     if(life.current.busy)return;
     const s=life.current,instance=s.mountId,epoch=++s.epoch,controller=new AbortController(); read.current?.abort();read.current=controller;s.sensitive=true;s.busy=true;setBusy(true);
