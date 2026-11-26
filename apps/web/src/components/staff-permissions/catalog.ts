@@ -135,6 +135,7 @@ export const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'ai.agent.jordan.use': 'Use Jordan (operations)',
   'ai.agent.claire.use': 'Use Claire (business performance)',
   'ai.agent.lena.use': 'Use Lena (creative and commerce)',
+  'teaching.journal.use': 'Keep their own Kai teaching journal',
 };
 export const labelOf = (p: AssignablePermission): string => PERMISSION_LABELS[p.code] ?? p.description;
 

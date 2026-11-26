@@ -244,6 +244,7 @@ const expectedRlsTables = [
   'school_media_assets',
   'staff_time_entry_revisions',
   'staff_timesheet_weeks',
+  'kai_journal_entries',
   'biometric_jurisdiction_profiles',
   'biometric_jurisdiction_rules',
   'attendance_card_settings',

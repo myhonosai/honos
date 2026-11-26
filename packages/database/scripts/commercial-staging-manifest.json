@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "11ee8e4450a26c907ed7980de8dd6aa10a78f907dd4610a57185661b25d5f025",
+  "chainSha256": "12f47ecadfd83309e4de6d4ed7974447576fe43550cae9b57caca02d9acfbdf0",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -1013,6 +1013,10 @@
     {
       "file": "0684_creative_studio_photo_avatars.sql",
       "sha256": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e"
+    },
+    {
+      "file": "0685_kai_teaching_journal.sql",
+      "sha256": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a"
     }
   ]
 }
