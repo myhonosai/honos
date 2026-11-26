@@ -22,8 +22,9 @@ export const WEBSITE_AI_REASONS = ['CONFIGURATION_REQUIRED', 'NO_ELIGIBLE_ROUTE'
 export type WebsiteAiReason = typeof WEBSITE_AI_REASONS[number];
 /**
  * 0690: what the next AI website edit is paid with. CREATIVE_CREDITS when the creative program is on, the school is
- * eligible for creative credits and HQ published the website rate; otherwise INCLUDED_AI (the 0550 allowance), which is
- * what trial and unpaid schools use. Owner decisions 2026-11-24.
+ * eligible for creative credits (a paid HON OS subscription, or a funded free trial spending its TRIAL lot, 0683) and HQ
+ * published the website rate; otherwise INCLUDED_AI (the 0550 allowance), which is what unpaid schools use. Owner
+ * decisions 2026-11-24.
  */
 export type WebsiteAiPrice =
   | { paidWith: 'CREATIVE_CREDITS'; creditsPerEdit: number; availableCredits: number }
