@@ -3,7 +3,8 @@ import { CHAMPIONS_OWNER_ROLE, CHAMPIONS_RUNTIME_ROLE, championsProofTargets, ve
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 // 0690: AI website edits paid from the school's creative credits (CW1 wallet, 0202) when the school can use them, and from
-// included AI exactly as in 0550 when it cannot (trial and unpaid schools, the program off, no published rate). Real
+// included AI exactly as in 0550 when it cannot (unpaid schools, the program off, no published rate). A free-trial school
+// (0683) is eligible and pays from its own 1,500-credit TRIAL lot (owner decision 2026-11-24, W16). Real
 // database, restricted runtime role, the real API services and a counted in-process fake provider (fetch is refused).
 // DISPOSABLE DATABASE ONLY, TEST MODE, SIMULATED payments. Each check runs on its own so one failure never hides another.
 await import('./test-champions-proof-target.mjs');
@@ -24,6 +25,8 @@ const { SchoolWebsiteService } = await import('../../../apps/api/dist/website/sc
 const { WebsiteAiService } = await import('../../../apps/api/dist/website/website-ai.service.js');
 const { WebsiteProviderRuntimeError } = await import('../../../apps/api/dist/ai/website-provider-runtime.js');
 const contracts = await import('@hon/contracts');
+const { SaasTrialsService } = await import('../../../apps/api/dist/saas-trials/saas-trials.service.js');
+const { trialTerms, trialDefinition, trialApproval, trialPromoLimits, trialPromoBudget } = await import('./trial-governance-fixture.mjs');
 const SECRET = 'whsec_disposableFixtureSecret0123456789', KEY = 'sk_test_disposableFixtureKey0123456789';
 const sim = new StripeSimulator(SECRET);
 const database = new RuntimeDatabaseService(), billing = new SaasBillingService(database), wallet = new SaasCreativeWalletService(billing);
@@ -279,6 +282,42 @@ try {
     assert.equal(await linkOf(v.id), undefined);
     assert.deepEqual(await usageOf(v.id), [{ c: 2, cost: '1100', spend_class: 'AGENT_INFERENCE', modality: 'TEXT' }]);
     assert.equal((await row('SELECT count(*)::int n FROM hon.saas_creative_reservations WHERE school_id=$1', [S.U])).n, 0);
+  });
+
+  await check('W16', 'a free-trial school (0683) pays AI website edits from its own 1,500-credit TRIAL lot at the website rate (owner decision 2026-11-24), never from included AI', async () => {
+    // HQ owner approves a synthetic trial policy and publishes one public 14-day campaign; programs opened to TEST_MODE in this disposable database only.
+    // The AI planner still checks its estimate (20 credits for a website edit) against the trial's agent-AI per-request cap,
+    // so this campaign sets 20; a lower HQ trial setting refuses the edit before any reservation or call (nothing is charged).
+    const trials = new SaasTrialsService(billing), why = 'DISPOSABLE SYNTHETIC 0690 TRIAL WEBSITE EDIT ONLY';
+    const pv = Number((await row('SELECT coalesce(max(version),0) v FROM hon.saas_trial_policy_versions')).v);
+    const policy = (await trials.propose(H('owner'), { expectedVersion: pv, terms: trialTerms({ termsReference: 'HON_OS_TRIAL_SYNTHETIC_TERMS', promotionalLimits: trialPromoLimits({ maxPerRequestCreditCap: 20 }) }), reason: why }, K())).policyVersion;
+    await trials.decide(H('owner'), trialApproval(policy.policyId, Number((await row('SELECT coalesce(max(revision),0) r FROM hon.saas_trial_policy_decisions')).r)), K());
+    const v = (await trials.draft(H('owner'), { campaignId: null, expectedVersion: 0, definition: trialDefinition({ name: 'Synthetic 0690 trial', durationDays: 14, termsReference: 'HON_OS_TRIAL_SYNTHETIC_TERMS',
+      linkMode: 'PUBLIC', maximumEnrollments: 1, enrollmentOpensAt: iso(Date.now() - 60_000), promotionalBudget: trialPromoBudget({ perRequestCreditCap: 20 }) }), reason: why }, K())).campaignVersion;
+    const preview = await trials.preview(H('owner'), v.versionId); assert.equal(preview.ready, true, JSON.stringify(preview.blockers));
+    await trials.publish(H('owner'), preview.campaignId, { versionId: preview.versionId, expectedRevision: preview.expectedRevision, previewDigest: preview.digest, confirmation: 'PUBLISH_TRIAL_CAMPAIGN_DEFINITION_ONLY', reason: why }, K());
+    for (const t of ['hon_os_signup_program', 'hon_os_trial_program']) await admin.query(`UPDATE hon.${t} SET status='TEST_MODE',recorded_at=clock_timestamp() WHERE program_id=1`);
+    const runtime = database['getPool']();
+    const subject = `oidc:w690-trial:${K()}`, terms = (await row('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1')).id;
+    const reg = (await runtime.query('SELECT hon.register_hon_os_school($1,$2,$3::jsonb,$4) r', [subject, `w690-${K()}@example.invalid`, JSON.stringify({ ownerName: 'Synthetic trial owner',
+      schoolName: 'W690 Trial Dojo', legalName: 'W690 Trial Dojo LLC', timezone: 'America/Chicago', termsVersionId: terms, confirmation: contracts.SIGNUP_CONFIRMATION }), K()])).rows[0].r;
+    const trial = (await runtime.query('SELECT hon.start_hon_os_trial($1,$2::jsonb,$3) r', [subject, JSON.stringify({ schoolId: reg.schoolId, campaignId: preview.campaignId, confirmation: contracts.TRIAL_CONFIRMATION }), K()])).rows[0].r;
+    assert.deepEqual(trial.creativeCredits, { credits: 1500, available: 1500, expiresAt: trial.endsAt });
+    const pid = (await row('SELECT p.id FROM hon.principals p JOIN hon.users u ON u.id=p.user_id WHERE u.external_subject=$1', [subject])).id;
+    humans.ownerT = { id: pid, subject }; S.orgT = reg.organizationId; S.T = reg.schoolId;
+    await website('T');
+    assert.deepEqual(await ai.price(readCtx('T')), { paidWith: 'CREATIVE_CREDITS', creditsPerEdit: RATE, availableCredits: 1500 });
+    const before = fake.calls, committed = async () => (await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp())::int n', [S.orgT])).n, c0 = await committed();
+    const t1 = await ask('T');
+    assert.equal(t1.status, 'RESULT_RECORDED'); assert.equal(fake.calls, before + 1);
+    const r = await linkOf(t1.id);
+    assert.deepEqual([r.status, r.final_credits, r.media_kind, r.operation_code], ['FINALIZED', RATE, 'WEBSITE', 'website.edit']);
+    assert.deepEqual(await rows("SELECT l.lot_kind k, g.entry_kind e, g.credits::int c FROM hon.saas_creative_ledger g JOIN hon.saas_creative_lots l ON l.id=g.lot_id WHERE g.reservation_id=$1 AND g.entry_kind='RESERVE'", [r.id]),
+      [{ k: 'TRIAL', e: 'RESERVE', c: RATE }], 'the TRIAL lot pays the edit');
+    assert.deepEqual(await usageOf(t1.id), [{ c: 0, cost: '1100', spend_class: 'AGENT_INFERENCE', modality: 'TEXT' }], 'no included trial AI credits used');
+    assert.equal(await committed(), c0, 'included AI credits untouched');
+    assert.deepEqual(await balance('T'), { available: 1500 - RATE, held: 0 });
+    assert.equal((await ai.price(readCtx('T'))).availableCredits, 1500 - RATE);
   });
 
   await check('W11', 'exact-school isolation: school A\'s edits never touch school B\'s wallet; B pays its own edit; one school\'s owner cannot read another school\'s price', async () => {

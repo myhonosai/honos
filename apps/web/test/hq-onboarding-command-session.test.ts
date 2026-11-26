@@ -39,7 +39,7 @@ describe('HQ command session lifetime with actual fetch transport', () => {
     expect(replacement.controller.snapshot()).toMatchObject({ access: 'ready', concealed: false, form, confirmed: true });
     expect(s.fetch.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
-  it.each(['blur', HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT])('retired POST401 after %s never emits another session event and retains the original command', async event => {
+  it.each([HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT])('retired POST401 after %s never emits another session event and retains the original command', async event => {
     const s = setup(), mounted = s.mount(); await prepare(mounted.controller);
     const run = mounted.controller.submit(); await s.dispatched.promise;
     const original = s.fetch.mock.calls.find(([, init]) => init?.method === 'POST')!;

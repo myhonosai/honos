@@ -30,11 +30,14 @@ export function FounderSetup({ plane = 'school' }: { plane?: 'school' | 'hq' }):
     };
     const blur = () => hide(), expired = () => hide('signedout'), school = () => hide();
     const visibility = () => { if (document.visibilityState === 'hidden') hide(); };
-    const events = [['blur', blur], ['pagehide', blur], [HON_SESSION_INVALIDATED_EVENT, expired], [HON_SCHOOL_CONTEXT_CHANGED_EVENT, school]] as const;
+    // HQ hides nothing when the tab or window loses focus (owner, 2026-11-26: "Hq do not need hidden"). A session end or a
+    // school change still hides it. The school (staff) guide keeps hiding when the person leaves.
+    const away = plane === 'hq' ? [] : [['blur', blur], ['pagehide', blur]] as const;
+    const events = [...away, [HON_SESSION_INVALIDATED_EVENT, expired], [HON_SCHOOL_CONTEXT_CHANGED_EVENT, school]] as const;
     for (const [event, handler] of events) window.addEventListener(event, handler);
-    document.addEventListener('visibilitychange', visibility);
+    if (plane !== 'hq') document.addEventListener('visibilitychange', visibility);
     return () => { s.mounted = false; ++s.epoch; pending.current?.abort(); for (const [event, handler] of events) window.removeEventListener(event, handler); document.removeEventListener('visibilitychange', visibility); };
-  }, []);
+  }, [plane]);
   async function load() {
     const s = life.current;
     if (s.busy) return;

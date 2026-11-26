@@ -16,7 +16,7 @@ const failKind = (error: unknown): OwnershipOutcomeKind => error instanceof Owne
 
 /**
  * HQ school owners (B-ID-4). The HQ owner chooses a school, sees its owners, primary, HQ seats and notices, and can make
- * another owner primary after an explicit confirmation. Leaving the tab (blur, hidden tab, page hide) or a session end
+ * another owner primary after an explicit confirmation. A session end
  * hides everything, retires reads and drops any kept command; "Show again" reads fresh. Every command answer is followed by
  * a fresh read: the server, not this tab, says who is primary.
  */
@@ -39,11 +39,8 @@ export function HqSchoolOwnership({ api = ownershipApi, schoolsLoader = loadScho
       generation.current++; privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE');
       setConcealed(true); setSchools({ state: 'LOADING' }); setSelected(null); setOwnership({ state: 'IDLE' }); setConfirming(null); setOutcome(null);
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   // The school list (HQ directory). Read again after each reveal.

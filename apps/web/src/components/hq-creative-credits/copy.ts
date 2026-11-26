@@ -1,9 +1,9 @@
 /** HQ creative credits wording (en / ko / es). Labels only; nothing here is authority, an offer, a charge or an outcome. */
 const en = {
   title: 'Creative Credits', intro: 'Each school\'s creative credit wallet for image and video generation, with the rates, top-up packages and provider cost HON has recorded.',
-  scope: 'Only the HQ owner can correct a school\'s credits here, and every correction is recorded with your note. Nothing here turns the program on, charges a card or changes a purchase: payment collection is not connected. AI team conversations never use creative credits.',
+  scope: 'Only the HQ owner can correct a school\'s credits here, and every correction is recorded with your note. Only the HQ owner can publish credit prices and turn the program on or off. Nothing here charges a card or changes a purchase: payment collection is not connected. AI team conversations never use creative credits.',
   refresh: 'Refresh', loading: 'Reading…', denied: 'Your HQ access does not include creative credits. Nothing is shown.',
-  unavailable: 'This could not be read. Nothing is shown.', concealed: 'Hidden while you were away or because your session ended.', showAgain: 'Show again',
+  unavailable: 'This could not be read. Nothing is shown.', concealed: 'Hidden because your session ended. Sign in again, then choose Show again.', showAgain: 'Show again',
   programTitle: 'Creative credit program', on: 'On', off: 'Off', programVersion: 'Program version {version}',
   monthly: 'Each eligible paying school receives {n} included credits a month. Unused included credits do not carry over.',
   monthlyOff: 'Once the program is on, each eligible paying school would receive {n} included credits a month. Unused included credits would not carry over.',
@@ -25,7 +25,7 @@ const en = {
   r_SUBSCRIPTION_NOT_IN_SERVICE: 'its subscription is not in service.', r_VERIFIED_PAYMENT_REQUIRED: 'a verified payment is required.',
   r_WINDOW_UNAVAILABLE: 'no billing window is available.', r_WINDOW_NOT_PAID: 'the current billing window is not paid.',
   balanceTitle: 'Balance', kind: 'Kind', granted: 'Granted', expired: 'Expired', debited: 'Removed',
-  k_INCLUDED_MONTHLY: 'Included monthly', k_PROMOTIONAL: 'Promotional', k_ADJUSTMENT: 'Adjustment', k_PURCHASED_TOPUP: 'Purchased top-up', total: 'Total',
+  k_INCLUDED_MONTHLY: 'Included monthly', k_TRIAL: 'Free trial', k_PROMOTIONAL: 'Promotional', k_ADJUSTMENT: 'Adjustment', k_PURCHASED_TOPUP: 'Purchased top-up', total: 'Total',
   lotsTitle: 'Credit lots', noLots: 'No credit lots.', lotRow: '{kind}: {credits} credits, granted {time}', expires: 'Expires {time}', noExpiry: 'Does not expire',
   lotExpired: 'Expired', lotParts: '{available} available · {held} held · {consumed} used · {expired} expired · {debited} removed',
   reservationsTitle: 'Generations', noReservations: 'No generations yet.', reservationRow: '{operation} ({media}): {credits} credits reserved, {time}',
@@ -64,9 +64,9 @@ const en = {
 export type CreditsKey = keyof typeof en;
 const ko: Record<CreditsKey, string> = {
   title: '크리에이티브 크레딧', intro: '이미지·동영상 생성을 위한 각 학교의 크리에이티브 크레딧 지갑과 HON이 기록한 요율, 충전 패키지, 제공업체 비용입니다.',
-  scope: '여기서는 HQ 소유자만 학교의 크레딧을 정정할 수 있으며 모든 정정은 메모와 함께 기록됩니다. 프로그램을 켜거나 카드를 청구하거나 구매를 변경하지 않으며 결제 수집은 연결되어 있지 않습니다. AI 팀 대화는 크리에이티브 크레딧을 사용하지 않습니다.',
+  scope: '여기서는 HQ 소유자만 학교의 크레딧을 정정할 수 있으며 모든 정정은 메모와 함께 기록됩니다. 크레딧 가격 게시와 프로그램 켜기/끄기도 HQ 소유자만 할 수 있습니다. 여기서는 카드를 청구하거나 구매를 변경하지 않으며 결제 수집은 연결되어 있지 않습니다. AI 팀 대화는 크리에이티브 크레딧을 사용하지 않습니다.',
   refresh: '새로 고침', loading: '읽는 중…', denied: 'HQ 권한에 크리에이티브 크레딧이 포함되어 있지 않습니다. 표시할 내용이 없습니다.',
-  unavailable: '읽을 수 없습니다. 표시할 내용이 없습니다.', concealed: '자리를 비웠거나 세션이 종료되어 숨겼습니다.', showAgain: '다시 보기',
+  unavailable: '읽을 수 없습니다. 표시할 내용이 없습니다.', concealed: '세션이 종료되어 숨겼습니다. 다시 로그인한 뒤 다시 보기를 선택하세요.', showAgain: '다시 보기',
   programTitle: '크리에이티브 크레딧 프로그램', on: '켜짐', off: '꺼짐', programVersion: '프로그램 버전 {version}',
   monthly: '자격을 갖춘 유료 학교는 매월 {n} 포함 크레딧을 받습니다. 사용하지 않은 포함 크레딧은 이월되지 않습니다.',
   monthlyOff: '프로그램이 켜지면 자격을 갖춘 유료 학교는 매월 {n} 포함 크레딧을 받게 됩니다. 사용하지 않은 포함 크레딧은 이월되지 않게 됩니다.',
@@ -88,7 +88,7 @@ const ko: Record<CreditsKey, string> = {
   r_SUBSCRIPTION_NOT_IN_SERVICE: '구독이 서비스 중이 아닙니다.', r_VERIFIED_PAYMENT_REQUIRED: '검증된 결제가 필요합니다.',
   r_WINDOW_UNAVAILABLE: '사용 가능한 결제 기간이 없습니다.', r_WINDOW_NOT_PAID: '현재 결제 기간이 지불되지 않았습니다.',
   balanceTitle: '잔액', kind: '종류', granted: '지급됨', expired: '만료됨', debited: '차감됨',
-  k_INCLUDED_MONTHLY: '월간 포함', k_PROMOTIONAL: '프로모션', k_ADJUSTMENT: '조정', k_PURCHASED_TOPUP: '구매한 충전', total: '합계',
+  k_INCLUDED_MONTHLY: '월간 포함', k_TRIAL: '무료 체험', k_PROMOTIONAL: '프로모션', k_ADJUSTMENT: '조정', k_PURCHASED_TOPUP: '구매한 충전', total: '합계',
   lotsTitle: '크레딧 묶음', noLots: '크레딧 묶음이 없습니다.', lotRow: '{kind}: {credits} 크레딧, {time} 지급', expires: '{time} 만료', noExpiry: '만료되지 않음',
   lotExpired: '만료됨', lotParts: '사용 가능 {available} · 보류 {held} · 사용됨 {consumed} · 만료 {expired} · 차감 {debited}',
   reservationsTitle: '생성', noReservations: '아직 생성이 없습니다.', reservationRow: '{operation} ({media}): {credits} 크레딧 예약, {time}',
@@ -126,9 +126,9 @@ const ko: Record<CreditsKey, string> = {
 };
 const es: Record<CreditsKey, string> = {
   title: 'Créditos creativos', intro: 'La billetera de créditos creativos de cada escuela para generar imágenes y videos, con las tarifas, los paquetes de recarga y el costo del proveedor que HON registró.',
-  scope: 'Aquí solo el propietario de HQ puede corregir los créditos de una escuela, y cada corrección queda registrada con su nota. Nada aquí activa el programa, cobra una tarjeta ni cambia una compra: el cobro de pagos no está conectado. Las conversaciones con el equipo de IA nunca usan créditos creativos.',
+  scope: 'Aquí solo el propietario de HQ puede corregir los créditos de una escuela, y cada corrección queda registrada con su nota. Solo el propietario de HQ puede publicar los precios y activar o desactivar el programa. Nada aquí cobra una tarjeta ni cambia una compra: el cobro de pagos no está conectado. Las conversaciones con el equipo de IA nunca usan créditos creativos.',
   refresh: 'Actualizar', loading: 'Leyendo…', denied: 'Su acceso a HQ no incluye créditos creativos. No se muestra nada.',
-  unavailable: 'No se pudo leer. No se muestra nada.', concealed: 'Oculto mientras estaba fuera o porque su sesión terminó.', showAgain: 'Mostrar de nuevo',
+  unavailable: 'No se pudo leer. No se muestra nada.', concealed: 'Oculto porque su sesión terminó. Inicie sesión de nuevo y elija Mostrar de nuevo.', showAgain: 'Mostrar de nuevo',
   programTitle: 'Programa de créditos creativos', on: 'Activo', off: 'Inactivo', programVersion: 'Versión del programa {version}',
   monthly: 'Cada escuela de pago que cumple los requisitos recibe {n} créditos incluidos al mes. Los créditos incluidos sin usar no se acumulan.',
   monthlyOff: 'Cuando el programa esté activo, cada escuela de pago que cumpla los requisitos recibiría {n} créditos incluidos al mes. Los créditos incluidos sin usar no se acumularían.',
@@ -150,7 +150,7 @@ const es: Record<CreditsKey, string> = {
   r_SUBSCRIPTION_NOT_IN_SERVICE: 'su suscripción no está en servicio.', r_VERIFIED_PAYMENT_REQUIRED: 'se requiere un pago verificado.',
   r_WINDOW_UNAVAILABLE: 'no hay un periodo de facturación disponible.', r_WINDOW_NOT_PAID: 'el periodo de facturación actual no está pagado.',
   balanceTitle: 'Saldo', kind: 'Tipo', granted: 'Otorgados', expired: 'Vencidos', debited: 'Quitados',
-  k_INCLUDED_MONTHLY: 'Incluidos del mes', k_PROMOTIONAL: 'Promocionales', k_ADJUSTMENT: 'Ajuste', k_PURCHASED_TOPUP: 'Recarga comprada', total: 'Total',
+  k_INCLUDED_MONTHLY: 'Incluidos del mes', k_TRIAL: 'Prueba gratuita', k_PROMOTIONAL: 'Promocionales', k_ADJUSTMENT: 'Ajuste', k_PURCHASED_TOPUP: 'Recarga comprada', total: 'Total',
   lotsTitle: 'Lotes de créditos', noLots: 'No hay lotes de créditos.', lotRow: '{kind}: {credits} créditos, otorgados {time}', expires: 'Vence {time}', noExpiry: 'No vence',
   lotExpired: 'Vencido', lotParts: '{available} disponibles · {held} retenidos · {consumed} usados · {expired} vencidos · {debited} quitados',
   reservationsTitle: 'Generaciones', noReservations: 'Todavía no hay generaciones.', reservationRow: '{operation} ({media}): {credits} créditos reservados, {time}',

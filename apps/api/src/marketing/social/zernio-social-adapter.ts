@@ -458,3 +458,31 @@ export function zernioSocialAdapterFactory(env: Env = process.env): ZernioSocial
     listAccounts: () => Promise.reject(new SocialProviderError('NOT_ENABLED')),
     removeAccount: () => Promise.reject(new SocialProviderError('NOT_ENABLED')) };
 }
+
+/** 0677: the Zernio adapter HQ uses to connect HON's own ad accounts. */
+export const HQ_ZERNIO_ADAPTER = Symbol('HQ_ZERNIO_ADAPTER');
+/** HQ connecting needs a well-formed key and its own switch; the school switch never turns HQ on, nor HQ the schools. */
+export function hqZernioConnectApproved(env: Env): boolean {
+  return KEY.test(env.ZERNIO_API_KEY ?? '') && env.HON_HQ_ZERNIO_CONNECT_APPROVED === 'true';
+}
+/**
+ * The environment the HQ adapter sees: the key, the fake and deployment markers, and HQ's own switch in the connect slot.
+ * The publish, inbox and ads switches are never passed, so the HQ adapter cannot publish, reply or spend.
+ */
+export function hqZernioEnvironment(env: Env): Env {
+  return { ZERNIO_API_KEY: env.ZERNIO_API_KEY, HON_ZERNIO_CONNECT_APPROVED: hqZernioConnectApproved(env) ? 'true' : undefined,
+    HON_ZERNIO_FAKE_PROVIDER: env.HON_ZERNIO_FAKE_PROVIDER, HON_DEPLOYMENT_ENVIRONMENT: env.HON_DEPLOYMENT_ENVIRONMENT, NODE_ENV: env.NODE_ENV };
+}
+/** The only Zernio operations HQ can reach: profile, consent URL, account list and removal. No publish, reply or ad call. */
+export type HqZernioConnector = Pick<ZernioSocialAdapter, 'kind' | 'ready' | 'findOrCreateProfile' | 'connectUrl' | 'listAccounts' | 'removeAccount'>;
+export function hqZernioConnector(adapter: ZernioSocialAdapter): HqZernioConnector {
+  return { kind: adapter.kind, ready: () => adapter.ready(), findOrCreateProfile: name => adapter.findOrCreateProfile(name),
+    connectUrl: input => adapter.connectUrl(input), listAccounts: id => adapter.listAccounts(id), removeAccount: id => adapter.removeAccount(id) };
+}
+export function hqZernioAdapterFactory(env: Env = process.env): HqZernioConnector {
+  const view = () => hqZernioEnvironment(env);
+  if (hqZernioConnectApproved(env)) return hqZernioConnector(new ZernioHttpSocialAdapter(view));
+  if (zernioFakeEnabled(env)) return hqZernioConnector(new FakeZernioSocialAdapter(view));
+  const off = () => Promise.reject(new SocialProviderError('NOT_ENABLED'));
+  return { kind: 'NONE', ready: () => false, findOrCreateProfile: off, connectUrl: off, listAccounts: off, removeAccount: off };
+}

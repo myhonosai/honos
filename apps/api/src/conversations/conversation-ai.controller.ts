@@ -3,7 +3,8 @@ import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import {
   CONVERSATION_AI_FILE_COMMAND, CONVERSATION_AI_ITEM_SAVE_COMMAND, CONVERSATION_AI_ITEM_STATUS_COMMAND, CONVERSATION_AI_KNOWLEDGE_COMMAND,
-  CONVERSATION_AI_READ_COMMAND, CONVERSATION_AI_SETTINGS_COMMAND, CONVERSATION_AI_UPLOAD_COMMAND, SAAS_COMMANDS,
+  CONVERSATION_AI_READ_COMMAND, CONVERSATION_AI_SETTINGS_COMMAND, CONVERSATION_AI_TEST_ASK_COMMAND, CONVERSATION_AI_TEST_READ_COMMAND,
+  CONVERSATION_AI_UPLOAD_COMMAND, SAAS_COMMANDS,
 } from '@hon/contracts';
 import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
@@ -12,6 +13,7 @@ import type { MembershipLifecycleContext } from '../billing/membership.service.j
 import { MembershipActivationHumanUiGuard } from '../billing/membership-activation-human-ui.guard.js';
 import { SaasCommandGuard, SaasCommandName, SaasReadGuard } from '../saas-billing/saas-billing.guards.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversation-ai.service.js';
+import { ConversationAiTestService } from './conversation-ai-test.service.js';
 
 /** 0420: each Train AI call is its own same-origin browser command; reads are GET only. */
 @Injectable()
@@ -42,6 +44,15 @@ export class ConversationAiItemSaveGuard extends MembershipActivationHumanUiGuar
 export class ConversationAiItemStatusGuard extends MembershipActivationHumanUiGuard {
   protected override readonly command: string = CONVERSATION_AI_ITEM_STATUS_COMMAND;
 }
+/** CE2 (0687): reading the test chat and asking a test question are each their own browser command. */
+@Injectable()
+export class ConversationAiTestReadGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = CONVERSATION_AI_TEST_READ_COMMAND;
+}
+@Injectable()
+export class ConversationAiTestAskGuard extends MembershipActivationHumanUiGuard {
+  protected override readonly command: string = CONVERSATION_AI_TEST_ASK_COMMAND;
+}
 
 function noQuery(request: HonRequest, query: Record<string, unknown>): void {
   if (Object.keys(query ?? {}).length || request.originalUrl?.includes('?')) throw new BadRequestException({ code: 'CONVERSATION_AI_SELECTORS_NOT_ACCEPTED' });
@@ -54,7 +65,7 @@ function noQuery(request: HonRequest, query: Record<string, unknown>): void {
 @Controller('organizations/:organizationId/schools/:schoolId/conversation-ai')
 @UseGuards(HonIdentityGuard)
 export class ConversationAiController {
-  constructor(private readonly database: RuntimeDatabaseService, private readonly ai: ConversationAiService) {}
+  constructor(private readonly database: RuntimeDatabaseService, private readonly ai: ConversationAiService, private readonly tests: ConversationAiTestService) {}
 
   @Get()
   @UseGuards(ConversationAiReadGuard)
@@ -127,6 +138,33 @@ export class ConversationAiController {
     @Query() query: Record<string, unknown>, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest,
     @Res({ passthrough: true }) response: Response) {
     return this.run(request, query, organizationId, schoolId, key, response, context => this.ai.setItemStatus(context, body), 200);
+  }
+
+  /** CE2: whether Chad can answer a test now, and the staff member's own last 10 tests. */
+  @Get('test')
+  @UseGuards(ConversationAiTestReadGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async testState(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query() query: Record<string, unknown>, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest) {
+    noQuery(request, query);
+    if (key !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
+    const context = await this.context(request, organizationId, schoolId, '');
+    return { data: await this.tests.state(context), meta: { requestId: context.requestId } };
+  }
+
+  /** CE2: one test question. One provider call at most per key; the answer is shown only to the asker and never sent. */
+  @Post('test')
+  @HttpCode(200)
+  @UseGuards(ConversationAiTestAskGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async testAsk(@Param('organizationId', new ParseUUIDPipe()) organizationId: string, @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Query() query: Record<string, unknown>, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Req() request: HonRequest) {
+    noQuery(request, query);
+    if (typeof key !== 'string' || !key || key.trim() !== key || key.length > 200) {
+      throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REQUIRED', detail: 'A unique Idempotency-Key header is required.' });
+    }
+    const context = await this.context(request, organizationId, schoolId, key);
+    return { data: await this.tests.ask(context, body), meta: { requestId: context.requestId } };
   }
 
   private async run<T>(request: HonRequest, query: Record<string, unknown>, organizationId: string, schoolId: string, key: string | undefined,

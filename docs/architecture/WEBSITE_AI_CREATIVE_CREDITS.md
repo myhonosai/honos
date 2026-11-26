@@ -3,7 +3,7 @@
 Owner decisions:
 - 2026-11-24 04:23Z, card "Charge AI website building to the school's creative credits?" was answered **Yes**. This applies the 2026-11-12 rule in `docs/hon/INCLUDED_AI_AND_FAIR_USE.md`.
 - 2026-11-24 04:51Z: **5 creative credits per edit**.
-- 2026-11-24 04:52Z: trial schools spend their own, smaller trial creative allowance. This is the 1,500-credit `TRIAL` lot from 0663.
+- 2026-11-24 04:52Z: trial schools spend their own, smaller trial creative allowance. This is the 1,500-credit `TRIAL` lot from 0683.
 
 Nothing here is deployed. The creative program stays INACTIVE and no rate is published until the HQ owner does both.
 
@@ -14,7 +14,7 @@ Prepare decides this for each request (`hon.ai_text_creative_applies`). A reques
 1. The kind is creative-billed (`hon.ai_text_creative_billing`; today only `WEBSITE_EDIT → website.edit`).
 2. A `website.edit` rate (`media_kind WEBSITE`) is published.
 3. The creative program is ACTIVE.
-4. The school is eligible for creative credits (`saas_creative_eligibility`). That means a verified paid HON OS subscription, or, after 0663, a funded free trial.
+4. The school is eligible for creative credits (`saas_creative_eligibility`). That means a verified paid HON OS subscription, or, after 0683, a funded free trial.
 
 If any of these fails, the request is an ordinary included-AI request, byte-for-byte the 0550 path. This covers a school with neither a subscription nor a trial, and every school while HQ has not switched creative credits on. An eligible school that is **out of** creative credits never falls back. Its request is blocked `CREATIVE_CREDITS_EXHAUSTED` with nothing sent.
 
@@ -65,3 +65,6 @@ The order is `ai.budget` (0194) → the proposal row → the creative pause gate
 
 - The HQ owner publishes the `website.edit` rate at 5 credits (Creative Credits → rates) and activates the creative program when ready.
 - Until both happen, website edits keep using included AI.
+
+## Free-trial schools (0683)
+A funded free trial is eligible for creative credits, so its AI website edits reserve the website rate from the trial's own 1,500-credit `TRIAL` lot (spent first, expiring with the trial) and never use the trial's included agent-AI credits (proof W16). The trial never gets an included monthly lot, so the price read counts only its lots. One limit remains: the AI planner still checks its estimate for a website edit (20 credits) against the trial's agent-AI per-request cap, so HQ's trial setting needs a per-request cap of at least 20 credits; with a lower cap the edit is refused before any reservation or provider call, and nothing is charged.

@@ -10,9 +10,10 @@ BEGIN;
 --   publishes the rate (operation code website.edit) with the existing versioned rate command.
 -- - hon.ai_text_creative_billing says which AI text kinds are creative-billed (WEBSITE_EDIT -> website.edit). The shared
 --   0550 core keeps every other kind exactly as it was.
--- - Which credits pay is decided per request at prepare (owner decision 2026-11-24, trial and unpaid schools keep AI
---   website edits): creative credits when the creative program is on, the school is eligible for creative credits and the
---   website rate is published; otherwise the request is an ordinary included-AI request exactly as in 0550.
+-- - Which credits pay is decided per request at prepare (owner decisions 2026-11-24): creative credits when the creative
+--   program is on, the school is eligible for creative credits (a verified paid HON OS subscription, or a funded free trial,
+--   which spends its own 1,500-credit TRIAL lot from 0683 first) and the website rate is published; otherwise (for example
+--   an unpaid school) the request is an ordinary included-AI request exactly as in 0550.
 -- - Prepare (ai_text_prepare, 0550 body): a creative-paid request neither reserves nor checks the included AI allowance.
 --   Route, pause, access, the school AI limit and the kind's own block are unchanged. When the claim would send, one unit
 --   is reserved from the creative wallet in the same transaction (pause gate, wallet lock, S4 CREATIVE_MEDIA and school
@@ -190,7 +191,8 @@ CREATE TRIGGER website_creative_reservation_guard BEFORE INSERT OR UPDATE ON hon
 
 -- Whether this request pays with creative credits: a creative-billed kind, the creative program on, the school eligible
 -- for creative credits and the HQ website rate published. Otherwise it is an ordinary included-AI request exactly as in
--- 0550 (trial and unpaid schools, and every school while the program is off or unpriced). Owner decision 2026-11-24.
+-- 0550 (unpaid schools, and every school while the program is off or unpriced). A funded free trial is eligible (0683) and
+-- pays from its TRIAL lot. Owner decisions 2026-11-24.
 CREATE FUNCTION hon.ai_text_creative_applies(i hon.ai_text_proposals, p_at timestamptz) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog,hon AS $$
   SELECT EXISTS (SELECT 1 FROM hon.ai_text_creative_billing b JOIN hon.saas_creative_rates r ON r.operation_code = b.operation_code AND r.media_kind = 'WEBSITE'
@@ -416,8 +418,9 @@ BEGIN
   e := hon.saas_creative_eligibility(school, at);
   creative := per IS NOT NULL AND hon.saas_creative_program_active() AND (e->>'eligible')::boolean;
   IF NOT creative THEN RETURN jsonb_build_object('paidWith', 'INCLUDED_AI', 'creditsPerEdit', NULL, 'availableCredits', NULL); END IF;
-  -- This month's included credits count before their lot is granted (the first reserve of the window grants it).
-  IF NOT EXISTS (SELECT 1 FROM hon.saas_creative_lots l WHERE l.school_id = school AND l.lot_kind = 'INCLUDED_MONTHLY'
+  -- This month's included credits count before their lot is granted (the first reserve of the window grants it). A
+  -- free-trial window (0683) has no subscription and no included monthly lot: only its TRIAL lot counts.
+  IF e->>'subscriptionId' IS NOT NULL AND NOT EXISTS (SELECT 1 FROM hon.saas_creative_lots l WHERE l.school_id = school AND l.lot_kind = 'INCLUDED_MONTHLY'
       AND l.subscription_id = (e->>'subscriptionId')::uuid AND l.window_index = (e#>>'{window,index}')::integer) THEN
     SELECT monthly_included_credits INTO pending FROM hon.saas_creative_program WHERE program_id = 1;
   END IF;
