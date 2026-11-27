@@ -1,4 +1,6 @@
 'use client';
+import { SchoolSwitcher } from '../school-switcher/switcher';
+import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -100,6 +102,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const entry = controller.current;
   const [snapshot, setSnapshot] = useState<EntrySnapshot>(entry.snapshot());
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  const [schoolChoices, setSchoolChoices] = useState<readonly StaffReportingSchoolChoice[]>([]);
   const [mode, setMode] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
   const [viewState, setViewState] = useState<ShellViewState>('LOCAL');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -145,6 +148,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     const abort = new AbortController();
     schoolEntryApi.choices(AbortSignal.any([abort.signal, AbortSignal.timeout(8000)])).then(result => {
       if (abort.signal.aborted || result.state !== 'SELECTION_REQUIRED') return;
+      setSchoolChoices(result.schools); // the account switcher reuses this list; it reads nothing itself
       const match = result.schools.find(choice => choice.schoolId === selection.schoolId && choice.organizationId === selection.organizationId);
       if (match && entry.snapshot().phase === 'READY' && entry.snapshot().selection?.schoolId === match.schoolId) setSchoolName(match.schoolName);
     }, () => {});
@@ -305,6 +309,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
+    switcher={<SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} schools={schoolChoices} />}
     phone={selection ? <SchoolPhone key={`${selection.organizationId}/${selection.schoolId}`} scope={selection} language={preferences.language} /> : undefined}
     search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
     tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>

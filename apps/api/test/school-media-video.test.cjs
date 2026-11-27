@@ -261,9 +261,11 @@ test('a copy that cannot be made goes back to the database, and a video deleted 
   storage.head = async () => ({ totalBytes: 5000, head: iso('ftyp') });
   const calls = [];
   const database = { runSchoolVideoCopyCall: async (sql, values) => { calls.push([sql, values]); return sql === VIDEO_COPY_CLAIM ? job : { assetId: ASSET, copyState: 'QUEUED' }; } };
-  const failing = new SchoolVideoCopyWorker(database, storage).withTools({ run: async (_command, args) => { if (args[0] === '-version') return 'ffmpeg version x'; throw new Error('PROCESS_FAILED'); } });
+  let encode;
+  const failing = new SchoolVideoCopyWorker(database, storage).withTools({ run: async (_command, args) => { if (args[0] === '-version') return 'ffmpeg version x'; encode = args; throw new Error('PROCESS_FAILED'); } });
   try {
     assert.equal(await failing.runOnce(), 'RETRY');
+    assert.equal(encode[encode.indexOf('-threads') + 1], '2', 'the encode is held to two threads on the small API instance');
     assert.deepEqual(calls.at(-1), [VIDEO_COPY_FAIL, [ASSET, job.lease, 'COPY_FAILED']]);
     assert.deepEqual(removed.at(-1), [job.copyKey, job.posterKey]);
   } finally { if (before === undefined) delete process.env.HON_MEDIA_VIDEO_COPIES_APPROVED; else process.env.HON_MEDIA_VIDEO_COPIES_APPROVED = before; }

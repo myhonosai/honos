@@ -28,17 +28,17 @@ export function StatusCard({ copy, program, summary }: { copy: SetupCopy; progra
 
 export type StepKey = 'how' | 'answers' | 'handoff' | 'tryIt';
 export function Checklist({ copy, state, onGo }: { copy: SetupCopy; state: SetupChecklist; onGo: (step: StepKey) => void }): React.ReactElement {
-  const rows: { key: StepKey; done: boolean; label: string; soon?: boolean }[] = [
+  const rows: { key: StepKey; done: boolean; label: string }[] = [
     { key: 'how', done: state.how, label: copy.steps.how },
     { key: 'answers', done: state.answers, label: copy.steps.answers(state.answerCount) },
     { key: 'handoff', done: state.handoff, label: copy.steps.handoff },
-    { key: 'tryIt', done: state.tryIt, label: copy.steps.tryIt, soon: true },
+    { key: 'tryIt', done: state.tryIt, label: copy.steps.tryIt },
   ];
   return <section className={s.checklist} aria-labelledby="ca-checklist"><h2 id="ca-checklist">{copy.checklist}</h2>
     <ol>{rows.map((row, i) => <li key={row.key} data-done={row.done}>
       <span className={s.tick} aria-hidden="true">{row.done ? '✓' : i + 1}</span>
       <span className={s.stepLabel}>{row.label}</span>
-      {row.soon ? <span className={s.soon}>{copy.tryItSoon}</span> : !row.done && <button type="button" className={s.link} onClick={() => onGo(row.key)}>{copy.go}</button>}
+      {!row.done && <button type="button" className={s.link} onClick={() => onGo(row.key)}>{copy.go}</button>}
     </li>)}</ol>
   </section>;
 }

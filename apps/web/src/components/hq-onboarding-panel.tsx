@@ -6,13 +6,31 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { SchoolCreationController, bindSchoolCreationPrivacy } from './hq-onboarding-controller';
 import { useHqModern } from './hq-modern/shell';
 import styles from './hq-onboarding-panel.module.css';
+import { HqSchoolPlanCard } from './hq-school-plan/plan-card';
+import type { SchoolPlanApi } from './hq-school-plan/http';
+
+/**
+ * Step 2 of creating a school (owner, 2026-11-26): pick its plan right away. The same HQ plan card as the school's page
+ * (0676): it reads the new school's plan view (published plans + special price) and assigns through its confirm step.
+ * The server re-checks HQ-owner authority on both; records only, nothing is charged.
+ */
+export function CreatedSchoolPlanStep({ schoolId, language, formattingLocale, api }:
+  { schoolId: string; language: string; formattingLocale: string; api?: SchoolPlanApi }): React.ReactElement {
+  const t = (key: Parameters<typeof hqSchoolText>[1]) => hqSchoolText(language, key);
+  return <section aria-labelledby="hq-school-create-plan" data-school-create-plan="">
+    <h3 id="hq-school-create-plan">{t('planStepTitle')}</h3>
+    <p>{t('planStepIntro')}</p>
+    <HqSchoolPlanCard schoolId={schoolId} language={language} formattingLocale={formattingLocale} startPicking {...(api ? { api } : {})}/>
+    <p><a href={`/hq/schools/${encodeURIComponent(schoolId)}#plan`}>{t('planSkip')}</a></p>
+  </section>;
+}
 
 export function HqOnboardingPanel(): React.ReactElement {
   const [controller] = useState(() => new SchoolCreationController());
   const state = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
   const privateArea = useRef<HTMLDivElement>(null);
   const { view } = useHqModern();
-  const { preferences } = useLocale();
+  const { preferences, formattingLocale } = useLocale();
   const t = (key: Parameters<typeof hqSchoolText>[1]) => hqSchoolText(preferences.language, key);
   const announcement = state.busy ? t('announcementBusy')
     : state.receipt ? (state.receipt.replayed ? t('announcementReplay') : t('announcementReceipt'))
@@ -22,6 +40,7 @@ export function HqOnboardingPanel(): React.ReactElement {
             : (state.message ? t(state.message) : '') || (state.concealed ? t('announcementConcealed') : t('announcementReady'));
   useEffect(() => {
     controller.start();
+    void controller.authorize();
     const unbind = bindSchoolCreationPrivacy(controller, () => {
       if (privateArea.current) { privateArea.current.hidden = true; privateArea.current.inert = true; }
     }, window, document);
@@ -35,7 +54,8 @@ export function HqOnboardingPanel(): React.ReactElement {
     {state.concealed ? <>
       <p>{state.access === 'signed-out' ? t('signedOut') : state.access === 'forbidden' ? t('forbidden') : state.access === 'unavailable' ? t('unavailable') : t('concealed')}</p>
       {state.access === 'signed-out' && <a href="/auth/login">{t('signIn')}</a>}
-      <button type="button" disabled={state.busy} onClick={() => void controller.authorize()}>{t('verifyOwner')}</button>
+      {/* Refused, unavailable or account changed: the page will not retry by itself, so offer the same HQ-owner read. */}
+      {(state.access === 'forbidden' || state.access === 'unavailable' || state.message === 'principalChanged') && <button type="button" disabled={state.busy} onClick={() => void controller.authorize()}>{t('tryAgain')}</button>}
     </> : null}
     <div key={controller.revision()} ref={privateArea} data-hq-create-private hidden={state.concealed} inert={state.concealed}>
     {!state.concealed && (state.receipt ? <section aria-labelledby="hq-school-created">
@@ -43,6 +63,7 @@ export function HqOnboardingPanel(): React.ReactElement {
       <p>{state.receipt.replayed ? t('receiptReplay') : t('receiptCreated')}</p>
       <dl><dt>{t('organizationId')}</dt><dd><code>{state.receipt.organizationId}</code></dd><dt>{t('schoolId')}</dt><dd><code>{state.receipt.schoolId}</code></dd></dl>
       <p>{t('receiptLimit')}</p>
+      <CreatedSchoolPlanStep schoolId={state.receipt.schoolId} language={preferences.language} formattingLocale={formattingLocale}/>
     </section> : <form onSubmit={event => { event.preventDefault(); void controller.submit(); }}>
       <fieldset disabled={state.busy || state.uncertain} className={styles.fields}><legend>{t('formLegend')}</legend>
         {([['legalName', t('legalName'), 180], ['displayName', t('displayName'), 120], ['schoolName', t('schoolName'), 120], ['schoolSlug', t('schoolSlug'), 80], ['timezone', t('timezone'), 64]] as const).map(([key, label, maxLength]) => <label key={key}>{label}<input name={key} required maxLength={maxLength} value={state.form[key]} pattern={key === 'schoolSlug' ? '[a-z0-9]+(-[a-z0-9]+)*' : undefined} onChange={event => controller.edit(key, event.target.value)} /></label>)}

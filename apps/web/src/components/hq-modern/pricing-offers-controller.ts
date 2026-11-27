@@ -1,5 +1,6 @@
 import { SAAS_HON_OS_OFFER_PUBLISH_APPROVAL, type SaasHonOsOfferKind, type SaasHonOsOfferSetDetail, type SaasHonOsOfferManagementView, type SaasHonOsOfferStopReason } from '@hon/contracts';
 import { PricingError, pricingApi, preparePricingRequest, pricingCanStopOffer, type PricingApi, type PricingReceipt, type PricingRequest } from './pricing-offers-http';
+import { applyPlanToForm, type PlanDraft } from './pricing-plan-builder-model';
 import { blankSet, blankOffer, formFromSet, formInput, formFingerprint, type OfferFields, type OfferSetForm } from './pricing-offers-model';
 
 export type PricingScreen='overview'|'editor'|'preview'|'history';
@@ -87,6 +88,9 @@ export class PricingController {
   };
   addOffer=(kind:SaasHonOsOfferKind)=>{if(!this.editable()||this.state.form!.offers.length>=12)return;
     const form=this.state.form!,offer=blankOffer(kind,form.offers);this.patch({form:{...form,offers:[...form.offers,offer]},selected:offer.key,review:null,acknowledged:false,error:null});};
+  /** Plan builder: rewrites the local form only. Saving, preview and publish stay the existing server-checked commands. */
+  applyPlan=(plan:PlanDraft)=>{if(!this.editable())return;const form=applyPlanToForm(this.state.form!,plan);
+    this.patch({form,selected:form.offers.some(o=>o.key===this.state.selected)?this.state.selected:form.offers[0]?.key??null,review:null,acknowledged:false,receipt:null,error:null});};
   removeOffer=()=>{if(!this.editable())return;const form=this.state.form!,offers=form.offers.filter(o=>o.key!==this.state.selected);
     this.patch({form:{...form,offers},selected:offers[0]?.key??null,review:null,acknowledged:false,error:null});};
   async save(){

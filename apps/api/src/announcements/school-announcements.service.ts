@@ -45,7 +45,8 @@ function receiptShape(data: Record<string, unknown> | undefined, rows: number): 
 
 /**
  * 0576 school announcements. Parents: the one live family grant decides the school, with no selector trusted. Staff: the
- * guarded route scope plus the live family_messages.manage permission, re-proved by every database call. Nothing is sent.
+ * guarded route scope plus the live family_messages.manage permission, re-proved by every database call. Nothing is sent from here; a post
+ * with phoneAlert true (0658) is only recorded for the parent push worker.
  */
 @Injectable()
 export class SchoolAnnouncementsService {

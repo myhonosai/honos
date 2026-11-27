@@ -19,7 +19,7 @@ const T = '2026-11-07T12:00:00.000Z', T2 = '2026-11-07T12:00:05.000Z', U = () =>
 const kinds = ['INCLUDED_MONTHLY', 'ADJUSTMENT', 'PROMOTIONAL', 'PURCHASED_TOPUP'];
 const balance = (available = 11950, held = 0) => ({ availableCredits: available, heldCredits: held, byKind: kinds.map((kind, i) => ({ kind, grantedCredits: i ? 0 : 12000,
   availableCredits: i ? 0 : available, heldCredits: i ? 0 : held, consumedCredits: i ? 0 : 12000 - available - held, expiredCredits: 0, debitedCredits: 0 })) });
-const asset = (ordinal = 1, patch = {}) => ({ assetId: U(), ordinal, mediaType: 'image/png', width: 1024, height: 1024, durationSeconds: null, origin: 'SYNTHETIC', ...patch });
+const asset = (ordinal = 1, patch = {}) => ({ assetId: U(), ordinal, mediaType: 'image/png', width: 1024, height: 1024, durationSeconds: null, origin: 'SYNTHETIC', review: 'PENDING_REVIEW', ...patch });
 const generation = (patch = {}) => ({ generationId: U(), schoolId: U(), operationCode: 'image.generate', mediaKind: 'IMAGE', units: 2, format: 'SQUARE',
   prompt: 'A bright poster for our spring kids karate camp', status: 'GENERATING', failureReason: null, reservedCredits: 100, chargedCredits: null,
   createdAt: T, completedAt: null, assets: [], ...patch });
@@ -40,13 +40,15 @@ test('CS1 school view fails closed on provider/cost leakage, inconsistent status
   for (const ok of [generation(), succeeded(), generation({ status: 'FAILED', failureReason: 'PROVIDER_REJECTED', completedAt: T2 }),
     generation({ status: 'UNDER_REVIEW', failureReason: 'PROVIDER_UNKNOWN', completedAt: T2 }), generation({ status: 'RESOLVED_CHARGED', chargedCredits: 50, completedAt: T2, failureReason: 'INTERRUPTED' }),
     generation({ status: 'RESOLVED_NOT_CHARGED', completedAt: T2 }),
-    succeeded({ mediaKind: 'VIDEO', operationCode: 'video.generate', units: 10, chargedCredits: 100, assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 10 })] })])
+    succeeded({ mediaKind: 'VIDEO', operationCode: 'video.generate', units: 10, chargedCredits: 100, assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 10 })] }),
+    // C3: deleted assets are hidden, so a success may list a gap in ordinals or no assets at all.
+    succeeded({ assets: [asset(2)] }), succeeded({ assets: [asset(1), asset(3)] }), succeeded({ assets: [] })])
     assert.doesNotThrow(() => contracts.validateCreativeGeneration(ok), JSON.stringify(ok));
   for (const bad of [{ ...succeeded(), providerId: 'HIGGSFIELD' }, { ...succeeded(), providerCostMicrounits: 1 }, { ...succeeded(), modelCode: 'm' },
-    succeeded({ chargedCredits: 101 }), succeeded({ chargedCredits: null }), succeeded({ assets: [] }), succeeded({ failureReason: 'PROVIDER_UNKNOWN' }),
+    succeeded({ chargedCredits: 101 }), succeeded({ chargedCredits: null }), succeeded({ failureReason: 'PROVIDER_UNKNOWN' }),
     succeeded({ completedAt: null }), generation({ completedAt: T2 }), generation({ chargedCredits: 0 }), generation({ assets: [asset()] }),
     generation({ status: 'FAILED', completedAt: T2 }), generation({ status: 'UNDER_REVIEW', completedAt: T2 }), generation({ status: 'FAILED', failureReason: 'PROVIDER_REJECTED', completedAt: T2, chargedCredits: 1 }),
-    succeeded({ assets: [asset(2), asset(1)] }), succeeded({ assets: [asset(1, { origin: 'REAL' })] }), succeeded({ assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 3 })] }),
+    succeeded({ assets: [asset(2), asset(1)] }), succeeded({ assets: [asset(1), asset(1)] }), succeeded({ assets: [asset(0)] }), succeeded({ assets: [asset(9)] }), succeeded({ assets: [asset(1, { origin: 'REAL' })] }), succeeded({ assets: [asset(1, { review: 'OK' })] }), succeeded({ assets: [asset(1, { review: undefined })] }), succeeded({ assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 3 })] }),
     succeeded({ assets: [asset(1, { url: 'https://cdn.example/x.png' })] }), succeeded({ completedAt: '2026-11-07T11:00:00.000Z' }), generation({ status: 'QUEUED' })])
     assert.throws(() => contracts.validateCreativeGeneration(bad), JSON.stringify(bad));
   const school = U(), a = generation({ schoolId: school, createdAt: T2 }), b = generation({ schoolId: school });
@@ -77,7 +79,7 @@ function fakeDatabase({ createReplayed = false, createStatus = 'GENERATING', cre
       const completedAt = new Date(Date.parse(g.createdAt) + 5_000).toISOString();
       return { generation: { ...g, status, failureReason: outcome.failureReason, completedAt, chargedCredits: status === 'SUCCEEDED' ? outcome.finalUnits * 50 : null,
         assets: status === 'SUCCEEDED' ? outcome.assets.map((a, i) => ({ assetId: U(), ordinal: i + 1, mediaType: a.mediaType, width: a.width, height: a.height,
-          durationSeconds: a.durationSeconds, origin: 'SYNTHETIC' })) : [] }, balance: balance(), replayed: false };
+          durationSeconds: a.durationSeconds, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' })) : [] }, balance: balance(), replayed: false };
     }
     if (operation === 'readCreativeGenerations') return { generations: [], limit: 50 };
     if (operation === 'readCreativeGeneration') return succeeded({ schoolId: params[1], generationId: params[2] });

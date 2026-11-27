@@ -1,5 +1,6 @@
 'use client';
 
+import { SchoolSwitcher } from '../school-switcher/switcher';
 import { useLocale } from '../localization/provider';
 import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -24,7 +25,7 @@ type AccessState = { kind: 'loading' | 'unauthorized' | 'unavailable' | 'limited
  */
 export function hqPageAuthorizesItself(path: string): boolean {
   return path === '/hq/support' || /^\/hq\/support\/[0-9a-f-]{36}$/i.test(path)
-    || path === '/hq/communications' || /^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path);
+    || path === '/hq/communications' || path === '/hq/communications/settings' || /^\/hq\/communications\/[0-9a-f-]{36}$/i.test(path);
 }
 type HqContextValue = { overview: HqPlatformOverview; view: HqView; art: HqArt; draft: string; setDraft: (value: string) => void; openAssistant: () => void };
 const HqContext = createContext<HqContextValue | null>(null);
@@ -112,6 +113,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
   };
   const nav = <>
     <Link href="/hq" className={styles.brand}><img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={38} height={38}/><div><strong>{t("HON HQ")}</strong><span>{t("Owner workspace")}</span></div></Link>
+    <SchoolSwitcher language={preferences?.language ?? 'en'} current={{ kind: 'hq' }} inHq />
     <nav className={styles.navigation} aria-label={t("HQ navigation")}>
       {HQ_NAV.map((item) => {
         const group = HQ_NAV_GROUPS[item.path];

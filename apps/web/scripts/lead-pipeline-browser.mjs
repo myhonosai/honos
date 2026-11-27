@@ -48,7 +48,7 @@ function reset() {
     leads: PEOPLE.map(([g, f, program, source], i) => ({ id: id(41 + i), version: 1, status: i === 7 ? 'WON' : i === 8 ? 'LOST' : 'OPEN',
       stageId: [id(31), id(31), id(32), id(33), id(33), id(34), id(31), id(35), id(36)][i], personId: id(61 + i), givenName: g, familyName: f,
       email: `${g.toLowerCase()}@example.invalid`, phoneE164: `+1555555${String(100 + i).padStart(4, '0')}`, programInterestCode: program, sourceCode: source,
-      createdAt: day(1 + i, 15), closedAt: i >= 7 ? day(12) : null, nextTrialAt: i === 3 || i === 4 ? day(19 + i) : null, lastTrialAt: i === 5 ? day(10) : null })),
+      createdAt: day(1 + i, 15), closedAt: i >= 7 ? day(12) : null, nextTrialAt: i === 3 || i === 4 ? day(19 + i) : null, lastTrialAt: i === 5 ? day(10) : null, textOptedOut: i === 1 })),
   };
 }
 const openCount = (s) => state.leads.filter((l) => l.stageId === s.id && l.status === 'OPEN').length;
@@ -314,7 +314,7 @@ await check('edit pipeline: drag a stage by its handle to a new place, then save
   await ctx.close();
 });
 
-await check('quick actions: Call, Text and Book trial on a card; Email too in the panel; nothing is sent', async () => {
+await check('quick actions: Call, Text and Book trial on a card; no Text after a text opt-out; Email too in the panel; nothing is sent', async () => {
   reset(); report.commands = [];
   const { ctx, page } = await open({ width: 1440, height: 960 });
   const card = column(page, 'New lead').getByTestId('lead-card').filter({ hasText: 'Mina Park' });
@@ -330,6 +330,9 @@ await check('quick actions: Call, Text and Book trial on a card; Email too in th
   assert.equal(await panel.getByTestId('panel-email').getAttribute('href'), `mailto:${mina.email}`);
   await panel.getByText('HON does not send or record those messages.', { exact: false }).waitFor();
   await shot(page, 'pipeline-quick-actions-panel-modern-en');
+  const leo = column(page, 'New lead').getByTestId('lead-card').filter({ hasText: 'Leo Santos' });
+  assert.equal(await leo.getByRole('link', { name: 'Text Leo Santos' }).count(), 0, 'no Text for a lead who opted out of texts');
+  assert.equal(await leo.getByRole('link', { name: 'Call Leo Santos' }).count(), 1);
   assert.deepEqual(report.commands, [], 'quick actions send no command');
   await ctx.close();
 });
