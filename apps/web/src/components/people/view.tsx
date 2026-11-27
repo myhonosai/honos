@@ -31,6 +31,8 @@ export type PeopleViewProps = Readonly<{
   familySlot?: CardSlots['familySlot']; messagesSlot?: CardSlots['messagesSlot'];
   /** C3 (0523): delete, restore and merge for the open contact (its own reads and commands), and what the last one did. */
   actionsSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined; actionNotice?: string | null | undefined;
+  /** Add contact (owner, 2026-11-27): the button and its form, shown only once the school is verified. */
+  addSlot?: React.ReactNode;
   onFilters?: ((filters: ContactFilters) => void) | undefined; onMore?: (() => void) | undefined; onOpen?: ((personId: string) => void) | undefined; onReload?: (() => void) | undefined;
   onSaveContact?: ((draft: ContactDraft) => void) | undefined; onSaveBirth?: ((draft: BirthDraft) => void) | undefined;
   onTryAgain?: (() => void) | undefined; onDiscard?: (() => void) | undefined;
@@ -77,6 +79,7 @@ export function PeopleView(props: PeopleViewProps): React.ReactElement {
       </nav>
     </header>
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
+    {visible && props.addSlot ? props.addSlot : null}
     {visible ? <div className={styles.layout} data-card-mode={selectedId ? props.cardMode ?? 'SIDE' : 'CLOSED'}>
       <article className={styles.card} aria-labelledby="people-list-title" data-testid="people-list" hidden={Boolean(selectedId) && props.cardMode === 'FULL'}>
         <h2 id="people-list-title">{t('listTitle')}</h2>
