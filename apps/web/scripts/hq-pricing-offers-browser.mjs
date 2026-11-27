@@ -157,7 +157,7 @@ try{
       await context.addCookies([token(subject)]);await ui.getByRole('button',{name:op('verify'),exact:true}).click();await advanced(page);await page.getByLabel(op('price'),{exact:true}).waitFor();
     }finally{await context.close();}
   });
-  await check('Plan builder: regular-or-trial start, default prices, savings, live preview, save through the existing command',async()=>{
+  await check('Plan builder: regular-or-trial start, default prices, savings, live preview, a second plan with its own features and credits, save through the existing command',async()=>{
     for(const [size,viewport] of [['desktop',{width:1440,height:1000}],['mobile',{width:390,height:844}]]){
       const {context,page,fixture}=await open(viewport);const ui=page.locator('[data-pricing-design]'),tx=key=>translate('en',key),pb=key=>tx('planBuilder.'+key);
       try{
@@ -168,10 +168,26 @@ try{
         assert.equal(await ui.getByRole('textbox',{name:pb('monthly'),exact:true}).inputValue(),'249.00');assert.equal(await ui.getByRole('textbox',{name:pb('annual'),exact:true}).inputValue(),'2097.00');
         await ui.locator('[data-plan-price="founderMonthly"] input[type=checkbox]').check();await ui.getByRole('textbox',{name:pb('founderMonthly'),exact:true}).fill('199.20');await page.locator('#plan-founder-spots').fill('50');
         await ui.locator('[data-plan-preview]').getByText('$199.20').waitFor();await capture(page,`plan-builder-${size}-2-pricing`);
-        for(const [step,name] of [['included','3-included'],['credits','4-credits'],['terms','5-terms'],['review','6-review']]){await ui.getByRole('button',{name:pb('next'),exact:true}).click();await ui.locator(`[data-plan-step="${step}"]`).waitFor();await capture(page,`plan-builder-${size}-${name}`);}
+        // A second plan (David: pick features per plan): its own name, price, feature checklist and credits.
+        await ui.locator('[data-plan-add]').click();await ui.locator('[data-plan-tab="New plan"][aria-pressed=true]').waitFor();
+        await page.locator('#plan-name').fill('HON OS Core');await ui.getByRole('textbox',{name:pb('monthly'),exact:true}).fill('149');
+        await ui.locator('[data-plan-tab="HON OS Core"][aria-pressed=true]').waitFor();await ui.locator('[data-plan-preview]').getByText('$149',{exact:true}).waitFor();await capture(page,`plan-builder-${size}-2b-second-plan`);
+        await ui.getByRole('button',{name:pb('next'),exact:true}).click();await ui.locator('[data-plan-step="included"]').waitFor();
+        await ui.locator('[data-plan-features-school]').click();
+        assert.equal(await ui.locator('[data-plan-feature="ai.workforce"] input').isChecked(),false);assert.equal(await ui.locator('[data-plan-feature="crm.families_students_prospects"] input').isChecked(),true);
+        await ui.locator('[data-plan-feature="marketing.campaigns_ai_managed"] input').check();await ui.locator('[data-plan-feature="marketing.campaigns_ai_managed"] input').uncheck();
+        await ui.locator('[data-plan-preview]').getByText(pb('preview.features').replace('{count}','11').replace('{total}','16')).waitFor();await capture(page,`plan-builder-${size}-3-included`);
+        await ui.locator('[data-plan-tab="HON OS"]').click();assert.equal(await ui.locator('[data-plan-feature="ai.workforce"] input').isChecked(),true,'the first plan keeps every feature');
+        await ui.locator('[data-plan-tab="HON OS Core"]').click();
+        await ui.getByRole('button',{name:pb('next'),exact:true}).click();await ui.locator('[data-plan-step="credits"]').waitFor();
+        await ui.getByRole('button',{name:pb('credits.pick').replace('{credits}','5,000'),exact:true}).click();await capture(page,`plan-builder-${size}-4-credits`);
+        for(const [step,name] of [['terms','5-terms'],['review','6-review']]){await ui.getByRole('button',{name:pb('next'),exact:true}).click();await ui.locator(`[data-plan-step="${step}"]`).waitFor();await capture(page,`plan-builder-${size}-${name}`);}
+        await ui.locator('[data-plan-summary]').getByText('HON OS Core',{exact:true}).waitFor();
         assert.equal(fixture.mutations,before,'Nothing is sent before Save');
         await ui.locator('[data-plan-save]').click();await idle(page);await ui.getByRole('heading',{name:tx('pricing.op.receipt'),exact:true}).waitFor();assert.equal(fixture.mutations,before+1);
-        const saved=fixture.management().drafts.at(-1);assert.deepEqual(saved.offers.map(o=>[o.offerKind,o.priceMinor]),[['REGULAR_MONTHLY',24900],['REGULAR_ANNUAL',209700],['FOUNDER_MONTHLY',19920]]);assert.equal(saved.founderTotalLimit,50);
+        const saved=fixture.management().drafts.at(-1);
+        assert.deepEqual(saved.offers.map(o=>[o.displayName,o.offerKind,o.priceMinor,o.plannedMonthlyPremiumCredits,o.capabilities.length]),[['HON OS','REGULAR_MONTHLY',24900,12000,16],['HON OS','REGULAR_ANNUAL',209700,12000,16],['HON OS','FOUNDER_MONTHLY',19920,12000,16],['HON OS Core','REGULAR_MONTHLY',14900,5000,11]]);
+        assert.equal(saved.founderTotalLimit,50);assert.ok(!saved.offers[3].capabilities.includes('ai.workforce'));
         assert.equal(fixture.management().published.setId,fixture.originalId,'Saving never publishes');await capture(page,`plan-builder-${size}-7-saved`);
       }finally{await context.close();}
     }
