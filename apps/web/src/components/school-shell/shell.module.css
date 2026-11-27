@@ -442,3 +442,12 @@
   .mobileNav a span, .mobileNav button span { display: block; max-width: 100%; overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
   .shell[data-hon-mode='big-button'] .mobileNav a span, .shell[data-hon-mode='big-button'] .mobileNav button span { font-size: 12px; font-weight: 600; }
 }
+/* 0699 plan features: locked menu pages and the Upgrade card that replaces a locked page. */
+.planLockMark { display: inline-flex; align-items: center; margin-inline-start: auto; padding-inline-start: 6px; color: var(--hon-color-text-muted, #9aa3b2); }
+.planLockText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.planLocked { max-width: 560px; margin: 48px auto; padding: 28px 24px; border: 1px solid var(--hon-color-border, #2d3442); border-radius: 16px; background: var(--hon-color-surface, #151a23); text-align: center; }
+.planLocked h1 { margin: 8px 0 10px; font-size: 22px; line-height: 1.3; }
+.planLocked p { margin: 0 0 18px; line-height: 1.5; }
+.planLocked .planLockedBadge { display: inline-block; margin: 0 0 4px; padding: 4px 10px; border-radius: 999px; background: #2a2210; color: #ffe4a8; font-size: 13px; font-weight: 700; }
+.planUpgrade { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 22px; border-radius: 10px; background: var(--hon-color-accent, #e5483a); color: #fff; font-weight: 800; text-decoration: none; }
+.planUpgrade:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }

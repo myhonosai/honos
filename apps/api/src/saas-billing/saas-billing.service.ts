@@ -20,7 +20,7 @@ import {
   validateSaasRewardPreview,
   validateSaasHonOsOfferManagementView, validateSaasHonOsOfferSetDetail, validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
   validateSaasHonOsOfferSetDiscardInput, validateSaasHonOsOfferSetPublishInput, validateSaasHonOsOfferStopSalesInput, validateSaasHonOsOfferSetReceipt,
-  validateSaasHonOsOfferSetDiscardReceipt, validateSaasHonOsOfferSetPublishReceipt, validateSaasHonOsOfferStopSalesReceipt, validateSaasHonOsSchoolOfferView,
+  validateSaasHonOsOfferSetDiscardReceipt, validateSaasHonOsOfferSetPublishReceipt, validateSaasHonOsOfferStopSalesReceipt, validateSaasHonOsSchoolOfferView, validateSaasSchoolPlanFeatures,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
@@ -280,6 +280,13 @@ export class SaasBillingService {
   async readSchoolHonOsOffers(subject: string, schoolId: unknown) {
     const school = parse(() => saasUuid(schoolId));
     return this.run('readSchoolHonOsOffers', [subject, school], validateSaasHonOsSchoolOfferView);
+  }
+  /** Which features the school's HQ-assigned plan includes (0699), for any eligible staff member. Display only. */
+  async readSchoolPlanFeatures(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.run('readSchoolPlanFeatures', [subject, school], (v) => {
+      const r = validateSaasSchoolPlanFeatures(v); if (r.schoolId.toLowerCase() !== school.toLowerCase()) throw new Error('mismatch'); return r;
+    });
   }
 
   /** Shared fixed-function call with the SaaS error mapping (used by the B5 payments service). */

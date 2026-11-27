@@ -1,6 +1,7 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomUUID as K } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { pricingOffers } from './price-acceptance-fixture.mjs';
 
@@ -95,7 +96,7 @@ try {
     await admin.query("INSERT INTO hon.hq_operator_grants(principal_id,hq_role,permission_codes,effective_from) VALUES($1,$2,$3,clock_timestamp()-interval '1 hour')",[h.id,role,perms]);
   }
   await admin.query('COMMIT');
-  const A=await makeOrg('A'),B=await makeOrg('B');
+  const A=await makeOrg('A'),B=await makeOrg('B'),C=await makeOrg('C');
   const before=await effects();
 
   // ---------- empty state, before any offer set is published ----------
@@ -158,6 +159,45 @@ try {
   await deny(()=>assign(hq,B,2,{source:'OFFER',offerId:v2.offers.REGULAR_ANNUAL.offerId}),422,'HQ_SCHOOL_PLAN_OFFER_NOT_AVAILABLE');
   assert.equal((await plans.read(hq.subject,B.school)).offers.some(o=>o.offerKind==='REGULAR_ANNUAL'),false,'a stopped offer is not offered');
   passed('only offers of the published, not stopped set are assignable; terms are frozen; a founder offer reserves no spot; a new price version leaves the record unchanged and retires the old offer for new assignments');
+
+  // ---------- school plan features (0699): display only, locked features from the assigned offer ----------
+  const features=(who,o)=>billing.readSchoolPlanFeatures(who.subject,o.school);
+  const clerk={user:K(),id:K(),role:K(),subject:'hsp-clerk-'+K()};
+  await admin.query('BEGIN');
+  await admin.query("INSERT INTO hon.users(id,external_subject,email,display_name) VALUES($1,$2,$3,'HSP SYNTHETIC')",[clerk.user,clerk.subject,clerk.user+'@example.test']);
+  await admin.query("INSERT INTO hon.principals(id,user_id,principal_type,display_name,is_active) VALUES($1,$2,'HUMAN_USER','HSP SYNTHETIC',true)",[clerk.id,clerk.user]);
+  await admin.query("INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,'FRONT_DESK','HSP front desk',false)",[clerk.role,C.id]);
+  await admin.query("INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,'ai.premium.request')",[clerk.role,C.id]);
+  await admin.query("INSERT INTO hon.principal_role_grants(organization_id,school_id,principal_id,role_id,granted_by_principal_id,effective_from) VALUES($1,$2,$3,$4,$5,clock_timestamp()-interval '1 day')",[C.id,C.school,clerk.id,clerk.role,C.principal]);
+  await admin.query('COMMIT');orgs.push({principal:clerk.id});
+  const all=c.HON_OS_PLAN_CAPABILITIES,complete=['marketing.campaigns_ai_managed','attribution.ai_insight','ai.workforce','ai.delegated_jobs','ai.orchestration'];
+  const none=await features(C,C);
+  assert.deepEqual([none.source,none.planName,none.included,none.locked],['NONE',null,[...all],[]],'no plan: nothing locked');
+  const onCustom=await features(A,A);
+  assert.deepEqual([onCustom.source,onCustom.planName,onCustom.locked],['CUSTOM','Free pilot',[]],'a custom plan locks nothing');
+  const onFull=await features(B,B);assert.deepEqual([onFull.source,onFull.planName,onFull.locked],['OFFER','FOUNDER_MONTHLY',[]]);
+  const coreOnly=all.filter(x=>!complete.includes(x));
+  const v3=await publish(v2.set.setId,{REGULAR_MONTHLY:{displayName:'HON OS Core',priceMinor:14900,capabilities:[...coreOnly].reverse()}});
+  assert.deepEqual(v3.offers.REGULAR_MONTHLY.capabilities,coreOnly);
+  await assign(hq,C,0,{source:'OFFER',offerId:v3.offers.REGULAR_MONTHLY.offerId});
+  for(const who of [C,clerk]){
+    const f=await features(who,C);
+    assert.deepEqual([f.source,f.planName,f.included,f.locked],['OFFER','HON OS Core',coreOnly,complete],'the assigned plan leaves out the AI team');
+    assert.deepEqual(c.validateSaasSchoolPlanFeatures(f),f);
+  }
+  for(const who of [hq,billingOp,A,B])await deny(()=>features(who,C),403,'SAAS_FORBIDDEN');
+  await deny(()=>billing.readSchoolPlanFeatures(C.subject,K()),403,'SAAS_FORBIDDEN');
+  await deny(()=>billing.readSchoolPlanFeatures(C.subject,'not-a-uuid'),400,'INVALID_SAAS_INPUT');
+  assert.equal((await restricted.query("SELECT has_function_privilege(current_user,'hon.school_plan_features(uuid,uuid)','EXECUTE') a")).rows[0].a,false);
+  assert.equal((await restricted.query("SELECT has_function_privilege(current_user,'hon.read_school_plan_features(text,uuid)','EXECUTE') a")).rows[0].a,true);
+  const canonical=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
+  const block=canonical.split('-- School plan features exact verification (0699)')[1]?.split('-- End school plan features exact verification.')[0];
+  assert.ok(block,'011 section present');await admin.query(block.slice(block.indexOf('\n')+1).replaceAll('hon_runtime',runtime.username));
+  await plans.remove(hq.subject,C.school,{expectedRevision:1,note:null},K());
+  assert.deepEqual((await features(clerk,C)).locked,[],'removing the plan unlocks everything');
+  await admin.query('BEGIN');await admin.query('UPDATE hon.principal_role_grants SET revoked_at=clock_timestamp(),revoked_by_principal_id=$2 WHERE principal_id=$1',[clerk.id,C.principal]);await admin.query('COMMIT');
+  await deny(()=>features(clerk,C),403,'SAAS_FORBIDDEN');
+  passed('0699 plan features: any current staff member of the exact school sees what the assigned offer includes and leaves out (canonical order); no plan, a custom plan or a removed plan locks nothing; HQ, other schools, revoked staff and unknown schools are refused; only the read is a runtime entry point');
 
   // ---------- remove, history, archived ----------
   const removed=await plans.remove(hq.subject,B.school,{expectedRevision:2,note:'School closed its account'},K());
