@@ -171,6 +171,13 @@ export const SAAS_COMMANDS = {
   createHqProspect: 'hq-prospect-create',
   updateHqProspect: 'hq-prospect-update',
   recordHqProspectConsent: 'hq-prospect-consent',
+  // CL5 (0694): HQ calling on the HQ number; same values as HQ_CALL_COMMANDS.
+  setHqCallingSettings: 'hq-call-settings',
+  setMyHqCallRinging: 'hq-call-ring',
+  startHqCall: 'hq-call-start',
+  updateHqCall: 'hq-call-update',
+  setHqDoNotCall: 'hq-call-do-not-call',
+  issueHqPhoneToken: 'hq-call-token',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

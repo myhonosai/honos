@@ -12,6 +12,7 @@ import { HqIcon } from './icon';
 import { SignOutButton } from '../auth/sign-out-button';
 import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { HonAssistant } from './assistant';
+import { HqPhone } from '../calls/phone-panel';
 import styles from './hq-modern.module.css';
 
 type AccessState = { kind: 'loading' | 'unauthorized' | 'unavailable' | 'limited' } | { kind: 'ready'; overview: HqPlatformOverview };
@@ -137,6 +138,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
       <header className={styles.topbar}>
         <button ref={menuButton} type="button" className={styles.menuButton} aria-label={t("Open HQ navigation")} aria-expanded={menu} onClick={() => setMenu(true)}><HqIcon name="menu"/></button>
         <div><p className={styles.eyebrow}>HON HQ / {path === '/hq' ? t("Home") : text(hqPageLabel(path))}</p><h1>{path === '/hq' ? t("Your company. In command.") : text(hqPageLabel(path))}</h1>{path === '/hq' ? <p className={styles.subtitle}>{t("Start here: what needs you today and where to go next.")}</p> : null}</div>
+        {access.kind === 'ready' && <HqPhone language={preferences.language}/>}
       <section className={styles.appearance} data-hq-appearance aria-label={t("HQ appearance")}>
         <div className={styles.appearanceGroup} role="group" aria-label={t("Platform view")}><span>{t("View")}</span>{HQ_VIEWS.map((option) => <button type="button" key={option.key} aria-pressed={view === option.key} onClick={() => setView(option.key)}>{text(option.label)}</button>)}</div>
         <div className={styles.appearanceGroup} role="group" aria-label={t("AI portrait style")}><span>{t("AI Style")}</span>{HQ_ART.map((option) => <button type="button" key={option.key} aria-pressed={art === option.key} onClick={() => setArt(option.key)}>{text(option.label)}</button>)}</div>

@@ -28,7 +28,7 @@ describe('HQ navigation groups', () => {
     expect(HQ_NAV.map((item) => item.title)).toEqual(['Home', 'Schools', 'Plans & Billing', 'Grow', 'Messages & Support', 'AI Team', 'Settings']);
     expect(HQ_REVENUE.map((item) => item.path)).toEqual(['/hq/pricing-offers', '/hq/marketing/promotions', '/hq/revenue', '/hq/revenue/business-numbers', '/hq/revenue/invoices', '/hq/revenue/trials', '/hq/revenue/founder-billing', '/hq/creative-credits', '/hq/revenue/sign-up-limits']);
     expect(HQ_AI.map((item) => item.path)).toEqual(['/hq/executives', '/hq/ai-costs', '/hq/creative-limits', '/hq/conversation-ai', '/hq/ai-safety']);
-    expect(HQ_INBOX.map((item) => item.path)).toEqual(['/hq/approvals', '/hq/support', '/hq/communications', '/hq/communications/numbers']);
+    expect(HQ_INBOX.map((item) => item.path)).toEqual(['/hq/approvals', '/hq/support', '/hq/communications', '/hq/communications/calls', '/hq/communications/numbers']);
     expect(HQ_SETTINGS.map((item) => item.path)).toEqual(['/hq/founder-setup', '/hq/ai-providers', '/hq/integrations/zernio']);
     const links = hqNavLinks().map((item) => item.path);
     expect(new Set(links).size).toBe(links.length);

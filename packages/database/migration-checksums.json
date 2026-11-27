@@ -433,6 +433,8 @@
     "0689_ai_school_cost_alerts.sql": "b6a23f776622a3a55ee0a000fc8ed48f4026e5316f961beaa222a4627aa9164e",
     "0690_website_ai_creative_credits.sql": "99a98eb93b208d3b629ecde76d0691f178b86002019fafb94b8f782fae04821c",
     "0691_creative_media_storage.sql": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b",
-    "0692_creative_asset_review.sql": "ca1abe10915b73e7e78ab0eb147ba208a1b3d2ec856c8e6fb624fa6ebd4e9c59"
+    "0692_creative_asset_review.sql": "ca1abe10915b73e7e78ab0eb147ba208a1b3d2ec856c8e6fb624fa6ebd4e9c59",
+    "0693_school_voice_apps.sql": "3732a33c60a4ab592768b344c57b5a5fea56d51bdcbe11502509ec6765e5e7da",
+    "0694_hq_calls.sql": "828b4f102f63cbef9b14462338b1e15ea89258ee0f23e654c112435723555015"
   }
 }

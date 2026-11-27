@@ -61,6 +61,7 @@ export const HQ_INBOX = [
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
   { path: '/hq/communications', title: 'Texts & Email', icon: 'support' },
+  { path: '/hq/communications/calls', title: 'Calls', icon: 'support' },
   { path: '/hq/communications/numbers', title: 'School texting numbers', icon: 'settings' },
 ] as const;
 export const HQ_SETTINGS = [

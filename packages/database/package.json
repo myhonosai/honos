@@ -192,6 +192,8 @@
     "db:test-intake-consent": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-intake-consent-integrity.mjs",
     "db:test-walk-in-kiosk": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-integrity.mjs",
     "db:test-walk-in-kiosk-card-payment": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-card-payment-integrity.mjs",
+    "db:test-school-voice-apps": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && node scripts/test-school-voice-apps.mjs",
+    "db:test-hq-calls": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && node scripts/test-hq-calls.mjs",
     "db:test-school-calls": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && node scripts/test-school-calls.mjs",
     "db:test-walk-in-kiosk-trial-class": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-trial-class-integrity.mjs",
     "db:test-walk-in-kiosk-trial-seats": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-walk-in-kiosk-trial-seats-integrity.mjs",
