@@ -72,6 +72,7 @@
     "db:test-communication-consents": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-communication-consent-integrity.mjs",
     "db:test-hq-communications": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-hq-communications.mjs",
     "db:test-hq-contact-phone": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-hq-contact-phone.mjs",
+    "db:test-hq-inbound-replies": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-hq-inbound-replies.mjs",
     "db:test-hq-prospects": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && node scripts/test-hq-prospects.mjs",
     "db:test-communication-delivery": "pnpm --filter @hon/contracts build && pnpm --filter @hon/database build && pnpm --filter @hon/api build && node scripts/test-communication-delivery-integrity.mjs",
     "db:test-school-twilio-subaccounts": "node scripts/test-school-twilio-subaccounts.mjs",

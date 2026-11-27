@@ -129,12 +129,20 @@ webhook side.
 - Worker: `record_hq_inbound_text(provider, eventId, from, toMessagingServiceSid, body, receivedAt)` returns the outcome
   and the fixed reply kind; `HQ_INBOUND_REPLIES` holds the reply wording. The Twilio inbound route that calls it belongs
   with the provider adapters.
+- `GET /v1/hq/communications/replies?schoolId&limit` (0698): owners' text replies to HQ, newest first, limited to the
+  purposes the viewer holds (the purpose of the HQ message each reply answers). Never the phone number.
 
 ### 4.7 Screens
 
 - HQ school detail and HQ support case: "Message the owners" with channel, purpose, the piece counter and the delivery
   timeline. No address is shown.
-- `/hq/communications`: sender status per channel (Not set up / Waiting for approval / Ready) and recent HQ messages.
+- `/hq/communications` (owner, 2026-11-26: "like school crm"): an inbox like the school Texts page. Conversations by
+  school on the left (newest activity first, owner replies included), the thread with that school's owners on the
+  right (HQ messages and owner replies, oldest first), and a composer that saves and sends in one step (Text or Email,
+  purpose limited to the viewer's purposes). New message picks a school. Leaving the tab hides nothing; a session end
+  hides everything.
+- `/hq/communications/settings`: sender status per channel (Not set up / Waiting for approval / Ready) and recent HQ
+  messages (the former `/hq/communications` page).
 - School app `/settings/texts-from-hon` ("Texts from HON", in the Settings nav): add a number, the code and the HQ
   number to text it to (the screen checks again every 5 seconds while a code is shown), the on/off switch, change or
   remove the number. The code lives in memory only and is dropped when the session ends.
@@ -186,6 +194,17 @@ E2 (not built):
 | D | Webhook routing for HQ receipts (comms thread) | none planned |
 | E1 | HON prospects, prospect consent, prospect screens (sends nothing) | 0283 |
 | E2 | Sending to prospects: campaign sends with HQ owner approval, consent re-checked at claim | owner allocates |
+| F1 | HQ inbox screen on the existing APIs; sender settings move to `/hq/communications/settings` | none |
+| F2 | Owners' text replies: `hon.hq_inbound_replies`, `read_hq_replies`, replies in the inbox | 0698 |
+
+### 5.1 Owner replies (F2, 0698)
+
+- IR1: a non-keyword text to the HQ Messaging Service from a confirmed HON OS phone is recorded as a reply when that
+  person got an accepted or delivered HQ text in the previous 30 days and is still a current owner of that school. It is
+  linked to the newest such message. Otherwise the text is `NO_MATCH` (unknown phone) or `IGNORED`. Nothing is sent back.
+- IR2: replies are append-only and replayed per provider event. IR3: the reader sees only replies to messages whose
+  purpose they hold. IR4: no phone number is stored on the reply or returned. IR5: email replies are not recorded yet
+  (they need an inbound mail route).
 
 A waits for #223 (0243) and SendGrid to be on main, because it reuses the worker role, dispatcher and adapter.
 

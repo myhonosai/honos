@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { HQ_MESSAGE_CHANNELS, hqMessageMaxLength, type HqMessage, type HqMessageChannel, type HqMessagePurpose, type HqSchoolDirectoryEntry } from '@hon/contracts';
+import { HQ_MESSAGE_CHANNELS, hqMessageMaxLength, type HqInboundReply, type HqMessage, type HqMessageChannel, type HqMessagePurpose, type HqSchoolDirectoryEntry } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { loadHqSchoolDirectory } from '../hq-school-directory-http';
 import { schoolDetailApi } from '../hq-school-detail/http';
@@ -12,7 +12,7 @@ import { useConcealment } from './model';
 import { commsText, type CommsKey } from './copy';
 import { PieceCounter } from './view';
 import { inboxText, inboxWhyKey, type InboxKey } from './inbox-copy';
-import { HqSendFlow, filterConversations, groupConversations, threadOrder, type HqConversation, type SendState } from './inbox-model';
+import { HqSendFlow, filterConversations, groupConversations, threadItems, type HqConversation, type SendState } from './inbox-model';
 
 /** Which school's owners the open conversation is with. The ids only point the composer; the server confirms them on save. */
 export type InboxTarget = Readonly<{ organizationId: string; schoolId: string; supportCaseId: string | null }>;
@@ -32,8 +32,12 @@ const defaultDeps: InboxDeps = {
 };
 
 export type InboxListState = { state: 'LOADING' } | { state: 'DENIED' } | { state: 'UNAVAILABLE' }
-  | { state: 'READY'; messages: readonly HqMessage[]; purposes: readonly HqMessagePurpose[]; next: boolean; loadingMore: boolean; moreFailed: boolean };
-export type ThreadState = { state: 'LOADING' } | { state: 'FAILED' } | { state: 'READY'; messages: readonly HqMessage[]; next: boolean; loadingMore: boolean };
+  | { state: 'READY'; messages: readonly HqMessage[]; purposes: readonly HqMessagePurpose[]; next: boolean; loadingMore: boolean; moreFailed: boolean;
+    replies: readonly HqInboundReply[]; repliesFailed: boolean };
+export type ThreadState = { state: 'LOADING' } | { state: 'FAILED' }
+  | { state: 'READY'; messages: readonly HqMessage[]; next: boolean; loadingMore: boolean; replies: readonly HqInboundReply[]; repliesFailed: boolean };
+/** Owners' replies (0698) are read beside the messages. If they cannot be read, the messages still show, with a note. */
+type RepliesRead = Readonly<{ replies: readonly HqInboundReply[]; repliesFailed: boolean }>;
 export type PickerState = null | { state: 'LOADING' } | { state: 'FAILED' } | { state: 'READY'; schools: readonly HqSchoolDirectoryEntry[] };
 export type Opening = null | { school: string; failed: boolean; schoolId: string; supportCaseId: string | null };
 
@@ -67,10 +71,11 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
   useEffect(() => {
     if (concealed) return;
     const owned = owns(generation.current, privacy.current), abort = new AbortController();
-    api.list({ schoolId: null, cursor: null }, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), owned).then(view => {
+    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    Promise.all([api.list({ schoolId: null, cursor: null }, signal, owned), readReplies(api, null, signal, owned)]).then(([view, r]) => {
       if (!owned()) return;
       listCursor.current = view.nextCursor;
-      setList({ state: 'READY', messages: view.messages, purposes: view.viewer.purposes, next: view.nextCursor !== null, loadingMore: false, moreFailed: false });
+      setList({ state: 'READY', messages: view.messages, purposes: view.viewer.purposes, next: view.nextCursor !== null, loadingMore: false, moreFailed: false, ...r });
     }, error => {
       if (!owned() || abort.signal.aborted) return;
       setList(error instanceof CommsError && error.kind === 'DENIED' ? { state: 'DENIED' } : { state: 'UNAVAILABLE' });
@@ -85,10 +90,11 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
     if (concealed || !schoolId) return;
     const owned = owns(generation.current, privacy.current), abort = new AbortController();
     setThread(prior => prior.state === 'READY' ? prior : { state: 'LOADING' });
-    api.list({ schoolId, cursor: null }, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), owned).then(view => {
+    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]);
+    Promise.all([api.list({ schoolId, cursor: null }, signal, owned), readReplies(api, schoolId, signal, owned)]).then(([view, r]) => {
       if (!owned()) return;
       threadCursor.current = view.nextCursor;
-      setThread({ state: 'READY', messages: view.messages, next: view.nextCursor !== null, loadingMore: false });
+      setThread({ state: 'READY', messages: view.messages, next: view.nextCursor !== null, loadingMore: false, ...r });
     }, () => { if (owned() && !abort.signal.aborted) setThread({ state: 'FAILED' }); });
     return () => abort.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,7 +152,7 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
     api.list({ schoolId, cursor: c }, AbortSignal.timeout(15000), owned).then(view => {
       if (!owned()) return;
       threadCursor.current = view.nextCursor;
-      setThread(prior => prior.state !== 'READY' ? prior : { state: 'READY', next: view.nextCursor !== null, loadingMore: false,
+      setThread(prior => prior.state !== 'READY' ? prior : { ...prior, next: view.nextCursor !== null, loadingMore: false,
         messages: [...prior.messages, ...view.messages.filter(m => !prior.messages.some(p => p.messageId === m.messageId))] });
     }, () => { if (owned()) setThread(prior => prior.state !== 'READY' ? prior : { ...prior, loadingMore: false }); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,6 +171,15 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
       return flow.send({ organizationId: open.organizationId, schoolId: open.schoolId, purpose: d.purpose, channel: d.channel, content, supportCaseId: open.supportCaseId });
     }}
     onTryAgain={() => flow.tryAgain()} onDismiss={() => flow.reset()}/>;
+}
+
+/** Owners' replies, or none with a note when they cannot be read (a session end still hides everything through the list read). */
+async function readReplies(api: CommsApi, schoolId: string | null, signal: AbortSignal, owned: Owned): Promise<RepliesRead> {
+  try { return { replies: (await api.replies({ schoolId }, signal, owned)).replies, repliesFailed: false }; }
+  catch (error) {
+    if (error instanceof CommsError && error.kind === 'SESSION') throw error;
+    return { replies: [], repliesFailed: true };
+  }
 }
 
 export type Draft = Readonly<{ channel: HqMessageChannel; purpose: HqMessagePurpose; content: string }>;
@@ -198,7 +213,7 @@ export function HqInboxView(p: InboxViewProps): React.ReactElement {
     <p className={s.actions} role="status"><span className={s.muted}>{t('concealed')}</span> <button type="button" className={s.button} onClick={p.onReveal}>{t('reveal')}</button></p></main>;
   if (p.list.state !== 'READY') return <main className={s.page} data-hq-inbox={p.list.state.toLowerCase()} aria-busy={p.list.state === 'LOADING'}>{head}
     <p className={s.muted} role="status">{t(p.list.state === 'LOADING' ? 'loading' : p.list.state === 'DENIED' ? 'denied' : 'unavailable')}</p></main>;
-  const list = p.list, conversations = filterConversations(groupConversations(list.messages), p.search);
+  const list = p.list, conversations = filterConversations(groupConversations(list.messages, list.replies), p.search);
   const picker = p.picker && <section className={s.panel} aria-label={t('pickTitle')} data-hq-inbox-picker={p.picker.state.toLowerCase()}>
     <PickerBody t={t} picker={p.picker} onPick={p.onPick} onCancel={p.onPickCancel}/></section>;
   const opening = p.opening && <p className={s.flash} data-tone={p.opening.failed ? 'bad' : undefined} role={p.opening.failed ? 'alert' : 'status'}>
@@ -208,14 +223,16 @@ export function HqInboxView(p: InboxViewProps): React.ReactElement {
       <section className={s.listPane} aria-label={t('conversations')}>
         <div className={s.listTools}><input className={s.field} type="search" aria-label={t('search')} placeholder={t('search')} value={p.search}
           maxLength={120} onChange={e => p.onSearch(e.currentTarget.value)}/></div>
-        {conversations.length === 0 ? <p className={s.empty}>{t(list.messages.length === 0 ? 'empty' : 'emptySearch')}</p> : <ul className={s.rows}>
+        {list.repliesFailed && <p className={s.muted} role="status">{t('repliesFailed')}</p>}
+        {conversations.length === 0 ? <p className={s.empty}>{t(list.messages.length + list.replies.length === 0 ? 'empty' : 'emptySearch')}</p> : <ul className={s.rows}>
           {conversations.map(x => <li key={x.schoolId}><button type="button" className={s.row} data-hq-conversation={x.schoolId}
             aria-current={p.open?.schoolId.toLowerCase() === x.schoolId.toLowerCase() ? 'true' : undefined} onClick={() => p.onOpen(x)}>
             <span className={s.avatar} aria-hidden="true">{initials(x.schoolDisplayName)}</span>
             <span className={s.rowMain}><span className={s.rowName}>{x.schoolDisplayName}</span>
               <span className={s.rowSub}>{x.organizationDisplayName}</span>
-              <span className={s.rowPreview}>{`${c(x.latest.channel)}: ${x.latest.content.slice(0, 120)}`}</span></span>
-            <span className={s.rowSide}><time dateTime={x.latest.createdAt}>{when(x.latest.createdAt)}</time></span></button></li>)}</ul>}
+              <span className={s.rowPreview} data-from={x.preview.direction === 'IN' ? 'in' : 'out'}>
+                {`${x.preview.direction === 'IN' ? t('reply') : c(x.preview.channel)}: ${x.preview.text.slice(0, 120)}`}</span></span>
+            <span className={s.rowSide}><time dateTime={x.latestAt}>{when(x.latestAt)}</time></span></button></li>)}</ul>}
         {list.moreFailed && <p className={s.muted} role="alert">{t('moreFailed')}</p>}
         {list.next && <p className={s.more}><button type="button" className={s.ghost} disabled={list.loadingMore} onClick={p.onMore}>{t('more')}</button></p>}
       </section>
@@ -254,13 +271,19 @@ function Thread(p: InboxViewProps & { open: OpenSchool; t: (k: InboxKey, v?: Rec
       {p.thread.state === 'LOADING' && <li className={s.muted} role="status">{t('threadLoading')}</li>}
       {p.thread.state === 'FAILED' && <li className={s.flash} data-tone="bad" role="alert">{t('threadFailed')}</li>}
       {p.thread.state === 'READY' && p.thread.next && <li className={s.actions}><button type="button" className={s.ghost} disabled={p.thread.loadingMore} onClick={p.onOlder}>{t('older')}</button></li>}
-      {p.thread.state === 'READY' && p.thread.messages.length === 0 && <li className={s.empty}>{t('threadEmpty')}</li>}
-      {p.thread.state === 'READY' && threadOrder(p.thread.messages).map(m => <li key={m.messageId} className={s.bubble} data-from="out" data-hq-message={m.messageId}>
-        <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.content}</p>
-        <span className={s.bubbleMeta}><span>{`${m.createdBy.displayName} · ${c(m.channel)} · ${c(m.purpose)}`}</span>
-          <time dateTime={m.createdAt}>{p.when(m.createdAt)}</time></span>
-        <span className={s.bubbleMeta}><span>{m.status === 'QUEUED' ? deliveryLine(t, m) || c('QUEUED') : c(m.status)}</span>
-          <a href={`/hq/communications/${m.messageId}`}>{t('details')}</a></span></li>)}
+      {p.thread.state === 'READY' && p.thread.repliesFailed && <li className={s.muted} role="status">{t('repliesFailed')}</li>}
+      {p.thread.state === 'READY' && p.thread.messages.length + p.thread.replies.length === 0 && <li className={s.empty}>{t('threadEmpty')}</li>}
+      {p.thread.state === 'READY' && threadItems(p.thread.messages, p.thread.replies).map(item => item.direction === 'IN'
+        ? <li key={item.id} className={s.bubble} data-from="in" data-hq-reply={item.id}>
+          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{item.reply.body}</p>
+          <span className={s.bubbleMeta}><span>{`${item.reply.from.displayName} · ${t('reply')} · ${c(item.reply.purpose)}`}</span>
+            <time dateTime={item.reply.receivedAt}>{p.when(item.reply.receivedAt)}</time></span></li>
+        : <li key={item.id} className={s.bubble} data-from="out" data-hq-message={item.id}>
+          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{item.message.content}</p>
+          <span className={s.bubbleMeta}><span>{`${item.message.createdBy.displayName} · ${c(item.message.channel)} · ${c(item.message.purpose)}`}</span>
+            <time dateTime={item.message.createdAt}>{p.when(item.message.createdAt)}</time></span>
+          <span className={s.bubbleMeta}><span>{item.message.status === 'QUEUED' ? deliveryLine(t, item.message) || c('QUEUED') : c(item.message.status)}</span>
+            <a href={`/hq/communications/${item.message.messageId}`}>{t('details')}</a></span></li>)}
     </ol>
     {purposes.length === 0 ? <p className={`${s.composer} ${s.muted}`}>{t('noPurposes')}</p>
       : <Composer key={open.schoolId} {...p} t={t} c={c} purposes={purposes} school={name}/>}

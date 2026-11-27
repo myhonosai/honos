@@ -7680,6 +7680,35 @@ BEGIN
     RAISE EXCEPTION 'HON OS plan features not written or reported'; END IF;
 END $$;
 -- End HON OS plan features exact verification.
+-- HQ inbound owner replies exact verification (0698): the runtime may only read replies; the communication worker records
+-- inbound texts; the reply table is forced-RLS, policy-free, grant-free and append-only; the outcome check adds REPLY_RECORDED.
+DO $$ DECLARE f text; t text; c text; d boolean; s text; r boolean; w boolean;
+BEGIN
+  FOR f,t,c,d,s,r,w IN SELECT * FROM (VALUES
+    ('hon.hq_inbound_reply_json(hon.hq_inbound_replies)','565b4f4f6e9024a8d45c7a208ba58381','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.read_hq_replies(text,uuid,integer)','b77b2a335ee2cefd684dc663db514770','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.record_hq_inbound_text(text,text,text,text,text,timestamp with time zone)','db5eb39d156952eec65f27b94eabee44','v',true,'search_path=pg_catalog, hon',false,true)) x(f,t,c,d,s,r,w) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')<>r
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker') AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE')<>w)
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'HQ inbound reply function body/posture drift: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('hq_inbound_reply_json','read_hq_replies','record_hq_inbound_text'))<>3 THEN
+    RAISE EXCEPTION 'Unexpected HQ inbound reply overload'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.hq_inbound_replies'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='hq_inbound_replies')
+    OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid='hon.hq_inbound_replies'::regclass AND a.grantee<>c.relowner)
+    OR (SELECT count(*) FROM pg_trigger WHERE tgrelid='hon.hq_inbound_replies'::regclass AND tgfoid='hon.guard_hq_communication_evidence()'::regprocedure
+      AND tgenabled='O' AND NOT tgisinternal AND tgname IN ('immutable','no_truncate'))<>2
+    OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_inbound_replies'::regclass AND conname='hq_inbound_replies_provider_provider_event_id_key' AND contype='u') THEN
+    RAISE EXCEPTION 'Unsafe HQ inbound reply table'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_inbound_texts'::regclass AND conname='hq_inbound_texts_outcome_check' AND contype='c' AND convalidated
+      AND md5(pg_get_constraintdef(oid))='f54d6b3afd09d775e88a5113914a0647') THEN
+    RAISE EXCEPTION 'HQ inbound text outcome check drift'; END IF;
+END $$;
+-- End HQ inbound owner replies exact verification.
 -- School plan features exact verification (0699)
 DO $$ BEGIN
   IF to_regprocedure('hon.read_school_plan_features(text,uuid)') IS NULL OR to_regprocedure('hon.school_plan_features(uuid,uuid)') IS NULL

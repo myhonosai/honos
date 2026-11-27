@@ -20,6 +20,8 @@ export class HqCommunicationsController {
   constructor(private readonly comms: HqCommunicationsService) {}
   @Get() @UseGuards(SaasReadGuard) @SaasReadQuery(['schoolId', 'cursor', 'limit'])
   async view(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { return { data: await this.comms.view(subject(req), query) }; }
+  @Get('replies') @UseGuards(SaasReadGuard) @SaasReadQuery(['schoolId', 'limit'])
+  async replies(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { return { data: await this.comms.replies(subject(req), query) }; }
   @Get('messages/:messageId') @UseGuards(SaasReadGuard)
   async read(@Req() req: HonRequest, @Param('messageId') id: string) { return { data: await this.comms.read(subject(req), id) }; }
   @Post('senders') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.setHqCommunicationSender)
