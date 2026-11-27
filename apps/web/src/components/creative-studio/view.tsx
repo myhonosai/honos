@@ -21,6 +21,8 @@ export type CreativeStudioViewProps = Readonly<{
   /** A2 (0277) talking avatar videos: the read, this tab's video request outcome and lock. */
   videos?: VideosState; videoOutcome?: CreateOutcome; videoLocked?: boolean | undefined; hideVideoText?: ((v: CreativeAvatarVideo) => boolean) | undefined;
   onCreateVideo?: ((input: CreativeAvatarVideoInput) => void) | undefined; onCheckVideoAgain?: (() => void) | undefined;
+  /** C6: the stored images and videos and, for reviewers, the approval queue (rendered only with a readable wallet). */
+  media?: React.ReactNode;
   /** A3 (0684) photo avatars: the person's own consented photo, its save/delete outcome and this tab's photo avatar request. */
   photos?: PhotosState; photoImage?: string | null | undefined; photoOutcome?: PhotoOutcome | undefined; photoSaveLocked?: boolean | undefined; photoDeleting?: boolean | undefined;
   photoAvatarOutcome?: CreateOutcome; photoAvatarLocked?: boolean | undefined;
@@ -35,7 +37,7 @@ export function CreativeStudioView({ language, waiting, concealed, hasSchool, st
   avatars = { state: 'UNAVAILABLE' }, avatarOutcome = null, avatarLocked = false, hideAvatarText, onCreateAvatar, onCheckAvatarAgain,
   videos = { state: 'UNAVAILABLE' }, videoOutcome = null, videoLocked = false, hideVideoText, onCreateVideo, onCheckVideoAgain,
   photos = { state: 'UNAVAILABLE' }, photoImage = null, photoOutcome = null, photoSaveLocked = false, photoDeleting = false, photoAvatarOutcome = null, photoAvatarLocked = false,
-  onSavePhoto, onCheckPhotoSave, onDeletePhoto, onCreatePhotoAvatar, onCheckPhotoAvatarAgain }: CreativeStudioViewProps): React.ReactElement {
+  onSavePhoto, onCheckPhotoSave, onDeletePhoto, onCreatePhotoAvatar, onCheckPhotoAvatarAgain, media }: CreativeStudioViewProps): React.ReactElement {
   const t = (key: StudioKey, vars?: Record<string, string>) => studioText(language, key, vars);
   const number = (n: number) => new Intl.NumberFormat(language).format(n);
   const notice = waiting ? t('waiting') : concealed ? t('concealed') : !hasSchool ? t('noSchool')
@@ -60,6 +62,7 @@ export function CreativeStudioView({ language, waiting, concealed, hasSchool, st
     {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
     {wallet ? <WalletCards wallet={wallet} language={language} t={t} number={number}/> : null}
     {wallet ? <GenerationsPanel language={language} generations={generations} hidePrompt={hidePrompt}/> : null}
+    {wallet && media ? media : null}
   </section>;
 }
 

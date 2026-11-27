@@ -54,7 +54,7 @@ export function AvatarsPanel({ language, wallet, avatars, outcome, showList = tr
         <span>{a.generation.chargedCredits !== null ? t('credits', { n: number(a.generation.chargedCredits) })
           : a.status === 'CREATING' || a.status === 'UNDER_REVIEW' ? t('creditsHeld', { n: number(a.generation.reservedCredits) }) : t('credits', { n: number(0) })}</span>
         {hideText?.(a) ? <p className={styles.meta} data-prompt-hidden="">{t('hiddenPrompt')}</p> : <p className={styles.prompt}>{a.description}</p>}
-        {a.generation.assets.map(x => <small key={x.assetId} className={styles.asset}>{t('assetPreview', { kind: t('IMAGE'), w: String(x.width), h: String(x.height), d: '' })}</small>)}
+        {a.generation.assets.map(x => <small key={x.assetId} className={styles.asset}>{t(x.origin === 'PROVIDER' ? 'assetStored' : 'assetPreview', { review: t(`review${x.review}`),  kind: t('IMAGE'), w: String(x.width), h: String(x.height), d: '' })}</small>)}
       </li>)}</ul> : <p className={styles.meta}>{t('avatarsNone')}</p>}
     </> : avatars.state === 'LOADING' ? <p className={styles.meta}>{t('loading')}</p> : <p className={styles.meta}>{t('avatarsUnavailable')}</p>}
   </article>;
