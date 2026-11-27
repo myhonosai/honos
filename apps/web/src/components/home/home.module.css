@@ -213,3 +213,36 @@
 
 /* Team chat link under Ask HON (owner ask 2026-11-17). */
 .teamChatLink { display: inline-flex; align-items: center; min-height: 44px; font-weight: 700; text-underline-offset: 3px; }
+
+/* Ask HON in place from the orb card (owner 2026-11-27): the bar holds three controls, the chat opens under the card. */
+.honAsk { position: relative; display: grid; justify-items: center; width: 100%; }
+.honAskBar {
+  display: inline-flex; align-items: stretch; max-width: 100%; overflow: hidden; border-radius: 999px;
+  background: var(--hon-accent-strong); border: 1px solid rgba(150, 200, 255, 0.6); box-shadow: 0 0 24px rgba(47, 123, 255, 0.55);
+}
+.honAskBar > button, .honAskBar > a {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: calc(var(--hon-control-h) + 4px); min-width: 44px;
+  padding: 0 10px; border: 0; background: transparent; color: #fff !important; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer;
+}
+.honAskBar > button:hover, .honAskBar > a:hover, .honAskBar > button:focus-visible, .honAskBar > a:focus-visible { background: rgba(255, 255, 255, 0.14); }
+.honAskBar > button:focus-visible, .honAskBar > a:focus-visible { outline: 3px solid #fff; outline-offset: -4px; }
+.honAskMic { border-right: 1px solid rgba(255, 255, 255, 0.22) !important; padding-left: 14px !important; }
+.honAskOpen { padding: 0 12px !important; white-space: nowrap; }
+.honAskExpand { border-left: 1px solid rgba(255, 255, 255, 0.22) !important; padding-right: 14px !important; }
+/* While the chat is open it may reach past the hero's edge. */
+.hero:has([data-hon-home-ask='open']) { overflow: visible; z-index: 5; }
+.honAskChat {
+  position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); z-index: 30;
+  width: min(460px, calc(100vw - 32px)); max-height: min(64vh, 640px); overflow: auto; box-sizing: border-box;
+  padding: 10px 12px 8px; text-align: left; border: 1px solid #2c4862; border-radius: 18px;
+  background: radial-gradient(circle at 90% 0%, rgba(63, 213, 255, .12), transparent 45%), var(--hon-bg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 4px rgba(47, 123, 255, .10);
+}
+.honAskChat form { position: static !important; }
+.honAskClose {
+  position: sticky; top: 0; float: right; z-index: 1; display: grid; place-items: center; width: 40px; height: 40px; margin: 0 0 4px 8px;
+  border: 1px solid var(--hon-border); border-radius: 12px; background: var(--hon-surface-solid); color: var(--hon-text); cursor: pointer;
+}
+@media (max-width: 760px) {
+  .honAskChat { top: calc(100% + 8px); }
+}

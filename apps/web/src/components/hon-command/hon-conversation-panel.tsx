@@ -386,7 +386,9 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
  * Private conversation content is concealed synchronously on session end (away only shows the school screensaver), and shown again
  * only after an explicit Refresh. A sent message is never cancelled: its outcome and exact retry are kept.
  */
-export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon', voiceApi = AGENT_VOICE_API }: { school: HonSchool; presentation: HonConversationPresentation; api?: HonConversationApi; initialAsk?: HonComposerAsk; voiceApi?: AgentVoiceApi }): React.ReactElement {
+export function HonConversation({ school, presentation, api = HON_CONVERSATION_API, initialAsk = 'hon', voiceApi = AGENT_VOICE_API, startVoice = 0 }: { school: HonSchool; presentation: HonConversationPresentation; api?: HonConversationApi; initialAsk?: HonComposerAsk; voiceApi?: AgentVoiceApi;
+  /** The Home orb card's microphone (owner 2026-11-27): each new value starts listening once HON can take a spoken question. */
+  startVoice?: number }): React.ReactElement {
   const [phase, setPhase] = useState<ConversationPhase>('LOADING');
   const [readiness, setReadiness] = useState<HonConversationReadiness | null>(null);
   const [conversations, setConversations] = useState<HonConversationSummary[]>([]);
@@ -564,6 +566,12 @@ export function HonConversation({ school, presentation, api = HON_CONVERSATION_A
   sendTextRef.current = sendText;
   const canVoice = voiceCanAsk(phase, readiness, pending);
   voiceAllowed.current = canVoice;
+  const { talkNow, ready: voiceReady } = voice;
+  const voiceStarted = useRef(0);
+  useEffect(() => {
+    if (startVoice <= voiceStarted.current || !voiceReady || !canVoice) return;
+    voiceStarted.current = startVoice; talkNow();
+  }, [startVoice, voiceReady, canVoice, talkNow]);
 
   return <HonConversationView presentation={presentation} phase={phase} readiness={readiness} conversations={conversations} thread={thread} threadPhase={threadPhase}
     pending={pending} draft={draft} mode={mode} ask={ask} onAsk={setAsk} onDraft={setDraft} onMode={setMode} onSend={send}

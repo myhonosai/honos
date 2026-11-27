@@ -629,5 +629,7 @@ export const en = {
   "Only test-mode checkouts can run, and each still needs a published offer and an eligible school.": "Only test-mode checkouts can run, and each still needs a published offer and an eligible school.",
   "No checkout can start while the payment program is disabled.": "No checkout can start while the payment program is disabled.",
   "Top-ups unavailable · overage and purchases disabled": "Top-ups unavailable · overage and purchases disabled",
-  "Nothing on this panel changes billing, checkout or credits.": "Nothing on this panel changes billing, checkout or credits."
+  "Nothing on this panel changes billing, checkout or credits.": "Nothing on this panel changes billing, checkout or credits.",
+  "HON conversation": "HON conversation",
+  "Close HON chat": "Close HON chat"
 } as const;

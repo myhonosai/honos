@@ -630,5 +630,7 @@ export const es = {
   "Only test-mode checkouts can run, and each still needs a published offer and an eligible school.": "Solo pueden ejecutarse pagos en modo de prueba, y cada uno necesita una oferta publicada y una escuela elegible.",
   "No checkout can start while the payment program is disabled.": "Ningún pago puede iniciarse mientras el programa de pagos esté desactivado.",
   "Top-ups unavailable · overage and purchases disabled": "Recargas no disponibles · excedentes y compras desactivados",
-  "Nothing on this panel changes billing, checkout or credits.": "Nada en este panel cambia la facturación, los pagos ni los créditos."
+  "Nothing on this panel changes billing, checkout or credits.": "Nada en este panel cambia la facturación, los pagos ni los créditos.",
+  "HON conversation": "Conversación con HON",
+  "Close HON chat": "Cerrar el chat de HON"
 } satisfies TranslationCatalog;
