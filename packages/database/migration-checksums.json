@@ -438,6 +438,7 @@
     "0694_hq_calls.sql": "828b4f102f63cbef9b14462338b1e15ea89258ee0f23e654c112435723555015",
     "0695_school_blast_audience_filters.sql": "eecde1129b9abe9eee70caa069b445b4c384a903df4a34108a26cb8b323140c9",
     "0696_hq_enter_school.sql": "2e38b91671c07cd55e2a1bd7ed3579ddf3be6bf3b654511c7f8dca56856bb909",
-    "0697_hon_os_plan_features.sql": "4b8afcfa294062fc3a3f31af72a476b109179c371d129ba81854e619c8b09ebc"
+    "0697_hon_os_plan_features.sql": "4b8afcfa294062fc3a3f31af72a476b109179c371d129ba81854e619c8b09ebc",
+    "0698_hq_inbound_owner_replies.sql": "cbd99d366661f7f44a2ad05b12cf13766fc928384f142b2c41b5637b9436ccbc"
   }
 }

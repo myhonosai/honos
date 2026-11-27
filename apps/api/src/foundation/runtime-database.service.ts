@@ -287,6 +287,7 @@ const SAAS_BILLING_CALLS = {
   openSupportCase: { sql: 'SELECT hon.open_hq_support_case($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readHqCommunications: { sql: 'SELECT hon.read_hq_communications($1,$2::uuid,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   readHqMessage: { sql: 'SELECT hon.read_hq_message($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readHqReplies: { sql: 'SELECT hon.read_hq_replies($1,$2::uuid,$3::integer) AS data', arity: 3, readOnly: true },
   setHqCommunicationSender: { sql: 'SELECT hon.set_hq_communication_sender($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   retireHqCommunicationSender: { sql: 'SELECT hon.retire_hq_communication_sender($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
   createHqMessage: { sql: 'SELECT hon.create_hq_message($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
