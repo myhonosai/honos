@@ -5,6 +5,7 @@ import {
   type HqCall, type HqCallList, type HqCallOutcome, type HqCallingOverview, type SchoolCallFilter,
 } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
+import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import { CallsAccessError, CallsRefusal, formatCallDuration, formatCallNumber } from './http';
 import { hqRecordingUrl, loadHqCalling, loadHqCalls, saveHqCallingSettings, setHqDoNotCall, setHqRingMe, updateHqCall } from './hq-http';
 import { hqCallsCopy, type HqCallsCopy } from './hq-copy';
@@ -54,9 +55,10 @@ export function HqCalls(): React.ReactElement {
   }, [filter, copy]);
   useEffect(() => { void refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps -- first read only
   useEffect(() => {
-    const onHide = () => { if (document.visibilityState === 'hidden') { clear(); setError(''); setNotice(''); setHidden(true); } };
-    document.addEventListener('visibilitychange', onHide);
-    return () => document.removeEventListener('visibilitychange', onHide);
+    // HQ stays on screen when the person looks away (#671); only a session end hides the calls.
+    const onSessionEnd = () => { clear(); setError(''); setNotice(''); setHidden(true); };
+    window.addEventListener(HON_SESSION_INVALIDATED_EVENT, onSessionEnd);
+    return () => window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, onSessionEnd);
   }, [clear]);
 
   async function more() {

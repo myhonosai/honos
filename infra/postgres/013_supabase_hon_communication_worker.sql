@@ -228,7 +228,7 @@ BEGIN
 END;
 $$;
 
-COMMIT;
+-- 0693 school voice apps: find schools that need one, claim, record the TwiML App and sealed key, read the key to sign
 -- a phone token (when applied).
 DO $$
 BEGIN
