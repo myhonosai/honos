@@ -649,3 +649,45 @@
 .assistantBody [data-hq-hon-agent] button[type=submit]{align-self:flex-start;min-width:110px;background:var(--hon-accent-2);color:#00202e;border-color:var(--hon-accent-2);font-weight:700}
 .assistantBody [data-hq-hon-agent] ol{display:flex;flex-direction:column;gap:12px;padding-left:18px;font-size:13px}
 .assistantBody [data-hq-hon-agent] fieldset label{flex-direction:row;align-items:center;gap:6px}
+
+/* Ask HON in place from the dashboard orb (owner 2026-11-27): the bar holds three buttons, the chat opens under the card. */
+.honOrbAsk{position:relative;width:100%}
+.shell .honEntry{padding:0;gap:0;overflow:hidden}
+.honEntry>button{display:flex;align-items:center;justify-content:center;min-height:42px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:0 8px}
+.honEntry>button:hover,.honEntry>button:focus-visible{background:#ffffff1a}
+.honEntry>button:focus-visible{outline:2px solid #9ff0ff;outline-offset:-3px}
+.honEntryAsk{flex:1;min-width:0;white-space:nowrap}
+.honEntryMic,.honEntryExpand{flex:0 0 auto;min-width:44px}
+.honEntryMic{border-right:1px solid #ffffff1f!important}
+.honEntryExpand{border-left:1px solid #ffffff1f!important}
+.honOrbChat{position:absolute;top:calc(100% + 10px);left:50%;transform:translateX(-50%);z-index:30;width:min(440px,calc(100vw - 32px));max-height:min(62vh,600px);overflow:auto;padding:12px 14px 10px;text-align:left;border:1px solid #62cfe0a0;border-radius:14px;background:linear-gradient(180deg,#071d2d,#0a2a3f);box-shadow:0 18px 40px #000a,0 0 24px #12b6eb33;color:#e9f7ff;font-size:13px}
+.honOrbChat>header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.honOrbChat>header>strong{letter-spacing:.08em}
+.honOrbChat>header>button{display:grid;place-items:center;width:36px;height:36px;border:1px solid #ffffff33;border-radius:10px;background:transparent;color:inherit;cursor:pointer}
+.honOrbChat section>h2{font-size:15px;margin:2px 0 4px}
+.honOrbChat section>p{margin:0 0 6px;color:#c4deed;font-size:12px}
+.honOrbChat form{display:grid;gap:6px}
+.honOrbChat textarea{width:100%;min-height:64px;resize:vertical;border:1px solid #6de4ff80;border-radius:10px;background:#03121d;color:#fff;padding:8px;font:inherit}
+.honOrbChat fieldset{display:flex;flex-wrap:wrap;gap:4px 12px;border:0;padding:0;margin:0;font-size:12px}
+.honOrbChat form>button[type=submit]{justify-self:end;min-height:40px;padding:0 18px;border:1px solid #6de4ffb3;border-radius:10px;background:linear-gradient(135deg,#146b96,#093f60);color:#fff;font-weight:700;cursor:pointer}
+.honOrbChat form>button[type=submit]:disabled{opacity:.55;cursor:default}
+.honOrbChat ol{margin:4px 0 0;padding-left:18px;display:grid;gap:8px}
+.honOrbChat h3{font-size:13px;margin:10px 0 2px}
+.honOrbChat .finePrint{margin:8px 0 0;font-size:10px;color:#a9c6d6}
+@media(max-width:1250px){
+  .honOrbAsk{position:static;width:auto;margin-left:auto}
+  .honOrbChat{left:0;right:0;transform:none;width:auto;top:calc(100% + 8px)}
+}
+@media(max-width:800px){
+  .shell .honEntry,.honDock .honEntry{width:auto;max-width:none;min-width:0;border-radius:999px;padding:0}
+  .honEntry>span,.honEntry>svg:first-child{display:revert}
+  .honEntryAsk{padding-inline:10px 14px!important;font-size:12px}
+  /* Phones: the bar gets its own full-width row under HON's name so the words never clip. */
+  .commandCore{flex-wrap:wrap}
+  .honOrbAsk{flex:1 1 100%;margin-left:0}
+  .honOrbAsk>.honEntry{width:100%}
+  /* Phones: the bottom bar's HON button already opens the full assistant. */
+  .honEntryExpand{display:none!important}
+}
+/* While the chat is open it sits above the sections that follow the stage. */
+.commandStage:has([data-hon-orb-ask=open]),.commandLineup:has([data-hon-orb-ask=open]),.commandCore:has([data-hon-orb-ask=open]){position:relative;z-index:40}

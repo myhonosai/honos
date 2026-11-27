@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { HQ_EXECUTIVES, HQ_GROWTH, HQ_RESPONSIBILITIES } from './catalog';
 import { useHqModern, HonCore } from './shell';
 import { HonComposer } from './assistant';
+import { HqHonOrbAsk } from './hon-orb-ask';
 import { CommercialStatus } from './commercial-status';
 import { HqIcon } from './icon';
 import styles from './hq-modern.module.css';
@@ -66,7 +67,6 @@ export function GrowthLinks(): React.ReactElement {
 
 function CommandStage(): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
-  const { openAssistant } = useHqModern();
   return <section className={styles.commandStage} aria-labelledby="hq-team-title">
     <div className={styles.stageHeader}><div><h2 id="hq-team-title">{t("Your executive team")}</h2><p>{t("Six AI helpers, each with one job. Open one to ask it a question.")}</p></div><Link href="/hq/executives">{t("View team")}{" "}<HqIcon name="chevron" size={15}/></Link></div>
     <div className={styles.commandLineup}>
@@ -74,7 +74,7 @@ function CommandStage(): React.ReactElement {
         <div className={styles.orbFrame}><span className={styles.coreOrbits} data-hq-orbits aria-hidden="true"><i/><i/><i/></span><HonCore/><strong aria-hidden="true">{t("HON")}</strong></div>
         <div className={styles.honDock} data-hq-conversation-dock>
           <div className={styles.coreCaption}><h2>{t("HON")}</h2><p>{t("Executive AI Coordinator")}</p></div>
-          <button type="button" className={styles.honEntry} onClick={openAssistant} aria-label={t("Expand HON conversation")}><HqIcon name="mic" size={22}/><span>{t("Ask HON anything")}</span><HqIcon name="expand" size={15}/></button>
+          <HqHonOrbAsk/>
 
         </div>
       </div>

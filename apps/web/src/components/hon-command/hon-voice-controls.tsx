@@ -64,6 +64,8 @@ export function HonVoiceControls(props: HonVoiceControlsProps): React.ReactEleme
       {snapshot.message ? <span> {snapshot.message}</span> : null}
     </p>
     {!support.synthesis ? <p className={styles.meta}>This browser can’t read answers aloud. They appear on screen.</p> : null}
+    {/* Voice can be turned on straight from the orb card's microphone, so the privacy facts stay visible while it is on. */}
+    <p className={styles.meta} data-voice-privacy="">Your browser turns your speech into text (Chrome and Edge do this on the browser maker’s servers). HON gets only the text, like typing. No audio is recorded or saved by HON.</p>
     {snapshot.handsFree ? <p className={styles.meta}>Hands-free listening happens on this device and stops when you leave this window. After {HON_VOICE_LIMITS.questionsInARow} spoken questions in a row HON pauses until you tap.</p> : null}
   </div>;
 }
@@ -125,8 +127,11 @@ export function useHonVoice(lang: HonVoiceLang, ask: (text: string) => boolean, 
     });
   }, [lang]);
 
+  /** The orb card's microphone (owner 2026-11-27): pressing it is turning voice on, then listening starts at once. */
+  const talkNow = useCallback(() => { remember(true); setEnabled(true); controller.current?.talk(); }, []);
+
   return {
-    snapshot, shutdown, reply, replyParts,
+    snapshot, shutdown, reply, replyParts, talkNow, ready: support.checked && support.recognition,
     controls: (canAsk: boolean): HonVoiceControlsProps => ({
       support, enabled, canAsk, onDeviceStatus, snapshot, orbSignal,
       onEnable: () => { remember(true); setEnabled(true); },
