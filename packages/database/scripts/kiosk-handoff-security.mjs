@@ -11,7 +11,7 @@ export async function verifyKioskHandoffSecurity(client,runtime='hon_runtime') {
   const source=(await client.query('SELECT prosrc FROM pg_proc WHERE oid=$1::regprocedure',['hon.'+signature])).rows[0].prosrc.replace(/--[^\n]*/g,'');
   if(/\bEXECUTE\b/i.test(source))throw new Error('Kiosk functions forbid dynamic SQL.');
   for(const match of source.matchAll(/hon\.([a-z_]+)/g)){
-   const allowed=signature.startsWith('lock_kiosk_actor')?['current_organization_id','current_school_id','organizations','schools','users','principals','principal_role_grants','roles','role_permissions','family_access_grants','hq_operator_grants','organization_entitlements']:['current_organization_id','current_school_id','lock_kiosk_actor','kiosk_secret_valid',...kioskTables,'organizations','schools','student_profiles','class_sessions','organization_entitlements'];
+   const allowed=signature.startsWith('lock_kiosk_actor')?['current_organization_id','current_school_id','organizations','schools','users','principals','principal_role_grants','roles','role_permissions','family_access_grants','hq_operator_grants','organization_entitlements','hq_visit_active']:['current_organization_id','current_school_id','lock_kiosk_actor','kiosk_secret_valid',...kioskTables,'organizations','schools','student_profiles','class_sessions','organization_entitlements'];
    if(!allowed.includes(match[1]))throw new Error('Unexpected kiosk dependency: '+match[1]);
   }
   if(signature.startsWith('read_kiosk')&&/\b(?:INSERT|DELETE|TRUNCATE)\b|\bUPDATE\s+hon\./i.test(source))throw new Error('Kiosk recovery must not write.');

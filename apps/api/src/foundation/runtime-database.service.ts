@@ -6,6 +6,7 @@ import { withTenantTransaction, type TenantTransactionContext } from '@hon/datab
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { HqEntitlementTransitionInput, HqEntitlementTransitionReceipt } from '@hon/contracts';
 import type { HqSchoolLifecycleInput, HqSchoolLifecycleReceipt, HqSchoolArchiveDates } from '@hon/contracts';
+import type { HqSchoolVisitEnterReceipt, HqSchoolVisitLeaveReceipt, HqSchoolVisits } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 export interface ResolvedStaffReportingScope {
   organizationId: string;
@@ -1248,6 +1249,47 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
       const result = await client.query<{ data: HqSchoolArchiveDates }>('SELECT hon.read_hq_school_archive_dates($1) AS data', [externalSubject]);
       await client.query('COMMIT');
       if (!result.rows[0]) throw new Error('HQ_SCHOOLS_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** HQ goes inside a school (0696): HQ authority, the 4-hour grant and the logs are decided in the database. */
+  async enterSchoolAsHq(externalSubject: string, schoolId: string, reason: string | null, key: string, requestId: string, correlationId: string): Promise<HqSchoolVisitEnterReceipt> {
+    return this.hqSchoolVisitCommand<HqSchoolVisitEnterReceipt>('SELECT hon.enter_school_as_hq($1,$2::uuid,$3,$4::uuid,$5::uuid,$6::uuid) AS data',
+      [externalSubject, schoolId, reason, key, requestId, correlationId]);
+  }
+
+  /** Leave a school HQ went inside; ends the grant at once. */
+  async leaveSchoolAsHq(externalSubject: string, schoolId: string, key: string, requestId: string, correlationId: string): Promise<HqSchoolVisitLeaveReceipt> {
+    return this.hqSchoolVisitCommand<HqSchoolVisitLeaveReceipt>('SELECT hon.leave_school_as_hq($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid) AS data',
+      [externalSubject, schoolId, key, requestId, correlationId]);
+  }
+
+  private async hqSchoolVisitCommand<T>(sql: string, params: unknown[]): Promise<T> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: T }>(sql, params);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_SCHOOL_VISIT_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** The signed-in person's own live HQ visits; read only. */
+  async readMyHqSchoolVisits(externalSubject: string): Promise<HqSchoolVisits> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: HqSchoolVisits }>('SELECT hon.read_my_hq_school_visits($1) AS data', [externalSubject]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_SCHOOL_VISIT_UNAVAILABLE');
       return result.rows[0].data;
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     finally { client.release(); }

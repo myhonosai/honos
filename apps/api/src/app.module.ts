@@ -554,6 +554,7 @@ import { paymentProviderFromEnvironment } from './payments/stripe-test-mode-adap
 import { SaasCommandGuard, SaasReadGuard } from './saas-billing/saas-billing.guards.js';
 import { HqSchoolDirectoryService } from './hq/hq-school-directory.service.js';
 import { HqSchoolLifecycleController, HqSchoolLifecycleHumanGuard, HqSchoolLifecycleService } from './hq/hq-school-lifecycle.js';
+import { HqSchoolVisitController, HqSchoolVisitHumanGuard, HqSchoolVisitService } from './hq/hq-school-visit.js';
 import { StaffRoleController } from './staff-roles/staff-role.controller.js';
 import { StaffRoleService } from './staff-roles/staff-role.service.js';
 import { StaffRoleHumanUiGuard } from './staff-roles/staff-role-human-ui.guard.js';
@@ -790,6 +791,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqController,
     HqOnboardingController,
     HqSchoolLifecycleController,
+    HqSchoolVisitController,
     HqAiProviderController,
     ZernioIntegrationController,
     A2pPreparationController,
@@ -1198,6 +1200,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqSchoolDirectoryService,
     HqSchoolLifecycleService,
     HqSchoolLifecycleHumanGuard,
+    HqSchoolVisitService,
+    HqSchoolVisitHumanGuard,
   ],
 })
 export class AppModule {}

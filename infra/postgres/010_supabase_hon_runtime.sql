@@ -5844,3 +5844,26 @@ BEGIN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
   END IF;
 END $$;
+
+-- 0696 HQ goes inside a school: three runtime entry points (enter, leave, own visits read); four evidence tables stay
+-- forced RLS with no runtime privilege; the visit check, role sync, actor, timestamp and evidence-guard helpers stay
+-- migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.enter_school_as_hq(text,uuid,text,uuid,uuid,uuid)','hon.leave_school_as_hq(text,uuid,uuid,uuid,uuid)','hon.read_my_hq_school_visits(text)'];
+BEGIN
+  IF to_regclass('hon.hq_school_visits') IS NULL THEN RAISE EXCEPTION 'Apply migration 0696 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.hq_school_visit_requests','hon.hq_school_visits','hon.hq_school_visit_audit','hon.hq_school_visit_outbox'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_visit_evidence()','hon.hq_visit_active(uuid)','hon.ensure_hq_support_role(uuid)',
+      'hon.require_hq_school_visit_actor(text)','hon.hq_school_visit_ts(timestamp with time zone)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;

@@ -2231,7 +2231,7 @@ BEGIN
     AND p.proargnames = ARRAY['p_subject','organization_id','school_id','organization_name','school_name']::text[]
     AND p.proallargtypes = ARRAY['text'::regtype,'uuid'::regtype,'uuid'::regtype,'text'::regtype,'text'::regtype]::oid[]
     AND p.proargmodes = ARRAY['i','t','t','t','t']::"char"[]
-    AND md5(p.prosrc) = '51fc4ca0ed315550cb104c3ce2a0b855'
+    AND md5(p.prosrc) = '0d2ca236834b34b6453a99714e0ad85c'
     AND has_function_privilege('hon_runtime', p.oid, 'EXECUTE')
     AND NOT EXISTS (
       SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
@@ -2286,7 +2286,7 @@ END $$;
 DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles WHERE rolname='hon_runtime'); BEGIN
  IF runtime_oid IS NULL OR EXISTS(SELECT 1 FROM pg_roles WHERE oid=runtime_oid AND (rolsuper OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolinherit OR rolreplication)) OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member=runtime_oid) THEN RAISE EXCEPTION 'Restricted review runtime required'; END IF;
  FOR f IN SELECT * FROM (VALUES
- ('resolve_planned_absence_review_scope','1a550ec1dffbbb97c907121bd4738f81',true),
+ ('resolve_planned_absence_review_scope','65f58b6da46c0fa60fc526c046f92dea',true),
  ('require_planned_absence_review_actor','621ec2f50ad2d3e1d7d27d7b39bbeb69',false),
  ('lock_planned_absence_review_actor','dcebc46b1019c65bd399c7f6e944ecb9',true),
  ('read_staff_planned_absence_review_queue','1e8b83a138801e854a0a1bddee9daf77',true)
@@ -2374,7 +2374,7 @@ DO $$ DECLARE f record; p record; runtime_oid oid := (SELECT oid FROM pg_roles W
   FOR f IN SELECT * FROM (VALUES
     ('hon.guard_crm_lead_registration_history()','dc1fc17328c4de05c501c5d1666c44f7',false,false,'trigger',false),
     ('hon.crm_lead_registration_has_permission(uuid,uuid,uuid,text)','e3b71364e299c4be376b83b3e4daa41a',false,true,'boolean',false),
-    ('hon.resolve_crm_lead_registration_scope(text,uuid)','97012048ddae1177aadeba233454afcf',true,true,'record',true),
+    ('hon.resolve_crm_lead_registration_scope(text,uuid)','5c3fbbff4af1becc237ae5d7f94fc5c7',true,true,'record',true),
     ('hon.require_crm_lead_registration_actor(text,text)','b1473f5d95b499f8c1d9c10907b34e08',false,true,'uuid',false),
     -- register_crm_lead_person: 0169 body (IAM tables in SHARE, CRM domain tables in SHARE ROW EXCLUSIVE).
     ('hon.register_crm_lead_person(text,uuid,jsonb,uuid,uuid,uuid)','539030f1832cdf3f320e356bf57e7c41',true,true,'jsonb',false)
@@ -2437,7 +2437,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   INTO safe FROM pg_class c WHERE c.oid='hon.crm_adult_membership_draft_sources'::regclass;
   IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Adult CRM membership source must be private'; END IF;
   FOR f IN SELECT * FROM (VALUES ('hon.guard_crm_adult_membership_draft_source()',false,false,'34f4563a08922d0cfce9c4cd319100fe33d9ed126f0ed940af2b7b0a85fd8651'),
-('hon.require_crm_adult_membership_actor(text)',true,false,'f5d9345e3a9fb7abf4c2686d8566cd4f21f60afdc8bd089164dcf9dabd6e30b0'),
+('hon.require_crm_adult_membership_actor(text)',true,false,'b02c87ebf4c7b837dd5e78f5f8fd65e1b820e835214dcc2389cf0e8acd7b0a2a'),
 ('hon.crm_adult_membership_relation(uuid)',true,false,'71d39ddcd35a15c7baf094045aaf1979c5d61516dab7818d3cee0bb009c81457'),
 ('hon.read_crm_adult_membership_preparation(text,uuid)',true,true,'909adac7587840fbcd7e464e7b2b2c6b920d44b2d6264822fbcbffe1cc43243f'),
 ('hon.read_crm_adult_membership_draft_confirmation(text,uuid)',true,true,'1c28232bde9839acda9d7e38724a711842827dd17cf871a81c2770a67f211c05'),
@@ -2505,7 +2505,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.guard_membership_plan()',false,false,'6b25106590748dffc6e8c3250cf6ca7e5f14eae80d2506d7c8d7201da432a3c3'),
 ('hon.guard_membership_plan_version()',false,false,'9c081574080016694c1587fe3d810d33f29232ab243e81d7a2b7b4a48108f63a'),
 ('hon.guard_membership_plan_selection()',false,false,'d4f4506bef058b36e4f285c87f1722db4baca645d44e1aadb7a6e4d19ab17035'),
-('hon.require_membership_plan_manager(text)',true,false,'55b5a9821f0a106e18d89b443ec3b7d4e480e968c6918f2c9738227d2c5ff63c'),
+('hon.require_membership_plan_manager(text)',true,false,'41895c5c0c21215afd60652f39ef07e6bd131470cb2f3368e8b268a8c5184a2f'),
 ('hon.membership_plan_validated_terms(jsonb)',true,false,'b108ba63c4c2da714d076a085895bfb2cadbb0b97b7db06d74901693472d3874'),
 ('hon.membership_plan_version_summary(uuid,integer)',true,false,'a0af232d46adc9230ea2c5df1db23c9e9ca4029edfaaa1507b1aba20e24eb92c'),
 ('hon.read_school_membership_plan_catalog(text)',true,true,'5cc7728519fdd3e0ad77d0c0186037557a7213e31724e03c8bfa3978ec1fbc35'),
@@ -2603,7 +2603,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; cols text[]; BEGI
 ('hon.membership_activation_text_ok(text,integer)',false,false,'search_path=pg_catalog','da4065773ea5ed7bf34267f0ff311863463c5d168d8ec8c0ad97a506677dbfe3'),
 ('hon.membership_activation_date(jsonb)',false,false,'search_path=pg_catalog','70dfaa487da94917b5204642ac4dd5685870f65062c9026e979e5919289b4963'),
 ('hon.membership_lifecycle_permission(uuid,uuid,uuid,text)',true,false,'search_path=pg_catalog, hon','1aaff531834840168bff93e5786e9956669fdb636b74c7d0c4f43dc245586f7f'),
-('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','dfe50a97f63ecbd589b550e6d532febcdd19e14c599e26c318ce439a245c1d6f'),
+('hon.require_membership_lifecycle_actor(text,text)',true,false,'search_path=pg_catalog, hon','718396f6ab991c2bfc539432bcf0875300a0db49f4deb5f58635c3626ad170f1'),
 ('hon.evaluate_membership_activation(uuid,boolean,date,date)',true,false,'search_path=pg_catalog, hon','9b2679af3efeb30175e068eeec49fa05e36190e6ad82eefa94f642f506601462'),
 ('hon.preview_school_membership_activation(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','19a4444b60c5c644f49be3da77ca2b5bbe52ff4d8aba4d8c94ce402b1bb7e271'),
 ('hon.activate_school_membership(text,uuid,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','81781b22ed586bfd90813c494446cfe7c61ac1631713829c63b443e7809323b0'),
@@ -2699,7 +2699,7 @@ END $$;
 DO $$ DECLARE safe boolean; BEGIN
  SELECT p.prosecdef AND p.provolatile='v' AND p.proconfig=ARRAY['search_path=pg_catalog, hon']
    AND (o.rolsuper OR o.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
-   AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='b43923e631e0754e70c4c039c2cddceb7b8a00a7a1f4ac41bb2da03d7b136419'
+   AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='4d42f66852893d61b9d593676dcf59c54a858a46655b31a9028dcd69e316bbed'
    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
@@ -2977,7 +2977,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_student_import()',true,false,'search_path=pg_catalog, hon','c9cd68374c58d5d42acd90cefbcb933a50b5fdeca29313d56acb3b828bda5ebe'),
-('hon.require_student_import_actor(text)',true,false,'search_path=pg_catalog, hon','0d7763a58e4e5edcf15f4fd90fedac036afd941a2ef7ffc939fc7f28202259c6'),
+('hon.require_student_import_actor(text)',true,false,'search_path=pg_catalog, hon','1316f39854dc70e3fc7deecf96b48b14964ff2f5d1845b094af9ddcc1cb31ceb'),
 ('hon.student_import_fields()',false,false,'search_path=pg_catalog','d5df936dbc745cb27a1d2c8f84a4412e05f562220314f42ff04ee6f24c6e217f'),
 ('hon.student_import_check_row(jsonb,jsonb,jsonb,date)',false,false,'search_path=pg_catalog','33d7ae2571e2606ee89f6d31b18d23541c63b292a304d2cab1b7e8a339525f72'),
 ('hon.student_import_guardian(jsonb)',false,false,'search_path=pg_catalog','6d250b75a53d90cd8c9a191ab1455fe5f4850dc4a4d3494f910623b98ede7adc'),
@@ -3043,7 +3043,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_class_series()',true,false,'search_path=pg_catalog, hon','f521e14b8760c8064dba2bb57d96a688f9c1e786f242e56f3dac27cadee51e69'),
-('hon.require_class_series_actor(text)',true,false,'search_path=pg_catalog, hon','a91ef014ce4bb04d732d405ba53b5a0ec1be10267fe2efac6b5f504cdafec2bf'),
+('hon.require_class_series_actor(text)',true,false,'search_path=pg_catalog, hon','493d8d19f622148de9b8ba7816d55918acb2a9c20015a3b3255c9257531d86e9'),
 ('hon.class_series_json(hon.class_series)',true,false,'search_path=pg_catalog, hon','ac63ec1bc183d40534a4623df595d4bb46b110f717861b58f08a281b372c82a8'),
 ('hon.class_series_pattern(jsonb,boolean)',false,false,'search_path=pg_catalog, hon','30abf7a726b2fb7c8c970b56b50a25be4239743474107f8954977279d0193bf5'),
 ('hon.class_series_command_begin(text,text,text)',true,false,'search_path=pg_catalog, hon','7119e94378413589f6e0fc87777f10405147e5556cd4b047b0d38ce6e0b45944'),
@@ -3086,7 +3086,7 @@ DO $$ DECLARE f record; safe boolean; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_invoice_payment_record()',true,false,'search_path=pg_catalog, hon','83b79ba66f63c96f3f5490960a10c8e95caac72c042c922498bd994f701d4bcb'),
 ('hon.guard_invoice_payment_status()',true,false,'search_path=pg_catalog, hon','d42c2d8a463004dfb1a7f118dc9c2e1b8fd081179147c7b62cde75a9142a3a43'),
-('hon.require_tuition_actor(text,text)',true,false,'search_path=pg_catalog, hon','250ed5e3b2245dc5f734465c3b8143b12cb527e2952196d1c953ecdc243b60e1'),
+('hon.require_tuition_actor(text,text)',true,false,'search_path=pg_catalog, hon','7ac8fe41104b2585562332e5a4bd235be3e1dedd9beb844082b3f0b3162a2e82'),
 ('hon.require_tuition_reader(text)',true,false,'search_path=pg_catalog, hon','f903656f91eaabca6673190572ce52ff3da42a87f2b818398bc00ad10e1164b5'),
 ('hon.invoice_payment_json(hon.invoice_payment_records)',false,false,'search_path=pg_catalog, hon','b357b9a37b1e7188d1e9972bb0cfc29ddadd3c8fb1932c8f510918e5fb0d452a'),
 ('hon.invoice_balance_json(hon.invoices)',true,false,'search_path=pg_catalog, hon','b5fcd6c54f5bd406f790308de190cc6d2bf3dd776aa2384ede9e26c1e3059398'),
@@ -3157,7 +3157,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.school_pay_capabilities_ok(jsonb)',false,false,'search_path=pg_catalog','06a760116cb31bccc05b5744c9210282eb237e712fabe5f52f05f8407bfef560'),
 ('hon.guard_school_pay_connection()',true,false,'search_path=pg_catalog, hon','ca63878ec37b758f1d03999ea64391e15baee8e2107fb134938c2bbd3f61f987'),
-('hon.require_school_pay_actor(text,text)',true,false,'search_path=pg_catalog, hon','794c66b32329aaf58e0e080b7c570dcc5da5417c5726f27736ac16f455ec0cbc'),
+('hon.require_school_pay_actor(text,text)',true,false,'search_path=pg_catalog, hon','1cb9d691e46a5e885b1a038335164c51122a6043e94139a74e30293a991a1c2b'),
 ('hon.require_school_pay_reader(text)',true,false,'search_path=pg_catalog, hon','0ea5164d4d234bd7a49b554e845bde508b33b625269775ff95b937f3038d7d17'),
 ('hon.school_pay_connection_json(hon.school_pay_connections)',false,false,'search_path=pg_catalog, hon','ab503fa6fd4fe382b20297b7196994be0626cd18386ba292ef1d728c121d2281'),
 ('hon.school_pay_observation_ok(jsonb)',false,false,'search_path=pg_catalog','b964d6192f817194e55427229f4bba83823a1bafa46d6561aadb7b46875f5e56'),
@@ -3210,7 +3210,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_pay_method_setup()',true,false,'search_path=pg_catalog, hon','268b6cb31f618ef2e27985201b7b5445bcaf2e6f7c0ac7c0af987d7f3ed51577'),
 ('hon.guard_school_pay_method()',true,false,'search_path=pg_catalog, hon','c3ce246d16e3ebb36b5d6c6526a0c7877c74d432a69279836a67246d9fbc690b'),
-('hon.require_school_pay_method_actor(text,text)',true,false,'search_path=pg_catalog, hon','eeb4a2063bc8d950b37d7b0b479de440b6dc23ae7db83d8b9b3bb22a5b05d528'),
+('hon.require_school_pay_method_actor(text,text)',true,false,'search_path=pg_catalog, hon','f2502f3898852a8690692f86d84ad71657b4eef076cbd64f6134a87e69d7e622'),
 ('hon.require_school_pay_method_reader(text)',true,false,'search_path=pg_catalog, hon','3abcb1e7071708a57c470da27b0193dd1a05fce7ceb067b2a106320c0d881920'),
 ('hon.school_pay_instant(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
 ('hon.school_pay_method_json(hon.school_pay_methods)',false,false,'search_path=pg_catalog, hon','ba0dda7f37f751c30345f0ff977bc7db38bbc45264435d5970e1edfd0a60891f'),
@@ -3264,7 +3264,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
   END LOOP;
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_pay_autopay_plan()',true,false,'search_path=pg_catalog, hon','107c77dcf040941fbeaf1a4f9a022a701970cb24639fe36e94da1368aaa9b005'),
-('hon.require_school_pay_autopay_actor(text,text)',true,false,'search_path=pg_catalog, hon','6bf7454c1f8a7c9a8b04276f8ad30d6a39ffbc0252ec47f8e401b57e802c097c'),
+('hon.require_school_pay_autopay_actor(text,text)',true,false,'search_path=pg_catalog, hon','134694222f8aa54ff2547ba9b70527d557b50a2965105614a37142ce6b2457c1'),
 ('hon.require_school_pay_autopay_reader(text,text[])',true,false,'search_path=pg_catalog, hon','2054e0deae2fedecd49fa52a61b73ee4238dd3bc34f86f750b4e57bba366976b'),
 ('hon.school_pay_school_zone()',true,false,'search_path=pg_catalog, hon','6237e35872aaf3b336a3ceae9d6d361cc3d8a351bc4b587d410305e0278779ef'),
 ('hon.school_pay_discount_rule_json(hon.school_pay_discount_rules)',false,false,'search_path=pg_catalog, hon','e3f1986ff3c589933d775f58cb5eff7ed40dc37e60794da76bc33df70ce4447a'),
@@ -3428,7 +3428,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.checkout_i18n_ok(jsonb,integer,boolean)',false,false,'search_path=pg_catalog, hon','b239d42e6814189094309db1b5ff1e3e85ee668c4f45972413ab88a700462b52'),
 ('hon.checkout_content_ok(jsonb)',false,false,'search_path=pg_catalog, hon','d58781d1946c1681ce86e346f610a59e5c4369b223f8ef01d812706e6151723b'),
 ('hon.guard_school_checkout_page()',false,false,'search_path=pg_catalog, hon','63a5a8ae76a8592e09e86b0a47741beb44d41b4536012714d3357dc75dd8efe4'),
-('hon.require_school_checkout_actor(text)',true,false,'search_path=pg_catalog, hon','0cf880596410ab036049602a0e90267c5690976b5d10036c1a00a240c97b1988'),
+('hon.require_school_checkout_actor(text)',true,false,'search_path=pg_catalog, hon','ce5ec0311542b6956f4155b94e2887499626783b66f30779838adaf27c7c6bc0'),
 ('hon.school_checkout_page_json(hon.school_checkout_pages)',false,false,'search_path=pg_catalog, hon','39f46e65b834fb8f1137ccfae9ae58d9069a7639e3538af084c420b3c88d68e1'),
 ('hon.read_school_checkout_pages(text)',true,false,'search_path=pg_catalog, hon','02f443483ac4bd2750ebf6278e3283f86baf8e58e6715cd9c59134e617731f6d'),
 ('hon.save_school_checkout_page(text,jsonb,text,uuid,uuid)',true,false,'search_path=pg_catalog, hon','2ee3c365baacab116aad18fe0c37eb591db7258d7209c627c1ced7d45d1dcf53')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
@@ -3500,7 +3500,7 @@ END $$;
 -- Maya at-risk students exact verification (M1 0259): two private helpers and one read-only runtime entry point.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','3ec3ab3ace09cba647c0ef6a7849baca7960f89d64e457893de9cf17fe916151'),
+('hon.require_maya_actor(text,text)',true,false,'search_path=pg_catalog, hon','f02d8bf96fd8778b33996b792fd26abd8870fcee9a8f8fba0e7984ea3e40a3e9'),
 ('hon.maya_reader_sees_tuition(text)',true,false,'search_path=pg_catalog, hon','16334235a565a92419cacb6472b0324fe185928c20bfea2782c93a7235b221af'),
 ('hon.read_maya_at_risk_students(text,jsonb)',true,true,'search_path=pg_catalog, hon','fef4486ea9a901293e41231c3ad82a86c002d5bd47e609b22fbac0e78871e3c4')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
@@ -3567,7 +3567,7 @@ DO $$ DECLARE f record; safe boolean; t text; expected record; BEGIN
 ('hon.school_branding_image_ok(text)',false,false,'search_path=pg_catalog','b10e7b2fced41045b95b6ab3843d662dc31192978ec596c23922071faa482d62'),
 ('hon.school_branding_input_ok(jsonb)',false,false,'search_path=pg_catalog, hon','053a6c6f5c424e4bbe5dcdbdfe8e696d652884514bc1562f34c3705426678882'),
 ('hon.guard_school_page_branding()',false,false,'search_path=pg_catalog, hon','4069df59a225f8552d5f3580bc20e0bf8f597d6a4a8532094e9ba05e485323f4'),
-('hon.require_school_branding_actor(text)',true,false,'search_path=pg_catalog, hon','c40bd4f620b7673b7fe6853ca22fb8712ae5c4a0c27e2fc3ac369c20af3fb4a0'),
+('hon.require_school_branding_actor(text)',true,false,'search_path=pg_catalog, hon','15ded18d96c4a2956744c9ef24b4f6c37f9a0686a0a5918477cc1a4197a8fe9d'),
 ('hon.school_page_branding_json(hon.school_page_branding)',false,false,'search_path=pg_catalog, hon','2b75779f3aa2a4fddf7b26cbca03e922a752effa694a3653ec0bba0b3551810d'),
 ('hon.read_school_page_branding(text)',true,true,'search_path=pg_catalog, hon','7a0f8422ee144c7c90df29e63b9160255d052ea64d193e2a199b84568a0273c7'),
 ('hon.save_school_page_branding(text,jsonb,text,uuid,uuid)',true,true,'search_path=pg_catalog, hon','71b8e89c1975c7d3f9d3d6a2cc6a1d1787438579d6ead5d2667c22f6c62134f4'),
@@ -3664,7 +3664,7 @@ END $$;
 -- School reports exact verification (R1 0331): one runtime read, the private actor check and period builder.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.require_school_reports_actor(text)',true,false,'search_path=pg_catalog, hon','3d47547f35d2562a600d01b79ef892740979a6066aace4098bb50327e934dce1'),
+('hon.require_school_reports_actor(text)',true,false,'search_path=pg_catalog, hon','93e1e5004fe0c23ef85e7c419cba30670793b40bcc924096e5048669553dbfb6'),
 ('hon.school_report_periods(uuid,uuid,text,integer,timestamptz)',true,false,'search_path=pg_catalog, hon','7212d2355091511b853d743dce01ec2b5fb959fb5df043b4a28cff9478a8891b'),
 ('hon.read_school_reports(text,jsonb)',true,true,'search_path=pg_catalog, hon','6721f3af25235c837b0f50552777df73c3606d3898b826cb5b278f5a81d63e8a')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
@@ -3843,7 +3843,7 @@ END $$;
 -- School contacts list exact verification (C1 0521): one runtime read and two private helpers.
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
-('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','d428974c62fe5e652b4470356505c174fd3b6431a3f07dd753ef47f79b1107a4'),
+('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','da51077efd0d9cf23610403472c6551e6f51d935b672b762b633974e5a300be0'),
 ('hon.school_contact_facts(uuid,uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','f481befbcea6c9e50078c3e0cddd8d26561814a339a7a8617152c109f0cd48dd'),
 ('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','7ff8305d24fe486002a589ed74c51dc025a99ff496dccad39d7e29b9824554a9')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
@@ -3880,7 +3880,7 @@ END $$;
 DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_school_contact_archive()',false,false,'search_path=pg_catalog, hon','v','d34a1772d3f162a2f59a512845bb16e4342714ca299f24641eef51bad73535e8'),
-('hon.require_school_contact_admin(text,text)',true,false,'search_path=pg_catalog, hon','v','d8408f3c3eb366cb55c011b5979aeafdfe2d3f88dfdb5ae08ebf68907027ef48'),
+('hon.require_school_contact_admin(text,text)',true,false,'search_path=pg_catalog, hon','v','80eb68f4b9b30e831ef80b99addf6d722a3ed032ff4f87635f9b2f15a3e52af0'),
 ('hon.school_contact_admin_begin(uuid,text,text)',true,false,'search_path=pg_catalog, hon','v','ab1a5d9b6f613a0882b3d242846da5cbaa3f5c5487410b76e0969d02494762d6'),
 ('hon.school_contact_archive_plan(uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','be7c9a3e0cf0b99511fe49612d6e2a6423ab7af175db26c2cd327fd88e57b27d'),
 ('hon.school_contact_merge_plan(uuid,uuid,uuid,uuid)',true,false,'search_path=pg_catalog, hon','s','138d72cc623f45f64ae4f2471507cb2e2e6f502b2e95aaf2155fed3f7b899844'),
@@ -3912,7 +3912,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
 ('hon.guard_person_membership_start()',false,false,'search_path=pg_catalog, hon','v','778a1f0da886a102416515b7fddaf20f1fbd4442450a7bd598cfbc393f1d0a14'),
 ('hon.membership_program_group(uuid)',true,false,'search_path=pg_catalog, hon','s','22bc641d28bcd4afaa522d080918b158ed1f2bc89eeae4a547a4279c0f3060f2'),
 ('hon.guard_person_membership_overlap()',false,false,'search_path=pg_catalog, hon','v','60249362e907a9e11fa91ebd837d3d1f8d86470b4414e7acd3e8a6ceec314457'),
-('hon.require_person_membership_actor(text)',true,false,'search_path=pg_catalog, hon','v','437b0820c5be45ff8100b2aaef9884a2cc559e87cd1575cb8f0b770c0eff7e13'),
+('hon.require_person_membership_actor(text)',true,false,'search_path=pg_catalog, hon','v','1967748144cd348d56dc95abc5f0240c7ab1fba2c18ad6a051d544741751aa21'),
 ('hon.person_membership_start_facts(uuid,date)',true,false,'search_path=pg_catalog, hon','s','4a9e7833b68b007062e11c5afe1d203faa2cfd970ad776fe756307c1415e5666'),
 ('hon.person_membership_start_item(hon.memberships,text)',true,false,'search_path=pg_catalog, hon','s','c5750ccc97cf64271794abc290420a20a106381674882c491f00ece2f722af4b'),
 ('hon.read_person_membership_start(text,jsonb)',true,true,'search_path=pg_catalog, hon','v','5e159c6728b25979dbe9a1360d7c335cb11c3a61a90da227a258bb552bba31b4'),
@@ -3943,7 +3943,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
 ('hon.family_message_body_ok(text)',false,false,'search_path=pg_catalog','911c8020274ce0bad19829ea68cafc456c16dd76f61ef1fbe827e68611e0b146'),
 ('hon.guard_family_message_thread()',false,false,'search_path=pg_catalog, hon','f42f869cc31028aaec75d17a4b321b35b18fbbcffa6b3d5d2e063f7199b5a2eb'),
 ('hon.family_message_parent_scope(text,boolean)',true,false,'search_path=pg_catalog, hon','934532bf7f7ae9807bbc7692110f31a3aa0f3359250a578897d95f308e6c6c35'),
-('hon.require_family_messages_actor(text)',true,false,'search_path=pg_catalog, hon','29ee5eb47779b29faf23ddd1598712047d1bc04d905ab7e8bc1b30eae56f686b'),
+('hon.require_family_messages_actor(text)',true,false,'search_path=pg_catalog, hon','1bdbf05c83d5044897fa2d74193938ab17c7d839dfbaf970358a9ccd5330b0a1'),
 ('hon.family_message_time(timestamp with time zone)',false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
 ('hon.family_message_json(hon.family_messages,uuid)',true,false,'search_path=pg_catalog, hon','baf138c7b630fcb89c0ec813fb95510288fbcf44700df03774940fd2477f0a74'),
 ('hon.family_message_list(uuid,uuid)',true,false,'search_path=pg_catalog, hon','c37b4dea088a25f7a72fdffcbacaf890e3080d9d655120dae7d889888135614f'),
@@ -3984,7 +3984,7 @@ DO $$ DECLARE f record; safe boolean; t text; worker_oid oid:=(SELECT oid FROM p
 ('hon.conversation_body_ok(text)',false,false,false,'search_path=pg_catalog','53dfa913f9ff8f68060d53a6b2b66a2c0831568e388ca92e60742f22b590162e'),
 ('hon.conversation_tags_ok(text[])',false,false,false,'search_path=pg_catalog','dec73cf1312918d4c380e47fd3ee49e210bf95163c664d1d739e5b35d14071c7'),
 ('hon.guard_school_conversation()',false,false,false,'search_path=pg_catalog, hon','d04f47eb34a9b0867950d7569acc9bb7389371a9906700e0adddd0dd4866a501'),
-('hon.conversation_staff_has(uuid,uuid,uuid,text)',true,false,false,'search_path=pg_catalog, hon','7abb6d93e5f4376fc97e013c7a30952353784fb4eac1ea308874063b7d076054'),
+('hon.conversation_staff_has(uuid,uuid,uuid,text)',true,false,false,'search_path=pg_catalog, hon','099455284fb85ee72eba82d4feff10cc21fa8d9c47517101ac8c89a285801102'),
 ('hon.require_conversation_actor(text,boolean)',true,false,false,'search_path=pg_catalog, hon','edae19e955bee3b56686346f1da36671937638e54b9d5e26ba6475cebbe829d9'),
 ('hon.conversation_time(timestamp with time zone)',false,false,false,'search_path=pg_catalog','e4a86c6f3c7e0d57791518a05be7b1552ebb4b274f34c42dc0e8b86bf6a93d46'),
 ('hon.conversation_row_json(hon.school_conversations)',true,false,false,'search_path=pg_catalog, hon','c5f308674824deb7c11243a12a618768aea35d2e3306aebbc774461e3032e73a'),
@@ -4361,7 +4361,7 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_automation_workflow_history()',true,false,'search_path=pg_catalog, hon','bd178753ff55c597469b68d05a5829e5101522af6b9cdc782f3d43c8a60ac54c'),
 ('hon.guard_automation_workflow()',true,false,'search_path=pg_catalog, hon','81fe707261e528747c73e0b957d93cfcc57d69d1fd86309e3d8160420c7bef98'),
-('hon.require_automation_workflow_actor(text,text)',true,false,'search_path=pg_catalog, hon','258b1d6b6f0d2abd06636489969a351f27d3ae0a909a9ec06561acc4a3ae47bf'),
+('hon.require_automation_workflow_actor(text,text)',true,false,'search_path=pg_catalog, hon','5b84f3838699b1c5c60b9107459b7955bea0788658bd5b9e1da13655b274d844'),
 ('hon.automation_invalid(text)',false,false,'search_path=pg_catalog, hon','0f5d594cb0b1a5cd740550aa23bfbab0a61bf822f6bf380b824135a1a6acf5ef'),
 ('hon.automation_keys(jsonb,text[])',false,false,'search_path=pg_catalog, hon','7fc8f80386425cd60f870a68b094bd0cf9872a639cffe1d102a52c25e0ceed2e'),
 ('hon.automation_int(jsonb,integer,integer)',false,false,'search_path=pg_catalog, hon','764aedb78b2fed9116d90ad7dbc096dbde300580e5b95c6e1f128503dbc83a45'),
@@ -4559,7 +4559,7 @@ DO $$ DECLARE f record; safe boolean; t text; worker oid:=(SELECT oid FROM pg_ro
 ('hon.guard_automation_run()',true,false,false,'search_path=pg_catalog, hon','65683e06da1ed396b09ab9ac1a460ae718c0b4cfa31c6f1d97c90b8f627d0abb'),
 ('hon.automation_unavailable(jsonb)',false,false,false,'search_path=pg_catalog, hon','178ad43fc35d2dd11aac3b3b37889c5ef41f213b496868d3692546658d362b3c'),
 ('hon.automation_references_ok(uuid,uuid,uuid,jsonb)',false,false,false,'search_path=pg_catalog, hon','af5fd466e05f55bd1afad7b4515edcc9606e71a86cb59dc4150e1d744b8976eb'),
-('hon.automation_activator_ok(uuid,uuid,uuid)',false,false,false,'search_path=pg_catalog, hon','95ecbf01f8b3da3dcee453618794ffb01359d92f0c9e144f576591434ece9b39'),
+('hon.automation_activator_ok(uuid,uuid,uuid)',false,false,false,'search_path=pg_catalog, hon','9803631a0c534efefcb11b57b618043e77e710db7a567a32a6700d993d414a9a'),
 ('hon.automation_trial_booked(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','8c640f7d5e3056dfde834c683dfea98e68c609d89cc6fa13c21a5d4eec9acbb6'),
 ('hon.automation_enrolled(uuid,uuid,uuid,timestamp with time zone)',false,false,false,'search_path=pg_catalog, hon','eaf38840dd7fb0de0866919f56d8d9636338545083cacc8cf4054e62f9361251'),
 ('hon.automation_condition_holds(uuid,uuid,uuid,timestamp with time zone,jsonb)',false,false,false,'search_path=pg_catalog, hon','16d3b51b7a8a8b5030afef5719c62efcbb815c7c459cfac1ad1d133669bd2538'),
@@ -4697,7 +4697,7 @@ DO $$ DECLARE f record; safe boolean; t text; workers oid[]:=ARRAY(SELECT oid FR
 ('hon.read_school_demo_data(text)',true,true,false,'search_path=pg_catalog, hon','c43c760f75b02e81ba06d83006ef560623002a81b1f6b6c5d73e398f7971ac27'),
 ('hon.refuse_demo_data_target()',true,false,false,'search_path=pg_catalog, hon','3376565780adf45268abff3a6d8fe667ecdcb74e3ebc374d766008f22d24ea1a'),
 ('hon.remove_school_demo_data(text,jsonb,text,uuid,uuid)',true,true,false,'search_path=pg_catalog, hon','ee275b954e2482f5ed925c2d15bc32ad7d27b72310f8854781449618f18187b9'),
-('hon.require_demo_data_actor(text)',true,false,false,'search_path=pg_catalog, hon','a49eab0e1f81dbb1185e8dcfd39733ef3603732380460fd5ee61f8eccaa9aede'),
+('hon.require_demo_data_actor(text)',true,false,false,'search_path=pg_catalog, hon','b4ff1a5f44a6b1be96655e41884c3f1816102caea70852d2aeda9cda82090d64'),
 ('hon.school_demo_data_attendance(uuid,uuid,uuid,uuid,text,jsonb,uuid[],integer[],integer[])',true,false,false,'search_path=pg_catalog, hon','0669c55a5a5ba40d8281ceef5c064878ca7752b368a9034f626377665333427e'),
 ('hon.school_demo_data_begin(text,text,jsonb,text,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','d73fab306eafd34c8ad6340e1c6d3e833b185041a534848e23e1f18af6614574'),
 ('hon.school_demo_data_collect(uuid,uuid,uuid)',true,false,false,'search_path=pg_catalog, hon','265767a5f2608aa825871c8519171eea989c4a16edcda923deaec298e47a82fe'),
@@ -5826,7 +5826,7 @@ END $$;
 DO $$ DECLARE f record; safe boolean; t text; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.guard_family_referral_rows()',false,false,'search_path=pg_catalog, hon','314dbb05287e2da471a2d27f6bbd457e853aa191978eeed30d45f895f8d13129'),
-('hon.require_school_referral_actor(text,text)',true,false,'search_path=pg_catalog, hon','5a743de3954bc5f3bba625c8f21713718b51429b6e24d8ca0124461e555eb98b'),
+('hon.require_school_referral_actor(text,text)',true,false,'search_path=pg_catalog, hon','c395db828dc9d575c4a1151fcb12a5385082c151e9602c5bdb22e1c1e66f7564'),
 ('hon.school_referral_program_json(uuid,uuid)',true,false,'search_path=pg_catalog, hon','efe55fdb5e464dbf5fe930dcee5ebf11c7bd0791f77f85fa829561bd5650eb3b'),
 ('hon.family_referral_display(text,integer)',false,false,'search_path=pg_catalog','6dc48e9e62534fc012adb7097fdb9d0203a552406f4d5ff55ea192ef568018e5'),
 ('hon.family_referral_staff_json(hon.family_referrals)',true,false,'search_path=pg_catalog, hon','688d5c38e68fd953ffda0e816dc111506437bcb56e5fcaa7e3199dd58adfb68f'),
@@ -5999,7 +5999,7 @@ BEGIN
     ('hon.adjust_pos_stock(text,jsonb,uuid)','cd3cb6a8cc2b3b80b1e96d1082a5445f','v'),
     ('hon.record_pos_sale(text,jsonb,uuid)','cfc576716745c998c0fc693120c489ed','v'),
     ('hon.refund_pos_sale(text,jsonb,uuid)','28f35e89bcfa719735deb88667f492da','v'),
-    ('hon.pos_actor(text,uuid,boolean)','57d43091144edb5833fdec72a0e06b91','s'),
+    ('hon.pos_actor(text,uuid,boolean)','4e4876137aa85838c796c676d3cf784f','s'),
     ('hon.pos_begin(text,text,jsonb,uuid,boolean)','4b4dc8ca1142e6c63b2b02a4ee7a4777','v'),
     ('hon.pos_finish(text,boolean,uuid,uuid,uuid,text,uuid,text,text,uuid,integer,jsonb,jsonb,jsonb)','b31626085f6ac12a5b2f4bbb30f33244','v'),
     ('hon.guard_pos_evidence()','8de6f1c6547c3a2a67ccd35150776925','v')) x LOOP
@@ -6302,7 +6302,7 @@ END $$;
 -- Class booking lock identity plane exact verification (0631, launch-readiness P2; body from 0644 H2, staff-assignable permission): the current body, unchanged posture and one overload.
 DO $$ BEGIN
   IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.lock_class_booking_session(text,uuid)'::regprocedure
-      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='fd2083b92da789ee1f77f3320eb3a30b'
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.provolatile='v' AND md5(p.prosrc)='b143b54fd8b1332e8eb75ab976b6232e'
       AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
       AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
       AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
@@ -7635,3 +7635,33 @@ BEGIN
   END LOOP;
 END $$;
 -- End HQ calls exact verification.
+-- HQ school visits exact verification (0696): three runtime entry points, five private helpers, four forced-RLS tables,
+-- and 63 school checks that carry the live-visit test.
+DO $$ DECLARE f text; t text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY['hon.enter_school_as_hq(text,uuid,text,uuid,uuid,uuid)','hon.leave_school_as_hq(text,uuid,uuid,uuid,uuid)','hon.read_my_hq_school_visits(text)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=f::regprocedure
+        AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls) AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon']
+        AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+        AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+          WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))) THEN
+      RAISE EXCEPTION 'Unsafe HQ school visit entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_visit_evidence()','hon.hq_visit_active(uuid)','hon.ensure_hq_support_role(uuid)',
+      'hon.require_hq_school_visit_actor(text)','hon.hq_school_visit_ts(timestamp with time zone)'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND (a.grantee=0 OR a.grantee<>p.proowner)) THEN
+      RAISE EXCEPTION 'Unsafe HQ school visit helper: %',f; END IF;
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_school_visit_requests','hq_school_visits','hq_school_visit_audit','hq_school_visit_outbox'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=t)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||t)::regclass AND a.grantee<>c.relowner) THEN
+      RAISE EXCEPTION 'Unsafe HQ school visit table: %',t; END IF;
+    IF (SELECT count(*) FROM pg_trigger WHERE tgrelid=('hon.'||t)::regclass AND tgfoid='hon.guard_hq_school_visit_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2 THEN
+      RAISE EXCEPTION 'HQ school visit evidence guard missing: %',t; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND prosrc LIKE '%hon.hq_visit_active(%')<>63 THEN
+    RAISE EXCEPTION 'HQ school visit check drift'; END IF;
+END $$;
+-- End HQ school visits exact verification.
