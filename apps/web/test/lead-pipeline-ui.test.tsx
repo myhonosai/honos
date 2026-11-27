@@ -24,7 +24,7 @@ const STAGES = [stage(1, { name: 'New lead', openCount: 2 }), stage(2, { name: '
   stage(4, { name: 'Enrolled', terminalStatus: 'WON', color: 'GREEN' }), stage(5, { name: 'Not now', terminalStatus: 'LOST', color: 'RED' })];
 const lead = (n: number, over: Partial<CrmBoardLead> = {}): CrmBoardLead => ({ id: id(40 + n), version: 2, status: 'OPEN', stageId: id(31), personId: id(60 + n),
   givenName: `Riley${n}`, familyName: 'Park', email: `riley${n}@example.invalid`, phoneE164: '+15555550100', programInterestCode: 'KIDS_KARATE', sourceCode: 'WEBSITE_FORM',
-  createdAt: at(n), closedAt: null, nextTrialAt: null, lastTrialAt: null, ...over });
+  createdAt: at(n), closedAt: null, nextTrialAt: null, lastTrialAt: null, textOptedOut: false, ...over });
 const LEADS = [lead(1), lead(2, { givenName: 'Jordan', familyName: 'Kim', programInterestCode: null, sourceCode: null, phoneE164: '+15555550199', nextTrialAt: at(20) }),
   lead(3, { stageId: id(32), givenName: 'Avery', lastTrialAt: at(4), programInterestCode: 'ADULT_BJJ' })];
 const BOARD: CrmPipelineBoard = { pipelines: [{ id: id(20), name: 'Default', version: 4 }], pipeline: { id: id(20), name: 'Default', version: 4 }, stages: STAGES,
@@ -397,6 +397,25 @@ describe('quick actions on lead cards', () => {
     expect(panel).toContain(pipelineText('en', 'quickTextHelp'));
   });
 
+  it('hides Text for a lead who opted out of texts, keeps Call and Book trial, and says so in the panel', () => {
+    const board = { ...BOARD, leads: [lead(1, { textOptedOut: true })] };
+    const html = render({ board: { state: 'READY', board }, selectedId: id(41) });
+    expect(html).not.toContain('sms:');
+    expect(html).toContain('data-testid="quick-call"');
+    expect(html).toContain('data-testid="quick-trial"');
+    expect(html).toContain('data-testid="panel-call"');
+    expect(html).toContain('data-testid="text-opted-out"');
+    expect(html).toContain('Opted out of texts');
+  });
+
+  it('refuses a board whose lead lacks a true/false text opt-out', async () => {
+    const { textOptedOut: _drop, ...missing } = LEADS[0]!;
+    for (const bad of [missing, { ...LEADS[0], textOptedOut: 'yes' }, { ...LEADS[0], textOptedOut: null }]) {
+      stub(json({ data: { ...BOARD, leads: [bad] }, meta: { requestId: id(5), correlationId: id(5) } }));
+      await expect(readBoard(scope, null, 'OPEN', signal(), () => true)).rejects.toMatchObject({ kind: 'UNAVAILABLE' });
+    }
+  });
+
   it('offers no quick actions for a closed lead', () => {
     const board = { ...BOARD, status: 'WON' as const, leads: [lead(1, { status: 'WON' })] };
     const html = render({ board: { state: 'READY', board }, status: 'WON', view: 'LIST', selectedId: id(41) });
@@ -406,7 +425,7 @@ describe('quick actions on lead cards', () => {
 
   it('has quick action words in every language', () => {
     for (const language of Object.keys(PIPELINE_LANGUAGES)) {
-      for (const key of ['quickCall', 'quickText', 'quickEmail', 'quickTrial', 'quickCallLabel', 'quickTextLabel', 'quickTrialLabel', 'quickTextHelp'] as const) {
+      for (const key of ['quickCall', 'quickText', 'quickEmail', 'quickTrial', 'quickCallLabel', 'quickTextLabel', 'quickTrialLabel', 'quickTextHelp', 'textOptedOut'] as const) {
         expect(pipelineText(language, key).length).toBeGreaterThan(0);
       }
     }

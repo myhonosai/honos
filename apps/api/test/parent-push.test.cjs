@@ -41,6 +41,39 @@ test('0601 inputs and data are closed', () => {
   }
 });
 
+test('0658 message alert data carries only the thread', () => {
+  assert.deepEqual(contracts.readParentPushData({ type: 'school_message', threadId: A }), { type: 'school_message', threadId: A });
+  for (const value of [{ type: 'school_message' }, { type: 'school_message', threadId: 'x' }, { type: 'school_message', threadId: A, body: 'secret' },
+    { type: 'school_message', announcementId: A }, { type: 'school_announcement', threadId: A }]) {
+    assert.equal(contracts.readParentPushData(value), null, JSON.stringify(value));
+  }
+});
+
+test('0658 staff choose the phone alert: absent or false means none, true only as a boolean', () => {
+  const T = '44444444-4444-4444-8444-444444444444';
+  assert.deepEqual(contracts.validatePublishSchoolAnnouncementInput({ title: 'Closed', body: 'Monday' }), { title: 'Closed', body: 'Monday' });
+  assert.deepEqual(contracts.validatePublishSchoolAnnouncementInput({ title: 'Closed', body: 'Monday', phoneAlert: false }), { title: 'Closed', body: 'Monday' });
+  assert.deepEqual(contracts.validatePublishSchoolAnnouncementInput({ title: 'Closed', body: 'Monday', phoneAlert: true }), { title: 'Closed', body: 'Monday', phoneAlert: true });
+  for (const phoneAlert of ['true', 1, null]) assert.throws(() => contracts.validatePublishSchoolAnnouncementInput({ title: 'Closed', body: 'Monday', phoneAlert }));
+  assert.throws(() => contracts.validatePublishSchoolAnnouncementInput({ title: 'Closed', body: 'Monday', phoneAlert: true, extra: 1 }));
+  const reply = { threadId: T, body: 'See you', throughMessageId: A };
+  assert.deepEqual(contracts.validateReplyFamilyMessageInput(reply), reply);
+  assert.deepEqual(contracts.validateReplyFamilyMessageInput({ ...reply, phoneAlert: false }), reply);
+  assert.deepEqual(contracts.validateReplyFamilyMessageInput({ ...reply, phoneAlert: true }), { ...reply, phoneAlert: true });
+  assert.throws(() => contracts.validateReplyFamilyMessageInput({ ...reply, phoneAlert: 'yes' }));
+});
+
+test('0658 worker sends a message alert with the thread only and refuses a claim without a valid id', async () => {
+  const T = '44444444-4444-4444-8444-444444444444';
+  const sent = [];
+  const msg = { deliveryId: D, leaseToken: L, expoToken: TOKEN, title: 'Dojo', body: 'You have a new message from the school.', kind: 'school_message', threadId: T, attempts: 1 };
+  const s = store([msg, { ...msg, deliveryId: A, threadId: '' }]);
+  await new ParentPushWorker(s, { readiness: () => 'READY', send: async (m) => { sent.push(...m); return m.map(() => ({ outcome: 'SENT', ticketId: 'tk' })); }, receipts: async () => new Map() }).runOnce();
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0], { to: TOKEN, title: 'Dojo', body: 'You have a new message from the school.', data: { type: 'school_message', threadId: T } });
+  assert.deepEqual(s.recorded.map(r => r.outcome.outcome), ['FAILED', 'SENT']);
+});
+
 test('0601 Expo client sends nothing unless the owner approved sends', async () => {
   await withEnv({ HON_PARENT_PUSH_APPROVED: undefined }, async () => {
     const c = client({ status: 200, body: { data: [{ status: 'ok', id: 't1' }] } });
@@ -92,7 +125,7 @@ function store(claimed = [], receipts = []) {
     recordReceipt: async (id, lease, outcome) => { s.receiptsRecorded.push({ id, outcome }); return { recorded: true }; } };
   return s;
 }
-const claimRow = (patch = {}) => ({ deliveryId: D, leaseToken: L, expoToken: TOKEN, title: 'Dojo', body: 'Closed Monday', announcementId: A, attempts: 1, ...patch });
+const claimRow = (patch = {}) => ({ deliveryId: D, leaseToken: L, expoToken: TOKEN, title: 'Dojo', body: 'Closed Monday', kind: 'school_announcement', announcementId: A, attempts: 1, ...patch });
 
 test('0601 worker: off until approved, and never claims while off', async () => {
   const s = store([claimRow()]);

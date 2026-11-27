@@ -128,8 +128,11 @@ export class FamilyMessagesService {
     let input;
     try {
       const body = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-      if (Object.keys(body).sort().join() !== 'body,throughMessageId') throw new Error('shape');
-      input = validateReplyFamilyMessageInput({ threadId, body: body.body, throughMessageId: body.throughMessageId });
+      const keys = Object.keys(body).sort().join();
+      if (keys !== 'body,throughMessageId' && keys !== 'body,phoneAlert,throughMessageId') throw new Error('shape');
+      // 0658: phoneAlert true asks for a phone alert to the family; the database records it with the reply.
+      input = validateReplyFamilyMessageInput({ threadId, body: body.body, throughMessageId: body.throughMessageId,
+        ...(Object.hasOwn(body, 'phoneAlert') ? { phoneAlert: body.phoneAlert } : {}) });
     } catch { throw new BadRequestException({ code: 'VALIDATION_FAILED' }); }
     try {
       return await this.database.withTenantTransaction(context, async client => {

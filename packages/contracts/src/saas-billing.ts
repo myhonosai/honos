@@ -107,6 +107,7 @@ export const SAAS_COMMANDS = {
   aiSpendPause: 'ai-spend-pause',
   aiSchoolCostLimit: 'ai-school-cost-limit',
   aiExceptionAllowance: 'ai-exception-allowance',
+  aiSchoolCostAlertAck: 'ai-school-cost-alert-ack',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   // CA2a (0420): the Conversation AI program switch (HQ owner).
@@ -125,6 +126,7 @@ export const SAAS_COMMANDS = {
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
   // C1 (0354): HON's daily provider spend guard and per-school daily caps (HQ owner).
   creativeProviderDailyLimit: 'saas-creative-provider-daily-limit', creativeSchoolDailyCaps: 'saas-creative-school-daily-caps',
+  uploadCreativeAvatarPhoto: 'saas-creative-avatar-photo-upload', deleteCreativeAvatarPhoto: 'saas-creative-avatar-photo-delete', createCreativePhotoAvatar: 'saas-creative-photo-avatar-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
@@ -133,14 +135,25 @@ export const SAAS_COMMANDS = {
   createMarketingCampaign: 'hq-marketing-campaign-create',
   updateMarketingCampaign: 'hq-marketing-campaign-update',
   setMarketingCampaignStatus: 'hq-marketing-campaign-status',
+  // 0677: HQ ad account connections; same values as HQ_AD_COMMANDS.
+  connectHqAdAccount: 'hq-ad-connect',
+  completeHqAdConnect: 'hq-ad-connect-complete',
+  disconnectHqAdAccount: 'hq-ad-disconnect',
   // 0308: HQ plan promotions; same values as HQ_PLAN_PROMOTION_COMMANDS.
   createPlanPromotion: 'hq-plan-promotion-create',
   updatePlanPromotion: 'hq-plan-promotion-update',
   setPlanPromotionStatus: 'hq-plan-promotion-status',
   recordSchoolPlanPromotionEvent: 'school-plan-promotion-event',
+  // 0676: HQ school plan assignments; same values as HQ_SCHOOL_PLAN_COMMANDS.
+  assignSchoolPlan: 'hq-school-plan-assign',
+  removeSchoolPlan: 'hq-school-plan-remove',
   createHqCreativeGeneration: 'hq-creative-generation-create',
   setHqCreativeBudget: 'hq-creative-budget-set',
   resolveHqCreativeGeneration: 'hq-creative-generation-resolve',
+  // 0678: HQ Creative designs (flyers, posters, social graphics for HON's own marketing).
+  saveHqCreativeDesign: 'hq-creative-design-save',
+  setHqCreativeDesignStatus: 'hq-creative-design-status',
+  addHqCreativeDesignPhoto: 'hq-creative-design-photo',
   // B1 (0263): HQ Ask HON and the HQ AI text budget.
   askHqHon: 'hq-hon-ask',
   setHqHonBudget: 'hq-hon-budget-set',

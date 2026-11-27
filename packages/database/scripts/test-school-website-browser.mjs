@@ -77,10 +77,19 @@ try {
   const slug = 'synthetic-tiger-' + randomBytes(3).toString('hex');
   await page.getByLabel('Website name').fill('Synthetic Tiger Dojo');
   await page.getByLabel('Web address').fill(slug);
+  // Build from a prompt: the description becomes the first message to Marcus once the site exists.
+  const describe = 'Kids karate school in Austin for families. Free first class, after-school program, warm and energetic.';
+  await page.getByLabel('Describe your school and the website you want').fill(describe);
   await page.screenshot({ path: join(shots, '01-start.png'), fullPage: true });
-  await page.getByRole('button', { name: 'Create website' }).click();
+  await page.getByRole('button', { name: 'Build my website with Marcus' }).click();
   await page.getByText('Website created. It is not live yet.').waitFor();
-  step('owner starts a website from the High conversion template');
+  const ai = page.locator('[data-website-ai]');
+  await ai.locator('ol li', { hasText: describe }).first().waitFor({ timeout: 30000 });
+  await ai.getByText(/nothing was sent/i).first().waitFor({ timeout: 30000 });
+  await page.screenshot({ path: join(shots, '01b-build-from-prompt.png'), fullPage: true });
+  const first = await q("SELECT status,request->>'request' AS request FROM hon.ai_text_proposals WHERE school_id=$1 AND kind='WEBSITE_EDIT'", [school.schoolId]);
+  assert(first.length <= 1, JSON.stringify(first)); for (const a of first) assert.equal(a.request, describe);
+  step('owner describes the school and starts a website (High conversion look); the description is sent to Marcus as the first message and refused before any provider call here');
 
   // Edit the main banner heading and connect the enquiry form.
   await page.locator('li[data-section-row="HERO"] button', { hasText: 'Main banner' }).click();
@@ -102,15 +111,14 @@ try {
 
   // WB5: Ask Marcus is wired end to end. This environment has no provider key and no AI route, so the request is
   // recorded and refused before any provider call: nothing is sent and nothing is spent, and the draft is unchanged.
-  const ai = page.locator('[data-website-ai]');
-  await ai.getByRole('heading', { name: 'Ask Marcus to edit your website' }).waitFor();
-  await ai.getByLabel('What should change?').fill('Add a summer camp page and make the welcome warmer for parents.');
+  await ai.getByRole('heading', { name: 'Build and change your website with Marcus' }).waitFor();
+  await ai.getByLabel('Message Marcus').fill('Add a summer camp page and make the welcome warmer for parents.');
   await ai.getByRole('button', { name: 'Ask Marcus' }).click();
-  await ai.getByText(/nothing was sent/i).first().waitFor({ timeout: 30000 });
+  await ai.locator('ol li', { hasText: 'summer camp page' }).first().waitFor({ timeout: 30000 });
   await page.screenshot({ path: join(shots, '02b-ask-marcus.png'), fullPage: true });
   // Refused either at the start (S4 access decision for this synthetic sign-up) or at the send (no route, no key).
   const asked = await q("SELECT status,reserved_credits,usage_id FROM hon.ai_text_proposals WHERE school_id=$1 AND kind='WEBSITE_EDIT'", [school.schoolId]);
-  assert(asked.length <= 1); for (const a of asked) { assert(['BLOCKED', 'CONFIGURATION_REQUIRED'].includes(a.status), JSON.stringify(asked)); assert.equal(a.reserved_credits, 0); assert.equal(a.usage_id, null); }
+  assert(asked.length <= 2, JSON.stringify(asked)); for (const a of asked) { assert(['BLOCKED', 'CONFIGURATION_REQUIRED'].includes(a.status), JSON.stringify(asked)); assert.equal(a.reserved_credits, 0); assert.equal(a.usage_id, null); }
   assert.equal((await q('SELECT count(*)::int n FROM hon.ai_usage_ledger WHERE school_id=$1', [school.schoolId]))[0].n, 0);
   step('Ask Marcus: the request reaches the database through the browser and is refused before any provider call (spend access, no route or no key), with nothing reserved or spent');
 
