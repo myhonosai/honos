@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { AddContact, saveAfterError } from '../src/components/people/add-contact';
+import { AddContact, saveAfterError, watchContactHold } from '../src/components/people/add-contact';
 import { addContactText } from '../src/components/people/add-contact-copy';
 import { AddContactError, addContactApi, buildContactPlan, prepareContact, type ContactForm } from '../src/components/people/add-contact-http';
 import { PeopleView, type PeopleViewProps } from '../src/components/people/view';
@@ -123,6 +123,18 @@ it('a request kept by the page comes back locked on the same request, never as a
   expect(back).toContain(`value="${hold.current.form.givenName}"`); expect(back).not.toContain('>Adding…<');
   const other = renderToStaticMarkup(<AddContact scope={{ ...scope, schoolId: id(77) }} language="en" hold={hold}/>);
   expect(other).not.toContain('<form');
+});
+
+it('a kept request is dropped when the session ends or the school changes, so the next person gets an empty form', () => {
+  for (const event of ['hon:session-invalidated', 'hon:school-context-changed']) {
+    const hold = { current: capsule() as ReturnType<typeof capsule> | null };
+    const stop = watchContactHold(hold);
+    window.dispatchEvent(new Event('blur')); expect(hold.current).not.toBeNull();
+    window.dispatchEvent(new Event(event)); expect(hold.current).toBeNull();
+    const next = renderToStaticMarkup(<AddContact scope={scope} language="en" hold={hold}/>);
+    expect(next).not.toContain('<form'); expect(next).not.toContain('Dana');
+    stop(); hold.current = capsule(); window.dispatchEvent(new Event(event)); expect(hold.current).not.toBeNull();
+  }
 });
 
 it('Contacts shows the button only once the school is verified', () => {

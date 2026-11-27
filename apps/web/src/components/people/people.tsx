@@ -9,7 +9,7 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { PersonRecordError, peopleApi, sameEmail, type PeopleApi } from './http';
 import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } from './model';
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
-import { AddContact } from './add-contact';
+import { AddContact, watchContactHold } from './add-contact';
 import type { ContactAdded, ContactCapsule } from './add-contact-http';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
@@ -370,6 +370,7 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   }, [onOpen]);
   // Kept here, above the node that is replaced when the page conceals, so an unfinished add is never retyped as a new one.
   const addHold = useRef<ContactCapsule | null>(null);
+  useEffect(() => watchContactHold(addHold), []);
   const addSlot = selection && shell.phase === 'READY'
     ? <AddContact key={`add:${lower(selection.schoolId)}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} language={preferences.language} onAdded={onContactAdded} hold={addHold}/> : null;
 

@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { addContactText, type AddContactKey } from './add-contact-copy';
 import { AddContactError, addContactApi, buildContactPlan, prepareContact, type AddContactApi, type ContactAdded, type ContactCapsule, type ContactForm, type ContactProblem, type ContactScope } from './add-contact-http';
+import { onShellPrivacyEvent } from '../school-shell/privacy';
 import styles from './people.module.css';
 
 export type AddContactSave = { state: 'IDLE' | 'SAVING' | 'DENIED' | 'REJECTED' | 'UNCERTAIN' } | { state: 'SAVED'; name: string; family: boolean }
@@ -14,6 +15,15 @@ export function saveAfterError(error: unknown, name: string): AddContactSave {
   if (error.kind === 'UNKNOWN') return { state: 'UNCERTAIN' };
   if (error.step === 'adult') return { state: error.kind === 'REJECTED' ? 'REJECTED' : 'DENIED' };
   return { state: 'PARTIAL', name, denied: error.kind !== 'REJECTED' };
+}
+
+/**
+ * A held request never outlives the session or the school it was typed in: on session end or a school change it is
+ * dropped at once, so the next person at this computer gets an empty form and can never resend someone else's request.
+ * A conceal on blur is not one of these events, so the hold still survives that.
+ */
+export function watchContactHold(hold: { current: ContactCapsule | null }): () => void {
+  return onShellPrivacyEvent(() => { hold.current = null; });
 }
 
 /**
