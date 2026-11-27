@@ -9,9 +9,12 @@ export type SchoolContactRowSegment = Exclude<SchoolContactSegment, 'ALL'> | 'OT
 export const SCHOOL_CONTACT_ENDS_WITHIN = [7, 30, 60, 90] as const;
 export const SCHOOL_CONTACT_PAGE = 50;
 /** C4 (0623): list order, membership groups, age bound and the tag shape (as the blasts audience tags). */
-export const SCHOOL_CONTACT_SORTS = ['NAME', 'ENDS_SOONEST', 'BELT_HIGH', 'BELT_LOW', 'AGE_YOUNGEST', 'AGE_OLDEST', 'NEWEST'] as const;
+export const SCHOOL_CONTACT_SORTS = ['NAME', 'ENDS_SOONEST', 'BELT_HIGH', 'BELT_LOW', 'AGE_YOUNGEST', 'AGE_OLDEST', 'NEWEST', 'PROGRAM'] as const;
 export type SchoolContactSort = typeof SCHOOL_CONTACT_SORTS[number];
-export const SCHOOL_CONTACT_MEMBERSHIP_FILTERS = ['HAS', 'NONE', 'ACTIVE', 'PAUSED', 'CANCELLING'] as const;
+export const SCHOOL_CONTACT_MEMBERSHIP_FILTERS = ['HAS', 'NONE', 'ACTIVE', 'PAUSED', 'CANCELLING', 'EXPIRED'] as const;
+/** C5 (0701): parents and guardians, or children who have a guardian in their family. The list response shape is unchanged. */
+export const SCHOOL_CONTACT_TYPES = ['GUARDIAN', 'CHILD'] as const;
+export type SchoolContactType = typeof SCHOOL_CONTACT_TYPES[number];
 export type SchoolContactMembershipFilter = typeof SCHOOL_CONTACT_MEMBERSHIP_FILTERS[number];
 export type SchoolContactMembershipState = 'ACTIVE' | 'PAUSED' | 'CANCELLING';
 export const SCHOOL_CONTACT_AGE_MAX = 120;
@@ -21,7 +24,7 @@ export interface SchoolContactQuery {
   segment?: SchoolContactSegment; query?: string; rankId?: string; programId?: string; planId?: string;
   endsWithinDays?: typeof SCHOOL_CONTACT_ENDS_WITHIN[number]; options?: boolean;
   sort?: SchoolContactSort; membership?: SchoolContactMembershipFilter; noBelt?: true; endsFrom?: string; endsTo?: string;
-  ageMin?: number; ageMax?: number; tag?: string;
+  ageMin?: number; ageMax?: number; tag?: string; contactType?: SchoolContactType;
 }
 export interface SchoolContactRow {
   personId: string; version: number; givenName: string; familyName: string; email: string | null; phoneE164: string | null;
@@ -80,6 +83,7 @@ export function validateSchoolContactQuery(value: unknown): SchoolContactQuery {
     else if ((key === 'ageMin' || key === 'ageMax') && (typeof raw === 'string' || typeof raw === 'number') && /^(0|[1-9]\d{0,2})$/.test(String(raw))
       && Number(raw) <= SCHOOL_CONTACT_AGE_MAX) out[key] = Number(raw);
     else if (key === 'tag' && typeof raw === 'string' && SCHOOL_CONTACT_TAG.test(raw)) out.tag = raw;
+    else if (key === 'contactType' && typeof raw === 'string' && (SCHOOL_CONTACT_TYPES as readonly string[]).includes(raw)) out.contactType = raw as SchoolContactType;
     else throw new Error('VALIDATION_FAILED');
   }
   // C4-5: closed combinations.

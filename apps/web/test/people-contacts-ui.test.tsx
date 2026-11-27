@@ -71,7 +71,7 @@ it('shows the filter count, keeps filters open and offers Clear; an empty page s
   const filters = { ...NO_CONTACT_FILTERS, segment: 'STUDENT' as const, endsWithinDays: '30' as const, planId: id(5) };
   const options = { ranks: [{ rankId: id(6), curriculum: 'Karate', rank: 'White' }], programs: [], plans: [{ planId: id(5), name: 'Kids monthly' }], tags: [] };
   const html = view({ filters, options, list: { state: 'READY', filters, counts: { ...counts, STUDENT: 0 }, rows: [], nextCursor: null, more: 'IDLE' } });
-  expect(html).toContain('Filters (2)'); expect(html).toMatch(/<details[^>]*open=""/); expect(html).toContain('Clear filters');
+  expect(html).toContain('Filters (2)'); expect(html).not.toContain('<details'); expect(html).toContain('Clear filters');
   expect(html).toContain('Karate: White'); expect(html).toMatch(/<option value="[^"]+" selected="">Kids monthly<\/option>/);
   expect(html).toContain('No one matches'); expect(html).not.toContain('Show more');
   expect(view({ list: { ...base.list, more: 'FAILED' } as never })).toContain('More contacts could not be loaded.');
@@ -187,4 +187,29 @@ it('C4: the deep link takes exactly one person id', async () => {
   const { contactDeepLink } = await import('../src/components/people/people');
   expect(contactDeepLink(`?person=${id(9).toUpperCase()}`)).toBe(id(9));
   for (const search of ['', '?person=', '?person=abc', `?person=${id(9)}&person=${id(8)}`, `?other=${id(9)}`]) expect(contactDeepLink(search)).toBeNull();
+});
+
+// C5 (0701): filters always in view; program order, expired members and contact type.
+it('shows the filter bar open with no filter set, and offers the new choices', () => {
+  const html = view();
+  expect(html).toContain('data-testid="contact-filters"'); expect(html).not.toContain('<details'); expect(html).not.toContain('Clear filters');
+  expect(html).toContain('>Filters</h3>');
+  expect(html).toContain('<option value="PROGRAM">Program A–Z</option>');
+  expect(html).toContain('<option value="EXPIRED">Expired (no current membership)</option>');
+  expect(html).toContain('Contact type'); expect(html).toContain('<option value="GUARDIAN">Parents and guardians</option>'); expect(html).toContain('<option value="CHILD">Children</option>');
+  const set = { ...NO_CONTACT_FILTERS, contactType: 'CHILD' as const, membership: 'EXPIRED' as const };
+  const filtered = view({ filters: set, list: { ...base.list, filters: set } as never });
+  expect(filtered).toContain('Filters (2)'); expect(filtered).toContain('Clear filters');
+  expect(filtered).toMatch(/<option value="CHILD" selected="">Children<\/option>/);
+});
+
+it('sends program order, expired and contact type in the closed query', async () => {
+  expect(contactQuery({ ...NO_CONTACT_FILTERS, sort: 'PROGRAM', membership: 'EXPIRED', contactType: 'GUARDIAN' }, false))
+    .toEqual({ sort: 'PROGRAM', membership: 'EXPIRED', contactType: 'GUARDIAN' });
+  const fetch = stub(json({ data: page(), meta: {} }));
+  await contactsApi.list(scope, { ...NO_CONTACT_FILTERS, contactType: 'CHILD', sort: 'PROGRAM' }, null, false, signal());
+  expect((fetch.mock.calls[0] as unknown as [string])[0])
+    .toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts?sort=PROGRAM&contactType=CHILD`);
+  expect(activeFilterCount({ ...NO_CONTACT_FILTERS, contactType: 'GUARDIAN', sort: 'PROGRAM' })).toBe(1);
+  expect(() => contactQuery({ ...NO_CONTACT_FILTERS, contactType: 'PARENT' as never }, false)).toThrow();
 });
