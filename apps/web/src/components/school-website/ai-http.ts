@@ -1,6 +1,6 @@
 import {
   validateWebsiteAiApplyInput, validateWebsiteAiEditRequest, verifySchoolWebsite, verifyWebsiteAiEditList, verifyWebsiteAiEditView,
-  type SchoolWebsite, type WebsiteAiEditView,
+  verifyWebsiteAiPrice, type SchoolWebsite, type WebsiteAiEditView, type WebsiteAiPrice,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { websiteBase, type Owned, type WebsiteScope } from './http';
@@ -66,6 +66,14 @@ export const websiteAiApi = {
     catch (error) { if (error instanceof WebsiteAiError || signal.aborted) throw error; throw new WebsiteAiError('UNKNOWN'); }
     if (answer.status !== 200) throw websiteAiErrorFor(answer.status, codeOf(answer.value));
     return checked(() => verifyWebsiteAiEditList(data(answer.value)));
+  },
+  /** 0690: what the next edit is paid with (creative credits at the HQ rate, or included AI). A read; nothing is reserved. */
+  async price(scope: WebsiteScope, signal: AbortSignal, owned: Owned): Promise<WebsiteAiPrice> {
+    let answer: { status: number; value: unknown };
+    try { answer = await exchange(websiteBase(scope) + '/ai-edits/price', signal, owned); }
+    catch (error) { if (error instanceof WebsiteAiError || signal.aborted) throw error; throw new WebsiteAiError('UNKNOWN'); }
+    if (answer.status !== 200) throw websiteAiErrorFor(answer.status, codeOf(answer.value));
+    return checked(() => verifyWebsiteAiPrice(data(answer.value)));
   },
   async request(scope: WebsiteScope, input: unknown, key: string, signal: AbortSignal, owned: Owned): Promise<WebsiteAiEditView> {
     let body; try { body = validateWebsiteAiEditRequest(input); } catch { throw new WebsiteAiError('INVALID'); }

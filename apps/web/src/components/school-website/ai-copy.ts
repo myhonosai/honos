@@ -1,7 +1,7 @@
 /** WB5 "Ask Marcus" wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
   title: 'Build and change your website with Marcus',
-  help: 'Describe a change in your own words. Marcus suggests edits to your saved draft; nothing changes until you apply them, and you still publish yourself. Each request uses AI credits.',
+  help: 'Describe a change in your own words. Marcus suggests edits to your saved draft; nothing changes until you apply them, and you still publish yourself.',
   limits: 'Marcus can change text, sections, pages, colours and fonts. He never picks images, forms, booking pages or outside links, and leaves [placeholders] for facts he does not know.',
   label: 'Message Marcus', placeholder: 'For example: add a summer camp page and make the welcome warmer for parents.',
   ask: 'Ask Marcus', asking: 'Marcus is working on it. This can take up to a minute…', saveFirst: 'Save your changes first, so Marcus works on your saved draft.',
@@ -18,6 +18,9 @@ const en = {
   r_SUBJECT_STALE: 'your draft changed after you asked. Ask again.', r_CUSTOMER_BUDGET_EXCEEDED: 'this month\'s AI allowance is used up.', r_AI_SPEND_STOPPED: 'AI help is paused for this school right now.',
   r_NO_ELIGIBLE_ROUTE: 'no AI model is available for this right now.', r_ROUTE_STALE: 'the AI setup changed. Ask again.', r_GATE_CLOSED: 'AI help is not available here right now.',
   r_other: 'AI help is not available right now.',
+  r_CREATIVE_CREDITS_EXHAUSTED: 'this school is out of creative credits. Top up or wait for next month\'s credits.', r_CREATIVE_NOT_PRICED: 'AI website edits need a creative-credit price from HON. Ask again soon.',
+  r_CREATIVE_NOT_ELIGIBLE: 'creative credits are not available for this school right now.', r_CREATIVE_EDIT_IN_PROGRESS: 'Marcus is still working on another request at this school. Ask again in a minute.',
+  costCreative: 'Each message uses {n} creative credits ({left} left). Credits come back if Marcus cannot answer.', costIncluded: 'Messages use your included AI.',
   e_SESSION: 'Your session ended. Sign in again.', e_NO_ACCESS: 'Asking Marcus needs website editing, Marcus and an active Complete plan at this school. Nothing was sent.',
   e_PAUSED: 'AI help is paused or not available for this school right now. Nothing was sent.', e_STALE: 'Your website changed. Reload it and ask again. Nothing was sent or changed.',
   e_DOES_NOT_FIT: 'Some suggested changes no longer fit your current draft. Dismiss this suggestion and ask again. Nothing changed.',
@@ -31,7 +34,7 @@ const en = {
 export type WebsiteAiKey = keyof typeof en;
 const ko: Record<WebsiteAiKey, string> = {
   title: 'Marcus와 웹사이트 만들고 바꾸기',
-  help: '바꾸고 싶은 내용을 직접 적어 주세요. Marcus가 저장된 초안에 대한 편집을 제안합니다. 적용하기 전에는 아무것도 바뀌지 않으며, 게시는 직접 하셔야 합니다. 요청할 때마다 AI 크레딧이 사용됩니다.',
+  help: '바꾸고 싶은 내용을 직접 적어 주세요. Marcus가 저장된 초안에 대한 편집을 제안합니다. 적용하기 전에는 아무것도 바뀌지 않으며, 게시는 직접 하셔야 합니다.',
   limits: 'Marcus는 글, 섹션, 페이지, 색상, 글꼴을 바꿀 수 있습니다. 이미지, 양식, 예약 페이지, 외부 링크는 고르지 않으며, 모르는 정보는 [안내 문구]로 남깁니다.',
   label: 'Marcus에게 메시지', placeholder: '예: 여름 캠프 페이지를 추가하고 학부모를 위한 환영 문구를 더 따뜻하게 바꿔 주세요.',
   ask: 'Marcus에게 요청', asking: 'Marcus가 작업 중입니다. 최대 1분 정도 걸릴 수 있습니다…', saveFirst: 'Marcus가 저장된 초안으로 작업하도록 먼저 변경 내용을 저장하세요.',
@@ -48,6 +51,9 @@ const ko: Record<WebsiteAiKey, string> = {
   r_SUBJECT_STALE: '요청 후 초안이 바뀌었습니다. 다시 요청하세요.', r_CUSTOMER_BUDGET_EXCEEDED: '이번 달 AI 사용량을 모두 썼습니다.', r_AI_SPEND_STOPPED: '지금은 이 도장의 AI 도움이 일시 중지되었습니다.',
   r_NO_ELIGIBLE_ROUTE: '지금 사용할 수 있는 AI 모델이 없습니다.', r_ROUTE_STALE: 'AI 설정이 바뀌었습니다. 다시 요청하세요.', r_GATE_CLOSED: '지금은 AI 도움을 사용할 수 없습니다.',
   r_other: '지금은 AI 도움을 사용할 수 없습니다.',
+  r_CREATIVE_CREDITS_EXHAUSTED: '이 도장의 크리에이티브 크레딧을 모두 썼습니다. 충전하거나 다음 달 크레딧을 기다리세요.', r_CREATIVE_NOT_PRICED: 'AI 웹사이트 편집에는 HON의 크리에이티브 크레딧 가격이 필요합니다. 잠시 후 다시 요청하세요.',
+  r_CREATIVE_NOT_ELIGIBLE: '지금은 이 도장에서 크리에이티브 크레딧을 사용할 수 없습니다.', r_CREATIVE_EDIT_IN_PROGRESS: 'Marcus가 이 도장의 다른 요청을 처리하고 있습니다. 잠시 후 다시 요청하세요.',
+  costCreative: '메시지 하나에 크리에이티브 크레딧 {n}개를 씁니다 ({left}개 남음). Marcus가 답하지 못하면 크레딧은 돌아옵니다.', costIncluded: '메시지는 포함된 AI 사용량을 씁니다.',
   e_SESSION: '세션이 끝났습니다. 다시 로그인하세요.', e_NO_ACCESS: 'Marcus에게 요청하려면 이 도장에서 웹사이트 편집 권한, Marcus, 활성 Complete 플랜이 필요합니다. 아무것도 보내지 않았습니다.',
   e_PAUSED: '지금은 이 도장의 AI 도움이 일시 중지되었거나 사용할 수 없습니다. 아무것도 보내지 않았습니다.', e_STALE: '웹사이트가 바뀌었습니다. 새로 불러온 뒤 다시 요청하세요. 아무것도 보내거나 바꾸지 않았습니다.',
   e_DOES_NOT_FIT: '일부 제안이 현재 초안에 더 이상 맞지 않습니다. 이 제안을 닫고 다시 요청하세요. 바뀐 것은 없습니다.',
@@ -60,7 +66,7 @@ const ko: Record<WebsiteAiKey, string> = {
 };
 const es: Record<WebsiteAiKey, string> = {
   title: 'Cree y cambie su sitio web con Marcus',
-  help: 'Describa un cambio con sus propias palabras. Marcus sugiere ediciones a su borrador guardado; nada cambia hasta que usted las aplique, y la publicación la hace usted. Cada solicitud usa créditos de IA.',
+  help: 'Describa un cambio con sus propias palabras. Marcus sugiere ediciones a su borrador guardado; nada cambia hasta que usted las aplique, y la publicación la hace usted.',
   limits: 'Marcus puede cambiar textos, secciones, páginas, colores y fuentes. Nunca elige imágenes, formularios, páginas de reservas ni enlaces externos, y deja [marcadores] para los datos que no conoce.',
   label: 'Mensaje para Marcus', placeholder: 'Por ejemplo: agregue una página del campamento de verano y haga la bienvenida más cálida para los padres.',
   ask: 'Pedir a Marcus', asking: 'Marcus está trabajando en ello. Puede tardar hasta un minuto…', saveFirst: 'Guarde sus cambios primero, para que Marcus trabaje sobre su borrador guardado.',
@@ -77,6 +83,9 @@ const es: Record<WebsiteAiKey, string> = {
   r_SUBJECT_STALE: 'su borrador cambió después de pedirlo. Vuelva a pedirlo.', r_CUSTOMER_BUDGET_EXCEEDED: 'ya se usó la asignación de IA de este mes.', r_AI_SPEND_STOPPED: 'la ayuda de IA está en pausa para esta escuela.',
   r_NO_ELIGIBLE_ROUTE: 'no hay un modelo de IA disponible para esto ahora.', r_ROUTE_STALE: 'cambió la configuración de IA. Vuelva a pedirlo.', r_GATE_CLOSED: 'la ayuda de IA no está disponible aquí ahora.',
   r_other: 'la ayuda de IA no está disponible ahora.',
+  r_CREATIVE_CREDITS_EXHAUSTED: 'esta escuela se quedó sin créditos creativos. Recargue o espere los créditos del próximo mes.', r_CREATIVE_NOT_PRICED: 'las ediciones del sitio con IA necesitan un precio en créditos creativos de HON. Vuelva a pedirlo pronto.',
+  r_CREATIVE_NOT_ELIGIBLE: 'los créditos creativos no están disponibles para esta escuela ahora.', r_CREATIVE_EDIT_IN_PROGRESS: 'Marcus aún trabaja en otra solicitud de esta escuela. Vuelva a pedirlo en un minuto.',
+  costCreative: 'Cada mensaje usa {n} créditos creativos (quedan {left}). Los créditos vuelven si Marcus no puede responder.', costIncluded: 'Los mensajes usan su IA incluida.',
   e_SESSION: 'Su sesión terminó. Inicie sesión de nuevo.', e_NO_ACCESS: 'Para pedírselo a Marcus se necesita editar el sitio, Marcus y un plan Complete activo en esta escuela. No se envió nada.',
   e_PAUSED: 'La ayuda de IA está en pausa o no está disponible para esta escuela ahora. No se envió nada.', e_STALE: 'Su sitio web cambió. Recárguelo y vuelva a pedirlo. No se envió ni cambió nada.',
   e_DOES_NOT_FIT: 'Algunos cambios sugeridos ya no encajan con su borrador actual. Descarte esta sugerencia y vuelva a pedirlo. No cambió nada.',
