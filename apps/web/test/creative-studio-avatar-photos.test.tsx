@@ -28,7 +28,7 @@ function avatar(extra: Partial<CreativeAvatar> = {}): CreativeAvatar {
   const g: CreativeGeneration = { generationId: id(964), schoolId: scope.schoolId, operationCode: 'avatar.create', mediaKind: 'IMAGE', units: 1, format: 'PORTRAIT',
     prompt: CREATIVE_PHOTO_AVATAR_DESCRIPTION, status: 'SUCCEEDED', failureReason: null, reservedCredits: 100, chargedCredits: 100,
     createdAt: '2026-11-12T05:00:00.000Z', completedAt: '2026-11-12T05:00:05.000Z',
-    assets: [{ assetId: id(963), ordinal: 1, mediaType: 'image/png', width: 1024, height: 1024, durationSeconds: null, origin: 'SYNTHETIC' }] };
+    assets: [{ assetId: id(963), ordinal: 1, mediaType: 'image/png', width: 1024, height: 1024, durationSeconds: null, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] };
   return { avatarId: id(970), schoolId: scope.schoolId, name: 'Coach Dana', style: 'REALISTIC', description: CREATIVE_PHOTO_AVATAR_DESCRIPTION, status: 'READY',
     createdAt: g.createdAt, generation: g, ...extra };
 }
