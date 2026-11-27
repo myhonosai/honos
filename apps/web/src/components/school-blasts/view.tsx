@@ -1,11 +1,11 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   SCHOOL_BLAST_AUDIENCE_GROUPS, SCHOOL_BLAST_DELIVERY_STATES, SCHOOL_BLAST_MERGE_FIELDS, SCHOOL_BLAST_OUTCOMES, schoolBlastBodyMax,
   type SchoolBlast, type SchoolBlastAudienceGroup, type SchoolBlastAudiencePreview, type SchoolBlastChannel, type SchoolBlastMergeField, type SchoolBlastSummary,
-  type SchoolMediaAsset,
+  type SchoolMediaAsset, SCHOOL_BLAST_ENDS_WITHIN_DAYS, SCHOOL_BLAST_MEMBERSHIP_FILTERS, SCHOOL_BLAST_LIMITS, type SchoolContactOptions,
 } from '@hon/contracts';
 import { blastCopy, type BlastCopy, type BlastOutcomeKind } from './copy';
-import { pictureIdsOf, videoIdsOf, type BlastDraft, type BlastField, type BlastProblem } from './format';
+import { NO_BELT, filterCount, pictureIdsOf, videoIdsOf, type BlastDraft, type BlastField, type BlastFilterForm, type BlastProblem, type PickedPerson } from './format';
 import page from '../membership-changes/membership-changes.module.css';
 import styles from './school-blasts.module.css';
 
@@ -19,6 +19,11 @@ export type PicturesRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' 
 /** BL2: the school's Live checkout pages with their share links, title in the staff member's language. */
 export type CheckoutLink = Readonly<{ pageId: string; publicId: string; title: string }>;
 export type CheckoutsRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; pages: readonly CheckoutLink[] };
+/** BL4: the belt, program and plan lists of the Contacts list (read with people.read). */
+export type FilterOptionsRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; options: SchoolContactOptions };
+/** BL4: one contact search result: a name and a short email or phone hint so two people of the same name can be told apart. */
+export type PersonMatch = Readonly<{ personId: string; name: string; detail: string | null }>;
+export type PeopleSearchRead = null | { state: 'LOADING' | 'DENIED' | 'UNAVAILABLE' } | { state: 'READY'; matches: readonly PersonMatch[] };
 export type SchoolBlastsViewProps = Readonly<{
   language: string; waiting: boolean; concealed: boolean; hasSchool: boolean;
   list: ListRead; selected: BlastRead; draft: BlastDraft | null; dirty: boolean; problems: readonly BlastProblem[];
@@ -34,6 +39,10 @@ export type SchoolBlastsViewProps = Readonly<{
   /** BL2: a Live checkout page's plain share link, for an email or a text. */
   checkouts?: CheckoutsRead; checkoutPickerOpen?: boolean; onToggleCheckoutPicker?: (() => void) | undefined;
   onInsertCheckoutLink?: ((publicId: string, start: number, end: number) => void) | undefined;
+  /** BL4 (0695): Contacts list filters and hand-picked people. */
+  filterOptions?: FilterOptionsRead; onFilters?: ((patch: Partial<BlastFilterForm>) => void) | undefined; onClearFilters?: (() => void) | undefined;
+  peopleQuery?: string; onPeopleQuery?: ((text: string) => void) | undefined; peopleSearch?: PeopleSearchRead;
+  onPickPerson?: ((person: PersonMatch) => void) | undefined; onUnpickPerson?: ((personId: string) => void) | undefined;
   onNew?: ((channel: SchoolBlastChannel) => void) | undefined; onOpen?: ((blastId: string) => void) | undefined;
   onEdit?: ((field: BlastField, value: string) => void) | undefined; onToggleGroup?: ((group: SchoolBlastAudienceGroup) => void) | undefined;
   onInsert?: ((target: 'subject' | 'body', field: SchoolBlastMergeField, start: number, end: number) => void) | undefined;
@@ -145,6 +154,78 @@ function Checkouts({ p, c, draft, body }: { p: SchoolBlastsViewProps; c: BlastCo
   </div>;
 }
 
+/** A select with "Any" first, the listed choices, and a saved value that is no longer listed shown as "Saved choice". */
+function Choice({ label, value, options, c, onChange, field }: { label: string; value: string; options: readonly { value: string; label: string }[]; c: BlastCopy; onChange: (v: string) => void; field: string }): React.ReactElement {
+  const known = !value || options.some(o => o.value === value);
+  return <label className={page.field}>{label}
+    <select value={value} onChange={(e) => onChange(e.target.value)} data-filter={field}>
+      <option value="">{c.any}</option>
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {known ? null : <option value={value}>{c.savedChoice}</option>}
+    </select></label>;
+}
+
+function Filters({ p, c, draft }: { p: SchoolBlastsViewProps; c: BlastCopy; draft: BlastDraft }): React.ReactElement {
+  const f = draft.filters, read = p.filterOptions ?? null, options = read?.state === 'READY' ? read.options : null;
+  const [range, setRange] = useState(!!(f.endsFrom || f.endsTo));
+  const set = (patch: Partial<BlastFilterForm>) => p.onFilters?.(patch);
+  const ends = range ? 'RANGE' : f.endsWithinDays;
+  const n = filterCount(f);
+  return <div className={page.field} role="group" aria-label={c.filtersTitle} data-testid="blast-filters">
+    <span className={styles.tags}><strong>{c.filtersTitle}</strong>
+      {n ? <><span className={page.meta} data-testid="blast-filter-count">{c.filtersSet(n)}</span>
+        <button type="button" className={styles.small} onClick={() => { setRange(false); p.onClearFilters?.(); }} data-action="clear-filters">{c.clearFilters}</button></> : null}</span>
+    <span className={page.meta}>{c.filtersHint}</span>
+    {read?.state === 'DENIED' ? <p className={page.meta}>{c.optionsDenied}</p> : read?.state === 'UNAVAILABLE' ? <p className={page.meta}>{c.optionsUnavailable}</p> : null}
+    <div className={page.grid}>
+      <Choice label={c.fieldBelt} value={f.rankId} c={c} field="rankId" onChange={(v) => set({ rankId: v })}
+        options={[{ value: NO_BELT, label: c.noBelt }, ...(options?.ranks ?? []).map(r => ({ value: r.rankId, label: `${r.curriculum}: ${r.rank}` }))]}/>
+      <Choice label={c.fieldProgram} value={f.programId} c={c} field="programId" onChange={(v) => set({ programId: v })}
+        options={(options?.programs ?? []).map(x => ({ value: x.programId, label: x.name }))}/>
+      <Choice label={c.fieldPlan} value={f.planId} c={c} field="planId" onChange={(v) => set({ planId: v })}
+        options={(options?.plans ?? []).map(x => ({ value: x.planId, label: x.name }))}/>
+      <Choice label={c.fieldMembership} value={f.membership} c={c} field="membership" onChange={(v) => set({ membership: v as BlastFilterForm['membership'] })}
+        options={SCHOOL_BLAST_MEMBERSHIP_FILTERS.map(m => ({ value: m, label: c.membership[m] }))}/>
+      <Choice label={c.fieldEnds} value={ends} c={c} field="ends" onChange={(v) => {
+        if (v === 'RANGE') { setRange(true); set({ endsWithinDays: '' }); }
+        else { setRange(false); set({ endsWithinDays: v as BlastFilterForm['endsWithinDays'], endsFrom: '', endsTo: '' }); }
+      }} options={[...SCHOOL_BLAST_ENDS_WITHIN_DAYS.map(d => ({ value: String(d), label: c.endsWithin(d) })), { value: 'RANGE', label: c.endsBetween }]}/>
+      {range ? <>
+        <label className={page.field}>{c.fieldEndsFrom}<input type="date" value={f.endsFrom} onChange={(e) => set({ endsFrom: e.target.value })} data-filter="endsFrom"/></label>
+        <label className={page.field}>{c.fieldEndsTo}<input type="date" value={f.endsTo} onChange={(e) => set({ endsTo: e.target.value })} data-filter="endsTo"/></label>
+      </> : null}
+      <label className={page.field}>{c.fieldAgeMin}<input type="number" min={0} max={120} step={1} inputMode="numeric" value={f.ageMin} onChange={(e) => set({ ageMin: e.target.value })} data-filter="ageMin"/></label>
+      <label className={page.field}>{c.fieldAgeMax}<input type="number" min={0} max={120} step={1} inputMode="numeric" value={f.ageMax} onChange={(e) => set({ ageMax: e.target.value })} data-filter="ageMax"/></label>
+    </div>
+  </div>;
+}
+
+function People({ p, c, draft }: { p: SchoolBlastsViewProps; c: BlastCopy; draft: BlastDraft }): React.ReactElement {
+  const search = p.peopleSearch ?? null, picked = new Set(draft.people.map(x => x.personId));
+  const full = draft.people.length >= SCHOOL_BLAST_LIMITS.people;
+  const label = (x: PickedPerson) => x.name ?? c.pickedEarlier;
+  return <div className={page.field} role="group" aria-label={c.peopleTitle} data-testid="blast-people">
+    <strong>{c.peopleTitle}</strong>
+    <span className={page.meta}>{c.peopleHint}</span>
+    {draft.people.length ? <>
+      <span className={page.meta} data-testid="blast-picked-count">{c.pickedCount(draft.people.length)}</span>
+      <ul className={styles.tags} aria-label={c.pickedCount(draft.people.length)}>{draft.people.map(x => <li key={x.personId} className={page.chip} data-picked={x.personId}>
+        {label(x)} <button type="button" className={styles.small} aria-label={c.removePerson(label(x))} onClick={() => p.onUnpickPerson?.(x.personId)} data-unpick={x.personId}>×</button>
+      </li>)}</ul></> : null}
+    <label className={page.field}>{c.searchPeople}
+      <input type="search" value={p.peopleQuery ?? ''} maxLength={100} onChange={(e) => p.onPeopleQuery?.(e.target.value)} data-field="peopleQuery"/>
+      <span className={page.meta}>{c.searchHint}</span></label>
+    {search?.state === 'LOADING' ? <p className={page.meta}>{c.reading}</p>
+      : search?.state === 'DENIED' ? <p className={page.meta}>{c.peopleDenied}</p>
+      : search?.state === 'UNAVAILABLE' ? <p className={page.meta}>{c.peopleUnavailable}</p>
+      : search?.state === 'READY' ? search.matches.length ? <ul className={styles.picker} data-testid="blast-people-matches">{search.matches.map(m => <li key={m.personId}>
+        <button type="button" className={styles.pick} disabled={picked.has(m.personId) || full} onClick={() => p.onPickPerson?.(m)} data-pick-person={m.personId}>
+          <span>{m.name}</span>{m.detail ? <span className={page.meta}>{m.detail}</span> : null}
+          <span className={page.meta}>{picked.has(m.personId) ? c.added : c.addPerson}</span></button>
+      </li>)}</ul> : <p className={page.meta}>{c.noMatches}</p> : null}
+  </div>;
+}
+
 function List({ p, c, blasts, current }: { p: SchoolBlastsViewProps; c: BlastCopy; blasts: readonly SchoolBlastSummary[]; current: string | null }): React.ReactElement {
   return <section className={page.card} aria-labelledby="blast-list-title" data-testid="blast-list">
     <div className={page.cardHead}><h2 id="blast-list-title">{c.listTitle}</h2></div>
@@ -208,6 +289,8 @@ function Composer({ p, c, draft }: { p: SchoolBlastsViewProps; c: BlastCopy; dra
       <label className={page.field}>{c.fieldTags}
         <input value={draft.tags} onChange={(e) => p.onEdit?.('tags', e.target.value)} data-field="tags"/>
         <span className={page.meta}>{c.tagsHint}</span></label>
+      <Filters key={draft.blastId ?? 'new'} p={p} c={c} draft={draft}/>
+      <People p={p} c={c} draft={draft}/>
       <p className={page.meta}>{c.consentNote}</p>
     </fieldset>
     {p.problems.length ? <ul className={styles.problems} data-testid="blast-problems">{p.problems.map(x => <li key={x}>{c.problems[x]}</li>)}</ul> : null}

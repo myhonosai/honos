@@ -30,13 +30,16 @@ it.each([['creation authority', schoolCreationApi.authorize], ['directory facts'
   const task = read(signal.signal); signal.abort(); finish(new Response('{}', { status: 401 }));
   await expect(task).rejects.toThrow(); expect(invalidated).not.toHaveBeenCalled();
 });
-it('conceals form/receipt DOM synchronously for every browser privacy event without releasing unsettled ownership', async () => {
+it('keeps the form on screen when the tab is left; conceals form/receipt DOM synchronously on a school change or session end without releasing unsettled ownership', async () => {
   const api = { authorize: vi.fn().mockResolvedValue(principal), send: vi.fn() };
   const c = new SchoolCreationController(api); c.start(); await c.authorize();
   const browser = new EventTarget(), documentTarget = Object.assign(new EventTarget(), { visibilityState: 'visible' });
   let hidden = false;
   const unbind = bindSchoolCreationPrivacy(c, () => { hidden = true; }, browser, documentTarget);
-  for (const event of ['blur', 'pagehide', HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT]) {
+  // Owner 2026-11-26: leaving the HQ tab or window hides nothing.
+  for (const event of ['blur', 'pagehide']) { browser.dispatchEvent(new Event(event)); expect(hidden).toBe(false); expect(c.snapshot().concealed).toBe(false); }
+  documentTarget.visibilityState = 'hidden'; documentTarget.dispatchEvent(new Event('visibilitychange')); expect(hidden).toBe(false);
+  for (const event of [HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT]) {
     hidden = false; browser.dispatchEvent(new Event(event));
     expect(hidden).toBe(true); expect(c.snapshot().concealed).toBe(true);
   }

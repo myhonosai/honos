@@ -115,12 +115,13 @@ export function bindSchoolCreationPrivacy(controller: SchoolCreationController, 
     if (view.concealed && view.access === 'idle' && view.message !== 'principalChanged') void controller.authorize();
   };
   const unsubscribe = controller.subscribe(() => { if (deferred && !controller.snapshot().busy) restore(); });
-  const visibility = () => { if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange')); else restore(); };
-  const events = ['blur', 'pagehide', HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
+  // HQ hides nothing when the tab or window loses focus or the page is put away (owner, 2026-11-26: "Hq do not need
+  // hidden"). Only a session end or a school change hides facts; coming back or focusing re-reads after one of those.
+  const visibility = () => { if (documentTarget.visibilityState === 'visible') restore(); };
+  const events = [HON_SESSION_INVALIDATED_EVENT, HON_SCHOOL_CONTEXT_CHANGED_EVENT];
   for (const event of events) browser.addEventListener(event, conceal);
   browser.addEventListener('focus', restore);
   documentTarget.addEventListener('visibilitychange', visibility);
-  if (documentTarget.visibilityState !== 'visible') conceal(new Event('visibilitychange'));
   return () => {
     unsubscribe(); browser.removeEventListener('focus', restore);
     conceal(new Event('unmount'));

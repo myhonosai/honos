@@ -107,6 +107,7 @@ export const SAAS_COMMANDS = {
   aiSpendPause: 'ai-spend-pause',
   aiSchoolCostLimit: 'ai-school-cost-limit',
   aiExceptionAllowance: 'ai-exception-allowance',
+  aiSchoolCostAlertAck: 'ai-school-cost-alert-ack',
   aiUnknownResolve: 'ai-unknown-resolve',
   aiLateProviderExpense: 'ai-late-provider-expense',
   // CA2a (0420): the Conversation AI program switch (HQ owner).
@@ -120,10 +121,13 @@ export const SAAS_COMMANDS = {
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
   createCreativeGeneration: 'saas-creative-generation-create',
+  deleteCreativeAsset: 'saas-creative-asset-delete',
+  reviewCreativeAsset: 'saas-creative-asset-review',
   // A1 (0276): Creative Studio avatars.
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
   // C1 (0354): HON's daily provider spend guard and per-school daily caps (HQ owner).
   creativeProviderDailyLimit: 'saas-creative-provider-daily-limit', creativeSchoolDailyCaps: 'saas-creative-school-daily-caps',
+  uploadCreativeAvatarPhoto: 'saas-creative-avatar-photo-upload', deleteCreativeAvatarPhoto: 'saas-creative-avatar-photo-delete', createCreativePhotoAvatar: 'saas-creative-photo-avatar-create',
   // B-HQ-2 (0232): HQ support records; same values as HQ_SUPPORT_COMMANDS.
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
@@ -167,6 +171,13 @@ export const SAAS_COMMANDS = {
   createHqProspect: 'hq-prospect-create',
   updateHqProspect: 'hq-prospect-update',
   recordHqProspectConsent: 'hq-prospect-consent',
+  // CL5 (0694): HQ calling on the HQ number; same values as HQ_CALL_COMMANDS.
+  setHqCallingSettings: 'hq-call-settings',
+  setMyHqCallRinging: 'hq-call-ring',
+  startHqCall: 'hq-call-start',
+  updateHqCall: 'hq-call-update',
+  setHqDoNotCall: 'hq-call-do-not-call',
+  issueHqPhoneToken: 'hq-call-token',
 } as const;
 export type SaasCommand = typeof SAAS_COMMANDS[keyof typeof SAAS_COMMANDS];
 

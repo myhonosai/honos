@@ -21,6 +21,8 @@ export type SchoolShellFrameProps = {
   choices: readonly StaffReportingSchoolChoice[]; mode: HonInterfaceTheme; viewState: ShellViewState; menuOpen: boolean;
   onMode: (mode: HonInterfaceTheme) => void; onMenu: (open: boolean) => void; onSwitch: () => void; onChoose: (schoolId: string) => void; onRestore: () => void;
   utility?: ReactNode; children?: ReactNode;
+  /** The top-bar phone (0556), mounted by the container for the verified school only. */
+  phone?: ReactNode;
   /** Guided tour step, or null when closed. */
   tourStep?: number | null; onTour?: (step: number | null) => void;
   /** Screensaver over the whole app (away or idle). The page behind it stays mounted and inert. */
@@ -142,6 +144,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
           <small role="status">{t(VIEW_STATE[props.viewState])}</small>
         </div>
         {props.utility && <div className={styles.locale}>{props.utility}</div>}
+        {verified && props.phone}
         {props.search ?? <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>}
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}

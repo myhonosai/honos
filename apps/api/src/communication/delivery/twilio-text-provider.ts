@@ -195,6 +195,11 @@ export class TwilioWebhookVerifier {
     return params;
   }
 
+  /** CL3 (0547): the verified form of a calling webhook at one of its fixed paths; the calling module reads its own fields. */
+  signedForm(rawBody: Buffer, path: string, signature: string | undefined, subaccount?: TwilioSubaccountCredential): URLSearchParams {
+    return this.params(rawBody, path, signature, subaccount);
+  }
+
   /** A status callback as a receipt, or null for statuses HON does not store (queued, sending, read). */
   status(rawBody: Buffer, signature: string | undefined, subaccount?: TwilioSubaccountCredential): VerifiedProviderReceipt | null {
     return this.statusAt(rawBody, TWILIO_STATUS_PATH, signature, subaccount);

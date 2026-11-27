@@ -1,5 +1,6 @@
 'use client';
 import { SchoolSwitcher } from '../school-switcher/switcher';
+import { HqVisitBanner } from '../hq-school-visit/banner';
 import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
@@ -19,6 +20,7 @@ import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
 import { HON_SCREENSAVER_SHOWN_EVENT, ScreensaverController } from './screensaver';
 import { SchoolShellFrame, type ShellViewState } from './frame';
+import { SchoolPhone } from '../calls/phone-panel';
 import { shellForgetLegacy, shellRecolorLegacy } from './legacy-recolor';
 import { AppearanceOwner } from './appearance-owner';
 import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
@@ -308,7 +310,9 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
-    switcher={<SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} schools={schoolChoices} />}
+    switcher={<><SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} schools={schoolChoices} />
+      <HqVisitBanner language={preferences.language} schoolId={snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? null : null} /></>}
+    phone={selection ? <SchoolPhone key={`${selection.organizationId}/${selection.schoolId}`} scope={selection} language={preferences.language} /> : undefined}
     search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
     tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>

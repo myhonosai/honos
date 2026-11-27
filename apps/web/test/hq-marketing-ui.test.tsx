@@ -115,7 +115,7 @@ it('hides every change for a read-only viewer and for archived campaigns', () =>
 });
 
 it('shows nothing while concealed, loading or denied', () => {
-  for (const [p, text] of [[{ concealed: true }, 'hidden while this tab'], [{ state: { state: 'LOADING' } }, 'Reading HQ campaigns'],
+  for (const [p, text] of [[{ concealed: true }, 'Hidden because your session ended'], [{ state: { state: 'LOADING' } }, 'Reading HQ campaigns'],
     [{ state: { state: 'DENIED' } }, 'does not include marketing']] as const) {
     const html = renderToStaticMarkup(<HqMarketingView {...props(p as Partial<MarketingViewProps>)}/>);
     expect(html).toContain(text); expect(html).not.toContain('SPRING-GOOGLE'); expect(html).not.toContain('data-ad-account');

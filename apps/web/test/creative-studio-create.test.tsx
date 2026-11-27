@@ -18,7 +18,7 @@ function generation(status: CreativeGeneration['status'] = 'SUCCEEDED', extra: P
   return { generationId: id(800), schoolId: scope.schoolId, operationCode: input.operationCode, mediaKind: 'IMAGE', units: input.units, format: input.format, prompt: input.prompt,
     status, failureReason: status === 'FAILED' ? 'PROVIDER_REJECTED' : status === 'UNDER_REVIEW' ? 'PROVIDER_UNKNOWN' : null, reservedCredits: 80,
     chargedCredits: charged ? 80 : null, createdAt: '2026-11-07T06:00:00.000Z', completedAt: done ? '2026-11-07T06:00:05.000Z' : null,
-    assets: status === 'SUCCEEDED' ? [1, 2].map(n => ({ assetId: id(810 + n), ordinal: n, mediaType: 'image/png' as const, width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' as const })) : [],
+    assets: status === 'SUCCEEDED' ? [1, 2].map(n => ({ assetId: id(810 + n), ordinal: n, mediaType: 'image/png' as const, width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' as const, review: 'PENDING_REVIEW' as const })) : [],
     ...extra };
 }
 const balance = () => rawWallet().balance;
@@ -144,7 +144,7 @@ it('offers the create form only when a provider is connected and the school can 
 
 it('says what happened, and offers Check again only for an unknown outcome', () => {
   const connected: GenerationsState = { state: 'READY', provider: 'CONNECTED', items: [] };
-  expect(view(connected, { kind: 'DONE' })).toContain('Done. The result is listed below.');
+  expect(view(connected, { kind: 'DONE' })).toContain('Done. It is listed below and waits for approval before it can be used.');
   expect(view(connected, { kind: 'HELD' })).toContain('credits are held while HQ checks it');
   expect(view(connected, { kind: 'FAILED' })).toContain('Your credits were returned.');
   expect(view(connected, { kind: 'REFUSED', code: 'SAAS_CREATIVE_AI_PAUSED_BY_HQ' })).toContain('HQ has paused creative work');

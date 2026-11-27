@@ -57,6 +57,10 @@
       "title": "HON HQ | Creative Credits"
     },
     {
+      "path": "/hq/creative-limits",
+      "title": "HON HQ | Creative Spend Limits"
+    },
+    {
       "path": "/hq/integrations/zernio",
       "title": "HON HQ | Zernio"
     },
@@ -485,6 +489,10 @@
       "title": "HON | Conversations"
     },
     {
+      "path": "/staff/calls",
+      "title": "HON | Calls"
+    },
+    {
       "path": "/staff/conversations/train-ai",
       "title": "HON | Train AI"
     },
@@ -579,6 +587,10 @@
     {
       "path": "/staff/teaching-studio",
       "title": "HON | Human Teaching Studio"
+    },
+    {
+      "path": "/staff/teaching-assistant/journal",
+      "title": "HON | Kai teaching journal"
     },
     {
       "path": "/staff/teaching-assistant",
@@ -697,8 +709,16 @@
       "title": "HON HQ | HQ message"
     },
     {
+      "path": "/hq/communications/calls",
+      "title": "HON HQ | Calls"
+    },
+    {
       "path": "/hq/communications/numbers",
       "title": "HON HQ | School texting numbers"
+    },
+    {
+      "path": "/hq/communications/settings",
+      "title": "HON HQ | Texts and email settings"
     },
     {
       "path": "/hq/growth/prospects",

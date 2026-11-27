@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
 import { bodyAfterDemoData } from './demo-data-guard-line.mjs';
+import { bodyAfterHqVisit } from './hq-visit-lift.mjs';
 
 // Disposable-localhost proof for 0175 school membership plan catalog. Plans are published and revised through the
 // real service; the adult CRM workflow is driven through the real registration, billing-account and DRAFT services;
@@ -52,7 +53,7 @@ try {
     assert.ok(body, `0175 defines ${name}`);
     const row = (await admin.query(`SELECT p.prosrc=$2 exact,p.prosecdef definer,p.proconfig config,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,
       has_function_privilege('public',p.oid,'EXECUTE') public_execute,(SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)::int overloads
-      FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, bodyAfterDemoData(name, body), `hon.${signature}`])).rows[0];
+      FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, bodyAfterHqVisit(signature, bodyAfterDemoData(name, body)), `hon.${signature}`])).rows[0];
     const runtime = runtimeFns.includes(signature), trigger = name.startsWith('guard_');
     assert.deepEqual(row, { exact: true, definer: !trigger, config: ['search_path=pg_catalog, hon'], runtime_execute: runtime, public_execute: false, overloads: 1 }, signature);
     assertions++;

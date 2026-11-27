@@ -16,8 +16,30 @@ export type WebsiteAiOp = typeof WEBSITE_AI_OPS[number];
 export const WEBSITE_AI_STATUSES = ['PENDING', 'CONFIGURATION_REQUIRED', 'BLOCKED', 'SENDING', 'UNKNOWN', 'FAILED', 'RESULT_RECORDED', 'RESULT_REJECTED', 'APPLIED', 'DISMISSED'] as const;
 export type WebsiteAiStatus = typeof WEBSITE_AI_STATUSES[number];
 export const WEBSITE_AI_REASONS = ['CONFIGURATION_REQUIRED', 'NO_ELIGIBLE_ROUTE', 'CUSTOMER_BUDGET_EXCEEDED', 'AI_SPEND_STOPPED', 'UNSUPPORTED_PROVIDER',
-  'INVALID_REQUEST', 'PROVIDER_REJECTED', 'PROVIDER_UNKNOWN', 'ROUTE_STALE', 'RESULT_BUDGET_EXCEEDED', 'RESULT_INVALID', 'SUBJECT_STALE', 'GATE_CLOSED'] as const;
+  'INVALID_REQUEST', 'PROVIDER_REJECTED', 'PROVIDER_UNKNOWN', 'ROUTE_STALE', 'RESULT_BUDGET_EXCEEDED', 'RESULT_INVALID', 'SUBJECT_STALE', 'GATE_CLOSED',
+  // 0690: an edit paid from creative credits that could not reserve them (nothing was sent).
+  'CREATIVE_CREDITS_EXHAUSTED', 'CREATIVE_NOT_PRICED', 'CREATIVE_NOT_ELIGIBLE', 'CREATIVE_EDIT_IN_PROGRESS'] as const;
 export type WebsiteAiReason = typeof WEBSITE_AI_REASONS[number];
+/**
+ * 0690: what the next AI website edit is paid with. CREATIVE_CREDITS when the creative program is on, the school is
+ * eligible for creative credits (a paid HON OS subscription, or a funded free trial spending its TRIAL lot, 0683) and HQ
+ * published the website rate; otherwise INCLUDED_AI (the 0550 allowance), which is what unpaid schools use. Owner
+ * decisions 2026-11-24.
+ */
+export type WebsiteAiPrice =
+  | { paidWith: 'CREATIVE_CREDITS'; creditsPerEdit: number; availableCredits: number }
+  | { paidWith: 'INCLUDED_AI'; creditsPerEdit: null; availableCredits: null };
+export function verifyWebsiteAiPrice(value: unknown): WebsiteAiPrice {
+  const fail = (): never => { throw new Error('SCHOOL_WEBSITE_AI_RESPONSE_DRIFT'); };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
+  const v = value as Record<string, unknown>;
+  if (Object.keys(v).sort().join() !== 'availableCredits,creditsPerEdit,paidWith') fail();
+  const count = (n: unknown, min: number) => Number.isSafeInteger(n) && (n as number) >= min && (n as number) <= 1_000_000_000;
+  if (v.paidWith === 'INCLUDED_AI' && v.creditsPerEdit === null && v.availableCredits === null) return { paidWith: 'INCLUDED_AI', creditsPerEdit: null, availableCredits: null };
+  if (v.paidWith === 'CREATIVE_CREDITS' && count(v.creditsPerEdit, 1) && count(v.availableCredits, 0))
+    return { paidWith: 'CREATIVE_CREDITS', creditsPerEdit: v.creditsPerEdit as number, availableCredits: v.availableCredits as number };
+  return fail();
+}
 
 type Props = Record<string, unknown>;
 export type WebsiteAiEdit =

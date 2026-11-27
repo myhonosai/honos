@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "f539c9c4d65b50c69cfe81290d0ccdba361d5dabc089e826fad91807e1f1efc0",
+  "chainSha256": "97c125ca3bc221dd313d222b50c4b100b35292ee4a0b7869ce1e7edaf87d1e39",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -1005,6 +1005,62 @@
     {
       "file": "0682_crm_board_text_opt_out.sql",
       "sha256": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7"
+    },
+    {
+      "file": "0683_hon_os_trial_creative_credits.sql",
+      "sha256": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5"
+    },
+    {
+      "file": "0684_creative_studio_photo_avatars.sql",
+      "sha256": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e"
+    },
+    {
+      "file": "0685_kai_teaching_journal.sql",
+      "sha256": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a"
+    },
+    {
+      "file": "0686_monthly_goal_plan.sql",
+      "sha256": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42"
+    },
+    {
+      "file": "0687_conversation_ai_test_chat.sql",
+      "sha256": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6"
+    },
+    {
+      "file": "0688_ai_fallback_policy_order_exclusion.sql",
+      "sha256": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4"
+    },
+    {
+      "file": "0689_ai_school_cost_alerts.sql",
+      "sha256": "b6a23f776622a3a55ee0a000fc8ed48f4026e5316f961beaa222a4627aa9164e"
+    },
+    {
+      "file": "0690_website_ai_creative_credits.sql",
+      "sha256": "99a98eb93b208d3b629ecde76d0691f178b86002019fafb94b8f782fae04821c"
+    },
+    {
+      "file": "0691_creative_media_storage.sql",
+      "sha256": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
+    },
+    {
+      "file": "0692_creative_asset_review.sql",
+      "sha256": "ca1abe10915b73e7e78ab0eb147ba208a1b3d2ec856c8e6fb624fa6ebd4e9c59"
+    },
+    {
+      "file": "0693_school_voice_apps.sql",
+      "sha256": "3732a33c60a4ab592768b344c57b5a5fea56d51bdcbe11502509ec6765e5e7da"
+    },
+    {
+      "file": "0694_hq_calls.sql",
+      "sha256": "828b4f102f63cbef9b14462338b1e15ea89258ee0f23e654c112435723555015"
+    },
+    {
+      "file": "0695_school_blast_audience_filters.sql",
+      "sha256": "eecde1129b9abe9eee70caa069b445b4c384a903df4a34108a26cb8b323140c9"
+    },
+    {
+      "file": "0696_hq_enter_school.sql",
+      "sha256": "2e38b91671c07cd55e2a1bd7ed3579ddf3be6bf3b654511c7f8dca56856bb909"
     },
     {
       "file": "0697_hon_os_plan_features.sql",

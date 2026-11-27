@@ -21,7 +21,7 @@ function generation(status: CreativeGeneration['status'], extra: Partial<Creativ
   return { generationId: id(962), schoolId: scope.schoolId, operationCode: 'avatar.video', mediaKind: 'VIDEO', units: 15, format: 'PORTRAIT', prompt: input.script,
     status, failureReason: status === 'FAILED' ? 'PROVIDER_REJECTED' : status === 'UNDER_REVIEW' ? 'PROVIDER_UNKNOWN' : null, reservedCredits: 750,
     chargedCredits: charged ? 750 : null, createdAt: '2026-11-12T06:00:00.000Z', completedAt: done ? '2026-11-12T06:00:05.000Z' : null,
-    assets: status === 'SUCCEEDED' ? [{ assetId: id(963), ordinal: 1, mediaType: 'video/mp4', width: 1080, height: 1920, durationSeconds: 15, origin: 'SYNTHETIC' }] : [], ...extra };
+    assets: status === 'SUCCEEDED' ? [{ assetId: id(963), ordinal: 1, mediaType: 'video/mp4', width: 1080, height: 1920, durationSeconds: 15, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] : [], ...extra };
 }
 function video(status: CreativeGeneration['status'] = 'SUCCEEDED', extra: Partial<CreativeAvatarVideo> = {}, g: Partial<CreativeGeneration> = {}): CreativeAvatarVideo {
   const gen = generation(status, g);

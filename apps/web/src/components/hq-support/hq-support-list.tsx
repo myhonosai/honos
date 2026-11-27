@@ -7,7 +7,7 @@ import { useConcealment, useSupportCommand, type SupportOutcome } from './model'
 import { HqSupportListView, openInputFrom, type OpenDraft, type SchoolsState, type SupportListState } from './list-view';
 
 /**
- * HQ support case list (B-HQ-2). Leaving the tab or a session end hides every case, drops the open form and any kept
+ * HQ support case list (B-HQ-2). A session end hides every case, drops the open form and any kept
  * command; "Show again" reads fresh. Every command answer is followed by a fresh read. The server decides who may read.
  */
 export function HqSupportList({ api = supportApi }: { api?: SupportApi }): React.ReactElement {

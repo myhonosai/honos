@@ -249,8 +249,29 @@ describe('existing HQ transport and verified receipt', () => {
     const ui = readFileSync('src/components/hq-onboarding-panel.tsx', 'utf8');
     expect(ui).toContain('bindSchoolCreationPrivacy');
     const privacy = readFileSync('src/components/hq-onboarding-controller.ts', 'utf8');
-    for (const event of ['blur', 'pagehide', 'visibilitychange', 'HON_SESSION_INVALIDATED_EVENT', 'HON_SCHOOL_CONTEXT_CHANGED_EVENT']) expect(privacy).toContain(event);
+    for (const event of ['HON_SESSION_INVALIDATED_EVENT', 'HON_SCHOOL_CONTEXT_CHANGED_EVENT']) expect(privacy).toContain(event);
+    // Owner 2026-11-26: leaving the HQ tab or window hides nothing.
+    for (const event of ["'blur'", "'pagehide'"]) expect(privacy).not.toContain(event);
     expect(ui).toContain('useHqModern');
     expect(ui).not.toContain('COMPLETE');
+  });
+});
+
+describe('create-school step 2: pick a plan', () => {
+  it('shows the plan step for the new school with a skip link to its page, in every language', async () => {
+    const { CreatedSchoolPlanStep } = await import('../src/components/hq-onboarding-panel');
+    const api = { read: vi.fn(), assign: vi.fn(), remove: vi.fn() };
+    for (const [language, title] of [['en', 'Step 2: Pick a plan for this school'], ['ko', '2단계: 이 도장의 플랜 선택'], ['es', 'Paso 2: Elige un plan para esta escuela']] as const) {
+      const html = renderToStaticMarkup(<CreatedSchoolPlanStep schoolId={receipt.schoolId} language={language} formattingLocale="en-US" api={api as never}/>);
+      expect(html).toContain(title);
+      expect(html).toContain(`href="/hq/schools/${receipt.schoolId}#plan"`);
+      expect(html).toContain('data-hq-school-plan="loading"'); // plan facts only after the server read
+    }
+    expect(api.assign).not.toHaveBeenCalled();
+  });
+  it('renders the plan step only inside the verified receipt', () => {
+    const source = readFileSync(new URL('../src/components/hq-onboarding-panel.tsx', import.meta.url), 'utf8');
+    const receiptBlock = source.slice(source.indexOf('<h3 id="hq-school-created">'), source.indexOf('</section> : <form'));
+    expect(receiptBlock).toContain('<CreatedSchoolPlanStep schoolId={state.receipt.schoolId}');
   });
 });

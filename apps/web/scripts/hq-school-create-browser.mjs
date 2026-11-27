@@ -151,7 +151,7 @@ try {
       await capture(s, `localized-${language}-${width}-${mode.replaceAll(' ', '-')}`);
       assert(await s.page.evaluate(() => {
         const creation = document.querySelector('[data-hq-create-private]'), directory = document.querySelector('[data-hq-directory-facts]');
-        window.dispatchEvent(new Event('blur'));
+        window.dispatchEvent(new Event('hon:school-context-changed'));
         return creation.hidden && creation.inert && directory.hidden && directory.inert;
       }), 'Private DOM must conceal in the same event turn');
       assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic Legal Name'));
@@ -176,7 +176,7 @@ try {
     await check(size + ': unknown outcome locks details and explicit retry preserves exact payload/key', async () => {
       assert.equal(s.f.commands.length, 1); assert(await s.panel.getByLabel('Legal organization name', { exact: true }).isDisabled());
       const original = s.f.commands[0]; assert.equal(original.marker, 'hq-school-provisioning'); assert.equal(original.expectedPrincipalId, principalId); assert.equal(JSON.parse(original.body).initialTier, 'COMPLETE');
-      await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      await s.page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed')));
       assert(await s.page.locator('[data-hq-directory-facts]').evaluate(node => node.hidden && node.inert));
       assert(!(await s.page.locator('body').innerText()).includes('Private Synthetic School'));
       // Coming back re-runs both reads by themselves: the owner check and one directory read.
@@ -209,7 +209,7 @@ try {
     let started; const commandStarted = new Promise(done => { started = done; });
     const s = await open('create-inflight', { width: 390, height: 844 }, f => { f.gate = gate; f.commandStarted = started; });
     await authorize(s); await fill(s); await submit(s); await commandStarted;
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await s.page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed')));
     assert.equal(await s.panel.locator('input').count(), 0);
     release(); await idle(s); assert.equal(await s.panel.locator('input').count(), 0); assert.equal(await s.panel.getByRole('heading', { name: 'School creation receipt', exact: true }).count(), 0);
     await authorize(s); assert(await s.panel.getByRole('button', { name: 'Retry exact creation request', exact: true }).isVisible()); assert.equal(s.f.commands.length, 1);
@@ -254,7 +254,7 @@ try {
     assert.equal(s.f.commands.length, 2); assert.deepEqual(s.f.commands[1], original);
     assert.equal(s.f.requests.size, 1); assert.equal(await s.panel.locator('input').count(), 0);
     assert.equal(await s.panel.getByRole('heading', { name: hqSchoolText('en', 'receiptTitle'), exact: true }).count(), 0);
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await s.page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed')));
     s.f.mode = 'ready'; await authorize(s);
     assert(!(await s.panel.getByRole('checkbox').isChecked()));
     assert(await s.panel.getByLabel(hqSchoolText('en', 'schoolName'), { exact: true }).isDisabled());

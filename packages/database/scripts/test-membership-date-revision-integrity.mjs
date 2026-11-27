@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { flexibleBillingAccountsFixture, requireFlexibleBillingAccountsLocalUrls } from './flexible-billing-accounts-local-guard.mjs';
 import { confirmationFor, membershipFixtureQuery } from './membership-activation-test-support.mjs';
+import { bodyAfterHqVisit } from './hq-visit-lift.mjs';
 
 // Disposable-localhost proof for the 0178 membership date revisions (E1b-1). Every command runs through the real
 // MembershipDateRevisionService against the restricted runtime role; the owner connection only builds fixtures and
@@ -72,7 +73,7 @@ try {
     assert.ok(body, `0178 defines ${signature}`);
     const row = (await admin.query(`SELECT p.prosrc=$2 exact,p.prosecdef definer,has_function_privilege($1,p.oid,'EXECUTE') runtime_execute,
       has_function_privilege('public',p.oid,'EXECUTE') public_execute,(SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)::int overloads,
-      array_length(p.proconfig,1) settings FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, body, `hon.${signature}`])).rows[0];
+      array_length(p.proconfig,1) settings FROM pg_proc p WHERE p.oid=$3::regprocedure`, [runtimeUrl.username, bodyAfterHqVisit(signature, body), `hon.${signature}`])).rows[0];
     assert.deepEqual(row, { exact: true, definer: !plain.includes(signature), runtime_execute: entry.includes(signature), public_execute: false, overloads: 1, settings: 1 }, signature);
     assertions++;
   }
@@ -764,7 +765,7 @@ try {
     }
     for (const name of readers) {
       assert.ok(latest[name], `${name} defined outside 0178`);
-      assert.equal((await sql('SELECT count(*)::int n FROM pg_proc WHERE pronamespace=\'hon\'::regnamespace AND proname=$1 AND prosrc=$2', [name, latest[name]]))[0].n, 1, `${name} unchanged`);
+      assert.equal((await sql('SELECT count(*)::int n FROM pg_proc WHERE pronamespace=\'hon\'::regnamespace AND proname=$1 AND prosrc=$2', [name, bodyAfterHqVisit(name, latest[name])]))[0].n, 1, `${name} unchanged`);
       assertions++;
     } }
 
