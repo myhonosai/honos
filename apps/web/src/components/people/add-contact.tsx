@@ -20,15 +20,19 @@ export function saveAfterError(error: unknown, name: string): AddContactSave {
  * The Add contact button and its form on Contacts. One press makes one capsule (plan plus five keys); while its outcome
  * is unknown or partly saved the form is locked and "Try again" resends that capsule exactly. The capsule lives in
  * memory only and is dropped on a definite answer, on Start over, or when the school changes (the parent re-keys us).
+ * `hold` lets the page keep the capsule while this form is replaced (school pages conceal on blur): the form comes back
+ * locked on the same capsule, so retyping can never add the same person a second time.
  */
-export function AddContact({ scope, language, onAdded, api = addContactApi, newKey = () => crypto.randomUUID(), initialOpen = false }: {
-  scope: ContactScope; language: string; onAdded?: (added: ContactAdded) => void; api?: AddContactApi; newKey?: () => string; initialOpen?: boolean;
+export function AddContact({ scope, language, onAdded, api = addContactApi, newKey = () => crypto.randomUUID(), initialOpen = false, hold }: {
+  scope: ContactScope; language: string; onAdded?: (added: ContactAdded) => void; api?: AddContactApi; newKey?: () => string; initialOpen?: boolean; hold?: { current: ContactCapsule | null };
 }): React.ReactElement {
   const t = (key: AddContactKey, vars?: Record<string, string>) => addContactText(language, key, vars);
-  const [open, setOpen] = useState(initialOpen);
-  const [form, setForm] = useState<ContactForm>(EMPTY);
-  const [save, setSave] = useState<AddContactSave>({ state: 'IDLE' });
-  const held = useRef<ContactCapsule | null>(null), alive = useRef(true);
+  const own = useRef<ContactCapsule | null>(null), held = hold ?? own, alive = useRef(true);
+  // A capsule kept by the page for this same school: its outcome is unknown, so the form returns locked on it.
+  const [kept0] = useState<ContactCapsule | null>(() => held.current && held.current.schoolId === scope.schoolId.toLowerCase() ? held.current : null);
+  const [open, setOpen] = useState(initialOpen || kept0 !== null);
+  const [form, setForm] = useState<ContactForm>(kept0 ? kept0.form : EMPTY);
+  const [save, setSave] = useState<AddContactSave>(kept0 ? { state: 'UNCERTAIN' } : { state: 'IDLE' });
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const ids = { title: useId(), given: useId(), family: useId(), email: useId(), phone: useId(), phoneHelp: useId(), childGiven: useId(), childFamily: useId(), help: useId() };
 
@@ -41,7 +45,7 @@ export function AddContact({ scope, language, onAdded, api = addContactApi, newK
       (error) => { if (!alive.current) return; const next = saveAfterError(error, capsule.plan.label);
         if (next.state === 'DENIED' || next.state === 'REJECTED') { if (held.current === capsule) held.current = null; }
         setSave(next); });
-  }, [api, onAdded]);
+  }, [api, onAdded, held]);
 
   const onSave = () => {
     const built = buildContactPlan(form);
@@ -97,7 +101,7 @@ export function AddContact({ scope, language, onAdded, api = addContactApi, newK
       <div className={styles.actions}>
         {kept ? <>
           <button type="button" className={styles.primary} onClick={onRetry}>{t('retry')}</button>
-          {save.state === 'UNCERTAIN' ? <button type="button" className={styles.secondary} onClick={onDiscard}>{t('discard')}</button> : null}
+          <button type="button" className={styles.secondary} onClick={onDiscard}>{t('discard')}</button>
         </> : <button type="submit" className={styles.primary} disabled={busy}>{busy ? t('saving') : t('save')}</button>}
       </div>
     </form>

@@ -116,6 +116,15 @@ it('shows one Add contact button, and the open form asks for the parent and the 
   expect(addContactText('en', 'saved', { name: 'Dana Lee' })).toContain('Dana Lee was added');
 });
 
+it('a request kept by the page comes back locked on the same request, never as an empty form', () => {
+  const hold = { current: capsule() };
+  const back = renderToStaticMarkup(<AddContact scope={scope} language="en" hold={hold}/>);
+  for (const text of ['<form', 'Try again', 'Start over', 'We could not confirm everything was saved']) expect(back).toContain(text);
+  expect(back).toContain(`value="${hold.current.form.givenName}"`); expect(back).not.toContain('>Adding…<');
+  const other = renderToStaticMarkup(<AddContact scope={{ ...scope, schoolId: id(77) }} language="en" hold={hold}/>);
+  expect(other).not.toContain('<form');
+});
+
 it('Contacts shows the button only once the school is verified', () => {
   const props: PeopleViewProps = { language: 'en', waiting: false, concealed: false, hasSchool: true, list: { state: 'LOADING' }, record: { state: 'NONE' }, selectedId: null,
     outcome: null, locked: false, canRetry: false, filters: NO_CONTACT_FILTERS, options: null, addSlot: <button type="button">Add contact</button> } as unknown as PeopleViewProps;
