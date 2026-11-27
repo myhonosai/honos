@@ -12,14 +12,21 @@ import { saasUuid } from './saas-billing.js';
 
 /** TRIAL (0683): a free trial's own creative credits, granted at trial start and expiring when the trial ends. */
 export type SaasCreativeLotKind = 'INCLUDED_MONTHLY' | 'PROMOTIONAL' | 'ADJUSTMENT' | 'PURCHASED_TOPUP' | 'TRIAL';
-export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO';
+/** WEBSITE (0690): AI website edits, one REQUEST each, always PROVISIONAL; never a Creative Studio generation. */
+export type SaasCreativeMediaKind = 'IMAGE' | 'VIDEO' | 'WEBSITE';
 export type SaasCreativeBillingUnit = 'IMAGE' | 'VIDEO_SECOND' | 'REQUEST';
 export type SaasCreativeRateBasis = 'PROVISIONAL' | 'VERIFIED_COST';
 export type SaasCreativePackageCode = 'STARTER' | 'GROWTH' | 'CREATOR';
 export type SaasCreativeEligibilityReason = 'PROGRAM_INACTIVE' | 'SCHOOL_NOT_ACTIVE' | 'PAID_ACCESS_REQUIRED' | 'ENTITLEMENT_NOT_IN_EFFECT'
   | 'HON_OS_SUBSCRIPTION_REQUIRED' | 'SUBSCRIPTION_NOT_IN_SERVICE' | 'VERIFIED_PAYMENT_REQUIRED' | 'WINDOW_UNAVAILABLE' | 'WINDOW_NOT_PAID';
 const LOT_KINDS: readonly SaasCreativeLotKind[] = ['INCLUDED_MONTHLY','PROMOTIONAL','ADJUSTMENT','PURCHASED_TOPUP','TRIAL'];
-const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO'];
+const MEDIA: readonly SaasCreativeMediaKind[] = ['IMAGE','VIDEO','WEBSITE'];
+/** Whether a rate's unit, per-request cap and basis fit its kind, exactly as the database checks it (0202, 0690). */
+export function saasCreativeRateFitsKind(kind: unknown, unit: unknown, maxUnits: unknown, basis: unknown): boolean {
+  if (kind === 'IMAGE') return unit === 'IMAGE' || unit === 'REQUEST';
+  if (kind === 'VIDEO') return unit === 'IMAGE' || unit === 'VIDEO_SECOND' || unit === 'REQUEST';
+  return kind === 'WEBSITE' && unit === 'REQUEST' && maxUnits === 1 && basis === 'PROVISIONAL';
+}
 const UNITS: readonly SaasCreativeBillingUnit[] = ['IMAGE','VIDEO_SECOND','REQUEST'];
 const BASES: readonly SaasCreativeRateBasis[] = ['PROVISIONAL','VERIFIED_COST'];
 const PACKAGES: readonly SaasCreativePackageCode[] = ['STARTER','GROWTH','CREATOR'];
@@ -181,7 +188,7 @@ export function validateSaasCreativeRatesInput(value: unknown): SaasCreativeRate
     const r = record(item, invalid);
     exactKeys(r, ['operationCode','mediaKind','displayName','billingUnit','creditsPerUnit','maxUnitsPerRequest','costEvidenceId'], invalid);
     if (typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(MEDIA, r.mediaKind) || !text(r.displayName, 120)
-      || !has(UNITS, r.billingUnit) || (r.mediaKind === 'IMAGE' && r.billingUnit === 'VIDEO_SECOND')
+      || !has(UNITS, r.billingUnit) || !saasCreativeRateFitsKind(r.mediaKind, r.billingUnit, r.maxUnitsPerRequest, r.costEvidenceId === null ? 'PROVISIONAL' : 'VERIFIED_COST')
       || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000)) invalid();
     return { ...r, costEvidenceId: r.costEvidenceId === null ? null : saasUuid(r.costEvidenceId) } as unknown as SaasCreativeRateDraft;
   });
@@ -309,6 +316,7 @@ function validateRates(value: unknown, internal: boolean): void {
     exactKeys(r, internal ? [...keys, 'costEvidenceId'] : keys, drift);
     if (typeof r.operationCode !== 'string' || !OPERATION.test(r.operationCode) || !has(MEDIA, r.mediaKind) || !text(r.displayName, 120)
       || !has(UNITS, r.billingUnit) || !isInt(r.creditsPerUnit, 1, 1_000_000) || !isInt(r.maxUnitsPerRequest, 1, 1000) || !has(BASES, r.rateBasis)
+      || !saasCreativeRateFitsKind(r.mediaKind, r.billingUnit, r.maxUnitsPerRequest, r.rateBasis)
       || (internal && (!nullable(r.costEvidenceId, isUuid) || (r.rateBasis === 'VERIFIED_COST') !== (r.costEvidenceId !== null)))) drift();
   });
 }
