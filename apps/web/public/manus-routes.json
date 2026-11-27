@@ -181,6 +181,10 @@
       "title": "HON | Social accounts"
     },
     {
+      "path": "/staff/marketing/social/posts",
+      "title": "HON | Posts"
+    },
+    {
       "path": "/staff/marketing/social/return",
       "title": "HON | Finishing connection"
     },
@@ -195,6 +199,14 @@
     {
       "path": "/sites/:slug/:page",
       "title": "School website"
+    },
+    {
+      "path": "/sites/:slug/privacy",
+      "title": "School privacy policy"
+    },
+    {
+      "path": "/sites/:slug/terms",
+      "title": "School terms of use"
     },
     {
       "path": "/staff/creative-studio",
@@ -243,6 +255,10 @@
     {
       "path": "/calendars/:publicId",
       "title": "Class calendar"
+    },
+    {
+      "path": "/v/:token",
+      "title": "School video"
     },
     {
       "path": "/agreement/:token",
@@ -569,6 +585,10 @@
       "title": "HON | Human Teaching Studio"
     },
     {
+      "path": "/staff/teaching-assistant/journal",
+      "title": "HON | Kai teaching journal"
+    },
+    {
       "path": "/staff/teaching-assistant",
       "title": "HON | Kai teaching drafts"
     },
@@ -689,6 +709,10 @@
       "title": "HON HQ | School texting numbers"
     },
     {
+      "path": "/hq/communications/settings",
+      "title": "HON HQ | Texts and email settings"
+    },
+    {
       "path": "/hq/growth/prospects",
       "title": "HON HQ | Prospects"
     },
@@ -741,8 +765,16 @@
       "title": "HON HQ | Marketing & Creative"
     },
     {
+      "path": "/hq/marketing/ads/return",
+      "title": "HON HQ | Finishing connection"
+    },
+    {
       "path": "/hq/marketing/creative",
       "title": "HON HQ | Creative Studio"
+    },
+    {
+      "path": "/hq/marketing/creative/designs",
+      "title": "HON HQ | Designs"
     },
     {
       "path": "/hq/marketing/promotions",

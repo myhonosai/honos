@@ -1,4 +1,6 @@
 'use client';
+import { SchoolSwitcher } from '../school-switcher/switcher';
+import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
 import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -17,6 +19,7 @@ import { SCHOOL_SHELL_NAV, schoolShellHref } from './catalog';
 import { concealShellPrivateNow, onShellPrivacyEvent } from './privacy';
 import { HON_SCREENSAVER_SHOWN_EVENT, ScreensaverController } from './screensaver';
 import { SchoolShellFrame, type ShellViewState } from './frame';
+import { shellForgetLegacy, shellRecolorLegacy } from './legacy-recolor';
 import { AppearanceOwner } from './appearance-owner';
 import { SCHOOL_TOUR_OPEN_EVENT, markSchoolTourSeen } from './tour';
 import { SchoolShellProvider, type SchoolShellState } from './context';
@@ -43,6 +46,13 @@ const paints = (element: Element): boolean => {
   const background = style.backgroundColor, image = style.backgroundImage;
   return !(background === 'transparent' || background === 'rgba(0, 0, 0, 0)') || Boolean(image && image !== 'none');
 };
+/** A light page surface written for the old light body (no image, near-white colour): recoloured, never kept. */
+const paintsLight = (element: Element): boolean => {
+  const style = getComputedStyle(element);
+  if (style.backgroundImage && style.backgroundImage !== 'none') return false;
+  const lightness = shellColorLightness(style.backgroundColor);
+  return lightness !== null && lightness >= 0.75;
+};
 /** Relative lightness 0..1 of a computed `rgb()`/`rgba()` colour; null when it cannot be read. */
 export function shellColorLightness(color: string): number | null {
   const match = /^rgba?\(\s*(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)/.exec(color.trim());
@@ -62,8 +72,8 @@ export function shellNeedsLegacyCanvas(main: Element | null): boolean {
   const first = main?.firstElementChild ?? null;
   if (!main || !first || first.closest('[data-hon-native]') || first.hasAttribute('data-hon-native')) return false;
   const heading = main.querySelector('h1') ?? main.querySelector('h2');
-  if (!heading) return !paints(first);
-  for (let node: Element | null = heading; node && node !== main; node = node.parentElement) if (paints(node)) return false;
+  if (!heading) return !paints(first) || paintsLight(first);
+  for (let node: Element | null = heading; node && node !== main; node = node.parentElement) if (paints(node)) return paintsLight(node);
   const lightness = shellColorLightness(getComputedStyle(heading).color);
   return lightness === null || lightness < 0.5;
 }
@@ -91,6 +101,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   const entry = controller.current;
   const [snapshot, setSnapshot] = useState<EntrySnapshot>(entry.snapshot());
   const [schoolName, setSchoolName] = useState<string | null>(null);
+  const [schoolChoices, setSchoolChoices] = useState<readonly StaffReportingSchoolChoice[]>([]);
   const [mode, setMode] = useState<HonInterfaceTheme>(DEFAULT_HON_INTERFACE_THEME);
   const [viewState, setViewState] = useState<ShellViewState>('LOCAL');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -136,6 +147,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     const abort = new AbortController();
     schoolEntryApi.choices(AbortSignal.any([abort.signal, AbortSignal.timeout(8000)])).then(result => {
       if (abort.signal.aborted || result.state !== 'SELECTION_REQUIRED') return;
+      setSchoolChoices(result.schools); // the account switcher reuses this list; it reads nothing itself
       const match = result.schools.find(choice => choice.schoolId === selection.schoolId && choice.organizationId === selection.organizationId);
       if (match && entry.snapshot().phase === 'READY' && entry.snapshot().selection?.schoolId === match.schoolId) setSchoolName(match.schoolName);
     }, () => {});
@@ -216,17 +228,31 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
   }, []);
   const closeMenu = useCallback(() => { setMenuOpen(false); tour(null); }, [tour]);
 
-  // Transitional: pages not yet migrated to the UI system may rely on the old light page
-  // background. Give those (and only those) a light canvas so their text stays readable.
+  // Transitional: pages not yet migrated to the UI system were written for the old light page background. Those (and
+  // only those) are recoloured onto the dark tokens (consistent look C1) instead of sitting on a light card.
   useEffect(() => {
     const main = document.getElementById('hon-main');
     if (!main) return;
-    const classify = () => main.setAttribute('data-canvas', shellNeedsLegacyCanvas(main) ? 'legacy-light' : 'native');
+    // Decide from the page as written: start each page with the recolouring off, and once the page's heading is in,
+    // keep the decision for this page (the recoloured heading would otherwise read as a native page and flip back).
+    main.removeAttribute('data-canvas');
+    let decided: boolean | null = null;
+    const classify = () => {
+      const legacy = decided ?? shellNeedsLegacyCanvas(main);
+      if (main.querySelector('h1, h2')) decided = legacy;
+      if (legacy) shellRecolorLegacy(main);
+      main.setAttribute('data-canvas', legacy ? 'legacy-light' : 'native');
+    };
     classify();
     // Pages render their heading after their own reads; re-check (once per frame) as the page fills in.
     let frame = 0;
-    const observer = new MutationObserver(() => { if (!frame) frame = requestAnimationFrame(() => { frame = 0; classify(); }); });
-    observer.observe(main, { childList: true, subtree: true });
+    // A class or style toggle on an existing element (a selected chip, an error row) re-measures it and everything
+    // under it (#509 review P2). The recolouring writes only data-hon-* and data-canvas, so this cannot loop.
+    const observer = new MutationObserver(records => {
+      for (const record of records) if (record.type === 'attributes' && record.target instanceof Element) shellForgetLegacy(record.target);
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; classify(); });
+    });
+    observer.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
     return () => { observer.disconnect(); if (frame) cancelAnimationFrame(frame); };
   }, [path]);
   const dialogOpen = menuOpen || tourStep !== null;
@@ -282,6 +308,7 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
+    switcher={<SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} schools={schoolChoices} />}
     search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
     tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>

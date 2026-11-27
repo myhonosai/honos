@@ -11,6 +11,7 @@ import pg from 'pg';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import http from 'node:http';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -194,6 +195,21 @@ try {
   // Authorization is unchanged by the ordering fix: an unknown signed subject is still 403.
   assert.equal((await httpRead(`unknown-${randomUUID()}`)).status, 403);
   await verifyClassSessionsReadSecurity(admin, runtime.username);
+
+  // 0645 (launch-readiness [25]): a session shorter than one minute cannot be stored, so no positive sub-millisecond
+  // session can publish equal startsAt/endsAt and invalidate a page; exactly one minute is stored. Plus the 011 section.
+  await clearSessions();
+  for (const length of ["interval '0.0005 seconds'", "interval '59.999999 seconds'"]) {
+    await assert.rejects(() => sql(`INSERT INTO hon.class_sessions(id,organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy,status)
+      VALUES($1,$2,$3,$4,'Too short',now()+interval '1 day',now()+interval '1 day'+${length},10,'WALK_IN','SCHEDULED')`, [randomUUID(), ids.org, ids.school, ids.program]),
+    (error) => error.code === '23514' && error.constraint === 'class_sessions_minimum_duration', `a ${length} session is refused`);
+  }
+  await sql(`INSERT INTO hon.class_sessions(id,organization_id,school_id,program_id,name,starts_at,ends_at,capacity,booking_policy,status)
+    VALUES($1,$2,$3,$4,'One minute',now()+interval '1 day',now()+interval '1 day 1 minute',10,'WALK_IN','SCHEDULED')`, [randomUUID(), ids.org, ids.school, ids.program]);
+  const verify = readFileSync(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
+  const section = verify.split('-- Class session minimum duration exact verification (0645')[1]?.split('-- End class session minimum duration exact verification.')[0];
+  assert(section, 'Missing the 0645 011 section');
+  await sql(section.replace(/^[^\n]*\n/, ''));
   await clearSessions();
   console.log('PASS: signed-session HTTP 200 for PostgreSQL microsecond collisions; SQL order, 50-row boundary, published UTC millisecond timestamps and the closed contract share one (published millisecond, UUID) rule; exact ties, reverse UUIDs, non-UTC session TimeZone and repeat reads verified.');
 } finally {

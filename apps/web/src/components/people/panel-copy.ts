@@ -2,7 +2,7 @@
 const en = {
   fullScreen: 'Full screen', keepSide: 'Keep at side', close: 'Close', panelLabel: 'Contact card',
   inboxes: 'Inboxes', textsInbox: 'Texts inbox', familyInbox: 'Family messages inbox',
-  details: 'Details', textsTitle: 'Texts', textsCount: '{n} texts with this person.', textsOpen: 'Open the texts inbox',
+  details: 'Details', textsTitle: 'Texts', textsCount: '{n} texts with this person.', textsOpen: 'Open the texts inbox', textsNone: 'No texts with this person yet.', textsMore: 'More texts are in the texts inbox.',
   familyMessagesTitle: 'Family messages', familyMessagesLoading: 'Reading family messages…', familyMessagesNone: 'This family has not written yet.',
   familyMessagesDenied: 'Your role doesn’t include family messages.', familyMessagesUnavailable: 'Family messages could not be loaded.',
   newCount: '{n} new', familyWrote: 'Family wrote', schoolReplied: 'School replied', you: 'You', schoolStaff: 'School staff',
@@ -15,7 +15,7 @@ export type PanelKey = keyof typeof en;
 const ko: Record<PanelKey, string> = {
   fullScreen: '전체 화면', keepSide: '옆에 두기', close: '닫기', panelLabel: '연락처 카드',
   inboxes: '받은편지함', textsInbox: '문자 받은편지함', familyInbox: '가족 메시지 받은편지함',
-  details: '세부 정보', textsTitle: '문자', textsCount: '이 사람과의 문자 {n}건.', textsOpen: '문자 받은편지함 열기',
+  details: '세부 정보', textsTitle: '문자', textsCount: '이 사람과의 문자 {n}건.', textsOpen: '문자 받은편지함 열기', textsNone: '이 사람과 주고받은 문자가 아직 없습니다.', textsMore: '나머지 문자는 문자 받은편지함에 있습니다.',
   familyMessagesTitle: '가족 메시지', familyMessagesLoading: '가족 메시지를 읽는 중…', familyMessagesNone: '이 가족은 아직 메시지를 보내지 않았습니다.',
   familyMessagesDenied: '내 역할에는 가족 메시지가 포함되지 않습니다.', familyMessagesUnavailable: '가족 메시지를 불러오지 못했습니다.',
   newCount: '새 메시지 {n}건', familyWrote: '가족이 보냄', schoolReplied: '학교가 답장함', you: '나', schoolStaff: '학교 직원',
@@ -27,7 +27,7 @@ const ko: Record<PanelKey, string> = {
 const es: Record<PanelKey, string> = {
   fullScreen: 'Pantalla completa', keepSide: 'Mantener al lado', close: 'Cerrar', panelLabel: 'Ficha de contacto',
   inboxes: 'Bandejas', textsInbox: 'Bandeja de textos', familyInbox: 'Bandeja de mensajes de familias',
-  details: 'Datos', textsTitle: 'Textos', textsCount: '{n} textos con esta persona.', textsOpen: 'Abrir la bandeja de textos',
+  details: 'Datos', textsTitle: 'Textos', textsCount: '{n} textos con esta persona.', textsOpen: 'Abrir la bandeja de textos', textsNone: 'Aún no hay textos con esta persona.', textsMore: 'Hay más textos en la bandeja de textos.',
   familyMessagesTitle: 'Mensajes de la familia', familyMessagesLoading: 'Leyendo mensajes de la familia…', familyMessagesNone: 'Esta familia aún no ha escrito.',
   familyMessagesDenied: 'Su función no incluye los mensajes de familias.', familyMessagesUnavailable: 'No se pudieron cargar los mensajes de la familia.',
   newCount: '{n} nuevos', familyWrote: 'Escribió la familia', schoolReplied: 'Respondió la escuela', you: 'Usted', schoolStaff: 'Personal de la escuela',

@@ -7,6 +7,7 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { MayaError, mayaApi, type MayaApi } from './http';
 import { MayaAtRiskView, type MayaListState } from './view';
 import { MayaAsk } from './maya-ask';
+import { MayaCheckIn } from './maya-check-in';
 import type { HonConversationApi } from '../hon-command/hon-conversation-http';
 
 /**
@@ -63,5 +64,6 @@ export function MayaAtRisk({ api = mayaApi, honApi }: { api?: MayaApi; honApi?: 
   return <MayaAtRiskView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'} hasSchool={Boolean(orgId && schoolId)}
     list={list} onRefresh={() => setRefresh((n) => n + 1)} onMore={onMore}
     renderAsk={orgId && schoolId ? (s) => <MayaAsk key={`${refresh}:${s.membershipId}`} school={{ organizationId: orgId, schoolId }} membershipId={s.membershipId} givenName={s.givenName}
-      {...(honApi ? { api: honApi } : {})} /> : undefined} />;
+      {...(honApi ? { api: honApi } : {})} /> : undefined}
+    renderCheckIn={orgId && schoolId ? (s) => <MayaCheckIn key={`${refresh}:${s.membershipId}:send`} school={{ organizationId: orgId, schoolId }} membershipId={s.membershipId} givenName={s.givenName} /> : undefined} />;
 }

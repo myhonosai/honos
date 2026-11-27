@@ -9,6 +9,7 @@
 .flash { margin: 0; padding: var(--hon-space-2, 8px) var(--hon-space-3, 12px); border-radius: var(--hon-radius-sm, 8px); border: 1px solid var(--hon-border, #24405a);
   background: var(--hon-surface-2, #13263a); font-size: var(--hon-text-sm, 13px); }
 .flash[data-tone='ERROR'] { border-color: color-mix(in srgb, var(--bad) 60%, transparent); }
+.flash[data-tone='WARN'] { border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
 .flash[data-tone='OK'] { border-color: color-mix(in srgb, var(--on) 55%, transparent); }
 .card { display: grid; gap: var(--hon-space-3, 12px); padding: var(--hon-space-4, 16px); border: 1px solid var(--hon-border, #24405a); border-radius: var(--hon-radius-md, 12px);
   background: var(--hon-surface, #0d1a38); min-width: 0; }
@@ -131,3 +132,14 @@
   .tabs button { padding: 0 var(--hon-space-3, 12px); }
   .channelName, .lengthLabel { min-width: 0; width: 100%; }
 }
+
+/* CE2 Try it */
+.chat { display: grid; gap: var(--hon-space-3, 12px); margin: 0; padding: 0; list-style: none; }
+.turn { display: grid; gap: var(--hon-space-2, 8px); }
+.bubble { max-width: min(560px, 88%); padding: var(--hon-space-3, 12px); border-radius: var(--hon-radius-md, 12px); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble[data-who='you'] { justify-self: end; background: color-mix(in srgb, var(--hon-accent, #2f7bff) 22%, var(--hon-surface-2, #13263a)); }
+.bubble[data-who='ai'] { justify-self: start; border: 1px solid var(--hon-border, #24405a); background: var(--hon-surface-2, #13263a); }
+.bubble small { display: block; margin-bottom: 4px; color: var(--hon-text-muted, #a9b8d6); font-size: var(--hon-text-xs, 12px); }
+.badge { display: inline-block; margin-top: var(--hon-space-2, 8px); padding: 2px 8px; border-radius: 999px; font-size: var(--hon-text-xs, 12px);
+  background: color-mix(in srgb, var(--hon-warning, #e5a524) 22%, transparent); color: var(--hon-text, #eef3ff); }
+.note { justify-self: start; color: var(--hon-text-muted, #a9b8d6); font-size: var(--hon-text-sm, 13px); }

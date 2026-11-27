@@ -1,0 +1,73 @@
+/** HQ ad account connection wording (en / ko / es), 0677. Labels only; nothing here is authority or an outcome. */
+const en = {
+  adAccounts: 'Ad accounts',
+  GOOGLE_ADS: 'Google Ads', META_ADS: 'Meta (Facebook and Instagram)',
+  connected: 'Connected', notConnected: 'Not connected', noSpend: 'Cannot publish or spend',
+  loading: 'Reading ad accounts…', unavailable: 'Ad accounts could not be read. Nothing is shown.',
+  connect: 'Connect', connecting: 'Opening the sign-in page…', disconnect: 'Disconnect', confirmDisconnect: 'Yes, disconnect {name}', cancel: 'Cancel',
+  disconnectAsk: 'Disconnect {name}? HON stops using this account. Nothing at Google or Meta is deleted.',
+  connectedBy: 'Connected by {name} on {date}.',
+  notEnabled: 'Connecting is not turned on yet. It turns on after the deploy, once David approves it.',
+  ownerOnly: 'Only the HQ owner can connect or disconnect HON\'s ad accounts.',
+  help: 'Connecting only links the account. HON does not publish ads or spend money from here.',
+  failed: 'That did not work. Nothing was connected. Try again.', rateLimited: 'Too many tries this hour. Try again later.',
+  denied: 'Your HQ access does not allow this. Nothing changed.', changed: 'Someone changed this account. Reload and try again.',
+  disconnected: '{name} is disconnected.', notRemoved: 'HON stopped using it, but Zernio could not remove it. You can remove it in Zernio.',
+  returnTitle: 'Finishing connection', returnWorking: 'Checking which account you connected…',
+  returnDone: 'Connected {count} account(s).', returnNone: 'No new account was found. Make sure you picked an ad account, then try again.',
+  returnConflicts: '{count} account(s) belong to a school and were skipped.',
+  returnMissing: 'This page needs a connection link. Start again from Marketing & Creative.',
+  returnExpired: 'This connection link expired after 10 minutes. Start again from Marketing & Creative.',
+  returnInvalid: 'This connection link was already used or is not yours. Start again from Marketing & Creative.',
+  back: 'Back to Marketing & Creative',
+};
+type Key = keyof typeof en;
+const ko: Record<Key, string> = {
+  adAccounts: '광고 계정',
+  GOOGLE_ADS: 'Google Ads', META_ADS: 'Meta (Facebook 및 Instagram)',
+  connected: '연결됨', notConnected: '연결되지 않음', noSpend: '게시 또는 지출 불가',
+  loading: '광고 계정을 읽는 중…', unavailable: '광고 계정을 읽을 수 없습니다. 아무것도 표시되지 않습니다.',
+  connect: '연결', connecting: '로그인 페이지를 여는 중…', disconnect: '연결 해제', confirmDisconnect: '예, {name} 연결 해제', cancel: '취소',
+  disconnectAsk: '{name} 연결을 해제할까요? HON은 이 계정 사용을 중지합니다. Google 또는 Meta에서는 아무것도 삭제되지 않습니다.',
+  connectedBy: '{name}님이 {date}에 연결함.',
+  notEnabled: '아직 연결 기능이 켜지지 않았습니다. 배포 후 David가 승인하면 켜집니다.',
+  ownerOnly: 'HQ 소유자만 HON의 광고 계정을 연결하거나 해제할 수 있습니다.',
+  help: '연결은 계정을 링크할 뿐입니다. HON은 여기서 광고를 게시하거나 비용을 쓰지 않습니다.',
+  failed: '실패했습니다. 아무것도 연결되지 않았습니다. 다시 시도하세요.', rateLimited: '이번 시간에 시도가 너무 많습니다. 나중에 다시 시도하세요.',
+  denied: 'HQ 권한으로는 이 작업을 할 수 없습니다. 아무것도 바뀌지 않았습니다.', changed: '다른 사람이 이 계정을 변경했습니다. 새로 고친 후 다시 시도하세요.',
+  disconnected: '{name} 연결이 해제되었습니다.', notRemoved: 'HON은 사용을 중지했지만 Zernio에서 제거하지 못했습니다. Zernio에서 직접 제거할 수 있습니다.',
+  returnTitle: '연결 완료 중', returnWorking: '연결한 계정을 확인하는 중…',
+  returnDone: '계정 {count}개를 연결했습니다.', returnNone: '새 계정을 찾지 못했습니다. 광고 계정을 선택했는지 확인한 후 다시 시도하세요.',
+  returnConflicts: '계정 {count}개는 학교 소유라서 건너뛰었습니다.',
+  returnMissing: '이 페이지에는 연결 링크가 필요합니다. 마케팅 및 크리에이티브에서 다시 시작하세요.',
+  returnExpired: '연결 링크가 10분 후 만료되었습니다. 마케팅 및 크리에이티브에서 다시 시작하세요.',
+  returnInvalid: '이미 사용했거나 본인의 링크가 아닙니다. 마케팅 및 크리에이티브에서 다시 시작하세요.',
+  back: '마케팅 및 크리에이티브로 돌아가기',
+};
+const es: Record<Key, string> = {
+  adAccounts: 'Cuentas de anuncios',
+  GOOGLE_ADS: 'Google Ads', META_ADS: 'Meta (Facebook e Instagram)',
+  connected: 'Conectada', notConnected: 'Sin conectar', noSpend: 'No puede publicar ni gastar',
+  loading: 'Leyendo cuentas de anuncios…', unavailable: 'No se pudieron leer las cuentas de anuncios. No se muestra nada.',
+  connect: 'Conectar', connecting: 'Abriendo la página de inicio de sesión…', disconnect: 'Desconectar', confirmDisconnect: 'Sí, desconectar {name}', cancel: 'Cancelar',
+  disconnectAsk: '¿Desconectar {name}? HON deja de usar esta cuenta. No se borra nada en Google ni en Meta.',
+  connectedBy: 'Conectada por {name} el {date}.',
+  notEnabled: 'La conexión aún no está activada. Se activa después del despliegue, cuando David la apruebe.',
+  ownerOnly: 'Solo el dueño de HQ puede conectar o desconectar las cuentas de anuncios de HON.',
+  help: 'Conectar solo vincula la cuenta. HON no publica anuncios ni gasta dinero desde aquí.',
+  failed: 'No funcionó. No se conectó nada. Inténtalo de nuevo.', rateLimited: 'Demasiados intentos esta hora. Inténtalo más tarde.',
+  denied: 'Tu acceso de HQ no permite esto. No cambió nada.', changed: 'Alguien cambió esta cuenta. Recarga e inténtalo de nuevo.',
+  disconnected: '{name} está desconectada.', notRemoved: 'HON dejó de usarla, pero Zernio no pudo quitarla. Puedes quitarla en Zernio.',
+  returnTitle: 'Terminando la conexión', returnWorking: 'Comprobando qué cuenta conectaste…',
+  returnDone: 'Se conectaron {count} cuenta(s).', returnNone: 'No se encontró ninguna cuenta nueva. Asegúrate de elegir una cuenta de anuncios e inténtalo de nuevo.',
+  returnConflicts: '{count} cuenta(s) pertenecen a una escuela y se omitieron.',
+  returnMissing: 'Esta página necesita un enlace de conexión. Empieza de nuevo desde Marketing y creatividad.',
+  returnExpired: 'Este enlace de conexión venció a los 10 minutos. Empieza de nuevo desde Marketing y creatividad.',
+  returnInvalid: 'Este enlace de conexión ya se usó o no es tuyo. Empieza de nuevo desde Marketing y creatividad.',
+  back: 'Volver a Marketing y creatividad',
+};
+export type AdKey = Key;
+export function adText(language: string, key: Key, vars: Record<string, string> = {}): string {
+  const text = (language === 'ko' ? ko : language === 'es' ? es : en)[key];
+  return text.replace(/\{(\w+)\}/g, (_, name: string) => vars[name] ?? '');
+}

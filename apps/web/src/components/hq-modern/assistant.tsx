@@ -4,24 +4,30 @@ import { useLocale } from '../localization/provider';
 import React, { useEffect, useRef, useState } from 'react';
 import { HonCore, useHqModern } from './shell';
 import { HqIcon } from './icon';
+import { HqHonPanel } from '../hq-hon/hq-hon-panel';
 import styles from './hq-modern.module.css';
 
-export function HonComposer({ context, compact = false }: { context: string; compact?: boolean }): React.ReactElement {
-  const { t,text,number,money,date,formattingLocale } = useLocale();
-  const { draft, setDraft } = useHqModern();
+/**
+ * The home "Message HON" box. It never sends by itself: pressing send opens the HON panel with the question filled in,
+ * and the panel's own Ask (with the server's budget, routing and provider checks) is the only way a question is asked.
+ */
+export function HonComposer({ context }: { context: string }): React.ReactElement {
+  const { t } = useLocale();
+  const { draft, setDraft, openAssistant } = useHqModern();
+  const ready = draft.trim().length > 0;
   return <div className={styles.composer}>
-    <label className={styles.srOnly} htmlFor={compact ? 'hon-panel-draft' : 'hon-dashboard-draft'}>{t("Unsent message draft for HON")}</label>
-    <div className={styles.composerInput} data-page-context={context}>
-      <textarea id={compact ? 'hon-panel-draft' : 'hon-dashboard-draft'} maxLength={2000} rows={compact ? 3 : 1} placeholder={t("Message HON…")} value={draft} onChange={(event) => setDraft(event.target.value)} aria-describedby={compact ? 'hon-panel-status' : 'hon-dashboard-status'}/>
-      <button type="button" disabled aria-label={t("Send unavailable: HQ conversation service is not connected")}><HqIcon name="arrow"/></button>
-    </div>
-    <div className={styles.composerFooter}><button type="button" disabled className={styles.voice}><HqIcon name="mic"/>{t("Talk to HON")}</button><small>{t("Microphone off")}</small>{draft && <button type="button" className={styles.textButton} onClick={() => setDraft('')}>{t("Clear draft")}</button>}</div>
-    <p id={compact ? 'hon-panel-status' : 'hon-dashboard-status'} className={styles.finePrint}>{t("Conversation unavailable. This draft stays on this page and is not sent or saved.")}</p>
+    <label className={styles.srOnly} htmlFor="hon-dashboard-draft">{t("Message HON")}</label>
+    <form className={styles.composerInput} data-page-context={context} onSubmit={(event) => { event.preventDefault(); if (ready) openAssistant(); }}>
+      <textarea id="hon-dashboard-draft" maxLength={2000} rows={1} placeholder={t("Message HON…")} value={draft} onChange={(event) => setDraft(event.target.value)} aria-describedby="hon-dashboard-status"/>
+      <button type="submit" disabled={!ready} aria-label={t("Continue with HON")}><HqIcon name="arrow"/></button>
+    </form>
+    <p id="hon-dashboard-status" className={styles.finePrint}>{t("Press the arrow to open HON with your question. You review it and press Ask to send.")}</p>
   </div>;
 }
 
 export function HonAssistant({ context, onMinimize }: { context: string; onMinimize: () => void }): React.ReactElement {
-  const { t,text,number,money,date,formattingLocale } = useLocale();
+  const { t,text } = useLocale();
+  const { draft } = useHqModern();
   const panel = useRef<HTMLElement>(null);
   const [mobile, setMobile] = useState(false);
   useEffect(() => { panel.current?.querySelector<HTMLButtonElement>('button')?.focus(); }, []);
@@ -53,8 +59,8 @@ export function HonAssistant({ context, onMinimize }: { context: string; onMinim
     }
   }}>
     <header><HonCore small/><div><h2>{t("HON")}</h2><p>{t("Executive AI Coordinator")}</p></div><button type="button" aria-label={t("Minimize HON assistant")} onClick={onMinimize}><HqIcon name="minimize"/></button></header>
-    <div className={styles.assistantBody}><p className={styles.contextPill}>{t("Current page: {page}",{page:text(context)})}</p><h3>{t("How can HON help here?")}</h3><p>{t("HQ conversation is not connected yet. Your company tools remain available.")}</p><p className={styles.finePrint}>{t("Page context is a navigation label, not permission to access records or perform actions.")}</p></div>
-    <HonComposer context={context} compact/>
-    <footer><HqIcon name="shield" size={18}/><span>{t("Consequential actions require the appropriate authorization and approval.")}</span></footer>
+    <div className={styles.assistantBody}><p className={styles.contextPill}>{t("Current page: {page}",{page:text(context)})}</p>
+      {/* The real HQ Ask HON (0263): the server decides access, budget, route and provider; nothing is sent until Ask. */}
+      <HqHonPanel agentKey="hon" name="HON" compact initialQuestion={draft}/></div>
   </aside>;
 }

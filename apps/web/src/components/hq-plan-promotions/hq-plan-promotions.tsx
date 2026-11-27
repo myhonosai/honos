@@ -8,7 +8,7 @@ import { createInputFrom, updateInputFrom, type PromotionDraft } from './model';
 import { HqPlanPromotionsView, type PromotionForm, type PromotionListState, type PromotionOutcome, type PromotionPreviewState } from './view';
 
 /**
- * HQ Plan promotions. Leaving the tab or a session end hides every promotion, drops the open form, the start check and any
+ * HQ Plan promotions. A session end hides every promotion, drops the open form, the start check and any
  * kept command; "Show again" reads fresh. Start always echoes the digest of a preview read just now, so the database refuses
  * it if the wording, audience or offer changed since. Every command answer is followed by a fresh read. The server decides
  * who may read or write.

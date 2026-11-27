@@ -99,13 +99,14 @@ const props = (patch: Partial<CreativeViewProps> = {}): CreativeViewProps => ({ 
 
 it('shows the separate HQ budget and turns requests off honestly when no provider is connected', () => {
   const html = renderToStaticMarkup(<HqCreativeView {...props()}/>);
-  expect(html).toContain('HQ budget, separate from schools');
+  expect(html).toContain('HQ’s own monthly limit, separate from schools');
+  expect(html).toContain('href="/hq/marketing/creative/designs"'); expect(html).toContain('Free, no AI.');
   expect(html).toContain('data-creative-provider="NOT_CONNECTED"');
-  expect(html).toContain("needs David&#x27;s approval");
+  expect(html).toContain("David approves the paid service");
   expect(html).toContain('data-creative-requests-off=""');
   expect(html).toMatch(/<fieldset[^>]*disabled=""/);
   expect(html).not.toContain('data-creative-budget-form');
-  expect(html).toContain('1 synthetic test result(s). No media is stored yet.');
+  expect(html).toContain('1 test result(s). Real pictures can’t be saved here yet.');
   const on = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ provider: 'CONNECTED' })) } })}/>);
   expect(on).not.toContain('data-creative-requests-off');
   const unset = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ provider: 'CONNECTED',

@@ -16,7 +16,7 @@ type Lock = 'NONE' | 'SENDING' | 'KEPT';
 const newKey = () => globalThis.crypto.randomUUID();
 
 /**
- * HQ exception policy (D10). Leaving the tab (blur, hidden tab, page hide) or a session end hides the policy, retires reads and
+ * HQ exception policy (D10). A session end hides the policy, retires reads and
  * drops any kept decision; "Show again" reads it fresh. Every decision answer is followed by a fresh read.
  */
 export function HqExceptionPolicy({ api = policyApi }: { api?: PolicyApi }): React.ReactElement {
@@ -38,11 +38,8 @@ export function HqExceptionPolicy({ api = policyApi }: { api?: PolicyApi }): Rea
       generation.current++; privacy.current++; pending.current = null; setLock(sending.current ? 'SENDING' : 'NONE');
       setConcealed(true); setState({ state: 'LOADING' }); setOutcome(null); setForm(null);
     };
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', conceal);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-    return () => { window.removeEventListener('blur', conceal); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', conceal);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal); };
   }, []);
 
   useEffect(() => {

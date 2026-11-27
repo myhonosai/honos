@@ -6,7 +6,7 @@ import { validateSaasCreativeHqWallet, validateSaasCreativeHqWalletList } from '
 import { CREDITS_LANGUAGES } from '../src/components/hq-creative-credits/copy';
 import { CreditsError, creditsApi } from '../src/components/hq-creative-credits/http';
 import { CreditsView, type CreditsViewProps } from '../src/components/hq-creative-credits/view';
-import { HQ_AI } from '../src/components/hq-modern/catalog';
+import { HQ_REVENUE } from '../src/components/hq-modern/catalog';
 import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { list, school, school2, wallet } from './hq-creative-credits-fixtures';
 
@@ -64,10 +64,10 @@ it('reads one school wallet only for the school asked, and a 401 ends the sessio
   expect(ended).toHaveBeenCalledTimes(1);
 });
 
-it('shows the program, packages, rates and school wallets, with no command anywhere', () => {
+it('shows the program, packages, rates and school wallets, with only the program switch as a command', () => {
   const html = view(), t = text(html);
   expect(t).toContain('Creative Credits');
-  expect(t).toContain('Nothing here turns the program on, charges a card or changes a purchase: payment collection is not connected.');
+  expect(t).toContain('Only the HQ owner can publish credit prices and turn the program on or off. Nothing here charges a card or changes a purchase: payment collection is not connected.');
   expect(html).toMatch(/data-testid="credits-program"[^>]*data-state="INACTIVE"/);
   expect(t).toContain('Once the program is on, each eligible paying school would receive 12,000 included credits a month.');
   expect(t).not.toContain('Each eligible paying school receives');
@@ -87,7 +87,7 @@ it('shows the program, packages, rates and school wallets, with no command anywh
   expect([...html.matchAll(/data-testid="credits-wallet"[^>]*data-attention="(\w+)"/g)].map((m) => m[1])).toEqual(['true', 'false']);
   // Read only: the only buttons are Refresh and one View wallet per school.
   const buttons = [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
-  expect(buttons).toEqual(['Refresh', 'View wallet', 'View wallet']);
+  expect(buttons).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet']);
   expect(html).toContain('aria-label="View wallet for Synthetic Dojo North"');
   expect(html).not.toMatch(/<form|<input|<textarea|<select/);
 });
@@ -115,7 +115,7 @@ it('shows one school wallet: balance, provider expense, unknown outcomes, adjust
   expect(t).toContain('Waiting for a verified payment');
   expect(t).toContain('Payment collection: not connected');
   const buttons = [...html.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
-  expect(buttons).toEqual(['Refresh', 'View wallet', 'View wallet', 'Close']);
+  expect(buttons).toEqual(['Refresh', 'Turn on', 'View wallet', 'View wallet', 'Close']);
   // An unknown provider cost is shown as unknown, never as zero.
   const unknown = wallet({ reservations: [{ ...wallet().reservations[1], status: 'RELEASED', statusReason: 'HQ_RESOLVED_NOT_CHARGED', settledAt: '2026-11-08T10:00:00.000Z', costStatus: 'UNKNOWN' }] });
   expect(text(view({ detail: { state: 'READY', schoolId: school, wallet: validateSaasCreativeHqWallet(unknown) } }))).toContain('Cost unknown (never counted as zero)');
@@ -127,7 +127,7 @@ it('shows nothing when a read is denied, unavailable or the session ended', () =
   expect(text(view({ detail: { state: 'DENIED', schoolId: school } }))).toContain('Your HQ access does not include this school\'s wallet. Nothing is shown.');
   expect(text(view({ detail: { state: 'UNAVAILABLE', schoolId: school } }))).toContain('This school\'s wallet could not be read. Nothing is shown.');
   const hidden = view({ concealed: true, detail: ready(), onShowAgain: () => {} });
-  expect(text(hidden)).toContain('Hidden while you were away or because your session ended.');
+  expect(text(hidden)).toContain('Hidden because your session ended. Sign in again, then choose Show again.');
   expect(text(hidden)).not.toContain('Synthetic Dojo');
   expect([...hidden.matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1])).toEqual(['Show again']);
   const empty = text(view({ wallets: { state: 'READY', view: validateSaasCreativeHqWalletList(list({ rates: null, wallets: [] })) } }));
@@ -140,7 +140,7 @@ it('has every wording key in Korean and Spanish, and is listed under AI', () => 
   for (const language of ['ko', 'es'] as const) expect(Object.keys(CREDITS_LANGUAGES[language]).sort()).toEqual(keys);
   expect(text(view({ language: 'ko' }))).toContain('크리에이티브 크레딧');
   expect(text(view({ language: 'es' }))).toContain('Créditos creativos');
-  expect(HQ_AI.some((entry) => entry.path === '/hq/creative-credits' && entry.title === 'Creative Credits')).toBe(true);
+  expect(HQ_REVENUE.some((entry) => entry.path === '/hq/creative-credits' && entry.title === 'Creative Credits')).toBe(true);
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')) as { routes: { path: string }[] };
   expect(manifest.routes.filter((r) => r.path === '/hq/creative-credits')).toHaveLength(1);
 });

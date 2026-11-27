@@ -7,7 +7,7 @@ import { contestText, type ContestKey } from './copy';
 import { ContestError, contestApi, type ContestApi } from './http';
 import { emptyDraft, formatMoney } from './form';
 import { useConcealment, useContestCommand, type ContestOutcome } from './model';
-import { ContestForm, Outcome, formatDay, statusTone, type SchoolChoices } from './parts';
+import { ContestForm, GoLiveGuide, Outcome, formatDay, statusTone, type SchoolChoices } from './parts';
 import styles from '../hq-access/hq-access.module.css';
 
 export type ContestListState = { state: 'LOADING' } | { state: 'DENIED' } | { state: 'UNAVAILABLE' } | { state: 'READY'; view: ChampionsContestList };
@@ -23,7 +23,7 @@ export const directorySchools: SchoolsLoader = async signal => {
 
 /**
  * HQ referral contests list and builder. Reads the newest 100 contests (optionally one status), and creates new drafts.
- * Leaving the tab or a session end hides everything and drops the form and any kept command. Each answer is followed by a
+ * A session end hides everything and drops the form and any kept command. Each answer is followed by a
  * fresh read; a new draft opens on its own page. The server decides who may read or create, every time.
  */
 export function HqContestsList({ api = contestApi, schools: loadSchools = directorySchools, navigate = (href: string) => { window.location.assign(href); } }:
@@ -89,6 +89,7 @@ export function HqContestsListView(p: Readonly<{ language: string; formattingLoc
     <div className={styles.notice} role="status"><p>{t('concealed')}</p><button type="button" className={styles.secondary} onClick={p.onReveal}>{t('reveal')}</button></div></section>;
   if (p.state.state === 'DENIED') return <section className={styles.access} data-hq-contests="denied">{head}<p className={styles.notice} role="status">{t('denied')}</p></section>;
   return <section className={styles.access} data-hq-contests={p.state.state.toLowerCase()} aria-busy={p.state.state === 'LOADING'}>{head}
+    <GoLiveGuide language={p.language}/>
     <div className={styles.filters} role="group" aria-label={t('filter')}>
       {[null, ...CHAMPIONS_CONTEST_STATUSES].map(s => <button key={s ?? 'ALL'} type="button" aria-pressed={p.filter === s} onClick={() => p.onFilter(s)}>{s ? t(s) : t('filterAll')}</button>)}
     </div>

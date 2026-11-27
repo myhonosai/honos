@@ -6,7 +6,7 @@ const c=require('@hon/contracts');
 const ids={pipe:randomUUID(),lead:randomUUID(),won:randomUUID(),person:randomUUID(),lead2:randomUUID(),org:randomUUID(),school:randomUUID()};
 const stage=(id,name,position,terminalStatus=null,openCount=0)=>({id,name,position,color:'BLUE',hidden:false,terminalStatus,openCount});
 const card={id:randomUUID(),version:1,status:'OPEN',stageId:ids.lead,personId:ids.person,givenName:'Ava',familyName:'Synthetic',email:null,phoneE164:null,
- programInterestCode:'Kids',sourceCode:'website',createdAt:'2026-11-16T10:00:00.000Z',closedAt:null,nextTrialAt:null,lastTrialAt:null};
+ programInterestCode:'Kids',sourceCode:'website',createdAt:'2026-11-16T10:00:00.000Z',closedAt:null,nextTrialAt:null,lastTrialAt:null,textOptedOut:false};
 const board={pipelines:[{id:ids.pipe,name:'New students',version:1}],pipeline:{id:ids.pipe,name:'New students',version:1},
  stages:[stage(ids.lead,'Lead',1,null,1),stage(ids.won,'Enrolled',2,'WON')],totals:{open:1,won:0,lost:0},status:'OPEN',leads:[card],truncated:false,limit:500};
 const ctx=(over={})=>({organizationId:ids.org,schoolId:ids.school,principalId:randomUUID(),principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),externalSubject:'oidc:owner',idempotencyKey:'',...over});

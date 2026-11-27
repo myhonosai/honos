@@ -125,7 +125,7 @@ function ClearForm({ row, t, locked, onClear, onOpenForm }: ExceptionAiViewProps
 type Pending = Readonly<{ key: string; school: string; input: AiExceptionAllowanceInput }>;
 
 /**
- * Container, mounted by the HQ access overview only while it shows customer facts (it unmounts on blur, hidden tab or
+ * Container, mounted by the HQ access overview only while it shows customer facts (it unmounts on a
  * session end, which drops any kept request). Every answer is followed by a fresh read; an unknown answer keeps the
  * exact request and key for Try again, and the database's version check means nothing is applied twice.
  */

@@ -56,7 +56,7 @@ separate page.
 - The person/family ids used by the card come from the server's card read, never typed.
 - Family messages: the school inbox read (max 200 threads, `FAMILY_MESSAGE_LIMITS.inbox`) is filtered in the browser
   to the card's family ids. Threads of other families are never rendered.
-- Slice B, migration **0401**: `hon.read_school_conversations` accepts an optional `personId` (uuid) filter, ANDed
+- Slice B, migration **0657**: `hon.read_school_conversations` accepts an optional `personId` (uuid) filter, ANDed
   with the existing filters, same caller check. The API controller accepts `personId` on the list query; the
   contract validates it as a lowercase UUID. The card asks for `status: 'ALL'` explicitly; the function's default
   (OPEN) is unchanged.
@@ -74,7 +74,7 @@ separate page.
 
 - **A (frontend only, stacked on #399):** panel with Side/Full/Close + remembered mode + URL; Edit profile pop-up (from #573); Family app
   access section; Family messages section; Texts counts + inbox link; menu/tab change; inbox links; en/ko/es copy.
-- **B (0401 + API + frontend, stacked on A):** `personId` filter; Texts section inline with reply.
+- **B (0657 + API + frontend, stacked on A):** `personId` filter; Texts section inline with reply.
 
 ## Tests
 

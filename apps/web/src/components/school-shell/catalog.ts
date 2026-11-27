@@ -40,7 +40,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Each specialist's workspace opens from that specialist's card on the AI Team page.
   { key: 'aiTeam', titleKey: 'navAiTeam', section: 'ai', routes: [r('/staff/ai-team', 'routeAiTeam'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork'),
     r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
-    h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
+    h('/staff/teaching-assistant', 'routeKai'), h('/staff/teaching-assistant/journal', 'routeKaiJournal'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
     h('/staff/ai-team/alex', 'routeAlex'), h('/staff/ai-team/jordan', 'routeJordan'), h('/staff/ai-team/claire', 'routeClaire'), h('/staff/ai-team/lena', 'routeLena')] },
   // Conversation AI answers the school's texts in Texts > Conversations (0364); its training and settings stay here.
   { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations/train-ai', 'routeTrainAi')] },
@@ -66,7 +66,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'email', titleKey: 'navEmail', section: 'communication', routes: [r('/staff/email', 'routeTextsSend'), r('/staff/email/history', 'routeTextsHistory'),
     r('/staff/email/templates', 'routeTextsTemplates'), r('/staff/email/opted-out', 'routeTextsOptedOut')] },
   { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements'), r('/staff/parent-app/curriculum', 'routeParentAppCurriculum')] },
-  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial')] },
+  { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial'), r('/staff/marketing/social/posts', 'routeSocialPosts')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/checkout-orders', 'routeCheckoutOrders')] },
   { key: 'pos', titleKey: 'navPos', section: 'finance', routes: [r('/staff/billing/pos', 'routePointOfSale')] },
   // Shopify (0405): the school's own store, read-only mirror plus connect, sync and disconnect.

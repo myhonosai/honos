@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, HttpExcepti
 import {
   WEBSITE_AI_LIMITS, applyWebsiteAiEdits, validateWebsiteAiApplyInput, validateWebsiteAiEditRequest, validateWebsiteAiProposal,
   verifySchoolWebsite, verifySchoolWebsiteRead, verifyWebsiteAiEditList, verifyWebsiteAiEditView,
-  type SchoolWebsite, type WebsiteAiEditView,
+  verifyWebsiteAiPrice, type SchoolWebsite, type WebsiteAiEditView, type WebsiteAiPrice,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -56,6 +56,10 @@ export class WebsiteAiService {
 
   list(context: SchoolWebsiteContext): Promise<WebsiteAiEditView[]> {
     return this.tx(context, false, async c => verifyWebsiteAiEditList((await c.query<{ data: unknown }>('SELECT hon.read_school_website_ai_edits($1,NULL) data', [context.externalSubject])).rows[0]?.data));
+  }
+  /** 0690: what the next edit is paid with (creative credits at the HQ rate, or included AI); nothing is reserved. */
+  price(context: SchoolWebsiteContext): Promise<WebsiteAiPrice> {
+    return this.tx(context, false, async c => verifyWebsiteAiPrice((await c.query<{ data: unknown }>('SELECT hon.read_school_website_ai_price($1) data', [context.externalSubject])).rows[0]?.data));
   }
   read(context: SchoolWebsiteContext, id: string): Promise<WebsiteAiEditView> { return this.view(context, id, false); }
   /** The same read inside a command (the request's key stays set). */

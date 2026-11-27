@@ -165,7 +165,7 @@ try {
       const s = await open(name, viewport); await ready(s);
       const text = await s.page.locator('[data-hq-support]').innerText();
       for (const expected of ['Owner cannot sign in', 'Invoice question for the organization', 'Synthetic Dojo', 'Synthetic Academy', t('wholeOrganization'), t('summaryUrgent')]) assert(text.includes(expected), expected);
-      assert(!(await s.page.locator('body').innerText()).includes('No service is called'));
+      assert(!(await s.page.locator('body').innerText()).includes('Nothing here does anything yet'));
       assert.equal(s.f.reads[0], '/v1/hq/support/cases?status=ACTIVE&limit=25');
       await capture(s, name, '[data-hq-support]'); await s.context.close();
     }
@@ -230,19 +230,17 @@ try {
     await capture(s, 'support-case-closed-mobile', '[data-hq-support-case]');
     await s.context.close();
   });
-  await check('leaving the tab hides every case and the open form; Show again reads fresh', async () => {
+  await check('leaving the tab hides nothing in HQ: cases and the open form stay, with no new read', async () => {
     const s = await open('support-conceal', { width: 1280, height: 900 }); await ready(s);
     await s.page.getByRole('button', { name: t('openCase'), exact: true }).click();
     await s.page.getByLabel(t('subject'), { exact: true }).fill('Private draft subject');
     const reads = s.f.reads.length;
-    await s.page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    await s.page.locator('[data-hq-support="concealed"]').waitFor();
-    const body = await s.page.locator('body').innerText();
-    assert(!body.includes('Owner cannot sign in') && !body.includes('Synthetic Academy'));
-    assert.equal(await s.page.locator('input[name="subject"]').count(), 0);
-    await s.page.getByRole('button', { name: t('reveal'), exact: true }).click(); await ready(s);
-    assert(s.f.reads.length > reads);
-    assert.equal(await s.page.locator('input[name="subject"]').count(), 0, 'the draft is not restored');
+    await s.page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
+    await s.page.waitForTimeout(300);
+    assert.equal(await s.page.locator('[data-hq-support="concealed"]').count(), 0);
+    assert((await s.page.locator('body').innerText()).includes('Owner cannot sign in'));
+    assert.equal(await s.page.getByLabel(t('subject'), { exact: true }).inputValue(), 'Private draft subject', 'the draft is kept');
+    assert.equal(s.f.reads.length, reads);
     await s.context.close();
   });
   await check('a person without HQ support access sees nothing', async () => {

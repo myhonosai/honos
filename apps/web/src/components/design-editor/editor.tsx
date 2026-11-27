@@ -16,6 +16,7 @@ import { NO_BRAND, type Brand } from './templates';
 import { DesignSaver, type SaveState } from './saver';
 import { decodePhoto, preparePhoto } from './photos';
 import { DesignsAccessError, DesignsRefusal, DesignsUnknown, type DesignsScope } from './http';
+import { useDesignWords } from './words';
 import { FONT_NAMES, designText, sizeMeasure, sizeName, type DesignKey } from './copy';
 import s from './design-editor.module.css';
 
@@ -30,8 +31,8 @@ type Drag = { mode: 'move' | 'resize'; handle: Handle | null; id: string; start:
 type Notice = { key: DesignKey; tone: 'warn' | 'info' } | null;
 
 /** Plain words for the save line under the toolbar. */
-export function saveStateText(language: string, state: SaveState): { text: string; tone: 'ok' | 'warn' | 'info' } {
-  const t = (key: DesignKey) => designText(language, key);
+export function saveStateText(language: string, state: SaveState, words: Readonly<Partial<Record<DesignKey, DesignKey>>> = {}): { text: string; tone: 'ok' | 'warn' | 'info' } {
+  const t = (key: DesignKey) => designText(language, words[key] ?? key);
   switch (state.kind) {
     case 'SAVED': return { text: t('saved'), tone: 'ok' };
     case 'SAVING': return { text: t('saving'), tone: 'info' };
@@ -78,7 +79,8 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   scope: DesignsScope; design: CreativeDesign; language: string; api: EditorApi; onBack: () => void; onReload: () => void; onChanged?: (design: CreativeDesign) => void;
   brand?: Brand;
 }): React.ReactElement {
-  const t = useCallback((key: DesignKey, vars?: Record<string, string>) => designText(language, key, vars), [language]);
+  const words = useDesignWords();
+  const t = useCallback((key: DesignKey, vars?: Record<string, string>) => designText(language, words[key] ?? key, vars), [language, words]);
   const size = sizeOf(initial.sizeCode);
   const [design, setDesign] = useState(initial);
   const [history, setHistory] = useState<History>(() => startHistory(initial.document));
@@ -320,7 +322,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     if (m && !element.locked) { event.preventDefault(); patch('nudge', { x: element.x + m[0], y: element.y + m[1] }); }
   };
 
-  const status = saveStateText(language, design.status === 'ARCHIVED' ? { kind: 'ARCHIVED' } : saveState);
+  const status = saveStateText(language, design.status === 'ARCHIVED' ? { kind: 'ARCHIVED' } : saveState, words);
   const box = element ? boxOf(element) : null;
   const handles: { h: Handle; x: number; y: number }[] = !element || element.locked || !editable ? []
     : element.kind === 'line' ? [{ h: 'start', x: element.x, y: element.y }, { h: 'end', x: element.x + element.w, y: element.y + element.h }]
@@ -468,7 +470,8 @@ export function Properties({ element: e, language, editable, patch, layer, remov
   patch: (field: string, value: Partial<CreativeDesignElement>) => void; layer: (move: LayerMove) => void; remove: () => void; duplicate: () => void;
   swatch?: string | null;
 }): React.ReactElement {
-  const t = (key: DesignKey) => designText(language, key);
+  const words = useDesignWords();
+  const t = (key: DesignKey) => designText(language, words[key] ?? key);
   const off = !editable;
   // A plain call, not a nested component, so React keeps the same input while a colour is dragged.
   const color = (label: string, value: string, onChange: (value: string) => void) =>

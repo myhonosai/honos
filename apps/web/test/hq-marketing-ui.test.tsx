@@ -7,7 +7,7 @@ import { MarketingError, marketingApi, marketingCampaignId, marketingCommandErro
 import { budgetMinorFrom, budgetTextFrom, createInputFrom, draftFrom, marketingOutcomeFor, updateInputFrom } from '../src/components/hq-marketing/model';
 import { HqMarketingView, type MarketingViewProps } from '../src/components/hq-marketing/view';
 import { marketingText } from '../src/components/hq-marketing/copy';
-import { HQ_NAV, hqPageLabel } from '../src/components/hq-modern/catalog';
+import { HQ_GROWTH, hqPageLabel } from '../src/components/hq-modern/catalog';
 
 const yes = () => true;
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
@@ -115,7 +115,7 @@ it('hides every change for a read-only viewer and for archived campaigns', () =>
 });
 
 it('shows nothing while concealed, loading or denied', () => {
-  for (const [p, text] of [[{ concealed: true }, 'hidden while this tab'], [{ state: { state: 'LOADING' } }, 'Reading HQ campaigns'],
+  for (const [p, text] of [[{ concealed: true }, 'Hidden because your session ended'], [{ state: { state: 'LOADING' } }, 'Reading HQ campaigns'],
     [{ state: { state: 'DENIED' } }, 'does not include marketing']] as const) {
     const html = renderToStaticMarkup(<HqMarketingView {...props(p as Partial<MarketingViewProps>)}/>);
     expect(html).toContain(text); expect(html).not.toContain('SPRING-GOOGLE'); expect(html).not.toContain('data-ad-account');
@@ -123,7 +123,7 @@ it('shows nothing while concealed, loading or denied', () => {
 });
 
 it('is reachable from HQ navigation with three languages', () => {
-  expect(HQ_NAV.map(i => i.path)).toContain('/hq/marketing');
+  expect(HQ_GROWTH.map(i => i.path)).toContain('/hq/marketing');
   expect(hqPageLabel('/hq/marketing')).toBe('Marketing & Creative');
   const manifest = JSON.parse(readFileSync('public/manus-routes.json', 'utf8')) as { routes: { path: string }[] };
   expect(manifest.routes.filter(r => r.path === '/hq/marketing')).toHaveLength(1);

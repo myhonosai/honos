@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { Text } from '../ui/text';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { createCommandKeys } from '../schedule/booking-model';
 import { FamilyGate } from '../screens/FamilyStates';
 import { Body, Button, Card, Loading, Pill, StateMessage, Title } from '../ui/parts';
 import { radius, space, TOUCH, type, useColors } from '../ui/theme';
+import { MessageAlertOpenedContext } from './opened-alert';
 
 export const MESSAGE_REFUSALS: Record<string, string> = {
   FAMILY_MESSAGES_RATE_LIMITED: 'Too many messages were sent in the last hour. Please try again later.',
@@ -40,6 +41,9 @@ export function MessagesScreen() {
     return result;
   }, [api]);
   useEffect(() => { void load(); return () => { generation.current++; }; }, [load]);
+  // A tap on a school message alert (0658) reads the conversation again, even if this tab was already open.
+  const alertOpened = useContext(MessageAlertOpenedContext);
+  useEffect(() => { if (alertOpened) void load(); }, [alertOpened, load]);
 
   const submit = async () => {
     const text = draft;

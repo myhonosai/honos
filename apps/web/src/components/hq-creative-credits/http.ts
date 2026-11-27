@@ -1,6 +1,8 @@
 import {
   SAAS_COMMANDS, saasUuid, validateSaasCreativeAdjustmentReceipt, validateSaasCreativeCostInput, validateSaasCreativeCostReceipt, validateSaasCreativeDebitInput,
-  validateSaasCreativeGrantInput, validateSaasCreativeHqWallet, validateSaasCreativeHqWalletList, validateSaasCreativeResolveInput, validateSaasCreativeResolveReceipt,
+  validateSaasCreativeGrantInput, validateSaasCreativeHqWallet, validateSaasCreativeProgramInput, validateSaasCreativeProgramReceipt,
+  validateSaasCreativeRatesInput, validateSaasCreativeRatesReceipt, type SaasCreativeProgramInput, type SaasCreativeProgramReceipt,
+  type SaasCreativeRatesInput, type SaasCreativeRatesReceipt, validateSaasCreativeHqWalletList, validateSaasCreativeResolveInput, validateSaasCreativeResolveReceipt,
   type SaasCreativeAdjustmentReceipt, type SaasCreativeCostInput, type SaasCreativeCostReceipt, type SaasCreativeDebitInput, type SaasCreativeGrantInput,
   type SaasCreativeHqWallet, type SaasCreativeHqWalletList, type SaasCreativeResolveInput, type SaasCreativeResolveReceipt,
 } from '@hon/contracts';
@@ -10,7 +12,8 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
  * HQ creative credits (CW1). Every read is a plain same-origin GET that sends only Accept; the database decides who may
  * read (HQ billing readers) on every request. The HQ owner's corrections (grant, remove, settle a generation, record a
  * provider cost) each send their own X-HON-Human-Command and an Idempotency-Key, and the database decides again that
- * the caller is the HQ owner. Nothing here changes the program, the rates, a purchase or a payment.
+ * the caller is the HQ owner. The HQ owner can also publish credit prices and turn the program on or off. Nothing here
+ * changes a purchase or a payment.
  */
 export type CreditsErrorKind =
   /** Session ended. */ 'SESSION'
@@ -142,6 +145,29 @@ export const creditsApi = {
       return command(`${BASE}/reservations/${id}/provider-cost`, SAAS_COMMANDS.recordCreativeCost, body, k, (v) => {
         const r = validateSaasCreativeCostReceipt(v), x = r.reservation;
         if (!same(x.reservationId, id) || !same(x.schoolId, school) || x.providerCostMicrounits !== body.providerCostMicrounits) throw new Error('mismatch');
+        return r;
+      }, signal, owned);
+    });
+  },
+  /** HQ owner: turn the creative credit program on or off. The receipt must show the requested state at the next version. */
+  program(input: SaasCreativeProgramInput, key: string, signal: AbortSignal, owned: Owned): Promise<SaasCreativeProgramReceipt> {
+    return Promise.resolve().then(() => {
+      const [body, k] = checked(() => [validateSaasCreativeProgramInput(input), saasUuid(key)] as const);
+      return command(`${BASE}/program`, SAAS_COMMANDS.setCreativeProgram, body, k, (v) => {
+        const r = validateSaasCreativeProgramReceipt(v);
+        if (r.program.status !== (body.action === 'ACTIVATE' ? 'ACTIVE' : 'INACTIVE') || (!r.replayed && r.program.version !== body.expectedVersion + 1)) throw new Error('mismatch');
+        return r;
+      }, signal, owned);
+    });
+  },
+  /** HQ owner: publish credit prices per generation type. The receipt must list exactly the prices sent. */
+  rates(input: SaasCreativeRatesInput, key: string, signal: AbortSignal, owned: Owned): Promise<SaasCreativeRatesReceipt> {
+    return Promise.resolve().then(() => {
+      const [body, k] = checked(() => [validateSaasCreativeRatesInput(input), saasUuid(key)] as const);
+      return command(`${BASE}/rates`, SAAS_COMMANDS.publishCreativeRates, body, k, (v) => {
+        const r = validateSaasCreativeRatesReceipt(v);
+        const sent = body.rates.map((x) => `${x.operationCode}:${x.creditsPerUnit}`).sort().join(','), got = r.rates.rates.map((x) => `${x.operationCode}:${x.creditsPerUnit}`).sort().join(',');
+        if (sent !== got) throw new Error('mismatch');
         return r;
       }, signal, owned);
     });

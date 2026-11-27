@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "0da594ec1e77304518b9b323dd3738750e80fe6a8d618eb354fb81839edd7831",
+  "chainSha256": "d62526f05c35d531a976200ca4b28340115b611ac06f53e07df8f8195417e158",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -843,6 +843,10 @@
       "sha256": "7362638a07207f403ab148cfe070ba926fd475aa8425043520157f192060b9d1"
     },
     {
+      "file": "0626_pgcrypto_public_gen_random_bytes.sql",
+      "sha256": "c03e173886417c5333301ea5ecd30a2c910e973a9be23bfaced4bdfcabe88e13"
+    },
+    {
       "file": "0627_public_checkout_orders.sql",
       "sha256": "6c73bead610c6b342574f43981ff1db898972f79807d05f2fb66a37395fd44c8"
     },
@@ -907,20 +911,140 @@
       "sha256": "2b2fd7eeae5284bde08d53829dd5326014ea6dda055133de22eee8099f19d251"
     },
     {
+      "file": "0643_claire_kpi_report.sql",
+      "sha256": "1c73a358be6a451881cf5062cc8841558e86e3d0544b7f33bcd1548952c39fcf"
+    },
+    {
       "file": "0644_booking_invoice_security_hygiene.sql",
       "sha256": "a68665a8b72140b15ec4e75d28d3776755e4fec8655bb70f1e20be2935d0d5b7"
+    },
+    {
+      "file": "0645_class_session_minimum_duration.sql",
+      "sha256": "1405bb87561d44bb445ece0346306b989d43031650a390da64bd0a79e621a2fe"
+    },
+    {
+      "file": "0646_maya_renewal_prep.sql",
+      "sha256": "9545d6adbd226e5e3f90e8c00367f9c549103b51ad2aad9093a04b7c261eeea0"
+    },
+    {
+      "file": "0647_chad_approved_draft_send.sql",
+      "sha256": "6402f9db63e16cd3e3b6bf835c4897afbd00cc503befe4aa6cd52de66f06f3a9"
+    },
+    {
+      "file": "0649_maya_check_in_draft_send.sql",
+      "sha256": "195209e1a5305ab44e7767faf7dbd7235c04bc6797e4e4eb81bd4888e6929d90"
+    },
+    {
+      "file": "0650_chad_lead_plan.sql",
+      "sha256": "ffee9d0d50932243760ae91110facdeae3fdb99c547d9849551e570574bb0487"
+    },
+    {
+      "file": "0651_hq_creative_cost_basis.sql",
+      "sha256": "f7464205ca3d3cfe0f8901793711e1a49075d71d3d400b87b458050d7349d219"
+    },
+    {
+      "file": "0652_staff_agent_speech.sql",
+      "sha256": "fdb50164a94331c08a57e6e034953a3c4c5addc68c16d764c8705736f960d408"
+    },
+    {
+      "file": "0653_school_blast_pictures.sql",
+      "sha256": "6b0265d1b04f091d3bbe9f43ab7f0a1bb2e9a0a0fa4b8f1a40418b98f0f1c397"
+    },
+    {
+      "file": "0654_school_media_video.sql",
+      "sha256": "9d7b524e42313514d56d340a37759bef2c5bd7499a80444fa966e553ceef8d4e"
     },
     {
       "file": "0655_mobile_handoff_single_use.sql",
       "sha256": "f1402acb87ba279c13a9461bb0ec41f97d8d2eeffd3401c57d0de21653374a83"
     },
     {
-      "file": "0671_creative_media_storage.sql",
+      "file": "0656_person_profile_details.sql",
+      "sha256": "b924c8276373b1188e43fe983a874ec6bafe0fc9c48fb3a20f792a4ada787240"
+    },
+    {
+      "file": "0657_school_conversations_person_filter.sql",
+      "sha256": "03d6cb0071d0669f1b8416786e6a2eac33f7e16cd83daa32e09162fa30e0382e"
+    },
+    {
+      "file": "0658_parent_push_staff_choice.sql",
+      "sha256": "4a6cc907ac65dd0ecd598e3708a13a2617ef7b840e92559bb6b43f04f6e2a8cc"
+    },
+    {
+      "file": "0659_school_contact_membership_details.sql",
+      "sha256": "7664c2da2c5603dc4bb2d0c35fbf014a974ed68c981b5563bd040b1f5006b63f"
+    },
+    {
+      "file": "0660_website_starter_art.sql",
+      "sha256": "26fe9c89a8d32379f32e3c579a1b29375579f46ba8c2e1fb5b71fb4d3be248d3"
+    },
+    {
+      "file": "0675_hq_school_lifecycle.sql",
+      "sha256": "22c1f1983591b669efa7fbbefa1d6571120ace94b4322e19c1a32f9fa6b02e60"
+    },
+    {
+      "file": "0676_hq_school_plan_assignments.sql",
+      "sha256": "ec678f629f21222ff612462ceb151e821938b4aaa602d08dd64e928b2cb91dc6"
+    },
+    {
+      "file": "0677_hq_ad_account_connections.sql",
+      "sha256": "680101b594c865cede1c7ae422f0acab5f1dea0f54b27b2316edd47731ac0dbf"
+    },
+    {
+      "file": "0678_hq_creative_designs.sql",
+      "sha256": "db2386168b7e785baf3bab1ff902b11e31278126d400fc160920a95834579970"
+    },
+    {
+      "file": "0680_membership_activates_on_signing.sql",
+      "sha256": "ec706a151e2ecfdac948d0447f764dec89df8a1b2a73bbe648a0d44c72354feb"
+    },
+    {
+      "file": "0681_staff_timesheet_no_self_approval.sql",
+      "sha256": "cde0484a5a79c8f8a25a4c4b8965cde01a1ef5909cdc7345032174346e118bd5"
+    },
+    {
+      "file": "0682_crm_board_text_opt_out.sql",
+      "sha256": "0787aa62252d9d1e48561eda5f7a35fa2c132ad0356a306798f94abe3d573fe7"
+    },
+    {
+      "file": "0683_hon_os_trial_creative_credits.sql",
+      "sha256": "07c510333e068982314248adf14626fa99531ef034191ff2c4714ecf867821d5"
+    },
+    {
+      "file": "0684_creative_studio_photo_avatars.sql",
+      "sha256": "7892bc19254e67f2b1b22831ed6331044f62ef6fd56dd2127a5a352c3649581e"
+    },
+    {
+      "file": "0685_kai_teaching_journal.sql",
+      "sha256": "65dc17611eba987cc13026281e7570790a4cf73ac9bf3f8de4630937c29e489a"
+    },
+    {
+      "file": "0686_monthly_goal_plan.sql",
+      "sha256": "65605c088d84d72ebfe3f3ba817ff1e00710375eb9d8461e4d390a80b94b2d42"
+    },
+    {
+      "file": "0687_conversation_ai_test_chat.sql",
+      "sha256": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6"
+    },
+    {
+      "file": "0688_ai_fallback_policy_order_exclusion.sql",
+      "sha256": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4"
+    },
+    {
+      "file": "0689_ai_school_cost_alerts.sql",
+      "sha256": "b6a23f776622a3a55ee0a000fc8ed48f4026e5316f961beaa222a4627aa9164e"
+    },
+    {
+      "file": "0690_website_ai_creative_credits.sql",
+      "sha256": "99a98eb93b208d3b629ecde76d0691f178b86002019fafb94b8f782fae04821c"
+    },
+    {
+      "file": "0691_creative_media_storage.sql",
       "sha256": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
     },
     {
-      "file": "0672_creative_asset_review.sql",
-      "sha256": "b0fec9717fe9c17f4b86d6a1087e18f7ab9bfbea18579d272666074d69d545b9"
+      "file": "0692_creative_asset_review.sql",
+      "sha256": "ca1abe10915b73e7e78ab0eb147ba208a1b3d2ec856c8e6fb624fa6ebd4e9c59"
     }
   ]
 }

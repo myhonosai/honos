@@ -3,6 +3,7 @@ import type { SaasCreativeHqWallet, SaasCreativeHqWalletList, SaasCreativeHqWall
 import { creditsText, type CreditsKey } from './copy';
 import { dollars, usd } from './http';
 import { CostForm, DebitForm, GrantForm, Outcome, ResolveForm, costable, debitable, settleable, type CreditForm, type CreditOutcome, type Fields } from './forms';
+import { ProgramControls } from './program-controls';
 import styles from './hq-creative-credits.module.css';
 
 type T = (key: CreditsKey, vars?: Record<string, string>) => string;
@@ -54,6 +55,7 @@ function Body({ list, language, detail, onOpen, onClose, t, ...commands }: Credi
         <p>{t(active ? 'monthly' : 'monthlyOff', { n: num(language, list.program.monthlyIncludedCredits) })}</p>
         {active ? null : <p className={styles.warnText}>{t('programOffNote')}</p>}
         <p className={styles.meta}>{t('programVersion', { version: String(list.program.version) })}</p>
+        <ProgramControls list={list} language={language} onDone={commands.onRefresh ?? (() => undefined)}/>
       </article>
       <article className={styles.card} aria-labelledby="hq-credits-packages">
         <h2 id="hq-credits-packages">{t('packagesTitle')}</h2>

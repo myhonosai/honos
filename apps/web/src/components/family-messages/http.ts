@@ -72,9 +72,11 @@ export async function markFamilyMessageThreadRead(scope: FamilyMessagesScope, th
   const input = validateMarkFamilyMessageReadInput({ threadId: thread(threadId), throughMessageId: thread(throughMessageId) });
   return verifyFamilyMessageReadMark((await call(`${base(scope)}/${input.threadId}/read`, 'POST', 'family_messages.mark_read', { throughMessageId: input.throughMessageId })).data, input.threadId);
 }
-export async function replyFamilyMessage(scope: FamilyMessagesScope, threadId: string, text: string, key: string, throughMessageId: string): Promise<{ receipt: FamilyMessageReceipt; replayed: boolean }> {
-  const input = validateReplyFamilyMessageInput({ threadId: thread(threadId), body: text, throughMessageId: thread(throughMessageId) });
-  const out = await call(`${base(scope)}/${input.threadId}/replies`, 'POST', 'family_messages.reply', { body: input.body, throughMessageId: input.throughMessageId }, key);
+/** phoneAlert (0658): staff ticked "Also send as a phone alert"; the family's phones get a "new message" alert, never the text. */
+export async function replyFamilyMessage(scope: FamilyMessagesScope, threadId: string, text: string, key: string, throughMessageId: string, phoneAlert = false): Promise<{ receipt: FamilyMessageReceipt; replayed: boolean }> {
+  const input = validateReplyFamilyMessageInput({ threadId: thread(threadId), body: text, throughMessageId: thread(throughMessageId), phoneAlert });
+  const out = await call(`${base(scope)}/${input.threadId}/replies`, 'POST', 'family_messages.reply',
+    { body: input.body, throughMessageId: input.throughMessageId, ...(input.phoneAlert ? { phoneAlert: true } : {}) }, key);
   return { receipt: verifyFamilyMessageReceipt(out.data, { from: 'SCHOOL', body: input.body, threadId: input.threadId }), replayed: replayed(out.meta) };
 }
 
