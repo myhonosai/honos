@@ -431,6 +431,7 @@
     "0687_conversation_ai_test_chat.sql": "84334b12ffae71d3f102d92cac03545a4d6c0372e698330d5193685a121c8ef6",
     "0688_ai_fallback_policy_order_exclusion.sql": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4",
     "0689_ai_school_cost_alerts.sql": "b6a23f776622a3a55ee0a000fc8ed48f4026e5316f961beaa222a4627aa9164e",
-    "0690_website_ai_creative_credits.sql": "99a98eb93b208d3b629ecde76d0691f178b86002019fafb94b8f782fae04821c"
+    "0690_website_ai_creative_credits.sql": "99a98eb93b208d3b629ecde76d0691f178b86002019fafb94b8f782fae04821c",
+    "0691_creative_media_storage.sql": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b"
   }
 }

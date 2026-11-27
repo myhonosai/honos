@@ -40,13 +40,15 @@ test('CS1 school view fails closed on provider/cost leakage, inconsistent status
   for (const ok of [generation(), succeeded(), generation({ status: 'FAILED', failureReason: 'PROVIDER_REJECTED', completedAt: T2 }),
     generation({ status: 'UNDER_REVIEW', failureReason: 'PROVIDER_UNKNOWN', completedAt: T2 }), generation({ status: 'RESOLVED_CHARGED', chargedCredits: 50, completedAt: T2, failureReason: 'INTERRUPTED' }),
     generation({ status: 'RESOLVED_NOT_CHARGED', completedAt: T2 }),
-    succeeded({ mediaKind: 'VIDEO', operationCode: 'video.generate', units: 10, chargedCredits: 100, assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 10 })] })])
+    succeeded({ mediaKind: 'VIDEO', operationCode: 'video.generate', units: 10, chargedCredits: 100, assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 10 })] }),
+    // C3: deleted assets are hidden, so a success may list a gap in ordinals or no assets at all.
+    succeeded({ assets: [asset(2)] }), succeeded({ assets: [asset(1), asset(3)] }), succeeded({ assets: [] })])
     assert.doesNotThrow(() => contracts.validateCreativeGeneration(ok), JSON.stringify(ok));
   for (const bad of [{ ...succeeded(), providerId: 'HIGGSFIELD' }, { ...succeeded(), providerCostMicrounits: 1 }, { ...succeeded(), modelCode: 'm' },
-    succeeded({ chargedCredits: 101 }), succeeded({ chargedCredits: null }), succeeded({ assets: [] }), succeeded({ failureReason: 'PROVIDER_UNKNOWN' }),
+    succeeded({ chargedCredits: 101 }), succeeded({ chargedCredits: null }), succeeded({ failureReason: 'PROVIDER_UNKNOWN' }),
     succeeded({ completedAt: null }), generation({ completedAt: T2 }), generation({ chargedCredits: 0 }), generation({ assets: [asset()] }),
     generation({ status: 'FAILED', completedAt: T2 }), generation({ status: 'UNDER_REVIEW', completedAt: T2 }), generation({ status: 'FAILED', failureReason: 'PROVIDER_REJECTED', completedAt: T2, chargedCredits: 1 }),
-    succeeded({ assets: [asset(2), asset(1)] }), succeeded({ assets: [asset(1, { origin: 'REAL' })] }), succeeded({ assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 3 })] }),
+    succeeded({ assets: [asset(2), asset(1)] }), succeeded({ assets: [asset(1), asset(1)] }), succeeded({ assets: [asset(0)] }), succeeded({ assets: [asset(9)] }), succeeded({ assets: [asset(1, { origin: 'REAL' })] }), succeeded({ assets: [asset(1, { mediaType: 'video/mp4', durationSeconds: 3 })] }),
     succeeded({ assets: [asset(1, { url: 'https://cdn.example/x.png' })] }), succeeded({ completedAt: '2026-11-07T11:00:00.000Z' }), generation({ status: 'QUEUED' })])
     assert.throws(() => contracts.validateCreativeGeneration(bad), JSON.stringify(bad));
   const school = U(), a = generation({ schoolId: school, createdAt: T2 }), b = generation({ schoolId: school });

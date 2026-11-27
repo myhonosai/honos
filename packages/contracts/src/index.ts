@@ -1081,6 +1081,7 @@ export * from './saas-creative-wallet.js';
 export * from './creative-studio.js';
 export * from './creative-studio-avatars.js';
 export * from './creative-provider-jobs.js';
+export * from './creative-media.js';
 export * from './saas-refunds-rewards.js';
 export * from './saas-payments.js';
 export * from './saas-school-billing.js';

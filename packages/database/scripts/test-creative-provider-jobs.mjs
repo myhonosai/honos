@@ -28,7 +28,7 @@ const synthetic=new SyntheticCreativeProviderRuntime('SUCCEED'),studio=new Creat
 const payments=new SaasPaymentsService(billing,database,new StripeTestModeAdapter({secretKey:KEY,webhookSecret:SECRET,provider:'STRIPE_SIMULATED',transport:sim.transport}));
 const admin=new pg.Client(targets.owner);
 const ownerPool=new pg.Pool({...targets.owner,max:8});
-const creativeTables=['creative_provider_jobs','creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
+const creativeTables=['creative_stored_objects','creative_provider_jobs','creative_generation_assets','creative_generations','saas_creative_ledger','saas_creative_reservations','saas_creative_lots','saas_creative_adjustments','saas_creative_topup_purchases',
  'saas_creative_wallets','saas_creative_rates','saas_creative_rate_versions'];
 // creative_avatars (0276) and creative_avatar_videos (0277) reference generations: delete them first when present.
 const optionalCreativeTables=['saas_creative_cost_events','creative_avatars','creative_avatar_videos'];
@@ -175,7 +175,11 @@ try{
  const rec=(who,gid,body)=>rt('SELECT hon.record_creative_generation_result($1,$2,$3::jsonb) r',[H(who),gid,JSON.stringify(body)]);
  const claim=(n=25,lease=60)=>admin.query('SELECT * FROM hon.claim_creative_provider_jobs($1,$2)',[n,lease]).then(r=>r.rows);
  const poll=(job,lease)=>admin.query('SELECT hon.record_creative_provider_job_poll($1,$2) r',[job,lease]).then(r=>r.rows[0].r);
- const result=(job,lease,body)=>admin.query('SELECT hon.record_creative_provider_job_result($1,$2,$3::jsonb) r',[job,lease,JSON.stringify(body)]).then(r=>r.rows[0].r);
+ // 0691: a provider success is recorded together with its stored files (one object per asset).
+ const result=(job,lease,body)=>body?.outcome==='SUCCEEDED'
+  ?admin.query('SELECT hon.record_creative_provider_job_stored_result($1,$2,$3::jsonb,$4::jsonb) r',[job,lease,JSON.stringify(body),
+    JSON.stringify((body.assets??[]).map(()=>({byteSize:1000,sha256:'b'.repeat(64)})))]).then(r=>r.rows[0].r)
+  :admin.query('SELECT hon.record_creative_provider_job_result($1,$2,$3::jsonb) r',[job,lease,JSON.stringify(body)]).then(r=>r.rows[0].r);
  const setLimit=(micros,expectedVersion,key=K(),who='owner')=>rt('SELECT hon.command_creative_provider_daily_limit($1,$2::jsonb,$3) r',
   [H(who),JSON.stringify({providerId:'HIGGSFIELD',dailyLimitMicros:micros,reason:'Fixture daily provider limit for C1',expectedVersion}),key]);
  const setCaps=(school,caps,expectedVersion,key=K(),who='owner')=>rt('SELECT hon.command_creative_school_daily_caps($1,$2::jsonb,$3) r',
@@ -418,8 +422,14 @@ try{
   const store={isConfigured:()=>true,
    claim:async(n,l)=>(await claim(n,l)).filter(r=>r.job_id===j.id).map(r=>({jobId:r.job_id,leaseToken:r.lease_token,providerId:r.provider_id,providerJobId:r.provider_job_id,
     modelCode:r.model_code,operationCode:r.operation_code,mediaKind:r.media_kind,units:r.units,format:r.format,pollCount:r.poll_count,deadlineAt:iso(r.deadline_at)})),
-   recordPoll:(id,l)=>poll(id,l),recordResult:(id,l,o)=>result(id,l,o)};
-  const worker=new CreativeJobWorker(store,asyncRuntime);
+   recordPoll:(id,l)=>poll(id,l),recordResult:(id,l,o)=>result(id,l,o),
+   recordStoredResult:(id,l,o,objects)=>admin.query('SELECT hon.record_creative_provider_job_stored_result($1,$2,$3::jsonb,$4::jsonb) r',[id,l,JSON.stringify(o),JSON.stringify(objects)]).then(r=>r.rows[0].r)};
+  // C3 ingest with a fixed in-memory file answer for the synthetic download host and an in-memory store.
+  const {CreativeMediaIngest}=await import('../../../apps/api/dist/creative-studio/media/creative-media-store.js');
+  const png=Buffer.from('89504e470d0a1a0a0000000d494844520000014000000100080600000000000000000000044944415401020304000000000000000049454e4400000000','hex');
+  const kept=new Map();
+  const ingest=new CreativeMediaIngest({readiness:()=>'READY',put:async(k,b)=>{kept.set(k,b);},signedReadUrl:async()=>'',remove:async()=>{}},{send:async()=>new Response(png,{status:200})});
+  const worker=new CreativeJobWorker(store,asyncRuntime,ingest);
   await due(j.id);
   assert.deepEqual(await worker.runOnce(),{claimed:1,recorded:0,heldForHq:0,pending:1,errors:0});
   assert.equal((await job(out.generation.generationId)).poll_count,1);
@@ -430,6 +440,85 @@ try{
   assert.equal((await bal('B')).availableCredits,before-20);
   assert.equal((await job(out.generation.generationId)).status,'RECORDED');
   assert.deepEqual([asyncRuntime.submits.length,asyncRuntime.polls.length],[1,2],'never resent');
+  assert.deepEqual([...kept.keys()],[`creative/${j.id}/1`,`creative/${j.id}/2`]);
+  assert.deepEqual(g.assets.map(a=>[a.width,a.height]),[[320,256],[320,256]],'measured from the stored file');
+  const objs=(await admin.query('SELECT asset_id,storage_key,byte_size FROM hon.creative_stored_objects WHERE job_id=$1 ORDER BY ordinal',[j.id])).rows;
+  assert.deepEqual(objs.map(o=>[o.asset_id,o.storage_key]),g.assets.map((a,i)=>[a.assetId,`creative/${j.id}/${i+1}`]));
+ });
+ // ---------- C3 (0691) media storage ----------
+ const {SyntheticAsyncCreativeProviderRuntime:Async}=await import('../../../apps/api/dist/creative-studio/creative-provider-runtime.js');
+ const {CreativeMediaService}=await import('../../../apps/api/dist/creative-studio/media/creative-media.controller.js');
+ const memory=()=>{const objects=new Map();return{objects,readiness:()=>'READY',put:async(k,b)=>{objects.set(k,b);},
+  signedReadUrl:async k=>`https://project.supabase.example/storage/v1/object/sign/creative-media/${k}?token=t`,remove:async k=>{objects.delete(k);}};};
+ const submittedJob=async(units=1)=>{const rt=new Async('ACCEPT',['SUCCEED'],{providerId:'HIGGSFIELD'});
+  const out=await new CreativeStudioService(billing,rt).create(H('ownerB'),S.B,{operationCode:'image.generate',units,format:'SQUARE',prompt:PROMPT},K());
+  const j=await job(out.generation.generationId);await due(j.id);
+  const lease=(await claim(25,60)).find(r=>r.job_id===j.id).lease_token;return{gid:out.generation.generationId,j,lease};};
+ const okAssets=n=>({outcome:'SUCCEEDED',finalUnits:n,providerCostMicrounits:16000*n,failureReason:null,
+  assets:Array.from({length:n},(_,i)=>({mediaType:'image/png',width:800,height:600,durationSeconds:null,providerAssetReference:`hf:fixture:${i+1}`}))});
+ const objs=n=>Array.from({length:n},(_,i)=>({byteSize:2000+i,sha256:(i%10).toString().repeat(64)}));
+ const stored=(j,l,p,o)=>admin.query('SELECT hon.record_creative_provider_job_stored_result($1,$2,$3::jsonb,$4::jsonb) r',[j,l,JSON.stringify(p),JSON.stringify(o)]).then(r=>r.rows[0].r);
+ let storedAsset,storedGeneration;
+ await check('J14','C3: a provider success is recorded only with its stored files: the plain result refuses SUCCEEDED, objects are validated and their keys fixed by the database',async()=>{
+  const {gid,j,lease}=await submittedJob(2);
+  await refuse(admin.query('SELECT hon.record_creative_provider_job_result($1,$2,$3::jsonb)',[j.id,lease,JSON.stringify(okAssets(2))]),'INVALID_SAAS_INPUT');
+  for(const bad of [objs(1),objs(3),[{byteSize:1,sha256:'A'.repeat(64)},objs(1)[0]],[{byteSize:26214401,sha256:'a'.repeat(64)},objs(1)[0]],
+   [{byteSize:0,sha256:'a'.repeat(64)},objs(1)[0]],[{byteSize:5,sha256:'a'.repeat(64),storageKey:'creative/x/1'},objs(1)[0]],[{byteSize:5},objs(1)[0]]])
+   await refuse(stored(j.id,lease,okAssets(2),bad),'INVALID_SAAS_INPUT');
+  await refuse(stored(j.id,lease,{outcome:'UNKNOWN',finalUnits:null,providerCostMicrounits:null,failureReason:'PROVIDER_UNKNOWN',assets:null},[]),'INVALID_SAAS_INPUT');
+  await refuse(stored(j.id,randomUUID(),okAssets(2),objs(2)),'CREATIVE_JOB_LEASE_LOST');
+  assert.deepEqual(await stored(j.id,lease,okAssets(2),objs(2)),{status:'RECORDED'});
+  const g=await studio.read(H('ownerB'),S.B,gid);
+  assert.deepEqual([g.status,g.assets.length,g.assets.every(a=>a.origin==='PROVIDER')],['SUCCEEDED',2,true]);
+  const rows=(await admin.query('SELECT * FROM hon.creative_stored_objects WHERE job_id=$1 ORDER BY ordinal',[j.id])).rows;
+  assert.deepEqual(rows.map(r=>[r.asset_id,r.storage_key,r.school_id,Number(r.byte_size),r.media_type,r.deleted_at]),
+   g.assets.map((a,i)=>[a.assetId,`creative/${j.id}/${i+1}`,S.B,2000+i,'image/png',null]));
+  await refuse(stored(j.id,lease,okAssets(2),objs(2)),'CREATIVE_JOB_LEASE_LOST');
+  storedAsset=g.assets[0].assetId;storedGeneration=gid;
+ });
+ await check('J15','C3: a read grant only for the exact school\'s creative staff and a stored, undeleted asset; the browser gets a 5-minute signed URL and no key',async()=>{
+  const media=new CreativeMediaService(billing,memory());
+  const view=await media.view(H('ownerB'),S.B,storedAsset);
+  assert.deepEqual(Object.keys(view).sort(),['assetId','expiresAt','mediaType','url']);
+  assert.ok(view.url.includes('/object/sign/creative-media/creative/'));
+  await deny(media.view(H('ownerA'),S.B,storedAsset),403,'SAAS_FORBIDDEN');
+  await deny(media.view(H('ownerB'),S.A1,storedAsset),403,'SAAS_FORBIDDEN');
+  await deny(media.view(H('ownerA'),S.A1,storedAsset),404,'SAAS_UNAVAILABLE');
+  await deny(media.view(H('ownerB'),S.B,randomUUID()),404,'SAAS_UNAVAILABLE');
+  const synth=(await gen('B',{units:1})).generation;
+  await deny(media.view(H('ownerB'),S.B,synth.assets[0].assetId),404,'SAAS_UNAVAILABLE');
+ });
+ await check('J16','C3: delete stops reads at once, keeps an identifier-only record, retries the file removal until confirmed; rows never change otherwise; runtime cannot touch the table',async()=>{
+  const store=memory();const key=(await row('SELECT storage_key FROM hon.creative_stored_objects WHERE asset_id=$1',[storedAsset])).storage_key;
+  store.objects.set(key,Buffer.from('x'));
+  await deny(new CreativeMediaService(billing,store).remove(H('ownerA'),S.B,storedAsset,{}),403,'SAAS_FORBIDDEN');
+  const down={...store,remove:async()=>{throw new Error('storage down');}};
+  const first=await new CreativeMediaService(billing,down).remove(H('ownerB'),S.B,storedAsset,{});
+  assert.equal(first.fileRemoved,false);
+  const marked=await row('SELECT * FROM hon.creative_stored_objects WHERE asset_id=$1',[storedAsset]);
+  assert.ok(marked.deleted_at&&marked.deleted_by_principal_id===humans.ownerB.id&&marked.removed_at===null);
+  await deny(new CreativeMediaService(billing,store).view(H('ownerB'),S.B,storedAsset),404,'SAAS_UNAVAILABLE');
+  const g=await studio.read(H('ownerB'),S.B,storedGeneration);
+  assert.ok(!g.assets.some(a=>a.assetId===storedAsset)&&g.assets.length===1,'the deleted asset is no longer listed');
+  const again=await new CreativeMediaService(billing,store).remove(H('ownerB'),S.B,storedAsset,{});
+  assert.deepEqual([again.fileRemoved,again.deletedAt,store.objects.has(key)],[true,first.deletedAt,false]);
+  const done=await row('SELECT * FROM hon.creative_stored_objects WHERE asset_id=$1',[storedAsset]);
+  assert.ok(done.removed_at&&String(done.deleted_at)===String(marked.deleted_at));
+  assert.equal((await new CreativeMediaService(billing,{...store,remove:async()=>assert.fail('already removed')}).remove(H('ownerB'),S.B,storedAsset,{})).fileRemoved,true);
+  for(const sql of ["UPDATE hon.creative_stored_objects SET sha256=repeat('c',64) WHERE asset_id=$1","UPDATE hon.creative_stored_objects SET removed_at=NULL WHERE asset_id=$1",
+   "UPDATE hon.creative_stored_objects SET deleted_by_principal_id=gen_random_uuid() WHERE asset_id=$1","DELETE FROM hon.creative_stored_objects WHERE asset_id=$1"])
+   await refuse(admin.query(sql,[storedAsset]),'SAAS_TRANSITION_NOT_ALLOWED');
+  await assert.rejects(pool.query('SELECT 1 FROM hon.creative_stored_objects LIMIT 1'),/permission denied/);
+  await assert.rejects(pool.query('SELECT hon.record_creative_provider_job_stored_result($1,$2,$3::jsonb,$4::jsonb)',[randomUUID(),randomUUID(),'{}','[]']),/permission denied/);
+  const can=async(role,f)=>(await row('SELECT has_function_privilege($1,$2,$3) r',[role,f,'EXECUTE'])).r;
+  for(const f of ['hon.authorize_creative_asset_read(text,uuid,uuid)','hon.delete_creative_asset(text,uuid,uuid)','hon.confirm_creative_asset_removed(text,uuid,uuid)'])
+   assert.equal(await can(CHAMPIONS_RUNTIME_ROLE,f),true,f);
+  for(const f of ['hon.record_creative_provider_job_stored_result(uuid,uuid,jsonb,jsonb)','hon.creative_school_object(text,uuid,uuid,boolean)','hon.guard_creative_stored_object()'])
+   assert.equal(await can(CHAMPIONS_RUNTIME_ROLE,f),false,f);
+  if((await row("SELECT count(*)::int n FROM pg_roles WHERE rolname='hon_communication_worker'")).n){
+   assert.equal(await can('hon_communication_worker','hon.record_creative_provider_job_stored_result(uuid,uuid,jsonb,jsonb)'),true);
+   assert.equal(await can('hon_communication_worker','hon.delete_creative_asset(text,uuid,uuid)'),false);
+  }
  });
  await setAccessProgram(false);programTouched=false;
 }finally{

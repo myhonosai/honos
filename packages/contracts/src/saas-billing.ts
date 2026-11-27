@@ -121,6 +121,7 @@ export const SAAS_COMMANDS = {
   openCreativeWindow: 'saas-creative-window-open',
   createCreativeTopupPurchase: 'saas-creative-topup-purchase',
   createCreativeGeneration: 'saas-creative-generation-create',
+  deleteCreativeAsset: 'saas-creative-asset-delete',
   // A1 (0276): Creative Studio avatars.
   createCreativeAvatar: 'saas-creative-avatar-create', createCreativeAvatarVideo: 'saas-creative-avatar-video-create',
   // C1 (0354): HON's daily provider spend guard and per-school daily caps (HQ owner).

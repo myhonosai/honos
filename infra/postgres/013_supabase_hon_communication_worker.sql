@@ -219,4 +219,13 @@ BEGIN
 END;
 $$;
 
+-- 0691 creative media storage: record a provider success together with its stored files (when applied).
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_creative_provider_job_stored_result(uuid,uuid,jsonb,jsonb)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_creative_provider_job_stored_result(uuid, uuid, jsonb, jsonb) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 COMMIT;

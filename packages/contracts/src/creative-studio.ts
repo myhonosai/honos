@@ -55,9 +55,9 @@ export function validateCreativeGenerationInput(value: unknown): CreativeGenerat
 }
 
 // ---------- responses (closed; any drift fails) ----------
-function validateAsset(value: unknown, mediaKind: CreativeMediaKind, ordinal: number): void {
+function validateAsset(value: unknown, mediaKind: CreativeMediaKind, after: number): void {
   const a = record(value, drift); exactKeys(a, ['assetId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'origin'], drift);
-  if (!isUuid(a.assetId) || a.ordinal !== ordinal || !has(CREATIVE_ASSET_MEDIA_TYPES[mediaKind], a.mediaType) || !isInt(a.width, 1, 8192) || !isInt(a.height, 1, 8192)
+  if (!isUuid(a.assetId) || !isInt(a.ordinal, after + 1, CREATIVE_GENERATION_LIMITS.maxAssets) || !has(CREATIVE_ASSET_MEDIA_TYPES[mediaKind], a.mediaType) || !isInt(a.width, 1, 8192) || !isInt(a.height, 1, 8192)
     || (a.origin !== 'SYNTHETIC' && a.origin !== 'PROVIDER') || (mediaKind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
 }
 export function validateCreativeGeneration(value: unknown): CreativeGeneration {
@@ -72,11 +72,13 @@ export function validateCreativeGeneration(value: unknown): CreativeGeneration {
   const charged = g.status === 'SUCCEEDED' || g.status === 'RESOLVED_CHARGED';
   if (charged ? !isInt(g.chargedCredits, 0, g.reservedCredits as number) : g.chargedCredits !== null) drift();
   if ((g.status === 'GENERATING') !== (g.completedAt === null)) drift();
-  if ((g.status === 'SUCCEEDED') !== ((g.assets as unknown[]).length > 0)) drift();
+  // Only a success has assets; a deleted asset is hidden, so a success may list fewer (or none) with gaps in ordinals.
+  if (g.status !== 'SUCCEEDED' && (g.assets as unknown[]).length > 0) drift();
   if ((g.status === 'SUCCEEDED' || g.status === 'GENERATING') && g.failureReason !== null) drift();
   if ((g.status === 'FAILED' || g.status === 'UNDER_REVIEW') && g.failureReason === null) drift();
   if (g.completedAt !== null && Date.parse(g.completedAt as string) < Date.parse(g.createdAt as string)) drift();
-  (g.assets as unknown[]).forEach((a, i) => validateAsset(a, g.mediaKind as CreativeMediaKind, i + 1));
+  let previous = 0;
+  for (const a of g.assets as unknown[]) { validateAsset(a, g.mediaKind as CreativeMediaKind, previous); previous = (a as { ordinal: number }).ordinal; }
   return g as unknown as CreativeGeneration;
 }
 function validateGenerationArray(value: unknown): void {
