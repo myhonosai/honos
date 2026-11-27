@@ -20,7 +20,7 @@ function generation(status: CreativeGeneration['status'], extra: Partial<Creativ
   return { generationId: id(960), schoolId: scope.schoolId, operationCode: 'avatar.create', mediaKind: 'IMAGE', units: 1, format: 'PORTRAIT', prompt: input.description,
     status, failureReason: status === 'FAILED' ? 'PROVIDER_REJECTED' : status === 'UNDER_REVIEW' ? 'PROVIDER_UNKNOWN' : null, reservedCredits: 100,
     chargedCredits: charged ? 100 : null, createdAt: '2026-11-12T06:00:00.000Z', completedAt: done ? '2026-11-12T06:00:05.000Z' : null,
-    assets: status === 'SUCCEEDED' ? [{ assetId: id(961), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC' }] : [], ...extra };
+    assets: status === 'SUCCEEDED' ? [{ assetId: id(961), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] : [], ...extra };
 }
 function avatar(status: CreativeGeneration['status'] = 'SUCCEEDED', extra: Partial<CreativeAvatar> = {}, g: Partial<CreativeGeneration> = {}): CreativeAvatar {
   const gen = generation(status, g);

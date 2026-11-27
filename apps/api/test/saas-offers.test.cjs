@@ -26,7 +26,8 @@ const inputs = () => [offerInput('OS_MONTHLY', 'REGULAR_MONTHLY', 31700), offerI
   offerInput('OS_FOUNDER_MONTHLY', 'FOUNDER_MONTHLY', 18300), offerInput('OS_FOUNDER_ANNUAL', 'FOUNDER_ANNUAL', 183000),
   offerInput('OS_LIFETIME', 'LIFETIME', 950000), offerInput('OS_FOUNDER_LIFETIME', 'FOUNDER_LIFETIME', 640000)];
 const draft = (patch = {}) => ({ basedOnSetId:null, termsReference:'Fixture HON OS terms', founderTotalLimit:30, offers:inputs(), ...patch });
-const offer = (input, position, patch = {}) => ({ offerId:U(), position, ...input, billingInterval:interval(input.offerKind), founder:input.offerKind.startsWith('FOUNDER_'),
+const ALL = () => [...contracts.HON_OS_PLAN_CAPABILITIES];
+const offer = (input, position, patch = {}) => ({ offerId:U(), position, capabilities:ALL(), ...input, billingInterval:interval(input.offerKind), founder:input.offerKind.startsWith('FOUNDER_'),
   currency:'USD', premiumCreditsStatus:'PLANNING_ONLY_NOT_A_CREDIT_GRANT', salesStop:null, ...patch });
 const set = (patch = {}) => ({ setId:U(), setVersion:1, productCode:'HON_OS', status:'DRAFT', revision:1, basedOnSetId:null, termsReference:'Fixture HON OS terms',
   founderTotalLimit:30, offers:inputs().map((o, i) => offer(o, i + 1)), approvedPreviewDigest:null, chargesEnabled:false, creditGrantsEnabled:false,
@@ -62,7 +63,18 @@ test('HON OS product policy is the full capability set and never a legacy tier',
 
 test('offer-set inputs: any HQ price in range, strict keys and consistent terms', () => {
   const d = draft();
-  assert.deepEqual(contracts.validateSaasHonOsOfferSetDraftInput(d), d);
+  // An offer without a feature list sells every HON OS capability (0697 column default).
+  assert.deepEqual(contracts.validateSaasHonOsOfferSetDraftInput(d), { ...d, offers:d.offers.map(o => ({ ...o, capabilities:ALL() })) });
+  // Plans with their own features: any non-empty subset, returned in canonical order; one list per plan name.
+  const core = ALL().slice(0, 11), shuffled = [...core].reverse();
+  const two = contracts.validateSaasHonOsOfferSetDraftInput(draft({ offers:[offerInput('CORE_M', 'REGULAR_MONTHLY', 14900, { displayName:'Core', capabilities:shuffled }),
+    offerInput('CORE_A', 'REGULAR_ANNUAL', 149000, { displayName:'Core', capabilities:core }), offerInput('FULL_M', 'REGULAR_MONTHLY', 24900, { displayName:'Complete', capabilities:ALL() })] }));
+  assert.deepEqual(two.offers.map(o => o.capabilities.length), [11, 11, 16]);
+  assert.deepEqual(two.offers[0].capabilities, core);
+  for (const caps of [[], [core[0], core[0]], ['ai.unknown'], [1], 'crm.families_students_prospects', null, [...ALL(), 'extra']])
+    assert.throws(() => contracts.validateSaasHonOsOfferSetDraftInput(draft({ offers:[offerInput('OS_MONTHLY', 'REGULAR_MONTHLY', 100, { capabilities:caps })] })), String(caps));
+  assert.throws(() => contracts.validateSaasHonOsOfferSetDraftInput(draft({ offers:[offerInput('CORE_M', 'REGULAR_MONTHLY', 14900, { displayName:'Core', capabilities:core }),
+    offerInput('CORE_A', 'REGULAR_ANNUAL', 149000, { displayName:'Core', capabilities:ALL() })] })));
   // Prices are data: any whole-cent value in range is accepted, so price changes need no code change.
   for (const price of [100, 4900, 24900, 33333, 10_000_000])
     assert.doesNotThrow(() => contracts.validateSaasHonOsOfferSetDraftInput(draft({ offers:[offerInput('OS_MONTHLY', 'REGULAR_MONTHLY', price)] })));
@@ -98,6 +110,13 @@ test('responses fail closed on activation flags, repricing claims, credit grants
   assert.doesNotThrow(() => contracts.validateSaasHonOsOfferSetDetail({ set:s, preview:preview(s) }));
   assert.doesNotThrow(() => contracts.validateSaasHonOsOfferManagementView(management()));
   assert.doesNotThrow(() => contracts.validateSaasHonOsSchoolOfferView(schoolView()));
+  // Each offer reports its plan's features in canonical order; a plan (display name) has one list.
+  const caps = (list, i = 0) => { const v = set(); v.offers[i] = { ...v.offers[i], capabilities:list }; return { set:v, preview:preview(v) }; };
+  assert.doesNotThrow(() => contracts.validateSaasHonOsOfferSetDetail(caps(ALL().slice(0, 11))));
+  for (const bad of [[], [...ALL()].reverse(), ['ai.unknown'], undefined])
+    assert.throws(() => contracts.validateSaasHonOsOfferSetDetail(caps(bad)), String(bad));
+  const shared = set(); shared.offers = shared.offers.map((o, i) => ({ ...o, displayName:'Core', capabilities:i ? ALL() : ALL().slice(0, 11) }));
+  assert.throws(() => contracts.validateSaasHonOsOfferSetDetail({ set:shared, preview:preview(shared) }));
   const stopped = published(); stopped.offers[1].salesStop = { reasonCode:'PRICE_CHANGE_PENDING', stoppedAt:T };
   assert.doesNotThrow(() => contracts.validateSaasHonOsOfferStopSalesReceipt({ offer:stopped.offers[1], replayed:false }));
   const retired = { ...stopped, status:'RETIRED', retiredAt:T };
@@ -190,7 +209,9 @@ test('HTTP routes: subject-only reads, exact human commands, server-owned parame
       const [op, params] = calls.at(-1);
       assert.equal(op, operation); assert.equal(params[0], 'verified-human');
       const rest = target ? (assert.equal(params[1], target), params.slice(2)) : params.slice(1);
-      assert.deepEqual(JSON.parse(rest[0]), body); assert.equal(rest[1], headers['idempotency-key']);
+      // The server forwards the validated body: offers without a feature list carry the full HON OS list (0697).
+      const forwarded = body.offers ? { ...body, offers:body.offers.map(o => ({ ...o, capabilities:ALL() })) } : body;
+      assert.deepEqual(JSON.parse(rest[0]), forwarded); assert.equal(rest[1], headers['idempotency-key']);
       assert.equal(rest.length, 4, 'subject, [target], body, key, request id, correlation id');
       const n = calls.length;
       for (const extra of [{ 'x-hon-human-command':'saas-catalog-publish' }, { origin:'https://attacker.example' }, { 'sec-fetch-site':'cross-site' },

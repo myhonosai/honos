@@ -262,6 +262,8 @@ export const saasBillingFunctions = [
  ['hon.saas_offer_set_preview(uuid)',false,false],
  ['hon.saas_offer_set_content_valid(jsonb)',false,false],
  ['hon.saas_offer_set_write_content(uuid,jsonb)',false,false],
+ // 0697 HON OS plan features (per-offer capability list)
+ ['hon.saas_offer_input_capabilities(jsonb)',false,false],
  ['hon.saas_offer_owner(text)',false,false],
  ['hon.read_saas_offer_management_from_hq(text)',true,true],
  ['hon.read_saas_offer_set_from_hq(text,uuid)',true,true],

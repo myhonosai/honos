@@ -209,3 +209,21 @@ it('has every wording in Korean and Spanish', () => {
     expect(schoolPlanText(lang, 'chargingOff')).not.toBe(t('chargingOff'));
   }
 });
+
+it('create-school step 2 opens the picker once, only for a manager, on the right starting tile', async () => {
+  const { startingPick, opensPickerNow } = await import('../src/components/hq-school-plan/plan-card');
+  const ready = (v: HqSchoolPlanView) => ({ state: 'READY' as const, view: v });
+  expect(opensPickerNow(true, false, ready(view()))).toBe(true);
+  expect(opensPickerNow(true, true, ready(view()))).toBe(false); // already opened: never re-opens after save/cancel
+  expect(opensPickerNow(false, false, ready(view()))).toBe(false); // the school page keeps its View step
+  expect(opensPickerNow(true, false, ready(view(raw({ viewer: { ...who, canManage: false } }))))).toBe(false);
+  expect(opensPickerNow(true, false, { state: 'LOADING' })).toBe(false);
+  expect(opensPickerNow(true, false, { state: 'DENIED' })).toBe(false);
+  // New school: published plans to choose from, nothing preselected; none published: special price.
+  expect(startingPick(view())).toBeNull();
+  expect(startingPick(view(raw({ offers: [] })))).toEqual({ kind: 'CUSTOM' });
+  expect(startingPick(view(raw({ offers: [offer(), offer({ offerId: id(6), offerCode: 'COMPLETE_MONTHLY', displayName: 'Complete monthly', priceMinor: 24900 })] })))).toBeNull();
+  expect(startingPick(view(raw({ revision: 1, current: custom(1), history: [custom(1)] })))).toEqual({ kind: 'CUSTOM' });
+  const onOffer = { ...custom(1), source: 'OFFER', offerId: id(5), offerKind: 'REGULAR_MONTHLY', offerSetVersion: 3, planName: 'Core monthly', priceMinor: 14900 };
+  expect(startingPick(view(raw({ revision: 1, current: onOffer, history: [onOffer] })))).toEqual({ kind: 'OFFER', offerId: id(5) });
+});

@@ -53,6 +53,7 @@ export const HQ_REVENUE = [
 export const HQ_AI = [
   { path: '/hq/executives', title: 'Executive Team', icon: 'team' },
   { path: '/hq/ai-costs', title: 'AI Costs', icon: 'database' },
+  { path: '/hq/creative-limits', title: 'Creative Spend Limits', icon: 'settings' },
   { path: '/hq/conversation-ai', title: 'Conversation AI', icon: 'settings' },
   { path: '/hq/ai-safety', title: 'AI Safety', icon: 'check' },
 ] as const;
@@ -60,6 +61,7 @@ export const HQ_INBOX = [
   { path: '/hq/approvals', title: 'Approvals', icon: 'check' },
   { path: '/hq/support', title: 'Support', icon: 'support' },
   { path: '/hq/communications', title: 'Texts & Email', icon: 'support' },
+  { path: '/hq/communications/calls', title: 'Calls', icon: 'support' },
   { path: '/hq/communications/numbers', title: 'School texting numbers', icon: 'settings' },
 ] as const;
 export const HQ_SETTINGS = [

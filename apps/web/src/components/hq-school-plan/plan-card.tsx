@@ -152,8 +152,19 @@ export function planProblem(error: unknown): { key: SchoolPlanKey; keepKey: bool
  * owner can assign a published offer or a custom price, change it, or remove it, always through a confirm step. Records
  * only: charging stays off. The server decides authority, availability and every rule on each command.
  */
-export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = schoolPlanApi }:
-  { schoolId: string; language: string; formattingLocale: string; api?: SchoolPlanApi }): React.ReactElement {
+/** Which tile the picker starts on: the current plan when it is still offered, custom when nothing is published, else none. */
+export function startingPick(view: HqSchoolPlanView): Pick {
+  const cur = view.current;
+  if (cur?.source === 'CUSTOM') return { kind: 'CUSTOM' };
+  if (cur?.source === 'OFFER' && cur.offerId && view.offers.some(o => o.offerId === cur.offerId)) return { kind: 'OFFER', offerId: cur.offerId };
+  return view.offers.length ? null : { kind: 'CUSTOM' };
+}
+/** Open the picker by itself (create-school step 2) only for a viewer the server says may manage, and only once. */
+export const opensPickerNow = (startPicking: boolean, alreadyOpened: boolean, load: Load): boolean =>
+  startPicking && !alreadyOpened && load.state === 'READY' && load.view.viewer.canManage;
+
+export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = schoolPlanApi, startPicking = false }:
+  { schoolId: string; language: string; formattingLocale: string; api?: SchoolPlanApi; startPicking?: boolean }): React.ReactElement {
   const t = useCallback<Text>((key, vars) => schoolPlanText(language, key, vars), [language]);
   const f = useMemo(() => fmt(formattingLocale), [formattingLocale]);
   const [load, setLoad] = useState<Load>({ state: 'LOADING' });
@@ -177,12 +188,14 @@ export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = s
   const fresh = () => { setProblem(null); setDone(null); key.current = null; };
   const onStart = () => {
     if (!view) return; fresh(); const cur = view.current;
-    if (cur?.source === 'CUSTOM') { setPick({ kind: 'CUSTOM' }); setForm({ name: cur.planName ?? '', price: String((cur.priceMinor ?? 0) / 100),
-      interval: cur.billingInterval === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY', freeUntil: cur.freeUntil ?? '', note: '' }); }
-    else { setPick(cur?.source === 'OFFER' && cur.offerId && view.offers.some(o => o.offerId === cur.offerId) ? { kind: 'OFFER', offerId: cur.offerId }
-      : view.offers.length ? null : { kind: 'CUSTOM' }); setForm(x => ({ ...x, note: '' })); }
+    setPick(startingPick(view));
+    if (cur?.source === 'CUSTOM') setForm({ name: cur.planName ?? '', price: String((cur.priceMinor ?? 0) / 100),
+      interval: cur.billingInterval === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY', freeUntil: cur.freeUntil ?? '', note: '' });
+    else setForm(x => ({ ...x, note: '' }));
     setStep({ step: 'PICK' });
   };
+  const opened = useRef(false);
+  useEffect(() => { if (opensPickerNow(startPicking, opened.current, load)) { opened.current = true; onStart(); } });
   const onReview = () => {
     if (!view) return; setProblem(null);
     const r = reviewChoice(view, pick, form, t, f);

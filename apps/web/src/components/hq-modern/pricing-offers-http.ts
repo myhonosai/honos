@@ -88,7 +88,7 @@ export function pricingOfferInput(o: SaasHonOsOffer): SaasHonOsOfferInput {
     salesOpensAt:o.salesOpensAt, salesClosesAt:o.salesClosesAt, eligibility:o.eligibility, saleLimit:o.saleLimit,
     priceLock:o.priceLock, priceLockMonths:o.priceLockMonths, annualRenewal:o.annualRenewal,
     plannedMonthlyPremiumCredits:o.plannedMonthlyPremiumCredits, aiFairUseReference:o.aiFairUseReference,
-    refundWindowDays:o.refundWindowDays, cancellationTiming:o.cancellationTiming };
+    refundWindowDays:o.refundWindowDays, cancellationTiming:o.cancellationTiming, capabilities:[...o.capabilities] };
 }
 export function preparePricingRequest(kind: PricingCommandKind, target: string | null, input: unknown, key: string, subject: string): PricingRequest {
   if (!Object.hasOwn(validators,kind) || !subject || (kind === 'create' ? target !== null : !target)) throw new PricingError('INVALID_SAAS_INPUT');

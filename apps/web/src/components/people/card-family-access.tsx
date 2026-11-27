@@ -22,21 +22,28 @@ const CODES = new Set(['ACCOUNT_INPUT_INVALID', 'ACCOUNT_FORBIDDEN', 'VERIFIED_E
  * the school is the one the shell verified, the family is the one the card read, and the server checks the family
  * access manager on every read and command. Nobody types an id. Invite, revoke and end each need the confirm box.
  */
-export function CardFamilyAccess({ language, scope, sessionSubject, familyId }: { language: string; scope: FamilyScope; sessionSubject: string; familyId: string }): React.ReactElement {
+/** The fixed page where a parent accepts an invitation. It never carries the invitation ID or the private code. */
+export const FAMILY_INVITATION_PATH = '/account/family-invitation';
+export function CardFamilyAccess({ language, scope, sessionSubject, familyId, suggestedEmail = null }: {
+  language: string; scope: FamilyScope; sessionSubject: string; familyId: string;
+  /** The open contact's own email when they are a guardian of this family: staff may change it before inviting. */
+  suggestedEmail?: string | null;
+}): React.ReactElement {
   const t = (key: FKey) => familyText(language, key);
   const holder = useRef<FamilyAccessController | null>(null);
   if (!holder.current) holder.current = new FamilyAccessController(sessionSubject, scope);
   const controller = holder.current;
   const [snap, setSnap] = useState<FamilySnapshot>(controller.snapshot());
-  const [email, setEmail] = useState(''), [level, setLevel] = useState<FamilyAccessLevel>('PRIMARY_GUARDIAN'), [hours, setHours] = useState('24');
+  const [email, setEmail] = useState(suggestedEmail ?? ''), [invited, setInvited] = useState<string | null>(null), [level, setLevel] = useState<FamilyAccessLevel>('PRIMARY_GUARDIAN'), [hours, setHours] = useState('24');
   const [confirmed, setConfirmed] = useState(false), [action, setAction] = useState<{ id: string; kind: 'revoke' | 'end' } | null>(null);
-  const levelId = useId();
+  const levelId = useId(), suggested = useRef(suggestedEmail ?? '');
+  suggested.current = suggestedEmail ?? '';
   useEffect(() => {
     controller.activate();
     const off = controller.subscribe(next => {
       // The family is chosen for the person as soon as the school's families are read; it never comes from a typed value.
       if (next.phase === 'READY' && next.selected !== familyId && !next.retained && !next.active) controller.choose(familyId, next.revision);
-      if (!['READY', 'LIMITED'].includes(next.phase)) { setEmail(''); setAction(null); }
+      if (!['READY', 'LIMITED'].includes(next.phase)) { setEmail(suggested.current); setInvited(null); setAction(null); }
       setConfirmed(false); setSnap(controller.snapshot());
     });
     const offPrivacy = onShellPrivacyEvent(() => controller.conceal());
@@ -64,7 +71,7 @@ export function CardFamilyAccess({ language, scope, sessionSubject, familyId }: 
           <label><input type="checkbox" checked={confirmed} onChange={e => { if (controller.review(snap.revision)) setConfirmed(e.target.checked); }}/> {t(action.kind === 'end' ? 'confirmEnd' : 'confirmRevoke')}</label>
           <div className={styles.actions}><button type="button" className={styles.danger} disabled={!confirmed}
             onClick={() => run(() => controller.change(action.id, action.kind, confirmed, snap.revision))}>{t('apply')}</button></div>
-        </fieldset> : <form className={styles.form} autoComplete="off" onSubmit={e => { e.preventDefault(); run(() => controller.invite(email, level, Number(hours), confirmed, snap.revision)); }}>
+        </fieldset> : <form className={styles.form} autoComplete="off" onSubmit={e => { e.preventDefault(); setInvited(email.trim()); run(() => controller.invite(email, level, Number(hours), confirmed, snap.revision)); }}>
           <fieldset className={styles.fields} disabled={busy}><legend>{t('invite')}</legend>
             <label>{t('email')}<input type="email" required maxLength={254} value={email} autoComplete="off" onChange={e => edit(() => setEmail(e.target.value))}/></label>
             <label htmlFor={levelId}>{t('level')}</label>
@@ -77,7 +84,9 @@ export function CardFamilyAccess({ language, scope, sessionSubject, familyId }: 
     {snap.active ? <p className={styles.meta} role="status">{t('pending')}</p> : null}
     {snap.code ? <p className={styles.notice} role="alert">{t((CODES.has(snap.code) ? snap.code : 'ACCOUNT_UNAVAILABLE') as FKey)}</p> : null}
     {snap.receipt ? <p className={styles.notice} role="status">{t('accountStatus' in snap.receipt ? 'accepted' : 'recorded')}</p> : null}
-    {snap.share ? <div className={styles.notice}><p>{t('manual')}</p>
+    {snap.share ? <div className={styles.notice}><p><strong>{panelText(language, 'accessSteps')}</strong></p>
+      <p>{panelText(language, 'accessStep1', { link: `${globalThis.location?.origin ?? ''}${FAMILY_INVITATION_PATH}`, email: invited || panelText(language, 'accessThisEmail') })}</p>
+      <p>{panelText(language, 'accessStep2')}</p><p>{panelText(language, 'accessStep3')}</p><p>{t('manual')}</p>
       <label>{t('id')}<input readOnly autoComplete="off" value={snap.share.invitationId}/></label>
       <label>{t('token')}<input readOnly autoComplete="off" value={snap.share.token}/></label><p>{t('once')}</p></div> : null}
     {snap.needsRefresh ? <div className={styles.actions}><p className={styles.meta}>{t('refresh')}</p>

@@ -1,32 +1,78 @@
 import {
-  SCHOOL_BLAST_LIMITS, schoolBlastBodyMax, schoolBlastBodyOk, schoolBlastNameOk, schoolBlastMediaCount, schoolBlastPictureIds, schoolBlastPictureLine, schoolBlastVideoIds, schoolBlastVideoLine, schoolBlastTextOk, type SaveSchoolBlastInput, type SchoolBlast,
+  SCHOOL_BLAST_LIMITS, validateSaveSchoolBlast, type SchoolBlastAudienceFilters, type SchoolBlastMembershipFilter, schoolBlastBodyMax, schoolBlastBodyOk, schoolBlastNameOk, schoolBlastMediaCount, schoolBlastPictureIds, schoolBlastPictureLine, schoolBlastVideoIds, schoolBlastVideoLine, schoolBlastTextOk, type SaveSchoolBlastInput, type SchoolBlast,
   type SchoolBlastAudienceGroup, type SchoolBlastChannel, type SchoolBlastMergeField, type SchoolCheckoutLinks, type SchoolCheckoutPages,
 } from '@hon/contracts';
+
+/**
+ * BL4 (0695): the Contacts list filters as form strings ('' = not set). rankId 'NONE' means "no belt yet"; endsWithinDays and
+ * the date range are alternatives.
+ */
+export type BlastFilterForm = Readonly<{
+  rankId: string; programId: string; planId: string; membership: '' | SchoolBlastMembershipFilter; endsWithinDays: '' | '7' | '30' | '60' | '90';
+  endsFrom: string; endsTo: string; ageMin: string; ageMax: string;
+}>;
+export type BlastFilterField = keyof BlastFilterForm;
+export const NO_BLAST_FILTERS: BlastFilterForm = { rankId: '', programId: '', planId: '', membership: '', endsWithinDays: '', endsFrom: '', endsTo: '', ageMin: '', ageMax: '' };
+export const NO_BELT = 'NONE';
+/** BL4: a hand-picked contact. The name is known only for people picked (or seen) in this session; a reopened draft has ids only. */
+export type PickedPerson = Readonly<{ personId: string; name: string | null }>;
 
 /** The composer's working copy, in memory only. Tags are typed as one comma-separated line. */
 export type BlastDraft = Readonly<{
   blastId: string | null; version: number; name: string; channel: SchoolBlastChannel; subject: string; body: string;
-  groups: readonly SchoolBlastAudienceGroup[]; tags: string;
+  groups: readonly SchoolBlastAudienceGroup[]; tags: string; filters: BlastFilterForm; people: readonly PickedPerson[];
 }>;
 export type BlastField = 'name' | 'subject' | 'body' | 'tags';
-export type BlastProblem = 'name' | 'subject' | 'body' | 'bodyLength' | 'mergeTag' | 'pictures' | 'pictureGone' | 'videoGone' | 'groups' | 'tags';
+export type BlastProblem = 'name' | 'subject' | 'body' | 'bodyLength' | 'mergeTag' | 'pictures' | 'pictureGone' | 'videoGone' | 'groups' | 'tags' | 'filters' | 'people';
 
 const TAG = /^[A-Za-z0-9](?:[A-Za-z0-9 _-]{0,38}[A-Za-z0-9])?$/;
 const MERGE = /\{\{(first_name|last_name|school_name|staff_name)\}\}/g;
 
 export function newBlastDraft(channel: SchoolBlastChannel): BlastDraft {
-  return { blastId: null, version: 0, name: '', channel, subject: '', body: '', groups: ['ACTIVE_STUDENTS'], tags: '' };
+  return { blastId: null, version: 0, name: '', channel, subject: '', body: '', groups: ['ACTIVE_STUDENTS'], tags: '', filters: NO_BLAST_FILTERS, people: [] };
 }
-export function blastDraftOf(blast: SchoolBlast): BlastDraft {
+/** `names` are the contacts whose names this session has seen, so a reopened draft can still label them. */
+export function blastDraftOf(blast: SchoolBlast, names?: ReadonlyMap<string, string>): BlastDraft {
+  const f = blast.audience.filters ?? {};
   return { blastId: blast.blastId, version: blast.version, name: blast.name, channel: blast.channel, subject: blast.subject ?? '', body: blast.body,
-    groups: blast.audience.groups, tags: blast.audience.tags.join(', ') };
+    groups: blast.audience.groups, tags: blast.audience.tags.join(', '),
+    filters: {
+      rankId: f.noBelt ? NO_BELT : f.rankId ?? '', programId: f.programId ?? '', planId: f.planId ?? '', membership: f.membership ?? '',
+      endsWithinDays: f.endsWithinDays ? String(f.endsWithinDays) as BlastFilterForm['endsWithinDays'] : '',
+      endsFrom: f.endsFrom ?? '', endsTo: f.endsTo ?? '', ageMin: f.ageMin !== undefined ? String(f.ageMin) : '', ageMax: f.ageMax !== undefined ? String(f.ageMax) : '',
+    },
+    people: (blast.audience.people ?? []).map(personId => ({ personId, name: names?.get(personId) ?? null })) };
 }
 export function tagList(text: string): string[] { return text.split(',').map(t => t.trim()).filter(Boolean); }
 
-export function blastInput(d: BlastDraft): SaveSchoolBlastInput {
-  return { blastId: d.blastId, expectedVersion: d.version, name: d.name.trim(), channel: d.channel, subject: d.channel === 'EMAIL' ? d.subject.trim() : null,
-    body: d.body.trim(), audience: { groups: [...d.groups], tags: tagList(d.tags) } };
+const AGE = /^\d{1,3}$/;
+/** BL4: the filters the server takes (empty ones left out), or undefined when none is set. Ages that are not whole numbers are sent as typed so the check refuses them. */
+export function blastFilters(f: BlastFilterForm): SchoolBlastAudienceFilters | undefined {
+  const out: Record<string, unknown> = {};
+  if (f.rankId === NO_BELT) out.noBelt = true; else if (f.rankId) out.rankId = f.rankId;
+  if (f.programId) out.programId = f.programId;
+  if (f.planId) out.planId = f.planId;
+  if (f.membership) out.membership = f.membership;
+  if (f.endsWithinDays) out.endsWithinDays = Number(f.endsWithinDays);
+  if (f.endsFrom) out.endsFrom = f.endsFrom;
+  if (f.endsTo) out.endsTo = f.endsTo;
+  for (const k of ['ageMin', 'ageMax'] as const) { const v = f[k].trim(); if (v) out[k] = AGE.test(v) ? Number(v) : v; }
+  return Object.keys(out).length ? out as SchoolBlastAudienceFilters : undefined;
 }
+/** How many filters are set, for the summary line. */
+export function filterCount(f: BlastFilterForm): number { return Object.keys(blastFilters(f) ?? {}).length; }
+
+export function blastInput(d: BlastDraft): SaveSchoolBlastInput {
+  const filters = blastFilters(d.filters);
+  return { blastId: d.blastId, expectedVersion: d.version, name: d.name.trim(), channel: d.channel, subject: d.channel === 'EMAIL' ? d.subject.trim() : null,
+    body: d.body.trim(), audience: { groups: [...d.groups], tags: tagList(d.tags), ...(filters ? { filters } : {}), ...(d.people.length ? { people: d.people.map(x => x.personId) } : {}) } };
+}
+/** BL4: adds a picked contact once (the newest name wins); removing takes it out. */
+export function pickPerson(people: readonly PickedPerson[], person: PickedPerson): PickedPerson[] {
+  const id = person.personId.toLowerCase();
+  return people.some(x => x.personId === id) ? people.map(x => x.personId === id ? { personId: id, name: person.name ?? x.name } : x) : [...people, { personId: id, name: person.name }];
+}
+export function unpickPerson(people: readonly PickedPerson[], personId: string): PickedPerson[] { return people.filter(x => x.personId !== personId.toLowerCase()); }
 
 const MEDIA_LINE = /^\{\{(?:picture|video):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\}\}$/;
 function withoutMediaLines(body: string): string { return body.split('\n').filter(line => !MEDIA_LINE.test(line)).join('\n'); }
@@ -83,9 +129,16 @@ export function blastProblems(d: BlastDraft, ready?: ReadonlySet<string>, readyV
   else if (!schoolBlastBodyOk(input.body, d.channel)) out.push('body');
   if (ready && d.channel === 'EMAIL' && pictureIdsOf(input.body).some(id => !ready.has(id))) out.push('pictureGone');
   if (readyVideos && d.channel === 'EMAIL' && videoIdsOf(input.body).some(id => !readyVideos.has(id))) out.push('videoGone');
-  if (d.groups.length < 1) out.push('groups');
+  if (d.groups.length < 1 && d.people.length < 1) out.push('groups');
   const tags = input.audience.tags;
-  if (tags.length > SCHOOL_BLAST_LIMITS.tags || tags.some(t => !TAG.test(t)) || new Set(tags.map(t => t.toLowerCase())).size !== tags.length) out.push('tags');
+  const tagsBad = tags.length > SCHOOL_BLAST_LIMITS.tags || tags.some(t => !TAG.test(t)) || new Set(tags.map(t => t.toLowerCase())).size !== tags.length;
+  if (tagsBad) out.push('tags');
+  if (d.people.length > SCHOOL_BLAST_LIMITS.people) out.push('people');
+  // BL4: the filters are checked with the same contract the server uses (ages, dates, alternatives).
+  if (input.audience.filters && !tagsBad && d.people.length <= SCHOOL_BLAST_LIMITS.people) {
+    try { validateSaveSchoolBlast({ ...input, name: 'x', subject: d.channel === 'EMAIL' ? 'x' : null, body: 'x', audience: { groups: input.audience.groups.length ? input.audience.groups : ['ACTIVE_STUDENTS'], tags: input.audience.tags, filters: input.audience.filters } }); }
+    catch { out.push('filters'); }
+  }
   return out;
 }
 

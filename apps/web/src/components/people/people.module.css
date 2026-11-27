@@ -179,3 +179,6 @@
 .contactRow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(96px, 30%) auto; gap: 8px; align-items: center; min-width: 0; }
 .contactRow input[aria-invalid="true"] { border-color: #e48aa0; }
 @media (max-width: 520px) { .contactRow { grid-template-columns: minmax(0, 1fr) auto; } .contactRow select { grid-column: 1; } }
+/* Add contact (2026-11-27): the parent-and-child or one-adult choice. */
+.addKind { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0; border: 0; }
+.addKind legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--hon-muted, #9fb4c8); }

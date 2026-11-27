@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { bodyAfterDemoData } from './demo-data-guard-line.mjs';
+import { bodyAfterHqVisit } from './hq-visit-lift.mjs';
 
 export const crmAdultMembershipDraftFunctions = [
   ['hon.guard_crm_adult_membership_draft_source()', false, false, '0162_crm_adult_membership_draft.sql'],
@@ -40,7 +41,7 @@ export async function verifyCrmAdultMembershipDraftSecurity(admin, runtimeRole) 
       NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
         WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname=$2) OR NOT $3 OR a.is_grantable OR a.privilege_type<>'EXECUTE')) AS private
       FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid=$1::regprocedure`, [signature,runtimeRole,execute])).rows[0];
-    assert.equal(row.prosrc, bodyAfterDemoData(name, expected), `exact function source ${signature}`);
+    assert.equal(row.prosrc, bodyAfterHqVisit(signature, bodyAfterDemoData(name, expected)), `exact function source ${signature}`);
     assert.equal(row.definer, definer); assert.equal(row.volatility, 'v'); assert.equal(row.trusted, true);
     assert.deepEqual(row.config, ['search_path=pg_catalog, hon']); assert.equal(row.execute, execute); assert.equal(row.private, true); assert.equal(row.sole, true, `no overload ${signature}`);
   }

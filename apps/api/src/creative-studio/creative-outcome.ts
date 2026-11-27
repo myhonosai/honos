@@ -1,4 +1,4 @@
-import { CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_GENERATION_LIMITS, type SaasCreativeMediaKind } from '@hon/contracts';
+import { CREATIVE_ASSET_MEDIA_TYPES, CREATIVE_GENERATION_LIMITS, type CreativeMediaKind } from '@hon/contracts';
 import { CREATIVE_COST_BASES, CreativeProviderRuntimeError, type CreativeCostBasis, type CreativeResult } from './creative-provider-runtime.js';
 
 /** What the database records for a provider outcome (0216 / 0354 record_creative_generation_result). */
@@ -16,7 +16,7 @@ const REFERENCE = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}$/;
 export const isBoundedInt = (v: unknown, min: number, max: number): v is number => Number.isSafeInteger(v) && (v as number) >= min && (v as number) <= max;
 
 /** A provider result is trusted only if it fits the reservation exactly; anything else is recorded UNKNOWN for HQ review. */
-export function verifiedOutcome(result: CreativeResult, g: { mediaKind: SaasCreativeMediaKind; units: number }): CreativeOutcome {
+export function verifiedOutcome(result: CreativeResult, g: { mediaKind: CreativeMediaKind; units: number }): CreativeOutcome {
   const assets = result?.assets;
   const types: readonly string[] = CREATIVE_ASSET_MEDIA_TYPES[g.mediaKind];
   const ok = result && isBoundedInt(result.finalUnits, 1, g.units) && isBoundedInt(result.providerCostMicrounits, 0, 999_999_999_999_999)

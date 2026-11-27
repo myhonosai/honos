@@ -7,7 +7,7 @@ import type { ShellKey } from './copy';
  * prefill, which the destination re-verifies server-side.
  */
 export type SchoolShellIcon = 'home' | 'hon' | 'aiTeam' | 'conversationAi' | 'classes' | 'attendance' | 'students' | 'staff' | 'crm' | 'automation' | 'messages' | 'email' | 'parentApp'
-  | 'social' | 'checkout' | 'pos' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'ads' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
+  | 'calls' | 'social' | 'checkout' | 'pos' | 'shopify' | 'invoices' | 'website' | 'marketing' | 'ads' | 'creative' | 'ranks' | 'testing' | 'promotions' | 'billing' | 'analytics' | 'community' | 'settings';
 /** Owner menu (David, 2026-11-16 07:52Z): eleven headings, each with its few pages under it. */
 export type SchoolShellSection = 'dashboard' | 'ai' | 'calendar' | 'contacts' | 'leads' | 'communication' | 'finance' | 'marketing' | 'ranks' | 'business' | 'community';
 export type SchoolShellRoute = Readonly<{ href: string; titleKey: ShellKey; scoped: boolean; hidden?: boolean }>;
@@ -40,7 +40,7 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   // Each specialist's workspace opens from that specialist's card on the AI Team page.
   { key: 'aiTeam', titleKey: 'navAiTeam', section: 'ai', routes: [r('/staff/ai-team', 'routeAiTeam'), r('/staff/action-center/approvals', 'routeApprovals'), r('/staff/ai-work', 'routeAiWork'),
     r('/staff/voice', 'routeVoice'), h('/staff/leads/assistant', 'routeLeadAssistant'), h('/staff/marketing/assistant', 'routeMarketingAssistant'),
-    h('/staff/teaching-assistant', 'routeKai'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
+    h('/staff/teaching-assistant', 'routeKai'), h('/staff/teaching-assistant/journal', 'routeKaiJournal'), h('/staff/retention/at-risk', 'routeMayaAtRisk'),
     h('/staff/ai-team/alex', 'routeAlex'), h('/staff/ai-team/jordan', 'routeJordan'), h('/staff/ai-team/claire', 'routeClaire'), h('/staff/ai-team/lena', 'routeLena')] },
   // Conversation AI answers the school's texts in Texts > Conversations (0364); its training and settings stay here.
   { key: 'conversationAi', titleKey: 'navConversationAi', section: 'ai', routes: [r('/staff/conversations/train-ai', 'routeTrainAi')] },
@@ -66,6 +66,8 @@ export const SCHOOL_SHELL_NAV: readonly SchoolShellItem[] = [
   { key: 'email', titleKey: 'navEmail', section: 'communication', routes: [r('/staff/email', 'routeTextsSend'), r('/staff/email/history', 'routeTextsHistory'),
     r('/staff/email/templates', 'routeTextsTemplates'), r('/staff/email/opted-out', 'routeTextsOptedOut')] },
   { key: 'parentApp', titleKey: 'navParentApp', section: 'communication', routes: [r('/staff/family-messages', 'routeFamilyMessages'), r('/staff/family-messages/announcements', 'routeAnnouncements'), r('/staff/parent-app/curriculum', 'routeParentAppCurriculum')] },
+  // Calls on the school texting number (0556): call log, voicemail and calling settings; the browser phone sits in the top bar.
+  { key: 'calls', titleKey: 'navCalls', section: 'communication', routes: [r('/staff/calls', 'routeCalls')] },
   { key: 'social', titleKey: 'navSocial', section: 'communication', routes: [r('/staff/marketing/social', 'routeSocial'), r('/staff/marketing/social/posts', 'routeSocialPosts')] },
   { key: 'checkout', titleKey: 'navCheckout', section: 'finance', routes: [r('/staff/billing/checkout-pages', 'routeCheckoutPages'), r('/staff/billing/checkout-orders', 'routeCheckoutOrders')] },
   { key: 'pos', titleKey: 'navPos', section: 'finance', routes: [r('/staff/billing/pos', 'routePointOfSale')] },

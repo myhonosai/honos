@@ -71,6 +71,8 @@ const en: TrainAiCopy = {
     INVALID_SAAS_INPUT: 'That was not accepted as sent.',
     SAAS_VERSION_CONFLICT: 'The program changed since you opened it. Refresh and try again.',
     CONVERSATION_AI_PROGRAM_UNCHANGED: 'The program is already set to that.',
+    CONVERSATION_AI_TEST_INVALID: 'Type a question of up to 500 characters.',
+    CONVERSATION_AI_TEST_BUSY: 'That’s a lot of tests in a few minutes. Wait a moment and try again.',
   },
 };
 
@@ -123,6 +125,8 @@ const ko: TrainAiCopy = {
     INVALID_SAAS_INPUT: '보낸 내용이 받아들여지지 않았습니다.',
     SAAS_VERSION_CONFLICT: '연 뒤에 프로그램이 변경되었습니다. 새로 고침하고 다시 시도하세요.',
     CONVERSATION_AI_PROGRAM_UNCHANGED: '이미 그 상태입니다.',
+    CONVERSATION_AI_TEST_INVALID: '500자 이내로 질문을 입력하세요.',
+    CONVERSATION_AI_TEST_BUSY: '몇 분 사이에 시험을 많이 했습니다. 잠시 후 다시 해 보세요.',
   },
 };
 
@@ -175,6 +179,8 @@ const es: TrainAiCopy = {
     INVALID_SAAS_INPUT: 'No se aceptó tal como se envió.',
     SAAS_VERSION_CONFLICT: 'El programa cambió desde que lo abrió. Actualice e inténtelo de nuevo.',
     CONVERSATION_AI_PROGRAM_UNCHANGED: 'El programa ya está así.',
+    CONVERSATION_AI_TEST_INVALID: 'Escribe una pregunta de hasta 500 caracteres.',
+    CONVERSATION_AI_TEST_BUSY: 'Son muchas pruebas en pocos minutos. Espera un momento e inténtalo de nuevo.',
   },
 };
 

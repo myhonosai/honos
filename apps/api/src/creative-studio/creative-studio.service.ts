@@ -1,13 +1,17 @@
 import { BadRequestException, ConflictException, HttpException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
+  checkCreativePrompt,
   CREATIVE_AVATAR_OPERATION, CREATIVE_PROVIDER_JOB_ID, validateCreativeProviderJobReceipt, CREATIVE_AVATAR_VIDEO_OPERATION, validateCreativeAvatarVideo, validateCreativeAvatarVideoInput,
   validateCreativeAvatarVideoReceipt, validateCreativeAvatarVideoRecords, type CreativeAvatarVideo, type CreativeAvatarVideoReceipt, type CreativeAvatarVideoRecords, CREATIVE_GENERATION_LIMITS, saasUuid, validateCreativeAvatar, validateCreativeAvatarInput,
   validateCreativeAvatarReceipt, validateCreativeAvatarRecords, validateCreativeGeneration, validateCreativeGenerationInput,
   validateCreativeGenerationReceipt, validateCreativeGenerationRecords, validateCreativeStudioAvatarList, validateCreativeStudioGenerationList,
   type CreativeAvatar, type CreativeAvatarReceipt, type CreativeGeneration, type CreativeGenerationReceipt, type CreativeStudioAvatarList,
-  type CreativeStudioGenerationList,
+  type CreativeStudioGenerationList, CREATIVE_PHOTO_LIMITS, validateCreativePhotoAvatarInput, validateCreativePhotoDeleted, validateCreativePhotoImage,
+  validateCreativePhotoReceipt, validateCreativePhotoRecords, validateCreativePhotoUploadInput, type CreativePhotoDeleted, type CreativePhotoImage,
+  type CreativePhotoReceipt, type CreativePhotoRecords,
 } from '@hon/contracts';
+import { PhotoMetadataError, stripPhotoMetadata } from './photo-metadata.js';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 import {
   CREATIVE_PROVIDER_RUNTIME, isAsyncCreativeProviderRuntime, type AsyncCreativeProviderRuntime, type CreativeAvatarLook, type CreativeInvocation,
@@ -18,6 +22,10 @@ import { emitTelemetry } from '../observability/telemetry.js';
 
 function parse<T>(work: () => T): T {
   try { return work(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); }
+}
+/** C4: the free prompt check, before anything is reserved. The reason stays on the server; the school sees one code. */
+function allowedPrompt(text: string, realisticStyle = false): void {
+  if (!checkCreativePrompt(text, { realisticStyle }).allowed) throw new BadRequestException({ code: 'CREATIVE_PROMPT_NOT_ALLOWED' });
 }
 
 /**
@@ -50,6 +58,7 @@ export class CreativeStudioService {
   /** Reserve -> one provider call -> record. The same key returns the same generation and never calls the provider again. */
   async create(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeGenerationReceipt> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeGenerationInput(body), saasUuid(key)] as const);
+    allowedPrompt(input.prompt);
     const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(input.operationCode) : null;
     if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
     const created = await this.billing.call('createCreativeGeneration',
@@ -84,6 +93,7 @@ export class CreativeStudioService {
   /** Create -> one provider call with the avatar's look -> record -> read the avatar back. Same key = same avatar, never a second call. */
   async createAvatar(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarReceipt> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarInput(body), saasUuid(key)] as const);
+    allowedPrompt(`${input.name}\n${input.description}`, input.style === 'REALISTIC');
     const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_OPERATION) : null;
     if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
     const created = await this.billing.call('createCreativeAvatar',
@@ -113,6 +123,7 @@ export class CreativeStudioService {
   /** Create -> one provider call with the avatar's look and the script -> record -> read the video back. Same key = same video. */
   async createAvatarVideo(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarVideoReceipt> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarVideoInput(body), saasUuid(key)] as const);
+    allowedPrompt(input.script);
     const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_VIDEO_OPERATION) : null;
     if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
     // The presenter's look, read under the requester's exact-school authority before anything is reserved (avatars are
@@ -129,6 +140,54 @@ export class CreativeStudioService {
     }
     const recorded = await this.run(subject, g, route, { name: avatar.name, style: avatar.style, description: avatar.description });
     return recorded ? this.videoReceipt(subject, school, created.video.videoId, recorded, false) : created;
+  }
+
+  // ---------- A3 photo avatars (0684): an adult staff member's own consented photo; delete erases it ----------
+  async listPhotos(subject: string, schoolId: unknown): Promise<CreativePhotoRecords> {
+    const school = parse(() => saasUuid(schoolId));
+    return this.billing.call('readCreativeAvatarPhotos', [subject, school], validateCreativePhotoRecords);
+  }
+
+  /** The image itself: the database returns it only to the person in it. */
+  async readPhotoImage(subject: string, schoolId: unknown, consentId: unknown): Promise<CreativePhotoImage> {
+    const [school, consent] = parse(() => [saasUuid(schoolId), saasUuid(consentId)] as const);
+    return this.billing.call('readCreativeAvatarPhotoImage', [subject, school, consent], validateCreativePhotoImage);
+  }
+
+  /** Validate the signed consent, strip embedded metadata (location, camera, comments) and store one photo of the signer. */
+  async uploadPhoto(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativePhotoReceipt> {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativePhotoUploadInput(body), saasUuid(key)] as const);
+    let clean: Buffer;
+    try { clean = stripPhotoMetadata(input.contentType, Buffer.from(input.photo, 'base64')); }
+    catch (error) { if (error instanceof PhotoMetadataError) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); throw error; }
+    if (clean.length < CREATIVE_PHOTO_LIMITS.minBytes || clean.length > CREATIVE_PHOTO_LIMITS.maxBytes) throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' });
+    const { photo: _bytes, ...consent } = input;
+    return this.billing.call('uploadCreativeAvatarPhoto', [subject, school, JSON.stringify(consent), clean.toString('base64'), idempotencyKey],
+      validateCreativePhotoReceipt);
+  }
+
+  async deletePhoto(subject: string, schoolId: unknown, consentId: unknown): Promise<CreativePhotoDeleted> {
+    const [school, consent] = parse(() => [saasUuid(schoolId), saasUuid(consentId)] as const);
+    return this.billing.call('deleteCreativeAvatarPhoto', [subject, school, consent], validateCreativePhotoDeleted);
+  }
+
+  /** Create -> one provider call with the avatar's look -> record -> read back, exactly like an A1 avatar. Same key = same avatar. */
+  async createPhotoAvatar(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarReceipt> {
+    const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativePhotoAvatarInput(body), saasUuid(key)] as const);
+    const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_OPERATION) : null;
+    if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
+    const created = await this.billing.call('createCreativePhotoAvatar',
+      [subject, school, JSON.stringify(input), JSON.stringify({ providerId: route.providerId, modelCode: route.modelCode }), idempotencyKey, randomUUID(), randomUUID()],
+      validateCreativeAvatarReceipt);
+    const g = created.avatar.generation;
+    if (g.status !== 'GENERATING') return created;
+    if (created.replayed) {
+      const settled = await this.recoverInterrupted(subject, { generation: g, balance: created.balance, replayed: true });
+      return settled.generation.status === 'GENERATING' ? created : this.avatarReceipt(subject, school, created.avatar.avatarId, settled, true);
+    }
+    // While no real provider is connected the photo is never sent anywhere: the synthetic provider gets the look only.
+    const recorded = await this.run(subject, g, route, { name: created.avatar.name, style: created.avatar.style, description: created.avatar.description });
+    return recorded ? this.avatarReceipt(subject, school, created.avatar.avatarId, recorded, false) : created;
   }
 
   private async videoReceipt(subject: string, school: string, videoId: string, recorded: CreativeGenerationReceipt, replayed: boolean): Promise<CreativeAvatarVideoReceipt> {

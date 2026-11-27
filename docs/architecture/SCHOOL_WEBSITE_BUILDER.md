@@ -13,7 +13,7 @@ Status: SPEC. Nothing here is deployed. Custom domains, paid hosting, real AI pr
 | Governed school knowledge (articles) | **Verified**, used by HON agents | 0036, `knowledge-articles.ts` |
 | Creative credits wallet (per school) | **Verified**, inactive in prod | CW1 0202, `HON_OS_CREATIVE_CREDIT_WALLET.md` |
 | AI website *drafts* (text for up to 8 fixed pages, paid by credits, WEBSITE rate per PAGE) | **Partial**: open PR #332 (0344), synthetic runtime only, no site, no publishing, no editor | other thread ("Route AI team models and limit costs") |
-| Media storage for owner images/video | **Partial**: open PR #365 (C3, 0355) | creative thread |
+| Media storage for owner images/video | **Partial**: open PR #365 (C3, 0691) | creative thread |
 | HON OS's own marketing site | Exists but is **HON's** site, not school sites | `apps/website` (static, Render) |
 | School website record, pages, sections, theme | **Absent** | — |
 | Draft/published versions, publish, rollback | **Absent** | — |

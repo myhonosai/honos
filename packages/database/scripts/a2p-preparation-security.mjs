@@ -1,4 +1,4 @@
-export const A2P_SCOPE_BODY_SHA256='b43923e631e0754e70c4c039c2cddceb7b8a00a7a1f4ac41bb2da03d7b136419';
+export const A2P_SCOPE_BODY_SHA256='4d42f66852893d61b9d593676dcf59c54a858a46655b31a9028dcd69e316bbed';
 export async function verifyA2pPreparationSecurity(client,runtime='hon_runtime') {
   if(!/^hon_[a-z_]+$/.test(runtime))throw Error('Unsafe A2P runtime alias');
   const row=(await client.query(`SELECT p.prosecdef,p.provolatile,p.proconfig,
