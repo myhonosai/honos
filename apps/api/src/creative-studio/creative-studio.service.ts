@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, HttpException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import {
+  checkCreativePrompt,
   CREATIVE_AVATAR_OPERATION, CREATIVE_PROVIDER_JOB_ID, validateCreativeProviderJobReceipt, CREATIVE_AVATAR_VIDEO_OPERATION, validateCreativeAvatarVideo, validateCreativeAvatarVideoInput,
   validateCreativeAvatarVideoReceipt, validateCreativeAvatarVideoRecords, type CreativeAvatarVideo, type CreativeAvatarVideoReceipt, type CreativeAvatarVideoRecords, CREATIVE_GENERATION_LIMITS, saasUuid, validateCreativeAvatar, validateCreativeAvatarInput,
   validateCreativeAvatarReceipt, validateCreativeAvatarRecords, validateCreativeGeneration, validateCreativeGenerationInput,
@@ -21,6 +22,10 @@ import { emitTelemetry } from '../observability/telemetry.js';
 
 function parse<T>(work: () => T): T {
   try { return work(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); }
+}
+/** C4: the free prompt check, before anything is reserved. The reason stays on the server; the school sees one code. */
+function allowedPrompt(text: string, realisticStyle = false): void {
+  if (!checkCreativePrompt(text, { realisticStyle }).allowed) throw new BadRequestException({ code: 'CREATIVE_PROMPT_NOT_ALLOWED' });
 }
 
 /**
@@ -53,6 +58,7 @@ export class CreativeStudioService {
   /** Reserve -> one provider call -> record. The same key returns the same generation and never calls the provider again. */
   async create(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeGenerationReceipt> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeGenerationInput(body), saasUuid(key)] as const);
+    allowedPrompt(input.prompt);
     const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(input.operationCode) : null;
     if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
     const created = await this.billing.call('createCreativeGeneration',
@@ -87,6 +93,7 @@ export class CreativeStudioService {
   /** Create -> one provider call with the avatar's look -> record -> read the avatar back. Same key = same avatar, never a second call. */
   async createAvatar(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarReceipt> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarInput(body), saasUuid(key)] as const);
+    allowedPrompt(`${input.name}\n${input.description}`, input.style === 'REALISTIC');
     const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_OPERATION) : null;
     if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
     const created = await this.billing.call('createCreativeAvatar',
@@ -116,6 +123,7 @@ export class CreativeStudioService {
   /** Create -> one provider call with the avatar's look and the script -> record -> read the video back. Same key = same video. */
   async createAvatarVideo(subject: string, schoolId: unknown, body: unknown, key: unknown): Promise<CreativeAvatarVideoReceipt> {
     const [school, input, idempotencyKey] = parse(() => [saasUuid(schoolId), validateCreativeAvatarVideoInput(body), saasUuid(key)] as const);
+    allowedPrompt(input.script);
     const route: CreativeProviderRoute | null = this.connected() ? this.provider.route(CREATIVE_AVATAR_VIDEO_OPERATION) : null;
     if (!route) throw new ServiceUnavailableException({ code: 'CREATIVE_PROVIDER_NOT_CONNECTED' });
     // The presenter's look, read under the requester's exact-school authority before anything is reserved (avatars are

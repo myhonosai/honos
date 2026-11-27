@@ -432,6 +432,11 @@
     "0688_ai_fallback_policy_order_exclusion.sql": "fa660d4cc98dc22c508a847082e5a746147994b95cb1a4b170ebc320e3c12cb4",
     "0689_ai_school_cost_alerts.sql": "b6a23f776622a3a55ee0a000fc8ed48f4026e5316f961beaa222a4627aa9164e",
     "0690_website_ai_creative_credits.sql": "99a98eb93b208d3b629ecde76d0691f178b86002019fafb94b8f782fae04821c",
+    "0691_creative_media_storage.sql": "2a70c6114c5fc93a2aabc6eae175a9337811a6b51410c7b85f907e4262f8be6b",
+    "0692_creative_asset_review.sql": "ca1abe10915b73e7e78ab0eb147ba208a1b3d2ec856c8e6fb624fa6ebd4e9c59",
+    "0693_school_voice_apps.sql": "3732a33c60a4ab592768b344c57b5a5fea56d51bdcbe11502509ec6765e5e7da",
+    "0694_hq_calls.sql": "828b4f102f63cbef9b14462338b1e15ea89258ee0f23e654c112435723555015",
+    "0695_school_blast_audience_filters.sql": "eecde1129b9abe9eee70caa069b445b4c384a903df4a34108a26cb8b323140c9",
     "0696_hq_enter_school.sql": "2e38b91671c07cd55e2a1bd7ed3579ddf3be6bf3b654511c7f8dca56856bb909"
   }
 }

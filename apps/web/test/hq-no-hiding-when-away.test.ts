@@ -18,6 +18,7 @@ const hqFiles = [
   ...readdirSync(root).filter(name => /^hq-.*\.(ts|tsx)$/.test(name)).map(name => join(root, name)),
   join(root, 'school-ownership/hq-school-ownership.tsx'),
   join(root, 'zernio-integration/workbench.tsx'),
+  join(root, 'calls/hq-calls.tsx'),
 ];
 
 describe('HQ pages do not hide when the person looks away', () => {

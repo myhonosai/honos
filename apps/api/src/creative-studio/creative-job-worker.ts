@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { Pool } from 'pg';
 import { CREATIVE_GENERATION_FORMATS, CREATIVE_PROVIDER_JOB_ID, type CreativeGenerationFormat, type CreativeMediaKind } from '@hon/contracts';
 import { runtimePoolOptions } from '../foundation/runtime-pool-options.js';
@@ -6,7 +6,9 @@ import { emitTelemetry } from '../observability/telemetry.js';
 import {
   CREATIVE_PROVIDER_RUNTIME, CreativeProviderRuntimeError, isAsyncCreativeProviderRuntime, type CreativeProviderJob, type CreativeProviderRuntime,
 } from './creative-provider-runtime.js';
-import { thrownOutcome, verifiedOutcome, type CreativeOutcome } from './creative-outcome.js';
+import { thrownOutcome, unknownOutcome, verifiedOutcome, type CreativeOutcome } from './creative-outcome.js';
+import { CREATIVE_MEDIA_INGEST, CreativeDownloadRetry, type CreativeMediaIngest, type StoredCreativeObject } from './media/creative-media-store.js';
+import { CreativeMediaRejected } from './media/creative-media-inspect.js';
 
 /** One leased job as claim_creative_provider_jobs (0354) returns it: never the prompt, school or requester. */
 export interface ClaimedCreativeJob extends CreativeProviderJob { jobId: string; leaseToken: string; pollCount: number; deadlineAt: string }
@@ -17,6 +19,8 @@ export interface CreativeJobWorkerStore {
   recordPoll(jobId: string, leaseToken: string): Promise<{ status: string; nextPollAt: string }>;
   /** RECORDED, or REQUESTER_UNAVAILABLE / RESOLVED_ELSEWHERE when the answer is kept on the job for HQ. */
   recordResult(jobId: string, leaseToken: string, outcome: CreativeOutcome): Promise<{ status: string }>;
+  /** C3 (0691): a provider success together with its stored files, one object per asset in order. */
+  recordStoredResult(jobId: string, leaseToken: string, outcome: CreativeOutcome, objects: StoredCreativeObject[]): Promise<{ status: string }>;
 }
 export const CREATIVE_JOB_WORKER_STORE = Symbol('CREATIVE_JOB_WORKER_STORE');
 
@@ -71,7 +75,15 @@ export class CreativeJobWorkerDatabase implements CreativeJobWorkerStore, OnModu
       [jobId, leaseToken, JSON.stringify(outcome)]);
     return rows[0]!.data;
   }
+  async recordStoredResult(jobId: string, leaseToken: string, outcome: CreativeOutcome, objects: StoredCreativeObject[]): Promise<{ status: string }> {
+    const rows = await this.query<{ data: { status: string } }>('SELECT hon.record_creative_provider_job_stored_result($1::uuid, $2::uuid, $3::jsonb, $4::jsonb) AS data',
+      [jobId, leaseToken, JSON.stringify(outcome), JSON.stringify(objects)]);
+    return rows[0]!.data;
+  }
 }
+
+/** What the worker learned from one poll: still running (null), a final answer, or a success with stored files. */
+type JobAnswer = null | { outcome: CreativeOutcome; objects?: StoredCreativeObject[] };
 
 export interface CreativeJobRunSummary { claimed: number; recorded: number; heldForHq: number; pending: number; errors: number }
 
@@ -85,6 +97,7 @@ export class CreativeJobWorker {
   constructor(
     @Inject(CREATIVE_JOB_WORKER_STORE) private readonly store: CreativeJobWorkerStore,
     @Inject(CREATIVE_PROVIDER_RUNTIME) private readonly provider: CreativeProviderRuntime,
+    @Optional() @Inject(CREATIVE_MEDIA_INGEST) private readonly media?: CreativeMediaIngest,
   ) {}
 
   async runOnce(limit = 10, leaseSeconds = 120): Promise<CreativeJobRunSummary> {
@@ -94,9 +107,11 @@ export class CreativeJobWorker {
     summary.claimed = jobs.length;
     for (const job of jobs) {
       try {
-        const outcome = await this.ask(job);
-        if (!outcome) { await this.store.recordPoll(job.jobId, job.leaseToken); summary.pending += 1; continue; }
-        const { status } = await this.store.recordResult(job.jobId, job.leaseToken, outcome);
+        const answer = await this.ask(job);
+        if (!answer) { await this.store.recordPoll(job.jobId, job.leaseToken); summary.pending += 1; continue; }
+        const { status } = answer.objects
+          ? await this.store.recordStoredResult(job.jobId, job.leaseToken, answer.outcome, answer.objects)
+          : await this.store.recordResult(job.jobId, job.leaseToken, answer.outcome);
         if (status === 'RECORDED') summary.recorded += 1; else summary.heldForHq += 1;
       } catch {
         // A lost lease or a refused record: the job stays open and is claimed again (or swept at its deadline).
@@ -107,7 +122,7 @@ export class CreativeJobWorker {
   }
 
   /** The provider's final answer as a record, or null while it is still running (or cannot be asked right now). */
-  private async ask(job: ClaimedCreativeJob): Promise<CreativeOutcome | null> {
+  private async ask(job: ClaimedCreativeJob): Promise<JobAnswer> {
     if (!UUID.test(job.jobId) || !UUID.test(job.leaseToken) || !CREATIVE_PROVIDER_JOB_ID.test(job.providerJobId) || !MEDIA.includes(job.mediaKind)
       || !(CREATIVE_GENERATION_FORMATS as readonly string[]).includes(job.format) || !Number.isSafeInteger(job.units) || job.units < 1) return null;
     if (!isAsyncCreativeProviderRuntime(this.provider) || this.provider.readiness() !== 'READY') return null;
@@ -116,20 +131,39 @@ export class CreativeJobWorker {
     try { answer = await this.provider.poll({ providerId, modelCode, providerJobId, operationCode, mediaKind, units, format }); }
     catch (error) {
       // Only a provider's explicit final answer closes the job. It was sent, so PRE_SEND is not an answer here.
-      if (error instanceof CreativeProviderRuntimeError && (error.outcome === 'FAILED' || error.outcome === 'UNKNOWN')) return thrownOutcome(error);
+      if (error instanceof CreativeProviderRuntimeError && (error.outcome === 'FAILED' || error.outcome === 'UNKNOWN')) return { outcome: thrownOutcome(error) };
       return null;
     }
     if (answer?.state === 'PENDING') return null;
-    if (answer?.state === 'DONE') {
-      // A real provider's result is recorded only once its files are copied into HON's storage (C3). Until that exists the
-      // job stays open and, at its deadline, becomes UNKNOWN for HQ: credits are never charged for media HON does not hold.
-      if (answer.downloads?.length) {
-        emitTelemetry('warn', 'creative.result_storage_unavailable', { component: 'creative-jobs' });
-        return null;
-      }
-      return verifiedOutcome(answer.result, { mediaKind, units });
+    if (answer?.state !== 'DONE') return null;
+    // A provider success is recorded only together with its files in HON's storage (0691): credits are never charged for
+    // media HON does not hold. A success without files cannot be trusted (UNKNOWN for HQ).
+    const claimed = verifiedOutcome(answer.result, { mediaKind, units });
+    if (claimed.outcome !== 'SUCCEEDED') return { outcome: claimed };
+    if (!answer.downloads?.length) return { outcome: unknownOutcome('UNVERIFIED_RESULT') };
+    if (!this.media || this.media.readiness() !== 'READY') {
+      // No storage yet: the job stays open and, at its deadline, becomes UNKNOWN for HQ.
+      emitTelemetry('warn', 'creative.result_storage_unavailable', { component: 'creative-jobs' });
+      return null;
     }
-    return null;
+    let stored;
+    try { stored = await this.media.ingest({ jobId: job.jobId, mediaKind }, answer.downloads, claimed.assets!); }
+    catch (error) {
+      if (error instanceof CreativeMediaRejected) {
+        emitTelemetry('warn', 'creative.result_file_rejected', { component: 'creative-jobs', message: error.why });
+        return { outcome: unknownOutcome('UNVERIFIED_RESULT') };
+      }
+      // A download that may work later, or a storage error: try again on the next poll (deadline still applies).
+      emitTelemetry('warn', error instanceof CreativeDownloadRetry ? 'creative.result_download_retry' : 'creative.result_store_retry', { component: 'creative-jobs' });
+      return null;
+    }
+    // The measured files decide. A video more than a second longer than reserved, or anything else out of bounds, is
+    // held for HQ; a fraction of a second over is recorded at the reserved length.
+    const assets = stored.assets.map(a => a.durationSeconds === null ? a : { ...a, durationSeconds: a.durationSeconds > units + 1 ? a.durationSeconds : Math.min(a.durationSeconds, units) });
+    if (assets.some(a => a.durationSeconds !== null && a.durationSeconds > units)) return { outcome: unknownOutcome('UNVERIFIED_RESULT') };
+    const measured = verifiedOutcome({ ...answer.result, assets }, { mediaKind, units });
+    if (measured.outcome !== 'SUCCEEDED') return { outcome: measured };
+    return { outcome: measured, objects: stored.objects };
   }
 }
 

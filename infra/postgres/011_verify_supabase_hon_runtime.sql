@@ -7542,6 +7542,99 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
   END IF;
 END $$;
 -- End AI website edits on creative credits exact verification.
+-- Creative media storage exact verification (C3 0691): one private forced-RLS table the runtime cannot touch, three
+-- runtime entry points, the stored-result worker function and private helpers not runnable by it.
+DO $$ DECLARE f text; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.creative_stored_objects'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='hon.creative_stored_objects'::regclass)
+    OR has_table_privilege('hon_runtime','hon.creative_stored_objects','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe creative stored object table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.authorize_creative_asset_read(text,uuid,uuid)','hon.delete_creative_asset(text,uuid,uuid)',
+    'hon.confirm_creative_asset_removed(text,uuid,uuid)','hon.record_creative_provider_job_stored_result(uuid,uuid,jsonb,jsonb)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)) THEN
+      RAISE EXCEPTION 'Unsafe creative media function: %',f; END IF;
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') <> (f NOT LIKE 'hon.record_creative_provider_job_%') THEN
+      RAISE EXCEPTION 'Wrong runtime EXECUTE on creative media function: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_school_object(text,uuid,uuid,boolean)','hon.guard_creative_stored_object()'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Creative media helper runnable by runtime: %',f; END IF;
+  END LOOP;
+END $$;
+-- End creative media storage exact verification.
+-- Creative asset review exact verification (C4 0692): one private forced-RLS append-only table the runtime cannot touch,
+-- two runtime entry points, private helpers not runnable by it.
+DO $$ DECLARE f text; BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.creative_asset_reviews'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR EXISTS(SELECT 1 FROM pg_policy WHERE polrelid='hon.creative_asset_reviews'::regclass)
+    OR has_table_privilege('hon_runtime','hon.creative_asset_reviews','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') THEN
+    RAISE EXCEPTION 'Unsafe creative asset review table posture'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.review_creative_asset(text,uuid,uuid,text)','hon.list_creative_review_queue(text,uuid,integer)','hon.authorize_creative_asset_read(text,uuid,uuid)'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f::regprocedure AND p.prosecdef
+        AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)) THEN
+      RAISE EXCEPTION 'Unsafe creative review function: %',f; END IF;
+    IF NOT has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Missing runtime EXECUTE on creative review function: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.creative_asset_review_status(uuid)','hon.creative_reviewer_holds(uuid,uuid,uuid)','hon.guard_creative_asset_review()'] LOOP
+    IF has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN RAISE EXCEPTION 'Creative review helper runnable by runtime: %',f; END IF;
+  END LOOP;
+END $$;
+-- End creative asset review exact verification.
+-- School voice apps exact verification (0693): one private forced-RLS table, one staff runtime entry point, worker-only
+-- claim/record/key functions and an owner-only guard, all SECURITY DEFINER with the fixed search path.
+DO $$ DECLARE f text;
+  entry text[]:=ARRAY['hon.authorize_school_phone_token(text)'];
+  worker text[]:=ARRAY['hon.read_schools_needing_voice_app(integer)','hon.begin_school_voice_app(uuid,integer)','hon.record_school_voice_app_twiml(uuid,uuid,text)',
+    'hon.complete_school_voice_app(uuid,uuid,text,text,text)','hon.read_school_voice_app(uuid)'];
+  closed text[]:=ARRAY['hon.guard_school_voice_app()'];
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.school_voice_apps'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+    OR has_table_privilege('hon_runtime','hon.school_voice_apps','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+    OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+      AND has_table_privilege('hon_communication_worker','hon.school_voice_apps','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) THEN
+    RAISE EXCEPTION 'Unsafe school voice apps table'; END IF;
+  FOREACH f IN ARRAY entry||worker||closed LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(entry))
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+        AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(worker)))
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe school voice apps function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End school voice apps exact verification.
+-- HQ calls exact verification (0694): six private forced-RLS tables, nine HQ runtime entry points, worker-only provider
+-- functions and owner-only definer helpers, all SECURITY DEFINER with the fixed search path.
+DO $$ DECLARE f text; t text;
+  entry text[]:=ARRAY['hon.read_hq_calling(text)','hon.set_hq_calling_settings(text,jsonb)','hon.set_my_hq_call_ringing(text,jsonb)',
+    'hon.start_hq_call(text,jsonb,text)','hon.read_hq_calls(text,jsonb)','hon.update_hq_call(text,jsonb)','hon.set_hq_do_not_call(text,jsonb)',
+    'hon.open_hq_call_recording(text,uuid)','hon.authorize_hq_phone_token(text)'];
+  worker text[]:=ARRAY['hon.hq_needs_voice_app()','hon.begin_hq_voice_app(integer)','hon.record_hq_voice_app_twiml(uuid,text)',
+    'hon.complete_hq_voice_app(uuid,text,text,text)','hon.read_hq_voice_app()','hon.connect_hq_client_call(uuid,text,text)',
+    'hon.route_hq_incoming_call(text,text,text)','hon.record_hq_call_status(text,text,text,integer,timestamptz)',
+    'hon.record_hq_call_voicemail(text,text,integer)','hon.read_hq_call_recordings_due(integer)','hon.mark_hq_call_recording_deleted(uuid,text)'];
+  closed text[]:=ARRAY['hon.guard_hq_call()','hon.guard_hq_calling_row()','hon.guard_hq_voice_app()','hon.guard_hq_call_evidence()',
+    'hon.hq_call_staff_ok(uuid)','hon.hq_call_number()','hon.hq_call_contact(text)','hon.expire_hq_calls()','hon.hq_call_json(hon.hq_calls)',
+    'hon.hq_call_evidence(uuid,uuid,text,text,jsonb)'];
+BEGIN
+  FOREACH t IN ARRAY ARRAY['hq_calling_settings','hq_call_staff','hq_calls','hq_do_not_call','hq_voice_app','hq_call_events'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||t)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=('hon.'||t)::regclass)
+      OR has_table_privilege('hon_runtime','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+        AND has_table_privilege('hon_communication_worker','hon.'||t,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')) THEN
+      RAISE EXCEPTION 'Unsafe HQ calls table: %',t; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY entry||worker||closed LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(entry))
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker')
+        AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE') IS DISTINCT FROM (f=ANY(worker)))
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'Unsafe HQ calls function: %',f; END IF;
+  END LOOP;
+END $$;
+-- End HQ calls exact verification.
 -- HQ school visits exact verification (0696): three runtime entry points, five private helpers, four forced-RLS tables,
 -- and 63 school checks that carry the live-visit test.
 DO $$ DECLARE f text; t text;

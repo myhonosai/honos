@@ -8,9 +8,11 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { BlastError, blastApi, keepForRetry, type BlastApi, type BlastScope } from './http';
 import { MediaError, mediaApi, videoPageLink, type MediaApi } from '../school-media/http';
 import { CheckoutError, checkoutApi, type CheckoutApi } from '../school-checkout/http';
+import { NO_CONTACT_FILTERS, contactsApi, type ContactsApi } from '../people/contacts-http';
+import { PersonRecordError } from '../people/http';
 import type { BlastOutcomeKind } from './copy';
-import { blastDraftOf, blastInput, blastProblems, checkoutPageLink, insertLink, liveCheckoutLinks, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
-import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type CheckoutsRead, type PicturesRead, type PreviewRead, type SendAsk } from './view';
+import { NO_BLAST_FILTERS, pickPerson, unpickPerson, type BlastFilterForm, blastDraftOf, blastInput, blastProblems, checkoutPageLink, insertLink, liveCheckoutLinks, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
+import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type CheckoutsRead, type FilterOptionsRead, type PeopleSearchRead, type PersonMatch, type PicturesRead, type PreviewRead, type SendAsk } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
 type Pending = Readonly<{ key: string; scope: BlastScope } & (
@@ -24,7 +26,7 @@ const same = (a: BlastDraft | null, b: BlastDraft | null) => JSON.stringify(a) =
  * draft, check its audience and send it now or schedule it. The draft stays in memory until saved; a school change or
  * session end drops it. Every command answer is followed by a fresh list read.
  */
-export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = checkoutApi }: { api?: BlastApi; media?: Pick<MediaApi, 'library'>; checkout?: Pick<CheckoutApi, 'pages' | 'links'> }): React.ReactElement {
+export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = checkoutApi, contacts = contactsApi }: { api?: BlastApi; media?: Pick<MediaApi, 'library'>; checkout?: Pick<CheckoutApi, 'pages' | 'links'>; contacts?: Pick<ContactsApi, 'list'> }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -47,11 +49,17 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
   // BL2: the school's Live checkout pages and their share links, read each time the picker opens.
   const [checkouts, setCheckouts] = useState<CheckoutsRead>(null);
   const [checkoutPickerOpen, setCheckoutPickerOpen] = useState(false);
+  // BL4 (0695): the Contacts list's belt, program and plan lists, read once a draft is open; and the contact name search.
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsRead>(null);
+  const [peopleQuery, setPeopleQuery] = useState('');
+  const [peopleSearch, setPeopleSearch] = useState<PeopleSearchRead>(null);
+  /** Names of contacts seen in this session's searches, in memory only, so chips of a reopened draft can be labelled. */
+  const names = useRef(new Map<string, string>());
   const gen = useRef(0), privacy = useRef(0), detail = useRef(0), mounted = useRef(false), lastSchool = useRef<string | null>(null);
   const pending = useRef<Pending | null>(null), sending = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; privacy.current++; gen.current++; detail.current++; pending.current = null; }; }, []);
 
-  const forget = useCallback(() => { setDraft(null); setSaved(null); setSelected(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null); setPictures(null); setPickerOpen(false); setVideoPickerOpen(false); }, []);
+  const forget = useCallback(() => { setDraft(null); setSaved(null); setSelected(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null); setPictures(null); setPickerOpen(false); setVideoPickerOpen(false); setFilterOptions(null); setPeopleQuery(''); setPeopleSearch(null); names.current = new Map(); }, []);
   useEffect(() => onShellPrivacyEvent((event) => {
     concealShellPrivateNow(); gen.current++; privacy.current++; detail.current++; pending.current = null;
     setLock(sending.current ? 'SENDING' : 'NONE'); setOutcome(null); setList({ state: 'LOADING' }); setPictures(null);
@@ -98,10 +106,40 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
     }, (error) => { if (owned()) setCheckouts({ state: error instanceof CheckoutError && error.kind === 'DENIED' ? 'DENIED' : 'UNAVAILABLE' }); });
   }, [draft, checkoutPickerOpen, checkouts, checkout, orgId, schoolId, preferences.language]);
 
+  const peopleError = (error: unknown) => error instanceof PersonRecordError && error.kind === 'DENIED' ? 'DENIED' as const : 'UNAVAILABLE' as const;
+  useEffect(() => {
+    if (!draft || filterOptions !== null || !orgId || !schoolId) return;
+    const shown = privacy.current, scope = { organizationId: orgId, schoolId };
+    const owned = () => mounted.current && shown === privacy.current;
+    setFilterOptions({ state: 'LOADING' });
+    contacts.list(scope, NO_CONTACT_FILTERS, null, true, AbortSignal.timeout(15000)).then((list) => {
+      if (owned()) setFilterOptions(list.options ? { state: 'READY', options: list.options } : { state: 'UNAVAILABLE' });
+    }, (error) => { if (owned()) setFilterOptions({ state: peopleError(error) }); });
+  }, [draft, filterOptions, contacts, orgId, schoolId]);
+
+  const hasDraft = !!draft;
+  useEffect(() => {
+    const text = peopleQuery.trim();
+    if (!hasDraft || text.length < 2 || !orgId || !schoolId) { setPeopleSearch(null); return; }
+    const shown = privacy.current, scope = { organizationId: orgId, schoolId };
+    const abort = new AbortController();
+    const owned = () => mounted.current && shown === privacy.current && !abort.signal.aborted;
+    const timer = setTimeout(() => {
+      setPeopleSearch({ state: 'LOADING' });
+      contacts.list(scope, { ...NO_CONTACT_FILTERS, query: text }, null, false, AbortSignal.any([abort.signal, AbortSignal.timeout(15000)])).then((list) => {
+        if (!owned()) return;
+        const matches: PersonMatch[] = list.rows.slice(0, 10).map(r => ({ personId: r.personId.toLowerCase(), name: `${r.givenName} ${r.familyName}`.trim(), detail: r.email ?? r.phoneE164 }));
+        for (const m of matches) names.current.set(m.personId, m.name);
+        setPeopleSearch({ state: 'READY', matches });
+      }, (error) => { if (owned()) setPeopleSearch({ state: peopleError(error) }); });
+    }, 300);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [hasDraft, peopleQuery, contacts, orgId, schoolId]);
+
   /** Shows one blast: a draft opens in the composer, a sent or cancelled one opens read-only. */
   const show = useCallback((blast: SchoolBlast) => {
     setSelected({ state: 'READY', blast }); setPreview(null); setAsk(null); setScheduleLocal('');
-    if (blast.status === 'DRAFT') { const d = blastDraftOf(blast); setDraft(d); setSaved(d); } else { setDraft(null); setSaved(null); }
+    if (blast.status === 'DRAFT') { const d = blastDraftOf(blast, names.current); setDraft(d); setSaved(d); } else { setDraft(null); setSaved(null); }
   }, []);
   const load = useCallback((blastId: string) => {
     if (!orgId || !schoolId) return;
@@ -186,6 +224,10 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
     // Opening the picker reads the pages again, so a page published meanwhile appears.
     setCheckoutPickerOpen((open) => { if (!open) setCheckouts(null); return !open; });
   }, [lock]);
+  const onFilters = useCallback((patch: Partial<BlastFilterForm>) => edit((d) => ({ ...d, filters: { ...d.filters, ...patch } })), [edit]);
+  const onClearFilters = useCallback(() => edit((d) => ({ ...d, filters: NO_BLAST_FILTERS })), [edit]);
+  const onPickPerson = useCallback((m: PersonMatch) => edit((d) => ({ ...d, people: pickPerson(d.people, { personId: m.personId, name: m.name }) })), [edit]);
+  const onUnpickPerson = useCallback((personId: string) => edit((d) => ({ ...d, people: unpickPerson(d.people, personId) })), [edit]);
   const onNew = useCallback((channel: SchoolBlastChannel) => {
     if (lock !== 'NONE') return;
     detail.current++; setSelected(null); setDraft(newBlastDraft(channel)); setSaved(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null);
@@ -228,6 +270,8 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
       onTryAgain={() => { void send(); }}
       pictures={pictures} pickerOpen={pickerOpen} onTogglePicker={onTogglePicker} onInsertPicture={onInsertPicture} onRemovePicture={onRemovePicture}
       videoPickerOpen={videoPickerOpen} onToggleVideoPicker={onToggleVideoPicker} onInsertVideo={onInsertVideo} onInsertVideoLink={onInsertVideoLink} onRemoveVideo={onRemoveVideo}
-      checkouts={checkouts} checkoutPickerOpen={checkoutPickerOpen} onToggleCheckoutPicker={onToggleCheckoutPicker} onInsertCheckoutLink={onInsertCheckoutLink}/>
+      checkouts={checkouts} checkoutPickerOpen={checkoutPickerOpen} onToggleCheckoutPicker={onToggleCheckoutPicker} onInsertCheckoutLink={onInsertCheckoutLink}
+      filterOptions={filterOptions} onFilters={onFilters} onClearFilters={onClearFilters}
+      peopleQuery={peopleQuery} onPeopleQuery={(v) => { if (lock === 'NONE') setPeopleQuery(v); }} peopleSearch={peopleSearch} onPickPerson={onPickPerson} onUnpickPerson={onUnpickPerson}/>
   </div>;
 }

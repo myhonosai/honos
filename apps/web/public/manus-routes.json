@@ -57,6 +57,10 @@
       "title": "HON HQ | Creative Credits"
     },
     {
+      "path": "/hq/creative-limits",
+      "title": "HON HQ | Creative Spend Limits"
+    },
+    {
       "path": "/hq/integrations/zernio",
       "title": "HON HQ | Zernio"
     },
@@ -485,6 +489,10 @@
       "title": "HON | Conversations"
     },
     {
+      "path": "/staff/calls",
+      "title": "HON | Calls"
+    },
+    {
       "path": "/staff/conversations/train-ai",
       "title": "HON | Train AI"
     },
@@ -699,6 +707,10 @@
     {
       "path": "/hq/communications/:messageId",
       "title": "HON HQ | HQ message"
+    },
+    {
+      "path": "/hq/communications/calls",
+      "title": "HON HQ | Calls"
     },
     {
       "path": "/hq/communications/numbers",

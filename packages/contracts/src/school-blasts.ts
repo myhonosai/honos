@@ -19,12 +19,24 @@ export type SchoolBlastOutcome = typeof SCHOOL_BLAST_OUTCOMES[number];
 export const SCHOOL_BLAST_DELIVERY_STATES = ['WAITING', 'PENDING', 'SENDING', 'ACCEPTED', 'DELIVERED', 'BOUNCED', 'FAILED', 'SUPPRESSED', 'UNKNOWN', 'CANCELLED'] as const;
 export type SchoolBlastDeliveryState = typeof SCHOOL_BLAST_DELIVERY_STATES[number];
 export const SCHOOL_BLAST_LIMITS = {
-  name: 100, subject: 150, emailBody: 3500, smsBody: 1000, groups: 5, tags: 10, recipients: 2000, perDay: 10, scheduleDays: 60, list: 100, pictures: 10,
+  name: 100, subject: 150, emailBody: 3500, smsBody: 1000, groups: 5, tags: 10, people: 200, maxAge: 120, recipients: 2000, perDay: 10, scheduleDays: 60, list: 100, pictures: 10,
 } as const;
 export const SCHOOL_BLAST_COMMANDS = { save: 'marketing_blast.save', send: 'marketing_blast.send', cancel: 'marketing_blast.cancel' } as const;
 export const SCHOOL_BLAST_READ_COMMAND = 'marketing_blast.read';
 
-export interface SchoolBlastAudience { groups: SchoolBlastAudienceGroup[]; tags: string[] }
+/** 0695: the Contacts list filters (0623) a blast audience may add; at least one when present. */
+export const SCHOOL_BLAST_MEMBERSHIP_FILTERS = ['HAS', 'NONE', 'ACTIVE', 'PAUSED', 'CANCELLING'] as const;
+export type SchoolBlastMembershipFilter = typeof SCHOOL_BLAST_MEMBERSHIP_FILTERS[number];
+export const SCHOOL_BLAST_ENDS_WITHIN_DAYS = [7, 30, 60, 90] as const;
+export interface SchoolBlastAudienceFilters {
+  rankId?: string; noBelt?: true; programId?: string; planId?: string; membership?: SchoolBlastMembershipFilter;
+  endsWithinDays?: typeof SCHOOL_BLAST_ENDS_WITHIN_DAYS[number]; endsFrom?: string; endsTo?: string; ageMin?: number; ageMax?: number;
+}
+/**
+ * groups and tags as in 0621. 0695: filters narrow who the groups match; people (1-200 hand-picked contacts) are reached as
+ * well. groups may be empty only when people are picked.
+ */
+export interface SchoolBlastAudience { groups: SchoolBlastAudienceGroup[]; tags: string[]; filters?: SchoolBlastAudienceFilters; people?: string[] }
 export interface SaveSchoolBlastInput {
   blastId: string | null; expectedVersion: number; name: string; channel: SchoolBlastChannel; subject: string | null; body: string; audience: SchoolBlastAudience;
 }
@@ -110,15 +122,63 @@ export function schoolBlastNameOk(v: unknown): v is string {
 }
 export function schoolBlastBodyMax(channel: SchoolBlastChannel): number { return channel === 'EMAIL' ? SCHOOL_BLAST_LIMITS.emailBody : SCHOOL_BLAST_LIMITS.smsBody; }
 
+const FILTER_KEYS = ['rankId', 'noBelt', 'programId', 'planId', 'membership', 'endsWithinDays', 'endsFrom', 'endsTo', 'ageMin', 'ageMax'] as const;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const ANY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const day = (v: unknown): string => {
+  if (typeof v !== 'string' || !DAY.test(v)) invalid();
+  const [y, m, d] = v.split('-').map(Number) as [number, number, number];
+  const t = new Date(Date.UTC(y, m - 1, d));
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d) invalid();
+  return v;
+};
+const age = (v: unknown): number => { if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > SCHOOL_BLAST_LIMITS.maxAge) invalid(); return v; };
+const id = (v: unknown): string => { if (typeof v !== 'string' || !ANY_UUID.test(v)) invalid(); return v; };
+function filters(value: unknown): SchoolBlastAudienceFilters {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const row = value as Record<string, unknown>;
+  const keys = Object.keys(row);
+  if (keys.length < 1 || keys.some(k => !(FILTER_KEYS as readonly string[]).includes(k))) invalid();
+  const out: SchoolBlastAudienceFilters = {};
+  if ('rankId' in row) out.rankId = id(row.rankId);
+  if ('noBelt' in row) { if (row.noBelt !== true || 'rankId' in row) invalid(); out.noBelt = true; }
+  if ('programId' in row) out.programId = id(row.programId);
+  if ('planId' in row) out.planId = id(row.planId);
+  if ('membership' in row) out.membership = oneOf(row.membership, SCHOOL_BLAST_MEMBERSHIP_FILTERS);
+  if ('endsWithinDays' in row) {
+    if ('endsFrom' in row || 'endsTo' in row) invalid();
+    if (!(SCHOOL_BLAST_ENDS_WITHIN_DAYS as readonly unknown[]).includes(row.endsWithinDays)) invalid();
+    out.endsWithinDays = row.endsWithinDays as typeof SCHOOL_BLAST_ENDS_WITHIN_DAYS[number];
+  }
+  if ('endsFrom' in row) out.endsFrom = day(row.endsFrom);
+  if ('endsTo' in row) out.endsTo = day(row.endsTo);
+  if (out.endsFrom && out.endsTo && out.endsFrom > out.endsTo) invalid();
+  if ('ageMin' in row) out.ageMin = age(row.ageMin);
+  if ('ageMax' in row) out.ageMax = age(row.ageMax);
+  if (out.ageMin !== undefined && out.ageMax !== undefined && out.ageMin > out.ageMax) invalid();
+  return Object.freeze(out);
+}
+
 function audience(value: unknown): SchoolBlastAudience {
-  const row = record(value, ['groups', 'tags']);
-  if (!Array.isArray(row.groups) || row.groups.length < 1 || row.groups.length > SCHOOL_BLAST_LIMITS.groups) invalid();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalid();
+  const keys = Object.keys(value);
+  if (!keys.includes('groups') || !keys.includes('tags') || keys.some(k => !['groups', 'tags', 'filters', 'people'].includes(k))) invalid();
+  const row = value as Record<string, unknown>;
+  if (!Array.isArray(row.groups) || row.groups.length > SCHOOL_BLAST_LIMITS.groups || (row.groups.length < 1 && !('people' in row))) invalid();
   const groups = row.groups.map(g => oneOf(g, SCHOOL_BLAST_AUDIENCE_GROUPS));
   if (new Set(groups).size !== groups.length) invalid();
   if (!Array.isArray(row.tags) || row.tags.length > SCHOOL_BLAST_LIMITS.tags) invalid();
   const tags = row.tags.map(t => { if (typeof t !== 'string' || !TAG.test(t)) invalid(); return t; });
   if (new Set(tags.map(t => t.toLowerCase())).size !== tags.length) invalid();
-  return Object.freeze({ groups, tags });
+  const out: SchoolBlastAudience = { groups, tags };
+  if ('filters' in row) out.filters = filters(row.filters);
+  if ('people' in row) {
+    if (!Array.isArray(row.people) || row.people.length < 1 || row.people.length > SCHOOL_BLAST_LIMITS.people) invalid();
+    const people = row.people.map(id);
+    if (new Set(people).size !== people.length) invalid();
+    out.people = people;
+  }
+  return Object.freeze(out);
 }
 
 export function validateSaveSchoolBlast(value: unknown): SaveSchoolBlastInput {
