@@ -71,7 +71,7 @@ type Lock = 'NONE' | 'SENDING' | 'KEPT';
  * HQ Creative Credits: the program state, rates, packages and every school wallet, with the HQ owner's corrections on one
  * school's wallet (grant, remove, settle a generation, record a provider cost). Leaving the window or tab, or a session end,
  * hides everything, retires every read and drops a kept correction; "Show again" reads fresh. Every correction answer is
- * followed by a fresh read. Nothing here changes the program, the rates, a purchase or a payment.
+ * followed by a fresh read. The program switch and credit prices live in ProgramControls. Nothing here changes a purchase or a payment.
  */
 export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): React.ReactElement {
   const { preferences } = useLocale();
@@ -93,8 +93,8 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
   const hidden = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; privacy.current++; pending.current = null; }; }, []);
   useEffect(() => {
-    // Per-school billing data: leaving the window or tab, or a session end, hides everything and retires every read. Leaving
-    // keeps an unconfirmed correction (same key) for Try again after Show again; a session end drops it and says so.
+    // Per-school billing data: a session end hides everything, retires every read and drops an unconfirmed correction,
+    // and says so. Leaving the window or tab hides nothing in HQ (owner, 2026-11-26: "Hq do not need hidden").
     const conceal = (sessionEnded: boolean) => {
       generation.current++; privacy.current++;
       const kept = pending.current;
@@ -104,12 +104,9 @@ export function HqCreativeCredits({ api = creditsApi }: { api?: CreditsApi }): R
       setConcealed(true); setWallets({ state: 'LOADING' }); setSelected(null); setDetail(null); setForm(null); setOutcome(null);
       setLock(sending.current ? 'SENDING' : pending.current ? 'KEPT' : 'NONE');
     };
-    const away = () => conceal(false), ended = () => conceal(true);
-    const visibility = () => { if (document.visibilityState === 'hidden') away(); };
-    window.addEventListener('blur', away); document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', away);
+    const ended = () => conceal(true);
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, ended);
-    return () => { window.removeEventListener('blur', away); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', away);
-      window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, ended); };
+    return () => { window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, ended); };
   }, []);
 
   // The list and the open school's wallet are read together, fresh, on open, refresh and after every correction answer.

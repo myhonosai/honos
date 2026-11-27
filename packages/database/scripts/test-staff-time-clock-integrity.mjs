@@ -144,9 +144,9 @@ async function cleanup(orgs = [ids.organization, ids.otherOrganization], subject
 }
 
 const allPermissions = (await sql('SELECT code FROM hon.permissions ORDER BY code')).rows.map((row) => row.code);
-async function role(org, permissions, code) {
+async function role(org, permissions, code, system = false) {
   const id = randomUUID();
-  await sql('INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,$3,$3,false)', [id, org, code ?? `STAFF_${id.slice(0, 8)}`]);
+  await sql('INSERT INTO hon.roles(id,organization_id,code,name,is_system_role) VALUES($1,$2,$3,$3,$4)', [id, org, code ?? `STAFF_${id.slice(0, 8)}`, system]);
   for (const permission of permissions) await sql('INSERT INTO hon.role_permissions(role_id,organization_id,permission_code) VALUES($1,$2,$3)', [id, org, permission]);
   return id;
 }
@@ -174,7 +174,7 @@ async function seed() {
   for (const [school, org, slug] of [[ids.schoolA, ids.organization, 'a'], [ids.schoolB, ids.organization, 'b'], [ids.otherSchool, ids.otherOrganization, 'o']]) {
     await sql('INSERT INTO hon.schools(id,organization_id,name,slug,timezone) VALUES($1,$2,$3,$4,$5)', [school, org, `Time ${slug}`, `time-${slug}-${school.slice(0, 8)}`, LA]);
   }
-  OWN = await staff('owner', [await role(ids.organization, allPermissions, 'OWNER')]);
+  OWN = await staff('owner', [await role(ids.organization, allPermissions, 'OWNER', true)]);
   MGR = await staff('manager', [await role(ids.organization, ['staff.timesheet.manage'])]);
   CLK = await staff('instructor', [await role(ids.organization, ['staff.time.clock', 'people.read'])]);
   CLK2 = await staff('desk', [await role(ids.organization, ['staff.time.clock'])]);
@@ -311,6 +311,15 @@ try {
   await refused(() => punch(CLK, 'CLOCK_IN', 0), 409, 'TIMESHEET_APPROVED', 'clock in to an approved week');
   ok((await success(() => myClock(CLK), 'clock in an approved week')).data.approval.status === 'APPROVED', 'my clock shows the approval');
   await success(() => decide(MGR, dec(CLK, { weekStart: THIS, action: 'REOPEN', expectedVersion: 1 })), 'reopen this week');
+  // 0681: nobody approves their own week, except the school's system OWNER.
+  const weekRows = async (who) => (await sql('SELECT count(*)::int n FROM hon.staff_timesheet_weeks WHERE principal_id=$1', [who.principal])).rows[0].n;
+  await refused(() => decide(MGR, dec(MGR, { staffPrincipalId: MGR.principal, weekStart: LAST })), 403, 'TIMESHEET_SELF_APPROVAL', 'a manager cannot approve their own week');
+  ok(await weekRows(MGR) === 0, 'a refused self-approval writes nothing');
+  const ownWeek = (await success(() => decide(OWN, dec(OWN, { staffPrincipalId: OWN.principal, weekStart: LAST })), 'the owner approves their own week')).data;
+  ok(ownWeek.status === 'APPROVED' && ownWeek.version === 1, 'owner self-approval is recorded');
+  await success(() => decide(OWN, dec(OWN, { staffPrincipalId: OWN.principal, weekStart: LAST, action: 'REOPEN', expectedVersion: 1 })), 'the owner reopens their own week');
+  const mgrOnOwner = await success(() => decide(MGR, dec(OWN, { staffPrincipalId: OWN.principal, weekStart: LAST, expectedVersion: 2 })), 'a manager approves someone else (the owner)');
+  ok(mgrOnOwner.data.status === 'APPROVED', 'approving another person is unchanged');
 
   // 8. Access lost mid-way: grant revoked, school suspended, paid access lapsed.
   for (const [label, take, restore] of [
@@ -372,16 +381,18 @@ try {
   }
   await assert.rejects(runtime.query("SELECT hon.read_my_time_clock('x')"), /STAFF_TIME_FORBIDDEN/); checks += 1;
   { const verify = await readFile(resolve(repo, 'infra/postgres/011_verify_supabase_hon_runtime.sql'), 'utf8');
-    const begin = '-- Staff time clock exact verification (0478)', end = '-- End staff time clock exact verification.';
-    const section = verify.split(begin)[1]?.split(end)[0];
-    ok(section, begin);
-    await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1; }
+    for (const [begin, end] of [['-- Staff time clock exact verification (0478)', '-- End staff time clock exact verification.'],
+      ['-- Staff timesheet no-self-approval exact verification (0681)', '-- End staff timesheet no-self-approval exact verification.']]) {
+      const section = verify.split(begin)[1]?.split(end)[0];
+      ok(section, begin);
+      await sql(section.replaceAll('hon_runtime', CRM_CLOSE_RUNTIME_ROLE)); checks += 1;
+    } }
 
   // 12. Time tracking only: no message, payment or invoice.
   ok((await sql("SELECT (SELECT count(*) FROM hon.payment_attempts WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.invoices WHERE organization_id=ANY($1::uuid[])) + (SELECT count(*) FROM hon.communication_messages WHERE organization_id=ANY($1::uuid[])) n",
     [[ids.organization, ids.otherOrganization]])).rows[0].n === '0', 'no message, payment attempt or invoice was created');
 
-  console.log(`PASS: staff time clock (0478): ${checks} checks.`);
+  console.log(`PASS: staff time clock (0478, 0681): ${checks} checks.`);
 } finally {
   if (app) await app.close();
   await cleanup().catch((error) => console.error('cleanup failed', error));

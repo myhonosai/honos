@@ -17,8 +17,9 @@ vi.mock('react', async () => { const r = await vi.importActual<typeof import('re
 }; });
 vi.mock('next/navigation', () => ({ usePathname: () => hooks.path }));
 vi.mock('next/link', () => ({ default: (props: Record<string, unknown>) => React.createElement('a', props) }));
-vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ t: (s: string) => s, text: (s: string) => s, number: String, money: String, date: String, formattingLocale: 'en' }) }));
+vi.mock('../src/components/localization/provider', () => ({ useLocale: () => ({ t: (s: string) => s, text: (s: string) => s, number: String, money: String, date: String, formattingLocale: 'en', preferences: { language: 'en' } }) }));
 vi.mock('../src/components/hq-modern/assistant', () => ({ HonAssistant: () => React.createElement('aside', { 'data-testid': 'assistant' }) }));
+vi.mock('../src/components/calls/phone-panel', () => ({ HqPhone: () => React.createElement('span', { 'data-testid': 'hq-phone' }) }));
 vi.mock('../src/components/hq-overview-http', async () => { const actual = await vi.importActual<typeof import('../src/components/hq-overview-http')>('../src/components/hq-overview-http');
   return { ...actual, loadHqOverview: (signal?: AbortSignal) => hooks.load!(signal) }; });
 import { HqModernShell } from '../src/components/hq-modern/shell';

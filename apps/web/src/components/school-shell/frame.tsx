@@ -21,6 +21,8 @@ export type SchoolShellFrameProps = {
   choices: readonly StaffReportingSchoolChoice[]; mode: HonInterfaceTheme; viewState: ShellViewState; menuOpen: boolean;
   onMode: (mode: HonInterfaceTheme) => void; onMenu: (open: boolean) => void; onSwitch: () => void; onChoose: (schoolId: string) => void; onRestore: () => void;
   utility?: ReactNode; children?: ReactNode;
+  /** The top-bar phone (0556), mounted by the container for the verified school only. */
+  phone?: ReactNode;
   /** Guided tour step, or null when closed. */
   tourStep?: number | null; onTour?: (step: number | null) => void;
   /** Screensaver over the whole app (away or idle). The page behind it stays mounted and inert. */
@@ -29,6 +31,8 @@ export type SchoolShellFrameProps = {
   demoLoaded?: boolean;
   /** The top-bar search (field + pop-up). Without it the bar links to the Search page. */
   search?: ReactNode;
+  /** Account switcher under the logo (HQ and multi-school people). Navigation only. */
+  switcher?: ReactNode;
 };
 /** Short labels for the phone bottom bar, so every slot fits on one line. */
 const MOBILE_BAR_LABEL: Partial<Record<string, ShellKey>> = { home: 'barHome', students: 'barStudents', crm: 'barCrm', classes: 'barClasses' };
@@ -86,6 +90,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
     <a className={styles.brand} href={schoolShellHref(SCHOOL_SHELL_NAV[0]!.routes[0]!, verified)}>
       <img className={styles.brandMark} src="/brand/hon-os-mark-dark.svg" alt="" width={36} height={36} /><span><strong>{t('brand')}</strong><small>{t('brandTagline')}</small></span>
     </a>
+    {props.switcher}
     {sidebar && school}
     <nav className={styles.nav} aria-label={t('primaryNav')}>
       {SCHOOL_SHELL_SECTIONS.map(section => <div key={section.key} className={styles.navSection} role="group" aria-labelledby={`hon-nav-${section.key}`} data-nav-section={section.key}>
@@ -139,6 +144,7 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
           <small role="status">{t(VIEW_STATE[props.viewState])}</small>
         </div>
         {props.utility && <div className={styles.locale}>{props.utility}</div>}
+        {verified && props.phone}
         {props.search ?? <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>}
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}

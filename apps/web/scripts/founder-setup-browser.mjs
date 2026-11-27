@@ -19,7 +19,7 @@ await mkdir(results, { recursive: true });
 const report = { sourceSha: process.env.HON_HQ_SOURCE_SHA, syntheticBrowserOnly: true, realApiDatabaseVerification: false, externalProviderCalls: 0, screenshots: [], accessibility: [], stageChecks: [], stageAnnouncements: [], hqAffordances: [], focusChecks: [], checks: [] };
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = { mode: 'OIDC', audience: 'founder-browser-synthetic', secret: randomBytes(32).toString('hex') };
-const state = { language: 'en', ownerReads: 0, hqReads: 0, mutations: 0, status: 200, hold: false, settle: null, schoolName: 'SYNTHETIC SCHOOL A' };
+const state = { language: 'en', ownerReads: 0, hqReads: 0, mutations: 0, phoneTokenReads: 0, status: 200, hold: false, settle: null, schoolName: 'SYNTHETIC SCHOOL A' };
 const projection = () => ({ organizationId: id(1), schoolId: id(2), schoolName: state.schoolName, tier: 'COMPLETE', program: { id: id(3), version: 1, status: 'DRAFT' }, classSession: null, registration: null, guardianChildRegistration: null });
 const directory = { schools: [{ schoolId: id(2), organizationDisplayName: 'SYNTHETIC ORGANIZATION', schoolDisplayName: 'SYNTHETIC HQ SCHOOL', organizationOperationalStatus: 'ACTIVE', schoolOperationalStatus: 'ACTIVE', entitlementTier: null, createdAt: '2026-10-30T12:00:00.000Z' }] };
 const overview = { asOf: '2026-10-30T12:00:00.000Z', callerHqRole: 'OWNER', organizationCount: 0, schoolCount: 0, onboarding: { availability: 'AVAILABLE', requestCount: 0, inProgressRequestCount: 0, completedRequestCount: 0 }, configuredProviderStates: { disabled: 0, configured: 0, healthy: 0, degraded: 0, unavailable: 0 }, taskProfileCount: 0, financialMetrics: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics }, aiUsage: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage }, durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork } };
@@ -30,6 +30,8 @@ const api = createServer(async (r, s) => {
     if (r.method === 'PUT') { let text = ''; for await (const c of r) text += c; state.language = JSON.parse(text).language; send(200, { preference: { language: state.language, version: 2, updatedAt: '2026-10-30T12:00:00.000Z' }, replayed: false }); return; }
     send(200, { preference: { language: state.language, version: 2, updatedAt: '2026-10-30T12:00:00.000Z' }, schoolDefault: null, effective: { language: state.language, source: 'PERSONAL' }, supportedLanguages: ['en','ko','es'] }); return;
   }
+  // The HQ top-bar phone asks once per HQ page for a browser-phone token (a POST that changes nothing); refuse it so the phone stays hidden.
+  if (r.method === 'POST' && r.url === '/v1/hq/calls/phone-token') { state.phoneTokenReads++; send(403); return; }
   if (r.method !== 'GET') { state.mutations++; send(405); return; }
   if (r.url === '/v1/hq/session') { send(200, { principalId: id(9), hqRole: 'HON_HQ_OWNER' }); return; }
   if (r.url === '/v1/hq/overview') { send(200, { overview }); return; }
@@ -193,8 +195,11 @@ try {
       report.hqAffordances.push({ language, width, mode, normal, hover, focused, hierarchy: 'shell h1 / founder h2 / sections h3 / subsections h4' });
     }
     await hq.getByRole('button', { name: t(language, 'modern'), exact: true }).click();
-    await capture(page, `${language}-${width}-hq-proposal`); await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0);
-    report.checks.push(`${language}/${width}: HQ directory separate from synthetic proposal, no staff fanout, unknown progress, pagehide`); await context.close();
+    await capture(page, `${language}-${width}-hq-proposal`);
+    // HQ hides nothing when the page is left (owner, 2026-11-26); a school change still hides it.
+    await page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('pagehide')); }); assert(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count() > 0);
+    await page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed'))); assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0);
+    report.checks.push(`${language}/${width}: HQ directory separate from synthetic proposal, no staff fanout, unknown progress, stays on leave, hides on school change`); await context.close();
   }
   ({ context, page } = await open('en', { width: 834, height: 1000 }, 'hq'));
   const hq = page.locator('[data-founder-plane=hq]');
@@ -205,7 +210,7 @@ try {
   state.status = 200; state.hold = true;
   await hq.getByRole('button', { name: t('en','hqLoad'), exact: true }).click();
   for (let i = 0; !state.settle && i < 30; i++) await page.waitForTimeout(50); assert(state.settle);
-  await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); const readsAfterHide = state.hqReads;
+  await page.evaluate(() => window.dispatchEvent(new Event('hon:school-context-changed'))); const readsAfterHide = state.hqReads;
   state.hold = false; state.settle(); state.settle = null; await page.waitForTimeout(100);
   assert.equal(await hq.getByText('SYNTHETIC HQ SCHOOL', { exact: true }).count(), 0);
   await page.evaluate(() => window.dispatchEvent(new Event('focus'))); assert.equal(state.hqReads, readsAfterHide);

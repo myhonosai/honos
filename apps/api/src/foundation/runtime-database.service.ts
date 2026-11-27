@@ -5,6 +5,7 @@ import { emitTelemetry, summarizeError } from '../observability/telemetry.js';
 import { withTenantTransaction, type TenantTransactionContext } from '@hon/database';
 import type { HonTier, AiControlPlaneSnapshot, AiControlPlaneKind, AiProviderConnectionWrite, AiCatalogEntryWrite, AiRoutingPolicyWrite, AiTaskProfileWrite, AiTaskProfileRegistry, AiRoutingRegistry, HqPlatformOverview, HqSchoolDirectory, OrganizationOperationsSummary, SchoolCommandCenterProjection, SchoolHealthScoreProjection, RetentionReviewSignals, RetentionReviewSignalsContext } from '@hon/contracts';
 import type { HqEntitlementTransitionInput, HqEntitlementTransitionReceipt } from '@hon/contracts';
+import type { HqSchoolLifecycleInput, HqSchoolLifecycleReceipt, HqSchoolArchiveDates } from '@hon/contracts';
 import type { StaffSearchKind, StaffSearchResponse } from '@hon/contracts';
 export interface ResolvedStaffReportingScope {
   organizationId: string;
@@ -183,6 +184,16 @@ const SAAS_BILLING_CALLS = {
   commandCreativeProviderDailyLimit: { sql: 'SELECT hon.command_creative_provider_daily_limit($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   commandCreativeSchoolDailyCaps: { sql: 'SELECT hon.command_creative_school_daily_caps($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readCreativeLimitsFromHq: { sql: 'SELECT hon.read_creative_limits_from_hq($1) AS data', arity: 1, readOnly: true },
+  uploadCreativeAvatarPhoto: { sql: 'SELECT hon.upload_creative_avatar_photo($1,$2::uuid,$3::jsonb,$4,$5::uuid) AS data', arity: 5, readOnly: false },
+  readCreativeAvatarPhotos: { sql: 'SELECT hon.read_creative_avatar_photos($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  readCreativeAvatarPhotoImage: { sql: 'SELECT hon.read_creative_avatar_photo_image($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  deleteCreativeAvatarPhoto: { sql: 'SELECT hon.delete_creative_avatar_photo($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
+  createCreativePhotoAvatar: { sql: 'SELECT hon.create_creative_photo_avatar($1,$2::uuid,$3::jsonb,$4::jsonb,$5::uuid,$6::uuid,$7::uuid) AS data', arity: 7, readOnly: false },
+  authorizeCreativeAssetRead: { sql: 'SELECT hon.authorize_creative_asset_read($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: true },
+  deleteCreativeAsset: { sql: 'SELECT hon.delete_creative_asset($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
+  reviewCreativeAsset: { sql: 'SELECT hon.review_creative_asset($1,$2::uuid,$3::uuid,$4) AS data', arity: 4, readOnly: false },
+  listCreativeReviewQueue: { sql: 'SELECT hon.list_creative_review_queue($1,$2::uuid,$3::integer) AS data', arity: 3, readOnly: true },
+  confirmCreativeAssetRemoved: { sql: 'SELECT hon.confirm_creative_asset_removed($1,$2::uuid,$3::uuid) AS data', arity: 3, readOnly: false },
   // B4: refund guarantee records and Champions reward application (no refund execution, payout or prize).
   readRefundEligibility: { sql: 'SELECT hon.read_saas_refund_eligibility_from_hq($1,$2::uuid,$3::timestamptz) AS data', arity: 3, readOnly: true },
   readRefundRequests: { sql: 'SELECT hon.read_saas_refund_requests_from_hq($1,$2) AS data', arity: 2, readOnly: true },
@@ -230,6 +241,8 @@ const SAAS_BILLING_CALLS = {
   // CA2a (0420): the Conversation AI program switch (HQ readers read; a human HQ owner changes it).
   readConversationAiProgram: { sql: 'SELECT hon.read_conversation_ai_program_from_hq($1) AS data', arity: 1, readOnly: true },
   commandConversationAiProgram: { sql: 'SELECT hon.command_conversation_ai_program($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  readAiSchoolCostAlerts: { sql: 'SELECT hon.read_ai_school_cost_alerts_from_hq($1) AS data', arity: 1, readOnly: true },
+  commandAiSchoolCostAlertAck: { sql: 'SELECT hon.command_ai_school_cost_alert_acknowledgement($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readAccessExceptions: { sql: 'SELECT hon.read_saas_access_exceptions_from_hq($1,$2::uuid) AS data', arity: 2, readOnly: true },
   grantAccessException: { sql: 'SELECT hon.grant_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
   revokeAccessException: { sql: 'SELECT hon.revoke_saas_access_exception($1,$2::uuid,$3::jsonb,$4::uuid,$5::uuid,$6::uuid) AS data', arity: 6, readOnly: false },
@@ -295,6 +308,13 @@ const SAAS_BILLING_CALLS = {
   createMarketingCampaign: { sql: 'SELECT hon.create_hq_marketing_campaign($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   updateMarketingCampaign: { sql: 'SELECT hon.update_hq_marketing_campaign($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   setMarketingCampaignStatus: { sql: 'SELECT hon.set_hq_marketing_campaign_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0677: HQ ad account connections (HQ owner connects HON's own Google Ads / Meta through Zernio). Records only.
+  readHqAdAccounts: { sql: 'SELECT hon.read_hq_ad_accounts($1) AS data', arity: 1, readOnly: true },
+  startHqAdConnect: { sql: 'SELECT hon.start_hq_ad_connect($1,$2::jsonb,$3) AS data', arity: 3, readOnly: false },
+  recordHqAdProfile: { sql: 'SELECT hon.record_hq_ad_profile($1,$2::uuid,$3) AS data', arity: 3, readOnly: false },
+  claimHqAdConnect: { sql: 'SELECT hon.claim_hq_ad_connect($1,$2) AS data', arity: 2, readOnly: false },
+  recordHqAdAccounts: { sql: 'SELECT hon.record_hq_ad_accounts($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
+  disconnectHqAdAccount: { sql: 'SELECT hon.disconnect_hq_ad_account($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   // 0308: HQ plan promotions. HQ reads are read-only; HQ commands write only promotion rows; the school event writes one
   // seen/opened/dismissed row. Nothing here changes prices, offers, checkouts, plans, billing or messages.
   readPlanPromotions: { sql: 'SELECT hon.read_hq_plan_promotions($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
@@ -304,12 +324,22 @@ const SAAS_BILLING_CALLS = {
   setPlanPromotionStatus: { sql: 'SELECT hon.set_hq_plan_promotion_status($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   readSchoolPlanPromotions: { sql: 'SELECT hon.read_school_plan_promotions($1,$2::uuid) AS data', arity: 2, readOnly: true },
   recordSchoolPlanPromotionEvent: { sql: 'SELECT hon.record_school_plan_promotion_event($1,$2::uuid,$3::uuid,$4::jsonb) AS data', arity: 4, readOnly: false },
+  readHqSchoolPlan: { sql: 'SELECT hon.read_hq_school_plan($1,$2::uuid) AS data', arity: 2, readOnly: true },
+  assignHqSchoolPlan: { sql: 'SELECT hon.assign_hq_school_plan($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  removeHqSchoolPlan: { sql: 'SELECT hon.remove_hq_school_plan($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   readHqCreativeStudio: { sql: 'SELECT hon.read_hq_creative_studio($1) AS data', arity: 1, readOnly: true },
   readHqCreativeGeneration: { sql: 'SELECT hon.read_hq_creative_generation($1,$2::uuid) AS data', arity: 2, readOnly: true },
   setHqCreativeBudget: { sql: 'SELECT hon.set_hq_creative_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   createHqCreativeGeneration: { sql: 'SELECT hon.create_hq_creative_generation($1,$2::jsonb,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   recordHqCreativeGenerationResult: { sql: 'SELECT hon.record_hq_creative_generation_result($1,$2::uuid,$3::jsonb) AS data', arity: 3, readOnly: false },
   resolveHqCreativeGeneration: { sql: 'SELECT hon.resolve_hq_creative_generation($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0678 HQ Creative designs.
+  readHqCreativeDesigns: { sql: 'SELECT hon.read_hq_creative_designs($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  readHqCreativeDesign: { sql: 'SELECT hon.read_hq_creative_design($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  readHqCreativeDesignPhoto: { sql: 'SELECT hon.read_hq_creative_design_photo($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  saveHqCreativeDesign: { sql: 'SELECT hon.save_hq_creative_design($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  setHqCreativeDesignStatus: { sql: 'SELECT hon.set_hq_creative_design_status($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
+  addHqCreativeDesignPhoto: { sql: 'SELECT hon.add_hq_creative_design_photo($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
   readHqHonConversation: { sql: 'SELECT hon.read_hq_hon_conversation($1) AS data', arity: 1, readOnly: true },
   readHqHonAgentPerformance: { sql: 'SELECT hon.read_hq_hon_agent_performance($1,$2) AS data', arity: 2, readOnly: true },
   setHqHonBudget: { sql: 'SELECT hon.set_hq_hon_budget($1,$2::jsonb,$3::uuid) AS data', arity: 3, readOnly: false },
@@ -343,6 +373,20 @@ export type SchoolOwnershipOperation = 'hqRead'|'setPrimary'|'ownerRead';
 export type ShopifyOperation = 'read'|'catalog'|'orders'|'start'|'claim'|'record'|'beginSync'|'rotate'|'page'|'finishSync'|'disconnect'
   |'changes'|'propose'|'cancelChange'|'approveChange'|'rotateChange'|'recordChange'|'finance'|'recordFinance'
   |'storefront'|'saveStorefront'|'beginStorefront'|'rotateStorefront'|'finishStorefront';
+
+/** CL5 (0694): the only HQ calling SQL the API may run. */
+const HQ_CALLS_CALLS = {
+  overview: { sql: 'SELECT hon.read_hq_calling($1) AS data', arity: 1, readOnly: true },
+  list: { sql: 'SELECT hon.read_hq_calls($1,$2::jsonb) AS data', arity: 2, readOnly: true },
+  settings: { sql: 'SELECT hon.set_hq_calling_settings($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  ringing: { sql: 'SELECT hon.set_my_hq_call_ringing($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  start: { sql: 'SELECT hon.start_hq_call($1,$2::jsonb,$3) AS data', arity: 3, readOnly: false },
+  update: { sql: 'SELECT hon.update_hq_call($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  doNotCall: { sql: 'SELECT hon.set_hq_do_not_call($1,$2::jsonb) AS data', arity: 2, readOnly: false },
+  recording: { sql: 'SELECT hon.open_hq_call_recording($1,$2::uuid) AS data', arity: 2, readOnly: false },
+  phoneToken: { sql: 'SELECT hon.authorize_hq_phone_token($1) AS data', arity: 1, readOnly: false },
+} as const;
+export type HqCallsOperation = keyof typeof HQ_CALLS_CALLS;
 
 @Injectable()
 export class RuntimeDatabaseService implements OnModuleDestroy {
@@ -1176,6 +1220,39 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     }
   }
 
+  /** HQ school lifecycle (0675): authority, typed name, status and idempotency are decided in the database. */
+  async transitionSchoolLifecycleFromHq(externalSubject: string, schoolId: string, input: HqSchoolLifecycleInput,
+    key: string, requestId: string, correlationId: string): Promise<HqSchoolLifecycleReceipt> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SET LOCAL statement_timeout='10s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: HqSchoolLifecycleReceipt }>(
+        'SELECT hon.transition_school_lifecycle_from_hq($1,$2::uuid,$3,$4,$5,$6::uuid,$7::uuid,$8::uuid) AS data',
+        [externalSubject, schoolId, input.action, input.expectedStatus, input.confirmName ?? null, key, requestId, correlationId]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_SCHOOL_LIFECYCLE_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
+  /** Archived schools with their erase dates; read only, same HQ viewers as the directory. */
+  async readHqSchoolArchiveDates(externalSubject: string): Promise<HqSchoolArchiveDates> {
+    await this.assertRuntimePosture();
+    const client = await this.getPool().connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      await client.query("SET LOCAL statement_timeout='5s'; SET LOCAL lock_timeout='3s'; SET LOCAL log_parameter_max_length_on_error=0");
+      const result = await client.query<{ data: HqSchoolArchiveDates }>('SELECT hon.read_hq_school_archive_dates($1) AS data', [externalSubject]);
+      await client.query('COMMIT');
+      if (!result.rows[0]) throw new Error('HQ_SCHOOLS_UNAVAILABLE');
+      return result.rows[0].data;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
+  }
+
   /** Minimal subject-only choices; no tenant GUC, table read, or command effect. */
   async readParentPlannedAbsenceRequestContext(externalSubject: string): Promise<unknown> {
     await this.assertRuntimePosture();
@@ -1686,6 +1763,16 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('SHOPIFY_UNAVAILABLE');
     return this.callFixedSubjectFunction(call,params,'SHOPIFY_UNAVAILABLE');
+  }
+
+  /**
+   * CL5 (0694) HQ calling: one fixed, subject-only SECURITY DEFINER call per operation, no tenant settings (the HQ actor
+   * check refuses any). Reads that write nothing run READ ONLY; opening a voicemail and the phone token are audited.
+   */
+  async callHqCalls(operation: HqCallsOperation, params: readonly (string | null)[]): Promise<unknown> {
+    const call = HQ_CALLS_CALLS[operation];
+    if (!call || params.length !== call.arity) throw new Error('CALLING_UNAVAILABLE');
+    return this.callFixedSubjectFunction(call, params, 'CALLING_UNAVAILABLE');
   }
 
   private async callFixedSubjectFunction(call: { sql: string; readOnly: boolean }, params: readonly (string | null)[], unavailable: string): Promise<unknown> {

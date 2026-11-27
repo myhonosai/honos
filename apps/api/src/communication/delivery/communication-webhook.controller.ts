@@ -13,11 +13,13 @@ import { HQ_MESSAGE_WORKER_STORE, type HqMessageWorkerStore } from '../../hq-com
 import { EMPTY_VOICE_TWIML, REJECT_VOICE_TWIML, voiceForwardTwiml } from './missed-call-text-back.js';
 import { TWILIO_SUBACCOUNT_DIRECTORY, type TwilioSubaccountCredential, type TwilioSubaccountDirectory } from './twilio-subaccounts.js';
 
+import { HQ_CALL_WEBHOOK_PATHS, SCHOOL_CALL_WEBHOOK_PATHS, REJECT_CALL_TWIML, incomingRingTwiml, voiceCallsApproved } from '../../calls/twilio-voice.js';
+
 const inboundLog = new Logger('CommunicationInboundText');
 
 export const COMMUNICATION_WEBHOOK_PREFIX = /^\/v1\/communications\/webhooks(?:\/|$)/i;
 const JSON_PATHS = new Set(['/v1/communications/webhooks/sendgrid', ZERNIO_LEAD_PATH]);
-const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH]);
+const FORM_PATHS = new Set([TWILIO_STATUS_PATH, TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, ...SCHOOL_CALL_WEBHOOK_PATHS, ...HQ_CALL_WEBHOOK_PATHS]);
 export const COMMUNICATION_WEBHOOK_PATHS = new Set([...JSON_PATHS, ...FORM_PATHS]);
 export const SENDGRID_EVENT_VERIFIER = Symbol('SENDGRID_EVENT_VERIFIER');
 export const TWILIO_WEBHOOK_VERIFIER = Symbol('TWILIO_WEBHOOK_VERIFIER');
@@ -101,23 +103,12 @@ export class CommunicationWebhookController {
    * An unknown or inactive subaccount is refused like a bad signature; directory trouble is a retry.
    */
   private async subaccountFor(body: Buffer): Promise<TwilioSubaccountCredential | undefined> {
-    const sid = this.twilio.accountSidOf(body);
-    if (!sid || this.twilio.isParentAccount(sid)) return undefined;
-    if (!this.subaccounts) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
-    let credential;
-    try { credential = await this.subaccounts.webhookCredential(sid); }
-    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
-    if (!credential) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
-    return { accountSid: credential.accountSid, authToken: credential.authToken };
+    return resolveTwilioSubaccount(this.twilio, this.subaccounts, body);
   }
 
   /** A verified subaccount event must be about a number of that subaccount's school (never another school's). */
   private async requireNumberInSubaccount(subaccount: TwilioSubaccountCredential | undefined, phone: string | null | undefined): Promise<void> {
-    if (!subaccount) return;
-    let owned = false;
-    try { owned = Boolean(phone) && await this.subaccounts!.numberInAccount(subaccount.accountSid, phone!); }
-    catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
-    if (!owned) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+    return requireTwilioNumberInSubaccount(this.subaccounts, subaccount, phone);
   }
 
   /** 0281: status callbacks for HQ texts, signed over their own path and resolved only against HQ deliveries. */
@@ -268,6 +259,16 @@ export class CommunicationWebhookController {
       throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
     }
     try {
+      // CL3b (0547): with paid calling approved and calling on at a live school, ring the school's browsers and
+      // forwarding phone at once (voicemail when nobody answers); otherwise the 0249 forward / missed-call path.
+      if (voiceCallsApproved() && this.store.routeSchoolIncomingCall) {
+        const ring = await this.store.routeSchoolIncomingCall(call.to, call.from, call.callSid);
+        if (ring.outcome === 'UNROUTED') return REJECT_CALL_TWIML;
+        if (ring.outcome === 'RING' || ring.outcome === 'REPLAYED') {
+          return incomingRingTwiml({ identities: ring.identities, forwardPhoneE164: ring.forwardPhoneE164, recorded: ring.recorded,
+            voicemailGreeting: ring.voicemailGreeting, language: ring.language, schoolName: ring.schoolName, publicBase: origin });
+        }
+      }
       const route = await this.store.readMissedCallRoute(call.to);
       if (!route.routed) return REJECT_VOICE_TWIML;
       if (route.forwardPhoneE164) return voiceForwardTwiml(route.forwardPhoneE164, origin);
@@ -333,12 +334,39 @@ export function hqInboundTwiml(result: { reply: string | null; replyText: string
 }
 
 /** One form field of an already verified Twilio body. */
-function formValue(body: Buffer, name: string): string | null {
+/**
+ * T1 (0351): the credential for a school-subaccount webhook. The body's AccountSid only chooses which token to try;
+ * the signature decides. Parent-account events (HQ, hand-entered 0248 senders) return undefined and verify as before.
+ * An unknown or inactive subaccount is refused like a bad signature; directory trouble is a retry.
+ */
+export async function resolveTwilioSubaccount(twilio: TwilioWebhookVerifier, subaccounts: TwilioSubaccountDirectory | undefined, body: Buffer):
+  Promise<TwilioSubaccountCredential | undefined> {
+  const sid = twilio.accountSidOf(body);
+  if (!sid || twilio.isParentAccount(sid)) return undefined;
+  if (!subaccounts) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+  let credential;
+  try { credential = await subaccounts.webhookCredential(sid); }
+  catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+  if (!credential) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+  return { accountSid: credential.accountSid, authToken: credential.authToken };
+}
+
+/** A verified subaccount event must be about a number of that subaccount's school (never another school's). */
+export async function requireTwilioNumberInSubaccount(subaccounts: TwilioSubaccountDirectory | undefined, subaccount: TwilioSubaccountCredential | undefined,
+  phone: string | null | undefined): Promise<void> {
+  if (!subaccount) return;
+  let owned = false;
+  try { owned = Boolean(phone) && await subaccounts!.numberInAccount(subaccount.accountSid, phone!); }
+  catch { throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' }); }
+  if (!owned) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
+}
+
+export function formValue(body: Buffer, name: string): string | null {
   const values = new URLSearchParams(body.toString('utf8')).getAll(name);
   return values.length === 1 ? values[0]! : null;
 }
 
-function twilioError(error: unknown): Error {
+export function twilioError(error: unknown): Error {
   if (error instanceof TwilioWebhookError && error.reason === 'NOT_CONFIGURED') return new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
   return new BadRequestException({ code: 'INVALID_WEBHOOK' });
 }
