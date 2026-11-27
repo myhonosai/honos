@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Inject, Injectable, Param, Post, Req, Res, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, Inject, Injectable, Param, Post, Query, Req, Res, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import {
-  SAAS_COMMANDS, saasUuid, validateCreativeAssetDeletion, validateCreativeAssetDeletionRecord, validateCreativeAssetReadGrant, validateCreativeAssetView,
-  type CreativeAssetDeletion, type CreativeAssetView,
+  CREATIVE_REVIEW_QUEUE_LIMIT, SAAS_COMMANDS, saasUuid, validateCreativeAssetDeletion, validateCreativeAssetDeletionRecord, validateCreativeAssetReadGrant,
+  validateCreativeAssetReview, validateCreativeAssetReviewInput, validateCreativeAssetView, validateCreativeReviewQueue,
+  type CreativeAssetDeletion, type CreativeAssetReview, type CreativeAssetView, type CreativeReviewQueue,
 } from '@hon/contracts';
 import { HonIdentityGuard } from '../../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../../foundation/hon-identity.service.js';
@@ -55,6 +56,26 @@ export class CreativeMediaService {
     }
     return validateCreativeAssetDeletion({ assetId: asset, deletedAt: record.deletedAt, fileRemoved });
   }
+
+  /** C4: a person with marketing.social.manage approves or rejects one asset (human command; the AI team never can). */
+  async review(subject: string, schoolId: unknown, assetId: unknown, body: unknown): Promise<CreativeAssetReview> {
+    const [school, asset, input] = parse(() => [saasUuid(schoolId), saasUuid(assetId), validateCreativeAssetReviewInput(body)] as const);
+    const result = await this.billing.call('reviewCreativeAsset', [subject, school, asset, input.decision], validateCreativeAssetReview);
+    if (result.assetId !== asset || result.review !== input.decision) throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    return result;
+  }
+
+  /** C4: the school's assets waiting for review, oldest first (reviewers only). */
+  async queue(subject: string, schoolId: unknown, limit: unknown): Promise<CreativeReviewQueue> {
+    const [school, size] = parse(() => {
+      const n = limit === undefined ? CREATIVE_REVIEW_QUEUE_LIMIT : Number(limit);
+      if (!(typeof limit === 'undefined' || (typeof limit === 'string' && /^[1-9][0-9]?$/.test(limit))) || !Number.isSafeInteger(n) || n < 1 || n > CREATIVE_REVIEW_QUEUE_LIMIT) throw new Error('limit');
+      return [saasUuid(schoolId), n] as const;
+    });
+    const result = await this.billing.call('listCreativeReviewQueue', [subject, school, String(size)], validateCreativeReviewQueue);
+    if (result.limit !== size) throw new ServiceUnavailableException({ code: 'SAAS_UNAVAILABLE' });
+    return result;
+  }
 }
 
 function subject(req: HonRequest): string {
@@ -66,6 +87,15 @@ function subject(req: HonRequest): string {
 @UseGuards(HonIdentityGuard)
 export class CreativeMediaController {
   constructor(private readonly media: CreativeMediaService) {}
+  @Get('review-queue') @UseGuards(SaasReadGuard)
+  async queue(@Req() req: HonRequest, @Res({ passthrough: true }) res: { setHeader(name: string, value: string): void }, @Param('schoolId') schoolId: string, @Query('limit') limit: unknown) {
+    res.setHeader('Cache-Control', 'private, no-store');
+    return { data: await this.media.queue(subject(req), schoolId, limit) };
+  }
+  @Post(':assetId/review') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.reviewCreativeAsset)
+  async review(@Req() req: HonRequest, @Param('schoolId') schoolId: string, @Param('assetId') assetId: string, @Body() body: unknown) {
+    return { data: await this.media.review(subject(req), schoolId, assetId, body) };
+  }
   @Get(':assetId/view') @UseGuards(SaasReadGuard)
   async view(@Req() req: HonRequest, @Res({ passthrough: true }) res: { setHeader(name: string, value: string): void }, @Param('schoolId') schoolId: string, @Param('assetId') assetId: string) {
     res.setHeader('Cache-Control', 'private, no-store');

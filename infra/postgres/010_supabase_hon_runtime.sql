@@ -5784,3 +5784,20 @@ DO $$ DECLARE r text; f text; BEGIN
   GRANT EXECUTE ON FUNCTION hon.authorize_creative_asset_read(text,uuid,uuid), hon.delete_creative_asset(text,uuid,uuid),
     hon.confirm_creative_asset_removed(text,uuid,uuid) TO hon_runtime;
 END $$;
+-- 0692 creative asset review: one private forced-RLS append-only table, private helpers; two new runtime entry points
+-- (the replaced read grant keeps its 0691 grant).
+DO $$ DECLARE r text; f text; BEGIN
+  IF to_regclass('hon.creative_asset_reviews') IS NULL THEN RAISE EXCEPTION 'Apply migration 0692 first'; END IF;
+  EXECUTE 'REVOKE ALL ON TABLE hon.creative_asset_reviews FROM PUBLIC';
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.creative_asset_reviews FROM %I', r);
+  END LOOP;
+  FOR f IN SELECT p.oid::regprocedure::text FROM pg_proc p WHERE p.pronamespace = 'hon'::regnamespace
+      AND p.proname IN ('guard_creative_asset_review','creative_asset_review_status','creative_reviewer_holds') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I', f, r);
+    END LOOP;
+  END LOOP;
+  GRANT EXECUTE ON FUNCTION hon.review_creative_asset(text,uuid,uuid,text), hon.list_creative_review_queue(text,uuid,integer) TO hon_runtime;
+END $$;

@@ -19,6 +19,9 @@ export const CREATIVE_GENERATION_FAILURE_REASONS = ['PROVIDER_NOT_CONNECTED', 'I
 export type CreativeGenerationFailureReason = typeof CREATIVE_GENERATION_FAILURE_REASONS[number];
 export const CREATIVE_ASSET_MEDIA_TYPES = { IMAGE: ['image/png', 'image/webp'], VIDEO: ['video/mp4'] } as const;
 export type CreativeAssetMediaType = 'image/png' | 'image/webp' | 'video/mp4';
+/** C4 (0692): every asset waits for a human reviewer; only APPROVED assets may be used in posts, ads or avatar looks. */
+export const CREATIVE_ASSET_REVIEW_STATES = ['PENDING_REVIEW', 'APPROVED', 'REJECTED'] as const;
+export type CreativeAssetReviewState = typeof CREATIVE_ASSET_REVIEW_STATES[number];
 /** Limits shared by the database (0216) and the API. */
 export const CREATIVE_GENERATION_LIMITS = { promptCharacters: 1000, maxUnits: 1000, maxAssets: 8, listLimit: 50, maxInProgressPerSchool: 3, interruptedAfterSeconds: 120 } as const;
 export const CREATIVE_STUDIO_PROVIDER_STATES = ['CONNECTED', 'NOT_CONNECTED'] as const;
@@ -27,6 +30,7 @@ export type CreativeStudioProviderState = typeof CREATIVE_STUDIO_PROVIDER_STATES
 export interface CreativeGenerationInput { operationCode: string; units: number; format: CreativeGenerationFormat; prompt: string }
 export interface CreativeGenerationAsset {
   assetId: string; ordinal: number; mediaType: CreativeAssetMediaType; width: number; height: number; durationSeconds: number | null; origin: 'SYNTHETIC' | 'PROVIDER';
+  review: CreativeAssetReviewState;
 }
 export interface CreativeGeneration {
   generationId: string; schoolId: string; operationCode: string; mediaKind: CreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
@@ -56,9 +60,9 @@ export function validateCreativeGenerationInput(value: unknown): CreativeGenerat
 
 // ---------- responses (closed; any drift fails) ----------
 function validateAsset(value: unknown, mediaKind: CreativeMediaKind, after: number): void {
-  const a = record(value, drift); exactKeys(a, ['assetId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'origin'], drift);
+  const a = record(value, drift); exactKeys(a, ['assetId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'origin', 'review'], drift);
   if (!isUuid(a.assetId) || !isInt(a.ordinal, after + 1, CREATIVE_GENERATION_LIMITS.maxAssets) || !has(CREATIVE_ASSET_MEDIA_TYPES[mediaKind], a.mediaType) || !isInt(a.width, 1, 8192) || !isInt(a.height, 1, 8192)
-    || (a.origin !== 'SYNTHETIC' && a.origin !== 'PROVIDER') || (mediaKind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
+    || (a.origin !== 'SYNTHETIC' && a.origin !== 'PROVIDER') || !has(CREATIVE_ASSET_REVIEW_STATES, a.review) || (mediaKind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
 }
 export function validateCreativeGeneration(value: unknown): CreativeGeneration {
   const g = record(value, drift);

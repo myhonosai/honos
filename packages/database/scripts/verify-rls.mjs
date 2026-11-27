@@ -176,6 +176,7 @@ const expectedRlsTables = [
   'family_referrals',
   'school_message_templates',
   'creative_stored_objects',
+  'creative_asset_reviews',
   'zernio_lead_forms',
   'zernio_lead_receipts',
   'crm_activities',

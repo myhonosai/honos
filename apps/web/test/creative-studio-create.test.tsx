@@ -18,7 +18,7 @@ function generation(status: CreativeGeneration['status'] = 'SUCCEEDED', extra: P
   return { generationId: id(800), schoolId: scope.schoolId, operationCode: input.operationCode, mediaKind: 'IMAGE', units: input.units, format: input.format, prompt: input.prompt,
     status, failureReason: status === 'FAILED' ? 'PROVIDER_REJECTED' : status === 'UNDER_REVIEW' ? 'PROVIDER_UNKNOWN' : null, reservedCredits: 80,
     chargedCredits: charged ? 80 : null, createdAt: '2026-11-07T06:00:00.000Z', completedAt: done ? '2026-11-07T06:00:05.000Z' : null,
-    assets: status === 'SUCCEEDED' ? [1, 2].map(n => ({ assetId: id(810 + n), ordinal: n, mediaType: 'image/png' as const, width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' as const })) : [],
+    assets: status === 'SUCCEEDED' ? [1, 2].map(n => ({ assetId: id(810 + n), ordinal: n, mediaType: 'image/png' as const, width: 1080, height: 1080, durationSeconds: null, origin: 'SYNTHETIC' as const, review: 'PENDING_REVIEW' as const })) : [],
     ...extra };
 }
 const balance = () => rawWallet().balance;

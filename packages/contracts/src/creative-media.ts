@@ -38,3 +38,46 @@ export function validateCreativeAssetDeletion(value: unknown): CreativeAssetDele
   if (!isUuid(r.assetId) || !isTimestamp(r.deletedAt) || typeof r.fileRemoved !== 'boolean') drift();
   return r as unknown as CreativeAssetDeletion;
 }
+
+// ---------- C4 (0692): human review ----------
+export const CREATIVE_REVIEW_DECISIONS = ['APPROVED', 'REJECTED'] as const;
+export type CreativeReviewDecision = typeof CREATIVE_REVIEW_DECISIONS[number];
+export interface CreativeAssetReviewInput { decision: CreativeReviewDecision }
+export interface CreativeAssetReview { assetId: string; review: CreativeReviewDecision; reviewedAt: string; reviewedBySelf: boolean }
+export interface CreativeReviewQueueItem {
+  assetId: string; generationId: string; ordinal: number; mediaType: CreativeStoredMediaType; width: number; height: number;
+  durationSeconds: number | null; storedAt: string; requestedBySelf: boolean;
+}
+export interface CreativeReviewQueue { limit: number; assets: CreativeReviewQueueItem[] }
+export const CREATIVE_REVIEW_QUEUE_LIMIT = 50;
+
+export function validateCreativeAssetReviewInput(value: unknown): CreativeAssetReviewInput {
+  const fail = () => { throw new TypeError('INVALID_SAAS_INPUT'); };
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
+  const r = value as Record<string, unknown>;
+  if (Object.keys(r).length !== 1 || !(CREATIVE_REVIEW_DECISIONS as readonly unknown[]).includes(r.decision)) fail();
+  return { decision: r.decision as CreativeReviewDecision };
+}
+export function validateCreativeAssetReview(value: unknown): CreativeAssetReview {
+  const r = record(value, drift); exactKeys(r, ['assetId', 'review', 'reviewedAt', 'reviewedBySelf'], drift);
+  if (!isUuid(r.assetId) || !(CREATIVE_REVIEW_DECISIONS as readonly unknown[]).includes(r.review) || !isTimestamp(r.reviewedAt) || typeof r.reviewedBySelf !== 'boolean') drift();
+  return r as unknown as CreativeAssetReview;
+}
+const isDim = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 1 && (v as number) <= 8192;
+export function validateCreativeReviewQueue(value: unknown): CreativeReviewQueue {
+  const q = record(value, drift); exactKeys(q, ['limit', 'assets'], drift);
+  if (!Number.isSafeInteger(q.limit) || (q.limit as number) < 1 || (q.limit as number) > CREATIVE_REVIEW_QUEUE_LIMIT
+    || !Array.isArray(q.assets) || q.assets.length > (q.limit as number)) drift();
+  let previous = '';
+  for (const item of q.assets as unknown[]) {
+    const a = record(item, drift);
+    exactKeys(a, ['assetId', 'generationId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'storedAt', 'requestedBySelf'], drift);
+    if (!isUuid(a.assetId) || !isUuid(a.generationId) || !Number.isSafeInteger(a.ordinal) || (a.ordinal as number) < 1 || (a.ordinal as number) > 8
+      || !isType(a.mediaType) || !isDim(a.width) || !isDim(a.height) || !isTimestamp(a.storedAt) || typeof a.requestedBySelf !== 'boolean'
+      || (a.mediaType === 'video/mp4' ? !(Number.isSafeInteger(a.durationSeconds) && (a.durationSeconds as number) >= 1 && (a.durationSeconds as number) <= 600) : a.durationSeconds !== null)) drift();
+    const key = `${a.storedAt as string}|${a.assetId as string}`;
+    if (key <= previous) drift(); // oldest first, no repeats
+    previous = key;
+  }
+  return q as unknown as CreativeReviewQueue;
+}
