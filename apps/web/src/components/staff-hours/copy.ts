@@ -50,7 +50,7 @@ const en: HoursCopy = {
     total: 'Week total', clock: 'Time clock', manager: 'Added by a manager', fileName: (w) => `hours-week-of-${w}.csv` },
   outcomes: {
     SAVING: 'Saving…', PUNCHED: 'Done.', SAVED: 'Entry saved.', APPROVED_WEEK: 'Week approved.', REOPENED: 'Week reopened.',
-    SESSION: 'Your session ended. Sign in again.', DENIED: 'Not saved: you can’t do this here (the person may no longer be staff).',
+    SESSION: 'Your session ended. Sign in again.', DENIED: 'Not saved: you can’t do this here (the person may no longer be staff).', SELF_APPROVAL: 'Not approved: you can’t approve your own week. Ask the owner or another manager.',
     CHANGED: 'Not saved: this changed on another screen or device. It was read again.', OVERLAP: 'Not saved: this overlaps another entry for this person.',
     APPROVED: 'Not saved: this week is approved. Reopen it first.', OPEN_ENTRY: 'Not approved: someone is still clocked in that week.',
     TOO_LONG: 'Not clocked out: this entry is over 24 hours. Ask a manager to fix it.', GONE: 'Not saved: this entry is gone. It was read again.',
@@ -85,7 +85,7 @@ const ko: HoursCopy = {
     total: '주간 합계', clock: '출퇴근 기록', manager: '관리자가 추가', fileName: (w) => `hours-week-of-${w}.csv` },
   outcomes: {
     SAVING: '저장 중…', PUNCHED: '완료.', SAVED: '기록을 저장했습니다.', APPROVED_WEEK: '주간을 승인했습니다.', REOPENED: '주간을 다시 열었습니다.',
-    SESSION: '세션이 끝났습니다. 다시 로그인하세요.', DENIED: '저장되지 않음: 여기에서 할 수 없습니다(더 이상 직원이 아닐 수 있음).',
+    SESSION: '세션이 끝났습니다. 다시 로그인하세요.', DENIED: '저장되지 않음: 여기에서 할 수 없습니다(더 이상 직원이 아닐 수 있음).', SELF_APPROVAL: '승인되지 않음: 본인의 주간 근무 시간은 승인할 수 없습니다. 소유자나 다른 관리자에게 요청하세요.',
     CHANGED: '저장되지 않음: 다른 화면이나 기기에서 변경되었습니다. 다시 불러왔습니다.', OVERLAP: '저장되지 않음: 이 사람의 다른 기록과 겹칩니다.',
     APPROVED: '저장되지 않음: 이 주는 승인되었습니다. 먼저 다시 여세요.', OPEN_ENTRY: '승인되지 않음: 그 주에 아직 근무 중인 사람이 있습니다.',
     TOO_LONG: '퇴근되지 않음: 이 기록은 24시간을 넘었습니다. 관리자에게 수정을 요청하세요.', GONE: '저장되지 않음: 이 기록이 없습니다. 다시 불러왔습니다.',
@@ -120,7 +120,7 @@ const es: HoursCopy = {
     total: 'Total de la semana', clock: 'Reloj', manager: 'Añadido por un encargado', fileName: (w) => `hours-week-of-${w}.csv` },
   outcomes: {
     SAVING: 'Guardando…', PUNCHED: 'Hecho.', SAVED: 'Registro guardado.', APPROVED_WEEK: 'Semana aprobada.', REOPENED: 'Semana reabierta.',
-    SESSION: 'Tu sesión terminó. Inicia sesión de nuevo.', DENIED: 'No se guardó: no puedes hacer esto aquí (puede que la persona ya no sea personal).',
+    SESSION: 'Tu sesión terminó. Inicia sesión de nuevo.', DENIED: 'No se guardó: no puedes hacer esto aquí (puede que la persona ya no sea personal).', SELF_APPROVAL: 'No se aprobó: no puedes aprobar tu propia semana. Pídelo al propietario o a otro gerente.',
     CHANGED: 'No se guardó: esto cambió en otra pantalla o dispositivo. Se leyó de nuevo.', OVERLAP: 'No se guardó: se solapa con otro registro de esta persona.',
     APPROVED: 'No se guardó: esta semana está aprobada. Reábrela primero.', OPEN_ENTRY: 'No se aprobó: alguien aún está trabajando esa semana.',
     TOO_LONG: 'No se marcó la salida: este registro supera las 24 horas. Pide a un encargado que lo corrija.', GONE: 'No se guardó: este registro ya no existe. Se leyó de nuevo.',

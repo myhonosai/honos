@@ -1,13 +1,16 @@
 import type { ParentPushPlatform } from '@hon/contracts/parent-push';
 import type { ParentApi } from '../api/client';
 
-/** What the phone can do for announcement notifications. The Expo version lives in expo-push.ts; tests pass a fake. */
+/** Which alert was tapped: an announcement opens Home, a school message reply (0658) opens Messages. */
+export type OpenedAlert = 'announcement' | 'message';
+
+/** What the phone can do for school notifications. The Expo version lives in expo-push.ts; tests pass a fake. */
 export interface PhonePush {
   platform: ParentPushPlatform;
   /** The phone's Expo push token, asking permission first when `ask` is true. Null when not allowed or not available. */
   token(ask: boolean): Promise<string | null>;
-  /** Calls back when the person taps an announcement notification. Returns the unsubscribe. */
-  onOpenAnnouncement(listener: () => void): () => void;
+  /** Calls back when the person taps a school notification, with which kind it was. Returns the unsubscribe. */
+  onOpenAlert(listener: (alert: OpenedAlert) => void): () => void;
 }
 
 export type PushRegistration = 'registered' | 'not-sending' | 'not-allowed' | 'not-saved';

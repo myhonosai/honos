@@ -20,6 +20,7 @@ const {RuntimeDatabaseService}=require('./dist/foundation/runtime-database.servi
 const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const AC=require('./dist/conversations/conversation-ai.controller.js');
 const {ConversationAiService}=require('./dist/conversations/conversation-ai.service.js');
+const {ConversationAiTestService}=require('./dist/conversations/conversation-ai-test.service.js');
 const C=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),worker=new pg.Client({connectionString:workerUrl.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
@@ -82,7 +83,7 @@ try{
  }
  const entry=['read_school_conversation_ai','read_school_ai_knowledge','set_school_conversation_ai_settings','upload_school_ai_training_file','read_school_ai_training_file',
   'save_school_ai_training_item','set_school_ai_training_item_status','read_conversation_ai_program_from_hq','command_conversation_ai_program'];
- const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%conversation_ai%' OR p.proname LIKE '%school_ai_%')");
+ const fns=await q("SELECT p.oid,p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%conversation_ai%' OR p.proname LIKE '%school_ai_%') AND p.proname NOT LIKE '%conversation_ai_test%'");
  assert.equal(fns.length,19,fns.map(f=>f.proname).join());
  for(const f of fns){
   assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry.includes(f.proname),'runtime '+f.proname);
@@ -93,7 +94,7 @@ try{
  assert.deepEqual((await q('SELECT status,version FROM hon.conversation_ai_program'))[0],{status:'OFF',version:1});
  pass('forced deny-all RLS on all five tables, no table privilege; the runtime executes exactly nine entry points and the worker none; the program starts OFF');
 
- const module=await Test.createTestingModule({controllers:[AC.ConversationAiController],providers:[ConversationAiService,AC.ConversationAiReadGuard,AC.ConversationAiKnowledgeGuard,AC.ConversationAiFileGuard,AC.ConversationAiSettingsGuard,AC.ConversationAiUploadGuard,AC.ConversationAiItemSaveGuard,AC.ConversationAiItemStatusGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
+ const module=await Test.createTestingModule({controllers:[AC.ConversationAiController],providers:[ConversationAiService,AC.ConversationAiReadGuard,AC.ConversationAiKnowledgeGuard,AC.ConversationAiFileGuard,AC.ConversationAiSettingsGuard,AC.ConversationAiUploadGuard,AC.ConversationAiItemSaveGuard,AC.ConversationAiItemStatusGuard,AC.ConversationAiTestReadGuard,AC.ConversationAiTestAskGuard,{provide:ConversationAiTestService,useValue:{}},HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false,bodyParser:false});app.use(json({limit:'2mb',strict:true}));app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  await q("UPDATE hon.hon_os_signup_program SET status='TEST_MODE',recorded_at=clock_timestamp() WHERE program_id=1");
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;

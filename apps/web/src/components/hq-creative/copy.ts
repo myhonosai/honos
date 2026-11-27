@@ -1,10 +1,11 @@
 /** HQ Creative Studio wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
+  designsTitle: 'Flyers, posters and social graphics', designsBody: 'Works now: make HON marketing designs from templates, add photos and download a print PDF. Free, no AI.', designsLink: 'Open designs',
   title: 'HQ Creative Studio', refresh: 'Refresh', cancel: 'Cancel', back: 'Back to Marketing & Creative',
   intro: "Make AI images and short videos to market HON OS. It uses HQ's own credits, never a school's.",
   loading: 'Reading HQ Creative Studio…', denied: 'Your HQ access does not include marketing. Nothing is shown.',
   unavailable: 'HQ Creative Studio could not be read or checked. Nothing is shown.',
-  concealed: 'HQ Creative Studio is hidden while this tab is in the background.', reveal: 'Show again',
+  concealed: 'Hidden because your session ended. Sign in again, then choose Show again.', reveal: 'Show again',
   asOf: 'Read {time} UTC.', viewer: 'Signed in as {name}.', readOnly: 'You can read HQ creative requests but not make them.',
   providerOff: "Not working yet: no AI image or video service is switched on, so nothing can be made here. It turns on after file storage and picture checks are built and David approves the paid service.",
   providerOn: 'An image and video provider is connected.',
@@ -52,11 +53,12 @@ const en = {
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  designsTitle: '전단, 포스터, 소셜 그래픽', designsBody: '지금 바로 사용 가능: 템플릿으로 HON 홍보 디자인을 만들고, 사진을 넣고, 인쇄용 PDF로 내려받으세요. 무료이며 AI를 쓰지 않습니다.', designsLink: '디자인 열기',
   title: 'HQ 크리에이티브 스튜디오', refresh: '새로 고침', cancel: '취소', back: '마케팅 및 크리에이티브로 돌아가기',
   intro: 'HON OS를 알리는 HON 자체 마케팅용 이미지와 짧은 동영상입니다. 모든 학교의 크리에이티브 크레딧과 분리된 HQ 자체 월간 크레딧 예산에서 사용합니다. 학교 지갑은 절대 사용하지 않습니다.',
   loading: 'HQ 크리에이티브 스튜디오를 읽는 중…', denied: 'HQ 권한에 마케팅이 포함되어 있지 않습니다. 아무것도 표시되지 않습니다.',
   unavailable: 'HQ 크리에이티브 스튜디오를 읽거나 확인할 수 없습니다. 아무것도 표시되지 않습니다.',
-  concealed: '이 탭이 백그라운드에 있는 동안 HQ 크리에이티브 스튜디오는 숨겨집니다.', reveal: '다시 표시',
+  concealed: '세션이 종료되어 숨겼습니다. 다시 로그인한 뒤 다시 보기를 선택하세요.', reveal: '다시 표시',
   asOf: '{time} UTC에 읽음.', viewer: '{name}(으)로 로그인됨.', readOnly: 'HQ 크리에이티브 요청을 볼 수 있지만 만들 수는 없습니다.',
   providerOff: '이미지 또는 동영상 제공업체가 연결되어 있지 않아 요청이 꺼져 있습니다. 유료 제공업체 연결은 먼저 David의 승인이 필요합니다.',
   providerOn: '이미지 및 동영상 제공업체가 연결되어 있습니다.',
@@ -103,11 +105,12 @@ const ko: Record<Key, string> = {
   refused: '거부되었습니다. 아무것도 저장되지 않았습니다.',
 };
 const es: Record<Key, string> = {
+  designsTitle: 'Volantes, carteles y gráficos sociales', designsBody: 'Ya funciona: crea diseños de marketing de HON con plantillas, añade fotos y descarga un PDF para imprenta. Gratis, sin IA.', designsLink: 'Abrir diseños',
   title: 'Estudio creativo de HQ', refresh: 'Actualizar', cancel: 'Cancelar', back: 'Volver a Marketing y creatividad',
   intro: 'Imágenes y videos cortos para el marketing propio de HON OS. Se pagan con el presupuesto mensual de créditos de HQ, separado de los créditos creativos de cada escuela. Nunca se usa la billetera de una escuela.',
   loading: 'Leyendo el Estudio creativo de HQ…', denied: 'Tu acceso de HQ no incluye marketing. No se muestra nada.',
   unavailable: 'No se pudo leer ni comprobar el Estudio creativo de HQ. No se muestra nada.',
-  concealed: 'El Estudio creativo de HQ se oculta mientras esta pestaña está en segundo plano.', reveal: 'Mostrar de nuevo',
+  concealed: 'Oculto porque su sesión terminó. Inicie sesión de nuevo y elija Mostrar de nuevo.', reveal: 'Mostrar de nuevo',
   asOf: 'Leído {time} UTC.', viewer: 'Sesión iniciada como {name}.', readOnly: 'Puedes ver las solicitudes creativas de HQ, pero no crearlas.',
   providerOff: 'No hay ningún proveedor de imágenes o video conectado, así que las solicitudes están desactivadas. Conectar un proveedor de pago necesita primero la aprobación de David.',
   providerOn: 'Hay un proveedor de imágenes y video conectado.',

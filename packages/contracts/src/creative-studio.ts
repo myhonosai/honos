@@ -6,7 +6,10 @@
 // CS1 records only SYNTHETIC result metadata (fake providers); real media storage and signed reads are a later slice.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
-import { validateSaasCreativeBalance, type SaasCreativeBalance, type SaasCreativeMediaKind } from './saas-creative-wallet.js';
+import { validateSaasCreativeBalance, type SaasCreativeBalance } from './saas-creative-wallet.js';
+
+/** The media a generation makes: image or video (website edits bill the wallet but are never generations, 0690). */
+export type CreativeMediaKind = 'IMAGE' | 'VIDEO';
 
 export const CREATIVE_GENERATION_FORMATS = ['SQUARE', 'PORTRAIT', 'LANDSCAPE'] as const;
 export type CreativeGenerationFormat = typeof CREATIVE_GENERATION_FORMATS[number];
@@ -30,7 +33,7 @@ export interface CreativeGenerationAsset {
   review: CreativeAssetReviewState;
 }
 export interface CreativeGeneration {
-  generationId: string; schoolId: string; operationCode: string; mediaKind: SaasCreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
+  generationId: string; schoolId: string; operationCode: string; mediaKind: CreativeMediaKind; units: number; format: CreativeGenerationFormat; prompt: string;
   status: CreativeGenerationStatus; failureReason: CreativeGenerationFailureReason | null; reservedCredits: number; chargedCredits: number | null;
   createdAt: string; completedAt: string | null; assets: CreativeGenerationAsset[];
 }
@@ -56,7 +59,7 @@ export function validateCreativeGenerationInput(value: unknown): CreativeGenerat
 }
 
 // ---------- responses (closed; any drift fails) ----------
-function validateAsset(value: unknown, mediaKind: SaasCreativeMediaKind, after: number): void {
+function validateAsset(value: unknown, mediaKind: CreativeMediaKind, after: number): void {
   const a = record(value, drift); exactKeys(a, ['assetId', 'ordinal', 'mediaType', 'width', 'height', 'durationSeconds', 'origin', 'review'], drift);
   if (!isUuid(a.assetId) || !isInt(a.ordinal, after + 1, CREATIVE_GENERATION_LIMITS.maxAssets) || !has(CREATIVE_ASSET_MEDIA_TYPES[mediaKind], a.mediaType) || !isInt(a.width, 1, 8192) || !isInt(a.height, 1, 8192)
     || (a.origin !== 'SYNTHETIC' && a.origin !== 'PROVIDER') || !has(CREATIVE_ASSET_REVIEW_STATES, a.review) || (mediaKind === 'IMAGE' ? a.durationSeconds !== null : !isInt(a.durationSeconds, 1, 600))) drift();
@@ -79,7 +82,7 @@ export function validateCreativeGeneration(value: unknown): CreativeGeneration {
   if ((g.status === 'FAILED' || g.status === 'UNDER_REVIEW') && g.failureReason === null) drift();
   if (g.completedAt !== null && Date.parse(g.completedAt as string) < Date.parse(g.createdAt as string)) drift();
   let previous = 0;
-  for (const a of g.assets as unknown[]) { validateAsset(a, g.mediaKind as SaasCreativeMediaKind, previous); previous = (a as { ordinal: number }).ordinal; }
+  for (const a of g.assets as unknown[]) { validateAsset(a, g.mediaKind as CreativeMediaKind, previous); previous = (a as { ordinal: number }).ordinal; }
   return g as unknown as CreativeGeneration;
 }
 function validateGenerationArray(value: unknown): void {

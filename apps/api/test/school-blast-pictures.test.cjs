@@ -45,6 +45,19 @@ test('picture lines become links in the text part and images in the HTML part; u
   assert.match(renderEmailWithPictures(`{{picture:${A}}}`, [picture({ width: 320, height: 200 })], ORIGIN).html, /width="320" height="200"/);
 });
 
+test('BL2: HON checkout and video page links in the message become links in the HTML part; other addresses stay text', () => {
+  const pid = 'a1'.repeat(24), vtok = 'V'.repeat(43);
+  const content = `{{picture:${A}}}\nJoin: ${ORIGIN}/checkout/${pid} today\nWatch ${ORIGIN}/v/${vtok}\nNot ours: https://evil.example/checkout/${pid}\nToo long: ${ORIGIN}/checkout/${pid}ff\nQuote: ${ORIGIN}/checkout/${pid}"><script>`;
+  const { text, html } = renderEmailWithPictures(content, [picture()], ORIGIN);
+  assert.ok(text.includes(`Join: ${ORIGIN}/checkout/${pid} today`), 'the text part keeps the plain link');
+  assert.ok(html.includes(`Join: <a href="${ORIGIN}/checkout/${pid}" style="color:#1f2933">${ORIGIN}/checkout/${pid}</a> today`));
+  assert.ok(html.includes(`Watch <a href="${ORIGIN}/v/${vtok}" style="color:#1f2933">${ORIGIN}/v/${vtok}</a>`));
+  assert.equal(html.includes('href="https://evil.example'), false);
+  assert.equal(html.includes(`href="${ORIGIN}/checkout/${pid}ff"`), false);
+  assert.equal((html.match(/<a href=/g) ?? []).length, 3, 'two links plus the quoted one, which stops before the quote');
+  assert.ok(html.includes('&quot;&gt;&lt;script&gt;')); assert.equal(html.includes('<script'), false);
+});
+
 test('SendGrid sends text and HTML for a blast email with pictures, and text only otherwise', async () => {
   let seen;
   const adapter = new SendGridEmailProvider(() => approved(), async (_url, init) => { seen = JSON.parse(init.body); return { status: 202, headers: new Headers({ 'x-message-id': 'abc123' }) }; });

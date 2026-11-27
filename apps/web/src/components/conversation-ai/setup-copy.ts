@@ -6,8 +6,8 @@ import type { LengthKey, ModeSummary, QuickStartKey } from './setup-model';
 export type SetupCopy = {
   eyebrow: string; title: string; intro: string;
   now: Record<ModeSummary, string>; hq: Record<ConversationAiProgramStatus, string>;
-  checklist: string; steps: { how: string; answers: (n: number) => string; handoff: string; tryIt: string }; tryItSoon: string; go: string;
-  tabs: { how: string; knows: string; handoff: string }; tabsLabel: string;
+  checklist: string; steps: { how: string; answers: (n: number) => string; handoff: string; tryIt: string }; go: string;
+  tabs: { how: string; knows: string; handoff: string; tryIt: string }; tabsLabel: string;
   choice: Record<ConversationAiMode, { title: string; body: string }>; choiceLabel: string;
   perChannel: string; perChannelHide: string; mixed: string; languages: string; languagesHint: string;
   save: string; saving: string; unsaved: string; discard: string; readOnly: string;
@@ -27,8 +27,8 @@ const en: SetupCopy = {
   hq: { OFF: 'HON hasn’t switched AI replies on for schools yet. You can set everything up now; it will be ready when it does.',
     TEST_MODE: 'Practice mode: AI replies are only shown to staff, never sent to families.', LIVE: 'AI replies are available for your school.' },
   checklist: 'Get set up', steps: { how: 'Choose how the AI helps', answers: n => `Add at least 5 answers (${n} so far)`, handoff: 'Check when it hands off to staff', tryIt: 'Try it with a question' },
-  tryItSoon: 'Coming next', go: 'Go',
-  tabs: { how: 'How it helps', knows: 'What it knows', handoff: 'When to hand off' }, tabsLabel: 'Conversation AI setup',
+  go: 'Go',
+  tabs: { how: 'How it helps', knows: 'What it knows', handoff: 'When to hand off', tryIt: 'Try it' }, tabsLabel: 'Conversation AI setup',
   choice: { OFF: { title: 'Off', body: 'No AI. Staff answer everything.' },
     ASSIST: { title: 'Suggest replies', body: 'The AI writes a reply. You check it and tap send. Best way to start.' },
     AUTOMATIC: { title: 'Reply for me', body: 'The AI answers by itself and hands the conversation to you when it should.' } },
@@ -61,8 +61,8 @@ const ko: SetupCopy = {
   hq: { OFF: 'HON이 아직 학원용 AI 답장을 켜지 않았습니다. 지금 모두 설정해 두면 켜질 때 바로 준비됩니다.',
     TEST_MODE: '연습 모드: AI 답장은 직원에게만 보이고 가족에게는 보내지 않습니다.', LIVE: '학원에서 AI 답장을 사용할 수 있습니다.' },
   checklist: '설정하기', steps: { how: 'AI가 돕는 방식 선택', answers: n => `답변 5개 이상 추가 (현재 ${n}개)`, handoff: '직원에게 넘기는 때 확인', tryIt: '질문으로 시험해 보기' },
-  tryItSoon: '곧 제공', go: '이동',
-  tabs: { how: '돕는 방식', knows: 'AI가 아는 것', handoff: '직원에게 넘기기' }, tabsLabel: '대화 AI 설정',
+  go: '이동',
+  tabs: { how: '돕는 방식', knows: 'AI가 아는 것', handoff: '직원에게 넘기기', tryIt: '시험해 보기' }, tabsLabel: '대화 AI 설정',
   choice: { OFF: { title: '끄기', body: 'AI 없음. 직원이 모두 답합니다.' },
     ASSIST: { title: '답장 제안', body: 'AI가 답장을 쓰고, 직원이 확인한 뒤 보냅니다. 처음 시작하기에 가장 좋습니다.' },
     AUTOMATIC: { title: '대신 답하기', body: 'AI가 스스로 답하고 필요할 때 직원에게 대화를 넘깁니다.' } },
@@ -95,8 +95,8 @@ const es: SetupCopy = {
   hq: { OFF: 'HON todavía no ha activado las respuestas de IA para las escuelas. Puedes dejar todo listo ahora; funcionará cuando se active.',
     TEST_MODE: 'Modo práctica: las respuestas de la IA solo las ve el personal, nunca se envían a las familias.', LIVE: 'Las respuestas de IA están disponibles para tu escuela.' },
   checklist: 'Configúralo', steps: { how: 'Elige cómo ayuda la IA', answers: n => `Agrega al menos 5 respuestas (${n} hasta ahora)`, handoff: 'Revisa cuándo pasa al personal', tryIt: 'Pruébala con una pregunta' },
-  tryItSoon: 'Muy pronto', go: 'Ir',
-  tabs: { how: 'Cómo ayuda', knows: 'Lo que sabe', handoff: 'Cuándo pasar al personal' }, tabsLabel: 'Configuración de la IA de conversaciones',
+  go: 'Ir',
+  tabs: { how: 'Cómo ayuda', knows: 'Lo que sabe', handoff: 'Cuándo pasar al personal', tryIt: 'Pruébala' }, tabsLabel: 'Configuración de la IA de conversaciones',
   choice: { OFF: { title: 'Apagada', body: 'Sin IA. El personal responde todo.' },
     ASSIST: { title: 'Sugerir respuestas', body: 'La IA escribe una respuesta. La revisas y la envías. La mejor forma de empezar.' },
     AUTOMATIC: { title: 'Responder por mí', body: 'La IA responde sola y te pasa la conversación cuando debe.' } },

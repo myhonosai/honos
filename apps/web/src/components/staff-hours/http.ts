@@ -13,6 +13,7 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 export type HoursErrorKind =
   /** Session ended. */ 'SESSION'
   /** Not allowed here, or the person is not current staff. Nothing changed. */ | 'DENIED'
+  /** A manager tried to approve their own week; only the school's owner may. Nothing changed. */ | 'SELF_APPROVAL'
   /** Someone (or another device) changed this since it was read. Nothing changed. */ | 'CHANGED'
   /** The entry overlaps another entry of the same person. Nothing changed. */ | 'OVERLAP'
   /** The week is approved. Nothing changed. */ | 'APPROVED'
@@ -56,7 +57,7 @@ async function exchange(url: string, signal: AbortSignal, owned: Owned, command?
 
 /** What a refused answer means. Only these exact answers are definitive; anything else (busy, 5xx, drift) is UNKNOWN. */
 export function hoursErrorFor(status: number, code: string | null): HoursError {
-  if (status === 403) return new HoursError('DENIED', code);
+  if (status === 403) return new HoursError(code === 'TIMESHEET_SELF_APPROVAL' ? 'SELF_APPROVAL' : 'DENIED', code);
   if (status === 400) return new HoursError('INVALID', code);
   if (status === 404) return new HoursError('GONE', code);
   if (status === 429) return new HoursError('RATE', code);

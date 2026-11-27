@@ -1,0 +1,14 @@
+.switcher { position: relative; margin: 0 10px 16px; }
+.switcher summary { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 8px 12px; border: 1px solid #2c4d69; border-radius: 10px; background: #0d2235; color: #edf6ff; font-size: 13px; font-weight: 700; cursor: pointer; list-style: none; }
+.switcher summary::-webkit-details-marker { display: none; }
+.switcher summary:focus-visible { outline: 3px solid #f5dd9a; outline-offset: 2px; }
+.current { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.caret { color: #83dadd; }
+.panel { position: absolute; left: 0; right: 0; z-index: 60; display: grid; gap: 2px; max-height: min(420px, 70vh); overflow-y: auto; margin-top: 6px; padding: 6px; border: 1px solid #2c4d69; border-radius: 10px; background: #0a1728; box-shadow: 0 12px 28px #000a; }
+.panel a { display: grid; gap: 2px; padding: 9px 10px; border-radius: 8px; color: #edf6ff; text-decoration: none; }
+.panel a:hover, .panel a:focus-visible { background: #15243b; }
+.panel a[aria-current="true"] { background: #0c2a3c; box-shadow: inset 3px 0 #55e9ff; }
+.panel strong { font-size: 13px; }
+.panel small { color: #9fb6c9; font-size: 11px; }
+.search { margin-bottom: 4px; padding: 8px 10px; border: 1px solid #2c4d69; border-radius: 8px; background: #071525; color: #edf6ff; font: inherit; }
+.none { margin: 0; padding: 9px 10px; color: #9fb6c9; font-size: 12px; }

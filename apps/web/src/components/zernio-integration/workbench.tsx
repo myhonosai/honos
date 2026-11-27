@@ -11,18 +11,12 @@ export function ZernioIntegrationWorkbench(): React.ReactElement {
   useEffect(() => {
     controller.start();
     const conceal = () => controller.conceal();
-    const visibility = () => { if (document.visibilityState === 'hidden') conceal(); };
-    window.addEventListener('blur', conceal);
-    window.addEventListener('pagehide', conceal);
+    // HQ page: leaving the tab hides nothing (owner, 2026-11-26). A session or school change still hides it.
     window.addEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
     window.addEventListener(HON_SCHOOL_CONTEXT_CHANGED_EVENT, conceal);
-    document.addEventListener('visibilitychange', visibility);
     return () => { controller.stop();
-      window.removeEventListener('blur', conceal);
-      window.removeEventListener('pagehide', conceal);
       window.removeEventListener(HON_SESSION_INVALIDATED_EVENT, conceal);
-      window.removeEventListener(HON_SCHOOL_CONTEXT_CHANGED_EVENT, conceal);
-      document.removeEventListener('visibilitychange', visibility); };
+      window.removeEventListener(HON_SCHOOL_CONTEXT_CHANGED_EVENT, conceal); };
   }, [controller]);
   return <ZernioIntegrationView view={view} refresh={() => void controller.refresh()} verify={() => void controller.verify()} />;
 }

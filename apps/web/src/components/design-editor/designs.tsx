@@ -15,6 +15,7 @@ import { DesignCommands } from './commands';
 import { NO_BRAND, TEMPLATE_IDS, TEMPLATE_NAMES, templateDocument, type Brand, type TemplateId } from './templates';
 import { brandingApi } from '../school-branding/http';
 import { designText, sizeMeasure, sizeName, type DesignKey } from './copy';
+import { useDesignWords } from './words';
 import s from './design-editor.module.css';
 
 export type DesignsApi = EditorApi & Readonly<{
@@ -60,12 +61,15 @@ export function createInput(name: string, sizeCode: CreativeDesignSizeCode, temp
  * the server re-checks creative.design.read / creative.design.manage for every call. A create or status change whose
  * outcome is unknown keeps its key, so pressing the button again replays it instead of making a second design.
  */
-export function Designs({ api = DESIGNS_API }: { api?: DesignsApi }): React.ReactElement {
+export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
+  /** A place with no school (HQ): its own fixed scope, which its api ignores; the server decides who may use it. */
+  fixedScope?: DesignsScope }): React.ReactElement {
   const { preferences } = useLocale();
   const language = preferences.language;
-  const t = useCallback((key: DesignKey, vars?: Record<string, string>) => designText(language, key, vars), [language]);
+  const words = useDesignWords();
+  const t = useCallback((key: DesignKey, vars?: Record<string, string>) => designText(language, words[key] ?? key, vars), [language, words]);
   const shell = useSchoolShell();
-  const selection = shell.phase === 'READY' ? shell.selection : null;
+  const selection = fixedScope ?? (shell.phase === 'READY' ? shell.selection : null);
   // One scope object per school, so the editor's effects do not restart on every render.
   const scope: DesignsScope | null = useMemo(() => selection ? { organizationId: selection.organizationId, schoolId: selection.schoolId } : null,
     [selection?.organizationId, selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -304,7 +304,15 @@ try {
   const signupSubject = `oidc:location-${ids.organization}-signup`, signupEmail = `signup-${ids.organization}@example.test`;
   const form = (patch = {}) => ({ ownerName: 'Location Owner', schoolName: 'Location Signup Dojo', legalName: 'Location Signup LLC', timezone: LA,
     location: loc({ region: 'TX', city: 'Austin', postalCode: '73301' }), termsVersionId: terms, confirmation: 'CREATE_HON_OS_SCHOOL_ACCOUNT', ...patch });
-  const register = (input, key) => runtime.query('SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data', [signupSubject, signupEmail, JSON.stringify(input), key]);
+  // lock_school_account_authority() takes its table locks NOWAIT, so a concurrent autovacuum/ANALYZE on hon.users (or another
+  // proof's session) can refuse a call with 55P03 before the function decides anything. That refusal writes nothing; retry it
+  // briefly so the proof checks the function's own answer instead of failing on lock timing.
+  const register = async (input, key) => {
+    for (let attempt = 1; ; attempt += 1) {
+      try { return await runtime.query('SELECT hon.register_hon_os_school_with_location($1,$2,$3::jsonb,$4::uuid) data', [signupSubject, signupEmail, JSON.stringify(input), key]); }
+      catch (e) { if (e.code !== '55P03' || attempt >= 20) throw e; await new Promise((r) => setTimeout(r, 100 * attempt)); }
+    }
+  };
   const program = (await sql('SELECT status FROM hon.hon_os_signup_program')).rows[0].status;
   await sql("UPDATE hon.hon_os_signup_program SET status='TEST_MODE',recorded_at=clock_timestamp()");
   try {
