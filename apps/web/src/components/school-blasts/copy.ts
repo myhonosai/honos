@@ -1,4 +1,4 @@
-import type { SchoolBlastAudienceGroup, SchoolBlastChannel, SchoolBlastDeliveryState, SchoolBlastMergeField, SchoolBlastOutcome, SchoolBlastStatus } from '@hon/contracts';
+import type { SchoolBlastAudienceGroup, SchoolBlastMembershipFilter, SchoolBlastChannel, SchoolBlastDeliveryState, SchoolBlastMergeField, SchoolBlastOutcome, SchoolBlastStatus } from '@hon/contracts';
 import type { BlastErrorKind } from './http';
 import type { BlastProblem } from './format';
 
@@ -14,6 +14,12 @@ export interface BlastCopy {
   characters: (used: number, max: number) => string; insertTag: string; mergeFields: Record<SchoolBlastMergeField, string>; mergeHint: string;
   audienceTitle: string; groups: Record<SchoolBlastAudienceGroup, string>; fieldTags: string; tagsHint: string;
   consentNote: string; smsNote: string;
+  filtersTitle: string; filtersHint: string; filtersSet: (n: number) => string; clearFilters: string; any: string; savedChoice: string;
+  fieldBelt: string; noBelt: string; fieldProgram: string; fieldPlan: string; fieldMembership: string; membership: Record<SchoolBlastMembershipFilter, string>;
+  fieldEnds: string; endsWithin: (days: number) => string; endsBetween: string; fieldEndsFrom: string; fieldEndsTo: string;
+  fieldAgeMin: string; fieldAgeMax: string; optionsDenied: string; optionsUnavailable: string;
+  peopleTitle: string; peopleHint: string; searchPeople: string; searchHint: string; noMatches: string; peopleDenied: string; peopleUnavailable: string;
+  addPerson: string; added: string; removePerson: (name: string) => string; pickedEarlier: string; pickedCount: (n: number) => string;
   picturesTitle: string; insertPicture: string; picturesHint: string; noPictures: string; picturesDenied: string; picturesUnavailable: string;
   pictureMissing: string; removePicture: string; pictureMarker: string;
   videosTitle: string; insertVideo: string; insertVideoLink: string; videosHint: string; videoLinkHint: string; noVideos: string; videoMissing: string; videoMarker: string;
@@ -43,6 +49,16 @@ const en: BlastCopy = {
   groups: { ACTIVE_STUDENTS: 'Active students', PROSPECTS: 'Prospects (open leads)', TRIAL: 'Trial students', FORMER_STUDENTS: 'Former students', ALL_CONTACTS: 'Everyone' },
   fieldTags: 'Only people with these tags (optional)', tagsHint: 'Separate tags with commas. Up to 10.',
   consentNote: 'Only people who agreed to hear from you on this channel get it. A child’s message goes to their guardians, and each address gets it once.',
+  filtersTitle: 'Narrow it down (optional)', filtersHint: 'The same filters as the Contacts list. People must match the groups, the tags and every filter you set.',
+  filtersSet: (n) => n === 1 ? '1 filter set' : `${n} filters set`, clearFilters: 'Clear filters', any: 'Any', savedChoice: 'Saved choice',
+  fieldBelt: 'Belt', noBelt: 'No belt yet', fieldProgram: 'Program', fieldPlan: 'Membership plan', fieldMembership: 'Membership',
+  membership: { HAS: 'Has a membership', NONE: 'No membership', ACTIVE: 'Active', PAUSED: 'Paused', CANCELLING: 'Cancelling' },
+  fieldEnds: 'Membership ends', endsWithin: (d) => `In the next ${d} days`, endsBetween: 'Between dates', fieldEndsFrom: 'From', fieldEndsTo: 'To',
+  fieldAgeMin: 'Age from', fieldAgeMax: 'Age to', optionsDenied: 'Belt, program and plan lists need permission to see contacts.', optionsUnavailable: 'The belt, program and plan lists could not be read.',
+  peopleTitle: 'Add people by name (optional)', peopleHint: 'Picked people get it too, even outside the groups. Up to 200. Consent and guardians still apply.',
+  searchPeople: 'Search contacts', searchHint: 'Type at least 2 letters of a name, email or phone.', noMatches: 'No contacts match.',
+  peopleDenied: 'Searching contacts needs permission to see contacts.', peopleUnavailable: 'Contacts could not be searched.',
+  addPerson: 'Add', added: 'Added', removePerson: (n) => `Remove ${n}`, pickedEarlier: 'Contact picked earlier', pickedCount: (n) => n === 1 ? '1 person picked' : `${n} people picked`,
   smsNote: 'Texts go out as plain text, without pictures.',
   picturesTitle: 'Pictures', insertPicture: 'Insert picture',
   picturesHint: 'A picture goes on its own line where your cursor is. Up to 10 per email. Add pictures in Marketing > Pictures for emails.',
@@ -60,7 +76,7 @@ const en: BlastCopy = {
   checkoutsDenied: 'You can’t see this school’s checkout pages. Ask the owner for access to Checkout pages.', checkoutsUnavailable: 'Checkout pages could not be read right now.',
   saveDraft: 'Save draft', close: 'Close',
   problems: { name: 'Give the blast a name (up to 100 characters, one line).', subject: 'Add a subject (up to 150 characters, one line).', body: 'Write a message.',
-    bodyLength: 'The message is too long.', mergeTag: 'Use only the merge tags from the Insert buttons.', groups: 'Pick at least one group.', tags: 'Tags use letters, numbers, spaces, - and _. Up to 10, no repeats.',
+    bodyLength: 'The message is too long.', mergeTag: 'Use only the merge tags from the Insert buttons.', groups: 'Pick at least one group or one person.', filters: 'Check the filters: ages are whole numbers from 0 to 120 with the first no higher, and the first date is not after the second.', people: 'Pick up to 200 people.', tags: 'Tags use letters, numbers, spaces, - and _. Up to 10, no repeats.',
     pictures: 'Use up to 10 pictures in one email.', pictureGone: 'A picture in this email is no longer in your library. Remove it.', videoGone: 'A video in this email is no longer ready in your library. Remove it.' },
   previewTitle: 'Before you send', preview: 'Check audience', matched: (n) => `${n.toLocaleString('en')} people match`,
   outcomes: { QUEUED: 'Will get it', NO_CONSENT: 'Haven’t agreed to this channel', NO_ADDRESS: 'No address', DUPLICATE_ADDRESS: 'Same address as someone else' },
@@ -102,6 +118,16 @@ const ko: BlastCopy = {
   groups: { ACTIVE_STUDENTS: '재학생', PROSPECTS: '잠재 고객(진행 중 문의)', TRIAL: '체험 수업 학생', FORMER_STUDENTS: '이전 학생', ALL_CONTACTS: '모두' },
   fieldTags: '이 태그가 있는 사람만(선택)', tagsHint: '쉼표로 구분합니다. 최대 10개.',
   consentNote: '이 채널 수신에 동의한 사람만 받습니다. 어린이 메시지는 보호자에게 가고, 같은 주소로는 한 번만 갑니다.',
+  filtersTitle: '대상 좁히기(선택)', filtersHint: '연락처 목록과 같은 필터입니다. 그룹, 태그, 설정한 모든 필터에 맞는 사람만 받습니다.',
+  filtersSet: (n) => `필터 ${n}개 설정됨`, clearFilters: '필터 지우기', any: '전체', savedChoice: '저장된 선택',
+  fieldBelt: '띠', noBelt: '아직 띠 없음', fieldProgram: '프로그램', fieldPlan: '회원권 플랜', fieldMembership: '회원권',
+  membership: { HAS: '회원권 있음', NONE: '회원권 없음', ACTIVE: '활성', PAUSED: '일시 정지', CANCELLING: '해지 예정' },
+  fieldEnds: '회원권 종료', endsWithin: (d) => `앞으로 ${d}일 이내`, endsBetween: '날짜 범위', fieldEndsFrom: '시작', fieldEndsTo: '끝',
+  fieldAgeMin: '나이(부터)', fieldAgeMax: '나이(까지)', optionsDenied: '띠, 프로그램, 플랜 목록을 보려면 연락처 보기 권한이 필요합니다.', optionsUnavailable: '띠, 프로그램, 플랜 목록을 읽지 못했습니다.',
+  peopleTitle: '이름으로 사람 추가(선택)', peopleHint: '선택한 사람은 그룹 밖이라도 받습니다. 최대 200명. 수신 동의와 보호자 규칙은 그대로 적용됩니다.',
+  searchPeople: '연락처 검색', searchHint: '이름, 이메일 또는 전화번호를 2자 이상 입력하세요.', noMatches: '맞는 연락처가 없습니다.',
+  peopleDenied: '연락처를 검색하려면 연락처 보기 권한이 필요합니다.', peopleUnavailable: '연락처를 검색하지 못했습니다.',
+  addPerson: '추가', added: '추가됨', removePerson: (n) => `${n} 빼기`, pickedEarlier: '이전에 선택한 연락처', pickedCount: (n) => `${n}명 선택됨`,
   smsNote: '문자는 사진 없이 일반 텍스트로 갑니다.',
   picturesTitle: '사진', insertPicture: '사진 넣기',
   picturesHint: '사진은 커서 위치에 한 줄로 들어갑니다. 이메일마다 최대 10장. 사진은 마케팅 > 이메일용 사진에서 올리세요.',
@@ -119,7 +145,7 @@ const ko: BlastCopy = {
   checkoutsDenied: '이 학교의 결제 페이지를 볼 수 없습니다. 원장에게 결제 페이지 권한을 요청하세요.', checkoutsUnavailable: '지금은 결제 페이지를 읽을 수 없습니다.',
   saveDraft: '임시 저장', close: '닫기',
   problems: { name: '이름을 입력하세요(100자 이내, 한 줄).', subject: '제목을 입력하세요(150자 이내, 한 줄).', body: '메시지를 입력하세요.',
-    bodyLength: '메시지가 너무 깁니다.', mergeTag: '넣기 버튼의 병합 태그만 사용하세요.', groups: '그룹을 하나 이상 선택하세요.', tags: '태그는 문자, 숫자, 공백, -, _만 사용합니다. 최대 10개, 중복 없이.',
+    bodyLength: '메시지가 너무 깁니다.', mergeTag: '넣기 버튼의 병합 태그만 사용하세요.', groups: '그룹이나 사람을 하나 이상 선택하세요.', filters: '필터를 확인하세요. 나이는 0~120 사이의 정수이고 앞의 값이 더 크면 안 되며, 시작 날짜는 끝 날짜보다 늦으면 안 됩니다.', people: '최대 200명까지 선택하세요.', tags: '태그는 문자, 숫자, 공백, -, _만 사용합니다. 최대 10개, 중복 없이.',
     pictures: '이메일 하나에 사진은 최대 10장입니다.', pictureGone: '이 이메일의 사진 하나가 보관함에 더 이상 없습니다. 빼 주세요.', videoGone: '이 이메일의 동영상 하나가 보관함에서 더 이상 준비된 상태가 아닙니다. 빼 주세요.' },
   previewTitle: '보내기 전에', preview: '받는 사람 확인', matched: (n) => `${n.toLocaleString('ko')}명 해당`,
   outcomes: { QUEUED: '받음', NO_CONSENT: '이 채널에 동의하지 않음', NO_ADDRESS: '주소 없음', DUPLICATE_ADDRESS: '다른 사람과 같은 주소' },
@@ -161,6 +187,16 @@ const es: BlastCopy = {
   groups: { ACTIVE_STUDENTS: 'Alumnos activos', PROSPECTS: 'Prospectos (contactos abiertos)', TRIAL: 'Alumnos de prueba', FORMER_STUDENTS: 'Exalumnos', ALL_CONTACTS: 'Todos' },
   fieldTags: 'Solo personas con estas etiquetas (opcional)', tagsHint: 'Separa las etiquetas con comas. Hasta 10.',
   consentNote: 'Solo lo reciben quienes aceptaron este canal. El mensaje de un niño va a sus tutores, y cada dirección lo recibe una vez.',
+  filtersTitle: 'Afinar el público (opcional)', filtersHint: 'Los mismos filtros de la lista de contactos. Deben coincidir con los grupos, las etiquetas y cada filtro que pongas.',
+  filtersSet: (n) => n === 1 ? '1 filtro puesto' : `${n} filtros puestos`, clearFilters: 'Quitar filtros', any: 'Cualquiera', savedChoice: 'Opción guardada',
+  fieldBelt: 'Cinturón', noBelt: 'Sin cinturón aún', fieldProgram: 'Programa', fieldPlan: 'Plan de membresía', fieldMembership: 'Membresía',
+  membership: { HAS: 'Tiene membresía', NONE: 'Sin membresía', ACTIVE: 'Activa', PAUSED: 'En pausa', CANCELLING: 'Cancelándose' },
+  fieldEnds: 'La membresía termina', endsWithin: (d) => `En los próximos ${d} días`, endsBetween: 'Entre fechas', fieldEndsFrom: 'Desde', fieldEndsTo: 'Hasta',
+  fieldAgeMin: 'Edad desde', fieldAgeMax: 'Edad hasta', optionsDenied: 'Las listas de cinturones, programas y planes necesitan permiso para ver contactos.', optionsUnavailable: 'No se pudieron leer las listas de cinturones, programas y planes.',
+  peopleTitle: 'Agregar personas por nombre (opcional)', peopleHint: 'Las personas elegidas también lo reciben, aunque no estén en los grupos. Hasta 200. El consentimiento y los tutores siguen aplicando.',
+  searchPeople: 'Buscar contactos', searchHint: 'Escribe al menos 2 letras de un nombre, correo o teléfono.', noMatches: 'Ningún contacto coincide.',
+  peopleDenied: 'Buscar contactos necesita permiso para ver contactos.', peopleUnavailable: 'No se pudieron buscar contactos.',
+  addPerson: 'Agregar', added: 'Agregado', removePerson: (n) => `Quitar a ${n}`, pickedEarlier: 'Contacto elegido antes', pickedCount: (n) => n === 1 ? '1 persona elegida' : `${n} personas elegidas`,
   smsNote: 'Los textos van como texto simple, sin imágenes.',
   picturesTitle: 'Imágenes', insertPicture: 'Insertar imagen',
   picturesHint: 'La imagen va en su propia línea donde está el cursor. Hasta 10 por correo. Sube imágenes en Marketing > Imágenes para correos.',
@@ -178,7 +214,7 @@ const es: BlastCopy = {
   checkoutsDenied: 'No puedes ver las páginas de pago de esta escuela. Pide acceso a Páginas de pago al dueño.', checkoutsUnavailable: 'No se pudieron leer las páginas de pago en este momento.',
   saveDraft: 'Guardar borrador', close: 'Cerrar',
   problems: { name: 'Ponle un nombre (hasta 100 caracteres, una línea).', subject: 'Agrega un asunto (hasta 150 caracteres, una línea).', body: 'Escribe un mensaje.',
-    bodyLength: 'El mensaje es demasiado largo.', mergeTag: 'Usa solo las etiquetas de los botones Insertar.', groups: 'Elige al menos un grupo.', tags: 'Las etiquetas usan letras, números, espacios, - y _. Hasta 10, sin repetir.',
+    bodyLength: 'El mensaje es demasiado largo.', mergeTag: 'Usa solo las etiquetas de los botones Insertar.', groups: 'Elige al menos un grupo o una persona.', filters: 'Revisa los filtros: las edades son números enteros de 0 a 120, la primera no mayor, y la primera fecha no es posterior a la segunda.', people: 'Elige hasta 200 personas.', tags: 'Las etiquetas usan letras, números, espacios, - y _. Hasta 10, sin repetir.',
     pictures: 'Usa hasta 10 imágenes por correo.', pictureGone: 'Una imagen de este correo ya no está en tu biblioteca. Quítala.', videoGone: 'Un video de este correo ya no está listo en tu biblioteca. Quítalo.' },
   previewTitle: 'Antes de enviar', preview: 'Revisar destinatarios', matched: (n) => `${n.toLocaleString('es')} personas coinciden`,
   outcomes: { QUEUED: 'Lo recibirán', NO_CONSENT: 'No aceptaron este canal', NO_ADDRESS: 'Sin dirección', DUPLICATE_ADDRESS: 'Misma dirección que otra persona' },

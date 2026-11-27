@@ -37,6 +37,12 @@ test('reads and commands call only the 0621 functions with the session subject a
  assert.equal(saved.blast.version,1);
  assert(calls.some(([sql,args])=>sql.includes('hon.save_school_blast($1,$2::jsonb,$3,$4::uuid,$5::uuid)')&&args[0]==='oidc:owner'&&args[2]==='k1'));
  await assert.rejects(new SchoolBlastService(db([{data:{blast:blast({body:'Other'}),replayed:false}}])).save(k,saveInput()),e=>e.status===503,'saved what was sent');
+ // BL4 (0695): filters and picked people go to the database as given and must come back the same.
+ const aud={groups:[],tags:[],filters:{noBelt:true,endsWithinDays:30,ageMin:5,ageMax:12},people:[blastId]};
+ const filteredCalls=[];
+ assert.deepEqual((await new SchoolBlastService(db([{data:{blast:blast({audience:aud}),replayed:false}}],filteredCalls)).save(k,saveInput({audience:aud}))).blast.audience,aud);
+ assert.deepEqual(JSON.parse(filteredCalls.find(([sql])=>sql.includes('hon.save_school_blast('))[1][1]).audience,aud);
+ await assert.rejects(new SchoolBlastService(db([{data:{blast:blast({audience:{...aud,people:[]}}),replayed:false}}])).save(k,saveInput({audience:aud})),e=>e.status===503,'saved the picked people');
  await assert.rejects(new SchoolBlastService(db([{data:{blast:blast({version:2}),replayed:false}}])).save(k,saveInput()),e=>e.status===503,'version moves by one');
  assert.equal((await new SchoolBlastService(db([{data:{blast:queued(),replayed:true}}])).send(k,{blastId,expectedVersion:1,sendAt:null})).replayed,true);
  await assert.rejects(new SchoolBlastService(db([{data:{blast:blast({version:2}),replayed:false}}])).send(k,{blastId,expectedVersion:1,sendAt:null}),e=>e.status===503,'send queues');
@@ -61,6 +67,15 @@ test('only direct human commands; bad input never reaches the database; refusals
   saveInput({body:'Hi {first_name}}'}),saveInput({body:'x'.repeat(3501)}),saveInput({channel:'SMS',subject:null,body:'x'.repeat(1001)}),saveInput({body:'a\u0007b'}),
   saveInput({audience:{groups:[],tags:[]}}),saveInput({audience:{groups:['EVERYONE'],tags:[]}}),saveInput({audience:{groups:['TRIAL','TRIAL'],tags:[]}}),
   saveInput({audience:{groups:['TRIAL'],tags:['a','A']}}),saveInput({audience:{groups:['TRIAL'],tags:['<b>']}}),saveInput({audience:{groups:['TRIAL']}}),
+  // BL4 (0695): closed filters and picked people.
+  saveInput({audience:{groups:['TRIAL'],tags:[],filters:{}}}),saveInput({audience:{groups:['TRIAL'],tags:[],filters:{color:'red'}}}),
+  saveInput({audience:{groups:['TRIAL'],tags:[],filters:{noBelt:true,rankId:blastId}}}),saveInput({audience:{groups:['TRIAL'],tags:[],filters:{endsWithinDays:45}}}),
+  saveInput({audience:{groups:['TRIAL'],tags:[],filters:{endsWithinDays:30,endsFrom:'2026-12-01'}}}),saveInput({audience:{groups:['TRIAL'],tags:[],filters:{endsFrom:'2026-02-30'}}}),
+  saveInput({audience:{groups:['TRIAL'],tags:[],filters:{ageMin:12,ageMax:5}}}),saveInput({audience:{groups:['TRIAL'],tags:[],filters:{ageMin:'5'}}}),
+  saveInput({audience:{groups:['TRIAL'],tags:[],filters:{membership:'FROZEN'}}}),saveInput({audience:{groups:[],tags:[],people:[]}}),
+  saveInput({audience:{groups:[],tags:[],people:['not-a-uuid']}}),saveInput({audience:{groups:[],tags:[],people:[blastId,blastId]}}),
+  saveInput({audience:{groups:[],tags:[],people:Array.from({length:201},(_,i)=>`00000000-0000-4000-8000-${String(i).padStart(12,'0')}`)}}),
+  saveInput({audience:{groups:['TRIAL'],tags:[],extra:true}}),
   saveInput({blastId,expectedVersion:0}),saveInput({expectedVersion:1}),{...saveInput(),media:[]},(({body,...r})=>r)(saveInput())])
   await assert.rejects(s.save(k,bad),e=>e.status===400,JSON.stringify(bad).slice(0,120));
  for(const bad of [{blastId,expectedVersion:1,sendAt:new Date(Date.now()+30_000).toISOString()},{blastId,expectedVersion:1,sendAt:new Date(Date.now()+61*86_400_000).toISOString()},
