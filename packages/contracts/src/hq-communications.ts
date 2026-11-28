@@ -345,3 +345,83 @@ export function validateHqRepliesView(value: unknown): HqRepliesView {
   }
   return r as unknown as HqRepliesView;
 }
+
+// ---------- 0704 HQ "Buy a number" (docs/architecture/HQ_TEXTING_NUMBER.md) ----------
+export const HQ_NUMBER_ORDER_STATUSES = ['BUYING', 'READY', 'FAILED'] as const;
+export type HqNumberOrderStatus = typeof HQ_NUMBER_ORDER_STATUSES[number];
+/** Human-command header values for the HQ number routes. */
+export const HQ_NUMBER_COMMANDS = { buy: 'hq-number-order-buy', finish: 'hq-number-order-finish' } as const;
+export interface HqAvailableNumber { phoneE164: string; locality: string | null; region: string | null; monthlyPriceMicrounits: number }
+export interface HqNumberSearchResult { status: 'READY' | 'SWITCHED_OFF'; numbers: HqAvailableNumber[] }
+export interface HqNumberOrder {
+  orderId: string; phoneE164: string; locality: string | null; region: string | null; monthlyPriceMicrounits: number; status: HqNumberOrderStatus;
+  numberSid: string | null; serviceSid: string | null; failureCode: string | null; senderId: string | null; requestedBy: HqCommunicationPerson;
+  requestedAt: string; finishedAt: string | null; version: number;
+}
+export interface HqNumberOrdersView { orders: HqNumberOrder[]; hasActiveSmsSender: boolean; provisioning: 'READY' | 'SWITCHED_OFF'; asOf: string }
+export interface HqNumberOrderReceipt { order: HqNumberOrder; replayed: boolean; sender: HqCommunicationSender | null }
+/** The buy body: the number and the monthly price the owner saw and confirmed (the API re-quotes it from Twilio). */
+export interface HqNumberBuyInput { phoneE164: string; monthlyPriceMicrounits: number }
+
+const NANP = /^\+1[2-9][0-9]{9}$/;
+const NUMBER_SID = /^PN[0-9a-f]{32}$/;
+const FAILURE = /^[A-Z_]{3,60}$/;
+const PRICE_MAX = 100_000_000;
+function availableNumber(value: unknown): HqAvailableNumber {
+  const n = record(value, drift); exactKeys(n, ['phoneE164', 'locality', 'region', 'monthlyPriceMicrounits'], drift);
+  if (typeof n.phoneE164 !== 'string' || !NANP.test(n.phoneE164) || !(n.locality === null || label(n.locality, 80))
+    || !(n.region === null || (typeof n.region === 'string' && /^[A-Z]{2}$/.test(n.region))) || !isInt(n.monthlyPriceMicrounits, 0, PRICE_MAX)) drift();
+  return n as unknown as HqAvailableNumber;
+}
+function numberOrder(value: unknown): HqNumberOrder {
+  const o = record(value, drift);
+  exactKeys(o, ['orderId', 'phoneE164', 'locality', 'region', 'monthlyPriceMicrounits', 'status', 'numberSid', 'serviceSid', 'failureCode', 'senderId',
+    'requestedBy', 'requestedAt', 'finishedAt', 'version'], drift);
+  availableNumber({ phoneE164: o.phoneE164, locality: o.locality, region: o.region, monthlyPriceMicrounits: o.monthlyPriceMicrounits });
+  if (!isUuid(o.orderId) || !has(HQ_NUMBER_ORDER_STATUSES, o.status) || !isTimestamp(o.requestedAt) || !isInt(o.version, 1, 999_999_999)) drift();
+  const ready = o.status === 'READY', failed = o.status === 'FAILED', buying = o.status === 'BUYING';
+  if (ready && !(typeof o.numberSid === 'string' && NUMBER_SID.test(o.numberSid) && typeof o.serviceSid === 'string' && SERVICE_SID.test(o.serviceSid)
+    && o.failureCode === null && isUuid(o.senderId) && isTimestamp(o.finishedAt))) drift();
+  if (failed && !(o.numberSid === null && o.serviceSid === null && typeof o.failureCode === 'string' && FAILURE.test(o.failureCode)
+    && o.senderId === null && isTimestamp(o.finishedAt))) drift();
+  if (buying && !(o.numberSid === null && o.serviceSid === null && o.failureCode === null && o.senderId === null && o.finishedAt === null)) drift();
+  person(o.requestedBy);
+  return o as unknown as HqNumberOrder;
+}
+export function validateHqNumberSearchResult(value: unknown): HqNumberSearchResult {
+  const r = record(value, drift); exactKeys(r, ['status', 'numbers'], drift);
+  if (!has(['READY', 'SWITCHED_OFF'], r.status) || !Array.isArray(r.numbers) || r.numbers.length > 20 || (r.status === 'SWITCHED_OFF' && r.numbers.length)) drift();
+  (r.numbers as unknown[]).forEach(availableNumber);
+  return r as unknown as HqNumberSearchResult;
+}
+/** The database part of the orders view; the API adds `provisioning`. */
+export function validateHqNumberOrdersRead(value: unknown): Omit<HqNumberOrdersView, 'provisioning'> {
+  const r = record(value, drift); exactKeys(r, ['orders', 'hasActiveSmsSender', 'asOf'], drift);
+  if (!Array.isArray(r.orders) || r.orders.length > 10 || typeof r.hasActiveSmsSender !== 'boolean' || !isTimestamp(r.asOf)) drift();
+  const orders = (r.orders as unknown[]).map(numberOrder);
+  if (orders.filter((o) => o.status === 'BUYING').length > 1) drift();
+  return r as unknown as Omit<HqNumberOrdersView, 'provisioning'>;
+}
+export function validateHqNumberOrdersView(value: unknown): HqNumberOrdersView {
+  const r = record(value, drift);
+  if (!has(['READY', 'SWITCHED_OFF'], r.provisioning)) drift();
+  const { provisioning, ...rest } = r;
+  return { ...validateHqNumberOrdersRead(rest), provisioning } as HqNumberOrdersView;
+}
+export function validateHqNumberOrderReceipt(value: unknown): HqNumberOrderReceipt {
+  // start returns {order, replayed}; finish adds sender (null unless READY).
+  const r: Record<string, unknown> = { sender: null, ...record(value, drift) };
+  exactKeys(r, ['order', 'replayed', 'sender'], drift);
+  const order = numberOrder(r.order);
+  if (typeof r.replayed !== 'boolean') drift();
+  if (r.sender !== null) {
+    const s = sender(r.sender);
+    if (order.status !== 'READY' || s.channel !== 'SMS' || s.senderId !== order.senderId || s.smsServiceSid !== order.serviceSid || s.smsReplyNumber !== order.phoneE164) drift();
+  }
+  return r as unknown as HqNumberOrderReceipt;
+}
+export function validateHqNumberBuyInput(value: unknown): HqNumberBuyInput {
+  const r = record(value, invalid); exactKeys(r, ['phoneE164', 'monthlyPriceMicrounits'], invalid);
+  if (typeof r.phoneE164 !== 'string' || !NANP.test(r.phoneE164) || !isInt(r.monthlyPriceMicrounits, 0, PRICE_MAX)) invalid();
+  return r as unknown as HqNumberBuyInput;
+}

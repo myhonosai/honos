@@ -131,7 +131,7 @@ export type CommsListState = { state: 'LOADING' } | { state: 'DENIED' } | { stat
 export type CommsListViewProps = Readonly<{ language: string; formattingLocale: string; concealed: boolean; state: CommsListState; target: ComposeTarget | null;
   outcome: CommsOutcome<unknown>; doneText: string; doneMessageId: string | null; locked: boolean; canRetry: boolean; formKey: number;
   onMore: () => void; onRefresh: () => void; onReveal: () => void; onCompose: (d: ComposeDraft) => void; onSetSender: (d: SenderDraft) => void;
-  onRetireSender: (s: HqCommunicationSender) => void; onTryAgain: () => void }>;
+  onRetireSender: (s: HqCommunicationSender) => void; onTryAgain: () => void; smsBuy?: React.ReactNode }>;
 
 function MessageFacts({ t, m, formattingLocale }: { t: T; m: HqMessage; formattingLocale: string }): React.ReactElement {
   const s = m.deliverySummary;
@@ -172,6 +172,7 @@ export function HqCommunicationsListView(props: CommsListViewProps): React.React
     {!owner && <p className={styles.meta}>{t('senderOwnerOnly')}</p>}
     <div className={styles.list}>{HQ_MESSAGE_CHANNELS.map(c => <SenderCard key={c} language={language} channel={c} sender={v.senders[c]} owner={owner}
       locked={props.locked} onSet={props.onSetSender} onRetire={props.onRetireSender}/>)}</div>
+    {props.smsBuy}
     <h2>{t('title')}</h2>
     {state.messages.length === 0 ? <p className={styles.notice}>{t('none')}</p> : <ul className={styles.list} aria-label={t('title')}>
       {state.messages.map(m => <li key={m.messageId} className={styles.card} data-comms-message={m.messageId}>

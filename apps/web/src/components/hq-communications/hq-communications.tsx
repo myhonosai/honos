@@ -5,6 +5,7 @@ import { useLocale } from '../localization/provider';
 import { CommsError, commsApi, type CommsApi, type CommsReceipt } from './http';
 import { useCommsCommand, useConcealment, type CommsOutcome } from './model';
 import { commsText } from './copy';
+import { HqBuyNumber, numberApi, type NumberApi } from './buy-number';
 import { HqCommunicationsListView, createInputFrom, senderInputFrom, type CommsListState, type ComposeDraft, type ComposeTarget, type SenderDraft } from './view';
 
 const isMessageReceipt = (r: CommsReceipt): r is HqMessageReceipt => 'message' in r;
@@ -14,7 +15,7 @@ const isMessageReceipt = (r: CommsReceipt): r is HqMessageReceipt => 'message' i
  * A session end hides everything and drops any draft or kept command. Every command answer is
  * followed by a fresh read. The server decides who may read or write, by purpose, every time.
  */
-export function HqCommunications({ target, api = commsApi }: { target: ComposeTarget | null; api?: CommsApi }): React.ReactElement {
+export function HqCommunications({ target, api = commsApi, numbers = numberApi }: { target: ComposeTarget | null; api?: CommsApi; numbers?: NumberApi }): React.ReactElement {
   const { preferences, formattingLocale } = useLocale();
   const language = preferences.language;
   const [state, setState] = useState<CommsListState>({ state: 'LOADING' });
@@ -86,5 +87,7 @@ export function HqCommunications({ target, api = commsApi }: { target: ComposeTa
   return <HqCommunicationsListView language={language} formattingLocale={formattingLocale} concealed={concealed} state={state} target={target}
     outcome={outcome} doneText={doneText} doneMessageId={receipt && isMessageReceipt(receipt) ? receipt.message.messageId : null}
     locked={command.locked} canRetry={command.canRetry} formKey={formKey} onMore={onMore} onRefresh={onRefresh} onReveal={reveal}
-    onCompose={onCompose} onSetSender={onSetSender} onRetireSender={onRetireSender} onTryAgain={command.tryAgain}/>;
+    onCompose={onCompose} onSetSender={onSetSender} onRetireSender={onRetireSender} onTryAgain={command.tryAgain}
+    smsBuy={state.state === 'READY' && !concealed && state.view.viewer.canManageSenders && !state.view.senders.SMS
+      ? <HqBuyNumber language={language} onChanged={onRefresh} api={numbers}/> : null}/>;
 }
