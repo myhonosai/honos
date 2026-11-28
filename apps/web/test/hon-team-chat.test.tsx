@@ -119,32 +119,60 @@ describe('team chat: one round', () => {
   };
   const round = () => newTeamRound({ create: { path: '/x', key: id(7), body: '{}' }, conversationId: null, text: Q, request: (k) => teamTurnRequest(k, Q), targets: ['hon', 'claire', 'jordan'], spoken: false });
 
-  it('creates the chat, then asks each teammate once, in order', async () => {
+  it('creates the chat, then asks every teammate once, all at the same time', async () => {
     const h = harness();
+    let inFlight = 0, most = 0; const send = h.deps.sendTurn;
+    h.deps.sendTurn = async (p) => { inFlight++; most = Math.max(most, inFlight); await new Promise((r) => setTimeout(r, 5)); try { return await send(p); } finally { inFlight--; } };
     const out = await runTeamRound(round(), h.deps);
     expect(out).toEqual({ kind: 'DONE', answers: [{ key: 'hon', reply: 'hon answer' }, { key: 'claire', reply: 'claire answer' }, { key: 'jordan', reply: 'jordan answer' }] });
-    expect(h.sent.map((s) => (JSON.parse(s.body) as { delegation: { agentKey: string } | null }).delegation?.agentKey ?? 'hon')).toEqual(['hon', 'claire', 'jordan']);
+    expect(most).toBe(3);
+    expect(new Set(h.sent.map((s) => (JSON.parse(s.body) as { delegation: { agentKey: string } | null }).delegation?.agentKey ?? 'hon'))).toEqual(new Set(['hon', 'claire', 'jordan']));
     expect(new Set(h.sent.map((s) => s.key)).size).toBe(3);
-    expect(h.busy).toEqual(['create', 'hon', 'claire', 'jordan', null]);
+    expect(h.busy[0]).toBe('create');
+    expect(h.busy[1]).toEqual(['hon', 'claire', 'jordan']);
+    expect(h.busy.at(-1)).toBeNull();
     expect(h.refreshes).toBe(3);
   });
-  it('stops at an unknown outcome and resumes with the exact same request, never re-asking who already answered', async () => {
+  it('shows each answer as it arrives: a slow teammate does not hold back a fast one', async () => {
+    const h = harness();
+    const send = h.deps.sendTurn; const order: string[] = [];
+    h.deps.sendTurn = async (p) => {
+      const who = (JSON.parse(p.body) as { delegation: { agentKey: string } | null }).delegation?.agentKey ?? 'hon';
+      await new Promise((r) => setTimeout(r, who === 'hon' ? 30 : who === 'claire' ? 15 : 1));
+      order.push(who); return send(p);
+    };
+    const out = await runTeamRound(round(), h.deps);
+    expect(order).toEqual(['jordan', 'claire', 'hon']);
+    expect(h.busy).toEqual(['create', ['hon', 'claire', 'jordan'], ['hon', 'claire'], ['hon'], null, null]);
+    // Answers keep the team order for reading aloud.
+    expect(out.kind === 'DONE' && out.answers.map((a) => a.key)).toEqual(['hon', 'claire', 'jordan']);
+  });
+  it('stops at an unknown outcome and resumes with the exact same request, only to who has not answered', async () => {
     const h = harness((who, attempt) => who === 'claire' && attempt === 1 ? new HonConversationError('UNKNOWN') : null);
     const r = round();
     expect(await runTeamRound(r, h.deps)).toEqual({ kind: 'STALLED', state: 'UNKNOWN', who: 'claire' });
-    const claireKey = h.sent[1]!.key;
+    expect(h.sent).toHaveLength(3);
+    const claireKey = h.sent.find((s) => s.body.includes('claire'))!.key;
     const out = await runTeamRound(r, h.deps);
-    expect(out.kind).toBe('DONE');
-    expect(h.sent.map((s) => s.key)).toEqual([h.sent[0]!.key, claireKey, claireKey, h.sent[3]!.key]);
+    expect(out).toEqual({ kind: 'DONE', answers: [{ key: 'hon', reply: 'hon answer' }, { key: 'claire', reply: 'claire answer' }, { key: 'jordan', reply: 'jordan answer' }] });
+    expect(h.sent).toHaveLength(4);
+    expect(h.sent[3]!.key).toBe(claireKey);
   });
-  it('reports a definitive refusal by name and does nothing once retired', async () => {
-    const h = harness((who) => who === 'hon' ? new HonConversationError('FORBIDDEN', 'HON_AI_SPEND_REFUSED') : null);
-    expect(await runTeamRound(round(), h.deps)).toEqual({ kind: 'STALLED', state: 'FORBIDDEN', who: 'hon' });
+  it('an unknown outcome wins over a refusal, and a refusal is reported by name', async () => {
+    const h = harness((who) => who === 'hon' ? new HonConversationError('FORBIDDEN', 'HON_AI_SPEND_REFUSED') : who === 'jordan' ? new HonConversationError('UNKNOWN') : null);
+    expect(await runTeamRound(round(), h.deps)).toEqual({ kind: 'STALLED', state: 'UNKNOWN', who: 'jordan' });
+    const k = harness((who) => who === 'hon' ? new HonConversationError('FORBIDDEN', 'HON_AI_SPEND_REFUSED') : null);
+    expect(await runTeamRound(round(), k.deps)).toEqual({ kind: 'STALLED', state: 'FORBIDDEN', who: 'hon' });
+  });
+  it('reports a failed create without asking anyone, and does nothing once retired', async () => {
+    const f = harness(); f.deps.create = async () => { throw new HonConversationError('FORBIDDEN'); };
+    expect(await runTeamRound(round(), f.deps)).toEqual({ kind: 'STALLED', state: 'FORBIDDEN', who: null });
+    expect(f.sent).toHaveLength(0);
     const g = harness();
     const r = round(); const send = g.deps.sendTurn;
     g.deps.sendTurn = async (p) => { const x = await send(p); g.retire(); return x; };
     expect(await runTeamRound(r, g.deps)).toEqual({ kind: 'RETIRED' });
-    expect(g.sent).toHaveLength(1);
+    expect(g.refreshes).toBe(0);
   });
 });
 
@@ -176,8 +204,9 @@ describe('team chat view', () => {
     expect(render({ artStyle: 'chibi' })).toContain('/ai/jordan');
   });
   it('locks sending while a teammate is answering or after an unknown outcome, and offers the exact retry', () => {
-    expect(render({ busy: 'jordan' })).toContain('Asking Jordan…');
-    expect(render({ busy: 'jordan' })).toMatch(/<textarea[^>]*disabled=""/);
+    expect(render({ busy: ['jordan'] })).toContain('Asking Jordan…');
+    expect(render({ busy: ['claire', 'jordan'] })).toContain('Asking Claire, Jordan…');
+    expect(render({ busy: ['jordan'] })).toMatch(/<textarea[^>]*disabled=""/);
     const r = newTeamRound({ create: null, conversationId: id(5), text: Q, request: (k) => teamTurnRequest(k, Q), targets: ['claire'], spoken: false });
     const html = render({ stalled: { round: r, state: 'UNKNOWN', who: 'claire' } });
     expect(html).toContain('It is not known whether Claire received this. Retry sends the exact same message');

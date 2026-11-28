@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { OpenRouterHonReplyRuntime, HonReplyProviderRuntimeError, HON_REPLY_SYSTEM_PROMPT, CLAIRE_ANALYSIS_SYSTEM_PROMPT, honReplySystemPrompt, splitHonReplySuggestions } = require('../dist/ai/hon-reply-provider-runtime.js');
+const { OpenRouterHonReplyRuntime, HonReplyProviderRuntimeError, HON_REPLY_SYSTEM_PROMPT, CLAIRE_ANALYSIS_SYSTEM_PROMPT, ALEX_ANALYSIS_SYSTEM_PROMPT, JORDAN_ANALYSIS_SYSTEM_PROMPT, LENA_ANALYSIS_SYSTEM_PROMPT, MAYA_ANALYSIS_SYSTEM_PROMPT, HON_OS_PRODUCT_GUIDE, honReplyInputTokenBound, honReplySystemPrompt, splitHonReplySuggestions } = require('../dist/ai/hon-reply-provider-runtime.js');
 const { HON_REPLY_LIMITS, HON_REPLY_MODES } = require('@hon/contracts');
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -29,7 +29,7 @@ test('HON reply runtime refuses changed budgets, bad model ids and oversized inp
   let calls = 0;
   const runtime = new OpenRouterHonReplyRuntime(approved, async () => { calls++; return ok(); });
   // Each mode carries exactly its own budgets: STANDARD cannot borrow DETAILED's output limit, and no mode exceeds $0.08.
-  for (const over of [{ inputBudget: 9000 }, { outputBudget: 1501 }, { outputBudget: D.outputTokens }, { maxCostMicrounits: 80001 }, { modelId: 'bad model' }, { facts: 'x'.repeat(9000) },
+  for (const over of [{ inputBudget: 9000 }, { outputBudget: 1501 }, { outputBudget: D.outputTokens }, { maxCostMicrounits: 80001 }, { modelId: 'bad model' }, { facts: 'x'.repeat(16000) },
     { question: 1 }, { replyMode: 'UNLIMITED' }, { replyMode: 'DETAILED' }, { replyMode: 'toString' }, { step: 0 }, { step: 4 }, { step: 1.5 }]) {
     await assert.rejects(runtime.generate({ ...input, ...over }), isErr('PRE_SEND', 'INVALID_REQUEST'));
   }
@@ -150,4 +150,38 @@ test('K2 Claire analysis: fixed DETAILED single step, her own two-part prompt, n
     await assert.rejects(runtime.generate(over), isErr('PRE_SEND', 'INVALID_REQUEST'));
   }
   assert.equal(seen.length, 1);
+});
+
+test('2026-11-28: HON knows HON OS itself (team chat, voice, menu), and the specialists hand product questions back to HON', () => {
+  assert.match(HON_REPLY_SYSTEM_PROMPT, /HON OS guide below/);
+  assert(HON_REPLY_SYSTEM_PROMPT.endsWith(HON_OS_PRODUCT_GUIDE));
+  assert.match(HON_OS_PRODUCT_GUIDE, /Dashboard has a Team chat where the person talks to the whole AI team at once/);
+  assert.match(HON_OS_PRODUCT_GUIDE, /microphone/);
+  assert.match(HON_OS_PRODUCT_GUIDE, /Make a plan together/);
+  assert.match(HON_OS_PRODUCT_GUIDE, /drafts wait for a person to approve/);
+  assert.match(HON_OS_PRODUCT_GUIDE, /depends on their role/);
+  assert.doesNotMatch(HON_OS_PRODUCT_GUIDE, /https?:|\/staff\//, 'no links or paths');
+  for (const prompt of [CLAIRE_ANALYSIS_SYSTEM_PROMPT, ALEX_ANALYSIS_SYSTEM_PROMPT, JORDAN_ANALYSIS_SYSTEM_PROMPT, LENA_ANALYSIS_SYSTEM_PROMPT, MAYA_ANALYSIS_SYSTEM_PROMPT]) {
+    assert.match(prompt, /about HON OS itself .* one or two sentences without the labeled parts and say that HON can explain how HON OS works/);
+  }
+  // HQ HON is unchanged here (its own guide comes with the HQ team chat).
+  assert.doesNotMatch(honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', 'hon'), /Team chat/);
+});
+
+test('2026-11-28: a team chat follow-up and "Make a plan together" fit their budgets and are sent (they were refused before)', async () => {
+  // A realistic context: the school metrics plus six earlier team turns, each answer at its 900-character cut.
+  const metrics = JSON.stringify(Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`metric${i}`, { availability: 'AVAILABLE', value: 1234 + i }])));
+  const history = JSON.stringify(Array.from({ length: 6 }, (_, i) => ({ question: 'am I able to talk to the whole team', answer: 'Recorded facts: '.padEnd(900, 'x'), delegatedTo: ['claire', 'alex', 'jordan', 'lena', 'claire', 'alex'][i] })));
+  const facts = JSON.stringify({ school: JSON.parse(metrics), history: JSON.parse(history) });
+  assert(Buffer.byteLength(HON_REPLY_SYSTEM_PROMPT + facts) > D.inputTokens, 'the old byte rule refused this');
+  let calls = 0;
+  const runtime = new OpenRouterHonReplyRuntime(approved, async () => { calls++; return ok(); });
+  await runtime.generate({ ...input, facts });
+  await runtime.generate({ ...detailed, facts, question: 'Make one plan from what the team said: numbered steps, who each point comes from, and what each teammate could look at next.' });
+  assert.equal(calls, 2);
+  // The estimate is half the UTF-8 bytes plus the fixed allowance; it still refuses what cannot fit.
+  assert.equal(honReplyInputTokenBound('ab'), 129);
+  assert.equal(honReplyInputTokenBound('한'), 2 + 128);
+  await assert.rejects(runtime.generate({ ...input, facts: 'x'.repeat(16000) }), isErr('PRE_SEND', 'INVALID_REQUEST'));
+  assert.equal(calls, 2);
 });
