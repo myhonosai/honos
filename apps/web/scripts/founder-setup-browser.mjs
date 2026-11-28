@@ -19,7 +19,7 @@ await mkdir(results, { recursive: true });
 const report = { sourceSha: process.env.HON_HQ_SOURCE_SHA, syntheticBrowserOnly: true, realApiDatabaseVerification: false, externalProviderCalls: 0, screenshots: [], accessibility: [], stageChecks: [], stageAnnouncements: [], hqAffordances: [], focusChecks: [], checks: [] };
 const id = n => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const session = { mode: 'OIDC', audience: 'founder-browser-synthetic', secret: randomBytes(32).toString('hex') };
-const state = { language: 'en', ownerReads: 0, hqReads: 0, mutations: 0, status: 200, hold: false, settle: null, schoolName: 'SYNTHETIC SCHOOL A' };
+const state = { language: 'en', ownerReads: 0, hqReads: 0, mutations: 0, phoneTokenReads: 0, status: 200, hold: false, settle: null, schoolName: 'SYNTHETIC SCHOOL A' };
 const projection = () => ({ organizationId: id(1), schoolId: id(2), schoolName: state.schoolName, tier: 'COMPLETE', program: { id: id(3), version: 1, status: 'DRAFT' }, classSession: null, registration: null, guardianChildRegistration: null });
 const directory = { schools: [{ schoolId: id(2), organizationDisplayName: 'SYNTHETIC ORGANIZATION', schoolDisplayName: 'SYNTHETIC HQ SCHOOL', organizationOperationalStatus: 'ACTIVE', schoolOperationalStatus: 'ACTIVE', entitlementTier: null, createdAt: '2026-10-30T12:00:00.000Z' }] };
 const overview = { asOf: '2026-10-30T12:00:00.000Z', callerHqRole: 'OWNER', organizationCount: 0, schoolCount: 0, onboarding: { availability: 'AVAILABLE', requestCount: 0, inProgressRequestCount: 0, completedRequestCount: 0 }, configuredProviderStates: { disabled: 0, configured: 0, healthy: 0, degraded: 0, unavailable: 0 }, taskProfileCount: 0, financialMetrics: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.financialMetrics }, aiUsage: { availability: 'UNAVAILABLE', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.aiUsage }, durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: HQ_OVERVIEW_UNAVAILABLE_REASONS.durableHqWork } };
@@ -30,6 +30,8 @@ const api = createServer(async (r, s) => {
     if (r.method === 'PUT') { let text = ''; for await (const c of r) text += c; state.language = JSON.parse(text).language; send(200, { preference: { language: state.language, version: 2, updatedAt: '2026-10-30T12:00:00.000Z' }, replayed: false }); return; }
     send(200, { preference: { language: state.language, version: 2, updatedAt: '2026-10-30T12:00:00.000Z' }, schoolDefault: null, effective: { language: state.language, source: 'PERSONAL' }, supportedLanguages: ['en','ko','es'] }); return;
   }
+  // The HQ top-bar phone asks once per HQ page for a browser-phone token (a POST that changes nothing); refuse it so the phone stays hidden.
+  if (r.method === 'POST' && r.url === '/v1/hq/calls/phone-token') { state.phoneTokenReads++; send(403); return; }
   if (r.method !== 'GET') { state.mutations++; send(405); return; }
   if (r.url === '/v1/hq/session') { send(200, { principalId: id(9), hqRole: 'HON_HQ_OWNER' }); return; }
   if (r.url === '/v1/hq/overview') { send(200, { overview }); return; }

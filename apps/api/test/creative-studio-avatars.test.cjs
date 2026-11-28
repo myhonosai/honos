@@ -23,7 +23,7 @@ const avatarInput = (patch = {}) => ({ name: 'Master Kim', style: 'REALISTIC', d
 const generation = (school, patch = {}) => ({ generationId: U(), schoolId: school, operationCode: 'avatar.create', mediaKind: 'IMAGE', units: 1, format: 'PORTRAIT',
   prompt: DESCRIPTION, status: 'GENERATING', failureReason: null, reservedCredits: 100, chargedCredits: null, createdAt: T, completedAt: null, assets: [], ...patch });
 const ready = school => generation(school, { status: 'SUCCEEDED', chargedCredits: 100, completedAt: T2,
-  assets: [{ assetId: U(), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC' }] });
+  assets: [{ assetId: U(), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] });
 const STATUS = { GENERATING: 'CREATING', SUCCEEDED: 'READY', UNDER_REVIEW: 'UNDER_REVIEW', FAILED: 'NOT_CREATED', RESOLVED_CHARGED: 'NOT_CREATED', RESOLVED_NOT_CHARGED: 'NOT_CREATED' };
 const avatar = (school, g = generation(school), patch = {}) => ({ avatarId: U(), schoolId: school, name: 'Master Kim', style: 'REALISTIC', description: DESCRIPTION,
   status: STATUS[g.status], createdAt: g.createdAt, generation: g, ...patch });
@@ -90,7 +90,7 @@ function fakeDatabase({ replayed = false, status = 'GENERATING', createdAt = T }
       db.avatar = { ...db.avatar, status: STATUS[next], generation: { ...g, status: next, failureReason: outcome.failureReason,
         completedAt: new Date(Date.parse(g.createdAt) + 5000).toISOString(), chargedCredits: next === 'SUCCEEDED' ? 100 : null,
         assets: next === 'SUCCEEDED' ? outcome.assets.map((a, i) => ({ assetId: U(), ordinal: i + 1, mediaType: a.mediaType, width: a.width, height: a.height,
-          durationSeconds: a.durationSeconds, origin: 'SYNTHETIC' })) : [] } };
+          durationSeconds: a.durationSeconds, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' })) : [] } };
       return { generation: db.avatar.generation, balance: balance(), replayed: false };
     }
     if (operation === 'readCreativeAvatar') return db.avatar ?? avatar(params[1]);

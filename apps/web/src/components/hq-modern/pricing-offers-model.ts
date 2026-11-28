@@ -1,33 +1,44 @@
-import { validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
+import { HON_OS_PLAN_CAPABILITIES, validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
   type SaasHonOsOfferKind, type SaasHonOsOfferSet, type SaasHonOsOfferSetContent, type SaasHonOsOfferSetDraftInput } from '@hon/contracts';
 import { pricingOfferInput } from './pricing-offers-http';
 
 export type OfferFields = {
-  key:string; offerKind:SaasHonOsOfferKind; offerCode:string; displayName:string; amount:string;
+  key:string;
+  /** Local plan identity for the Plan builder (never sent): offers of one plan share it, independent of the name being typed. */
+  planKey:string;
+  offerKind:SaasHonOsOfferKind; offerCode:string; displayName:string; amount:string;
   salesOpensAt:string; salesClosesAt:string; eligibility:string; saleLimit:string; priceLock:string;
   priceLockMonths:string; annualRenewal:string; plannedMonthlyPremiumCredits:string;
   aiFairUseReference:string; refundWindowDays:string; cancellationTiming:string;
+  /** The plan's features (0697), canonical HON OS order. */
+  capabilities:string[];
 };
 export type OfferSetForm = { key:string; setId:string|null; revision:number|null; basedOnSetId:string|null;
   termsReference:string; founderTotalLimit:string; offers:OfferFields[] };
 export const kindLabels = { REGULAR_MONTHLY:'monthly', REGULAR_ANNUAL:'annual', FOUNDER_MONTHLY:'founder-monthly',
   FOUNDER_ANNUAL:'founder-annual', LIFETIME:'lifetime', FOUNDER_LIFETIME:'founder-lifetime' } as const;
 export function blankSet(): OfferSetForm { return { key:crypto.randomUUID(),setId:null,revision:null,basedOnSetId:null,termsReference:'',founderTotalLimit:'',offers:[] }; }
-export function blankOffer(kind:SaasHonOsOfferKind, existing:OfferFields[]): OfferFields {
+export function blankOffer(kind:SaasHonOsOfferKind, existing:OfferFields[], planKey?:string): OfferFields {
   let code:string = kind; for(let i=2;existing.some(o=>o.offerCode===code);i++) code=kind+'_'+i;
-  return { key:crypto.randomUUID(),offerKind:kind,offerCode:code,displayName:'HON OS',amount:'',salesOpensAt:'',salesClosesAt:'',
+  const key=crypto.randomUUID();
+  return { key,planKey:planKey??existing.find(o=>o.displayName==='HON OS')?.planKey??key,offerKind:kind,offerCode:code,displayName:'HON OS',amount:'',salesOpensAt:'',salesClosesAt:'',
     eligibility:'ANY_ACTIVE_ORGANIZATION',saleLimit:'',priceLock:'NONE',priceLockMonths:'',annualRenewal:'',
-    plannedMonthlyPremiumCredits:'',aiFairUseReference:'',refundWindowDays:'',cancellationTiming:'' };
+    plannedMonthlyPremiumCredits:'',aiFairUseReference:'',refundWindowDays:'',cancellationTiming:'',capabilities:[...HON_OS_PLAN_CAPABILITIES] };
 }
 export function formFromSet(set:SaasHonOsOfferSet, clone=false):OfferSetForm {
   return { key:clone?crypto.randomUUID():set.setId,setId:clone?null:set.setId,revision:clone?null:set.revision,
     basedOnSetId:clone?set.setId:set.basedOnSetId,termsReference:set.termsReference??'',founderTotalLimit:set.founderTotalLimit?.toString()??'',
-    offers:set.offers.map(o=>{ const v=pricingOfferInput(o);return { ...v,key:clone?crypto.randomUUID():o.offerId,
+    offers:withPlanKeys(set.offers.map(o=>{ const v=pricingOfferInput(o);return { ...v,key:clone?crypto.randomUUID():o.offerId,planKey:'',
       amount:`${Math.floor(v.priceMinor/100)}.${String(v.priceMinor%100).padStart(2,'0')}`,
       salesOpensAt:v.salesOpensAt?.slice(0,-1)??'',salesClosesAt:v.salesClosesAt?.slice(0,-1)??'',
       saleLimit:v.saleLimit?.toString()??'',priceLockMonths:v.priceLockMonths?.toString()??'',annualRenewal:v.annualRenewal??'',
       plannedMonthlyPremiumCredits:v.plannedMonthlyPremiumCredits?.toString()??'',aiFairUseReference:v.aiFairUseReference??'',
-      refundWindowDays:v.refundWindowDays?.toString()??'',cancellationTiming:v.cancellationTiming??'' }; }) };
+      refundWindowDays:v.refundWindowDays?.toString()??'',cancellationTiming:v.cancellationTiming??'' }; })) };
+}
+/** A saved set's plans are the offers sharing a display name (0697); each plan's key is its first offer's key. */
+function withPlanKeys(offers:OfferFields[]):OfferFields[] {
+  const first=new Map<string,string>();
+  return offers.map(o=>{ if(!first.has(o.displayName))first.set(o.displayName,o.key);return { ...o,planKey:first.get(o.displayName)! }; });
 }
 const optionalText=(s:string)=>s===''?null:s;
 function integer(s:string):number|null { if(s==='')return null;if(!/^\d{1,10}$/.test(s)||!Number.isSafeInteger(Number(s)))throw Error('INVALID_SAAS_INPUT');return Number(s); }
@@ -46,7 +57,7 @@ export function formContent(form:OfferSetForm):SaasHonOsOfferSetContent {
       salesOpensAt:utc(o.salesOpensAt),salesClosesAt:utc(o.salesClosesAt),eligibility:o.eligibility,saleLimit:integer(o.saleLimit),
       priceLock:o.priceLock,priceLockMonths:o.priceLock==='FIXED_MONTHS'?integer(o.priceLockMonths):null,annualRenewal:optionalText(o.annualRenewal),
       plannedMonthlyPremiumCredits:integer(o.plannedMonthlyPremiumCredits),aiFairUseReference:optionalText(o.aiFairUseReference),
-      refundWindowDays:integer(o.refundWindowDays),cancellationTiming:optionalText(o.cancellationTiming),
+      refundWindowDays:integer(o.refundWindowDays),cancellationTiming:optionalText(o.cancellationTiming),capabilities:o.capabilities,
     })) });
   const {basedOnSetId,...content}=input;return content;
 }

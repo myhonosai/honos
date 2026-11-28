@@ -13,6 +13,7 @@ import { CreativeGenerationError, createCreativeAvatar, createCreativeAvatarVide
   listCreativeAvatarPhotos, listCreativeAvatarVideos, listCreativeAvatars, listCreativeGenerations, readCreativeAvatarPhotoImage, uploadCreativeAvatarPhoto } from './generation-http';
 import { studioWallet, type PhotoOutcome, type PhotosState, type AvatarsState, type VideosState, type CreateLock, type CreateOutcome, type GenerationsState, type StudioState, type StudioWallet } from './model';
 import { CreativeStudioView } from './view';
+import { CREATIVE_MEDIA_API, CreativeMedia, type CreativeMediaApi } from './media';
 
 type Scope = Readonly<{ organizationId: string; schoolId: string }>;
 export type CreativeStudioApi = {
@@ -25,6 +26,8 @@ export type CreativeStudioApi = {
   /** A2 (0277) talking avatar videos: optional for the same reason. */
   videos?(scope: Scope, signal: AbortSignal): Promise<CreativeAvatarVideoRecords>;
   createVideo?(scope: Scope, input: CreativeAvatarVideoInput, idempotencyKey: string, signal: AbortSignal): Promise<CreativeAvatarVideoReceipt>;
+  /** C6 stored media (view, delete, review, queue): optional for the same reason. */
+  media?: CreativeMediaApi;
   /** A3 (0684) photo avatars: optional for the same reason. */
   photos?(scope: Scope, signal: AbortSignal): Promise<CreativePhotoRecords>;
   photoImage?(scope: Scope, consentId: string, signal: AbortSignal): Promise<CreativePhotoImage>;
@@ -41,6 +44,7 @@ export const CREATIVE_STUDIO_API: CreativeStudioApi = {
   createAvatar: (scope, input, key, signal) => createCreativeAvatar(scope.schoolId, input, key, signal),
   videos: (scope, signal) => listCreativeAvatarVideos(scope.schoolId, signal),
   createVideo: (scope, input, key, signal) => createCreativeAvatarVideo(scope.schoolId, input, key, signal),
+  media: CREATIVE_MEDIA_API,
   photos: (scope, signal) => listCreativeAvatarPhotos(scope.schoolId, signal),
   photoImage: (scope, consentId, signal) => readCreativeAvatarPhotoImage(scope.schoolId, consentId, signal),
   uploadPhoto: (scope, input, key, signal) => uploadCreativeAvatarPhoto(scope.schoolId, input, key, signal),
@@ -78,6 +82,8 @@ export function outcomeFromAttempt(error: unknown, unresolved: boolean): Readonl
     case 'DENIED': return { outcome: { kind: 'RETRY_BLOCKED', cause: 'DENIED', code: error.code }, release: false };
     case 'REFUSED': case 'NOT_CONNECTED': case 'INVALID':
       if (unresolved) return { outcome: { kind: 'RETRY_BLOCKED', cause: error.kind, code: error.code }, release: false };
+      // C4: the free prompt check refused the wording before anything was reserved.
+      if (error.kind === 'INVALID' && error.code === 'CREATIVE_PROMPT_NOT_ALLOWED') return { outcome: { kind: 'PROMPT_REFUSED' }, release: true };
       return { outcome: error.kind === 'REFUSED' ? { kind: 'REFUSED', code: error.code } : { kind: error.kind }, release: true };
     default: return { outcome: { kind: 'UNKNOWN' }, release: false };
   }
@@ -397,6 +403,9 @@ export function CreativeStudio({ api = CREATIVE_STUDIO_API }: { api?: CreativeSt
       videos={videos} videoOutcome={shownVideoOutcome} videoLocked={videoLock !== 'NONE'} hideVideoText={hideVideoText} onCreateVideo={onCreateVideo} onCheckVideoAgain={onCheckVideoAgain}
       photos={photos} photoImage={photoImage} photoOutcome={shownPhotoOutcome} photoSaveLocked={uploadLock !== 'NONE'} photoDeleting={photoDeleting}
       photoAvatarOutcome={shownPhotoAvatarOutcome} photoAvatarLocked={photoAvatarLock !== 'NONE'} onSavePhoto={onSavePhoto} onCheckPhotoSave={onCheckPhotoSave}
-      onDeletePhoto={consentId => { void onDeletePhoto(consentId); }} onCreatePhotoAvatar={onCreatePhotoAvatar} onCheckPhotoAvatarAgain={onCheckPhotoAvatarAgain}/>
+      onDeletePhoto={consentId => { void onDeletePhoto(consentId); }} onCreatePhotoAvatar={onCreatePhotoAvatar} onCheckPhotoAvatarAgain={onCheckPhotoAvatarAgain}
+      media={api.media && selection && generations.state === 'READY' && shell.phase === 'READY'
+        ? <CreativeMedia key={selection.schoolId.toLowerCase()} language={preferences.language} schoolId={selection.schoolId.toLowerCase()} generations={generations.items} api={api.media} onChanged={onRefresh}/>
+        : null}/>
   </div>;
 }

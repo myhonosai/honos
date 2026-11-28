@@ -33,8 +33,19 @@ later backend piece (needs its own migration number).
 
 - Every message is an ordinary turn on the existing `POST .../hon/conversations/:id/turns`: the server re-checks the
   person, school, capability, AI access, HQ pause, per-school cost ceiling and budget lock for each one. "Everyone" is
-  several ordinary turns, sent one after another; each has its own idempotency key and exact-retry on an unknown
-  outcome. Nothing is sent, scheduled or changed by any agent.
+  several ordinary turns (2026-11-28: one after another took ~37 s live for five answers). HON is asked first; once its
+  turn settles the specialists are asked at the same time (about two answers' time). HON goes first because
+  `prepare_hon_reply` gives HON the six turns before its own: specialist turns of the same round created first would fill
+  that window with the same question and push out the previous round. Each turn has its own idempotency key and
+  exact-retry on an unknown outcome, and a retry resends only to the teammates who have not answered. Each answer appears as it arrives. The server already serializes turn creation on the conversation row
+  (`FOR UPDATE`), so parallel turns get distinct sequence numbers. Nothing is sent, scheduled or changed by any agent.
+- HON knows HON OS itself (2026-11-28): its prompt ends with a fixed product guide (`HON_OS_PRODUCT_GUIDE`: the team
+  chat, voice, "Make a plan together", the menu headings). The specialists answer a question about HON OS in one or
+  two sentences and hand it to HON.
+- Input size (2026-11-28): the pre-send check estimates tokens as half the UTF-8 bytes plus 128 (was: bytes). With six
+  team turns of history a follow-up to HON and every "Make a plan together" were over the byte rule and refused before
+  sending. The database still refuses to show any answer whose reported input tokens exceed the plan's budget: that call
+  is paid (the real cost is written to the ledger) and then shown as failed (RESULT_BUDGET_EXCEEDED).
 - The AI team is included in HON OS; nothing is charged per message. The existing internal $0.08/call ceiling and
   per-school limits apply to every turn.
 - The browser decides nothing: who may answer comes from the server's readiness.
@@ -74,3 +85,27 @@ Owner ask (2026-11-17): "choose voice for all AI agents, give few choices each".
 - **Where:** "Choose voices" in the Team chat card: each teammate's three voices with a ▶ to hear a sample first (nothing is saved by hearing). A change shows at once and is saved; if saving fails the previous voice comes back with a note. Only the newest request may change what is shown.
 - **Used by:** the team chat reads each answer in the chosen voice; Ask HON reads HON's answers in HON's chosen voice.
 - **Not:** no paid or cloud voice, no provider, no AI call, no spend. Paid natural voices stay off until the owner approves them.
+
+## HQ team chat (owner ask 2026-11-28)
+
+"HQ HON doesn't even show team chat ... set it up like the school CRM dashboard, let me talk to the team on the
+dashboard." The HQ Home dashboard now has **Talk to your team** under the command stage
+(`apps/web/src/components/hq-hon/hq-team-chat.tsx`, model `hq-team-chat-model.ts`):
+
+- Members: HON and the six HQ executives (Chase, Mia, Ethan, Olivia, Ryan, Sophia). Who can be asked comes only from
+  the server's `availableAgents` (0264); the others show greyed out. With no provider connected or no HQ AI budget set
+  the chat says so and shows no composer.
+- "Everyone" (or a message starting "Everyone, …") asks every allowed agent; a name ("Mia, …") asks one. Each is an
+  ordinary HQ Ask HON question (`POST /api/v1/hq/hon/turns`, STANDARD) with its own Idempotency-Key. HQ allows three
+  questions answering at once (0263/0519 `HQ_HON_TOO_MANY_IN_PROGRESS`), so a round asks three at a time; each answer
+  appears as it arrives. Retry asks only the agents without an answer: an UNKNOWN or CHANGED attempt keeps its key
+  (replayed, never asked twice), a definitive refusal asks again with a new key.
+- The chat shows only this person's own questions (the HQ conversation is shared; other HQ people's questions stay on
+  the executive pages). The same question to several agents within two minutes is one "you" bubble.
+- Voice: the microphone asks the team; each answer is read with the agent's name first, each executive in a school
+  team voice of their own (`HQ_TEAM_VOICE`). Browser speech only, as the HON orb.
+- HQ HON's prompt ends with `HQ_PRODUCT_GUIDE` (the HQ team chat and the HQ menu); executives answer questions about HQ
+  itself in one or two sentences and hand them to HON.
+- No "Make a plan together" in HQ yet: HQ HON does not read the executives' answers (that needs its own migration).
+
+Browser proof: `HON_ORB_ASK_BROWSER_LOCAL=1 HON_ORB_ASK_BROWSER_RESULTS=<dir> HON_ORB_ONLY="HQ team chat" node apps/web/scripts/hon-orb-ask-browser.mjs`.

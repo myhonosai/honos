@@ -2,9 +2,9 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HqMessage, HqMessageCreateInput, HqMessageReceipt } from '@hon/contracts';
-import { CommsError } from '../src/components/hq-communications/http';
-import { HqSendFlow, filterConversations, groupConversations, threadOrder, type SendApi } from '../src/components/hq-communications/inbox-model';
+import type { HqInboundReply, HqMessage, HqMessageCreateInput, HqMessageReceipt } from '@hon/contracts';
+import { CommsError, commsApi } from '../src/components/hq-communications/http';
+import { HqSendFlow, filterConversations, groupConversations, threadItems, threadOrder, type SendApi } from '../src/components/hq-communications/inbox-model';
 import { HqInboxView, type InboxViewProps } from '../src/components/hq-communications/inbox';
 import { inboxCatalogs, inboxText, inboxWhyKey } from '../src/components/hq-communications/inbox-copy';
 
@@ -18,6 +18,9 @@ const msg = (patch: Partial<HqMessage> = {}): HqMessage => ({ messageId: id(1), 
   version: 2, deliverySummary: { ...summary, delivered: 2 }, ...patch });
 const input: HqMessageCreateInput = { organizationId: id(2), schoolId: id(3), purpose: 'SUPPORT', channel: 'EMAIL', content: 'Hello owners', supportCaseId: null };
 const receipt = (operation: 'CREATE' | 'QUEUE', patch: Partial<HqMessage>): HqMessageReceipt => ({ operation, message: msg(patch), replayed: false });
+const reply = (patch: Partial<HqInboundReply> = {}): HqInboundReply => ({ replyId: id(80), messageId: id(1), organizationId: id(2), organizationDisplayName: 'Synthetic Dojo LLC',
+  schoolId: id(3), schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'SMS', from: { principalId: id(60), displayName: 'Synthetic Owner' },
+  body: 'Thanks, all fixed now.', receivedAt: '2026-11-05T00:00:00.000Z', ...patch });
 const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 
 describe('conversations by school', () => {
@@ -27,7 +30,7 @@ describe('conversations by school', () => {
       msg({ messageId: id(11), schoolId: id(4), schoolDisplayName: 'Other Dojo', createdAt: '2026-11-03T00:00:00.000Z' }),
       msg({ messageId: id(12), schoolId: id(3).toUpperCase(), schoolDisplayName: 'Synthetic Academy Renamed', createdAt: '2026-11-02T00:00:00.000Z' }),
     ]);
-    expect(list.map(c => [c.schoolDisplayName, c.count, c.latest.messageId])).toEqual([['Other Dojo', 1, id(11)], ['Synthetic Academy Renamed', 2, id(12)]]);
+    expect(list.map(c => [c.schoolDisplayName, c.count, c.latestId])).toEqual([['Other Dojo', 1, id(11)], ['Synthetic Academy Renamed', 2, id(12)]]);
     expect(filterConversations(list, 'renamed').map(c => c.schoolDisplayName)).toEqual(['Synthetic Academy Renamed']);
     expect(filterConversations(list, 'dojo llc')).toHaveLength(2);
     expect(filterConversations(list, '  ')).toHaveLength(2);
@@ -35,6 +38,32 @@ describe('conversations by school', () => {
   it('shows a thread oldest to newest', () => {
     const t = threadOrder([msg({ messageId: id(2), createdAt: '2026-11-02T00:00:00.000Z' }), msg({ messageId: id(1), createdAt: '2026-11-01T00:00:00.000Z' })]);
     expect(t.map(m => m.messageId)).toEqual([id(1), id(2)]);
+  });
+  it('an owner reply moves its school to the top and shows as the preview; a reply-only school still gets a row', () => {
+    const list = groupConversations([msg({ messageId: id(10), schoolId: id(3), createdAt: '2026-11-01T00:00:00.000Z' }),
+      msg({ messageId: id(11), schoolId: id(4), schoolDisplayName: 'Other Dojo', createdAt: '2026-11-03T00:00:00.000Z' })],
+    [reply({ schoolId: id(3).toUpperCase() }), reply({ replyId: id(81), schoolId: id(6), schoolDisplayName: 'Reply Only Dojo', receivedAt: '2026-11-02T00:00:00.000Z' })]);
+    expect(list.map(c => [c.schoolDisplayName, c.count, c.latestId, c.preview.direction])).toEqual([
+      ['Synthetic Academy', 2, id(80), 'IN'], ['Other Dojo', 1, id(11), 'OUT'], ['Reply Only Dojo', 1, id(81), 'IN']]);
+  });
+  it('puts HQ messages and owner replies in one thread, oldest first', () => {
+    const items = threadItems([msg({ messageId: id(2), createdAt: '2026-11-04T00:00:00.000Z' }), msg({ messageId: id(1), createdAt: '2026-11-01T00:00:00.000Z' })],
+      [reply({ receivedAt: '2026-11-02T00:00:00.000Z' })]);
+    expect(items.map(i => [i.direction, i.id])).toEqual([['OUT', id(1)], ['IN', id(80)], ['OUT', id(2)]]);
+  });
+});
+
+describe('owner replies read', () => {
+  const answer = (body: unknown) => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: body }), { status: 200, headers: { 'content-type': 'application/json' } })));
+  it('reads one school\'s replies through the declared query and refuses an answer about another school', async () => {
+    answer({ replies: [reply()], limit: 100, asOf: '2026-11-06T00:00:00.000Z' });
+    const r = await commsApi.replies({ schoolId: id(3) }, AbortSignal.timeout(1000), () => true);
+    expect(r.replies).toHaveLength(1);
+    expect(String(vi.mocked(fetch).mock.calls[0]![0])).toBe(`/api/v1/hq/communications/replies?schoolId=${id(3)}&limit=100`);
+    answer({ replies: [reply({ schoolId: id(9) })], limit: 100, asOf: '2026-11-06T00:00:00.000Z' });
+    await expect(commsApi.replies({ schoolId: id(3) }, AbortSignal.timeout(1000), () => true)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+    answer({ replies: [{ ...reply(), fromPhone: '+15555550100' }], limit: 100, asOf: '2026-11-06T00:00:00.000Z' });
+    await expect(commsApi.replies({ schoolId: null }, AbortSignal.timeout(1000), () => true)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   });
 });
 
@@ -99,7 +128,7 @@ describe('Send saves then sends, never twice', () => {
 
 const base = (patch: Partial<InboxViewProps> = {}): InboxViewProps => ({ language: 'en', formattingLocale: 'en-US', timeZone: 'UTC', concealed: false,
   list: { state: 'READY', messages: [msg(), msg({ messageId: id(9), schoolId: id(4), schoolDisplayName: 'Second Dojo', content: 'Billing update', channel: 'SMS', createdAt: '2026-11-04T00:00:00.000Z' })],
-    purposes: ['SUPPORT', 'BILLING'], next: false, loadingMore: false, moreFailed: false },
+    purposes: ['SUPPORT', 'BILLING'], next: false, loadingMore: false, moreFailed: false, replies: [], repliesFailed: false },
   open: null, thread: { state: 'LOADING' }, picker: null, opening: null, search: '', send: { phase: 'IDLE' }, locked: false, canRetry: false,
   onSearch() {}, onRefresh() {}, onReveal() {}, onMore() {}, onOlder() {}, onOpen() {}, onBack() {}, onNew() {}, onPickCancel() {}, onPick() {}, onRetryOpen() {},
   onSend: () => true, onTryAgain() {}, onDismiss() {}, ...patch });
@@ -115,7 +144,7 @@ describe('HQ inbox screen', () => {
   });
   it('opens a thread with the owners and a Text or Email composer limited to the purposes the reader holds', () => {
     const h = html(base({ open: { organizationId: id(2), schoolId: id(3), schoolDisplayName: 'Synthetic Academy', supportCaseId: id(70) },
-      thread: { state: 'READY', messages: [msg()], next: true, loadingMore: false } }));
+      thread: { state: 'READY', messages: [msg()], next: true, loadingMore: false, replies: [], repliesFailed: false } }));
     expect(h).toContain('data-open="true"'); expect(h).toContain('Owners of Synthetic Academy'); expect(h).toContain('Linked to a support case.');
     expect(h).toContain('Your sign-in link was reset.'); expect(h).toContain('2 delivered'); expect(h).toContain(`href="/hq/communications/${id(1)}"`);
     expect(h).toContain('data-hq-composer'); expect(h).toContain('>Text<'); expect(h).toContain('>Email<');
@@ -126,14 +155,24 @@ describe('HQ inbox screen', () => {
     expect(html(base({ locked: true }))).toMatch(/<button type="button" class="[^"]*" disabled="">New message<\/button>/);
     expect(html(base())).not.toMatch(/disabled="">New message/);
   });
+  it('shows owner replies as incoming bubbles and as the conversation preview, and says when replies could not be read', () => {
+    const ready = base().list as Extract<InboxViewProps['list'], { state: 'READY' }>;
+    const h = html(base({ list: { ...ready, replies: [reply()] }, open: { organizationId: id(2), schoolId: id(3), schoolDisplayName: 'Synthetic Academy', supportCaseId: null },
+      thread: { state: 'READY', messages: [msg()], next: false, loadingMore: false, replies: [reply()], repliesFailed: false } }));
+    expect(h).toContain('Owner reply: Thanks, all fixed now.'); expect(h.indexOf('Synthetic Academy')).toBeLessThan(h.indexOf('Second Dojo'));
+    expect(h).toContain(`data-from="in" data-hq-reply="${id(80)}"`); expect(h).toContain('Synthetic Owner · Owner reply · Support');
+    expect(h.indexOf('data-hq-message')).toBeLessThan(h.indexOf('data-hq-reply')); expect(h).not.toMatch(/\+1\d{10}/);
+    const failed = html(base({ list: { ...ready, repliesFailed: true } }));
+    expect(failed).toContain('replies could not be read right now'); expect(failed).toContain('Billing update');
+  });
   it('is read only without a sending purpose', () => {
-    const p = base({ open: { organizationId: id(2), schoolId: id(3), schoolDisplayName: 'Synthetic Academy', supportCaseId: null }, thread: { state: 'READY', messages: [], next: false, loadingMore: false } });
+    const p = base({ open: { organizationId: id(2), schoolId: id(3), schoolDisplayName: 'Synthetic Academy', supportCaseId: null }, thread: { state: 'READY', messages: [], next: false, loadingMore: false, replies: [], repliesFailed: false } });
     const h = html({ ...p, list: { ...(p.list as Extract<InboxViewProps['list'], { state: 'READY' }>), purposes: [] } });
     expect(h).not.toContain('data-hq-composer'); expect(h).toContain('cannot send texts or email'); expect(h).toContain('No messages to this school yet');
   });
   it('says what happened to a send, with Try again only for an unknown answer', () => {
     const open = { organizationId: id(2), schoolId: id(3), schoolDisplayName: 'Synthetic Academy', supportCaseId: null };
-    const thread = { state: 'READY' as const, messages: [], next: false, loadingMore: false };
+    const thread = { state: 'READY' as const, messages: [], next: false, loadingMore: false, replies: [], repliesFailed: false };
     expect(html(base({ open, thread, send: { phase: 'SENT', message: msg({ recipientCount: 3 }) } }))).toContain('Sent to 3 owners');
     const unknown = html(base({ open, thread, send: { phase: 'UNKNOWN', step: 'SEND', messageId: id(7) }, locked: true, canRetry: true }));
     expect(unknown).toContain('it will not go twice'); expect(unknown).toContain('>Try again<');

@@ -2,7 +2,7 @@
 import { championsExactKeys as keys, championsIsInt as integer, championsIsTimestamp as timestamp,
   championsIsUuid as uuid, championsRecord as record } from './champions-club.js';
 import { SAAS_PRICE_SCHEDULE_CONFIRMATION, validateSaasPriceScheduleTerms, type SaasPriceScheduleTerms } from './saas-introductory-pricing.js';
-import { validateSaasHonOsOffer } from './saas-offers.js';
+import { HON_OS_PLAN_CAPABILITIES, validateSaasHonOsOffer } from './saas-offers.js';
 
 export const SAAS_PRICE_DISCLOSURE_VERSION = 'HON_OS_PRICING_EN_V1' as const;
 export const SAAS_PRICE_RECORD_CONFIRMATION = 'RECORD_IMMUTABLE_PRICING_SCHEDULE_ONLY' as const;
@@ -63,7 +63,8 @@ export function validateSaasPriceSchedule(value: unknown): SaasPriceSchedule {
   const extra = ['productCode','capabilityPolicyVersion','planCode','offerSetId','offerSetVersion','termsReference','approvedPreviewDigest','recurringBilling'];
   const core = Object.fromEntries(Object.entries(a).filter(([k]) => !extra.includes(k)));
   // Position/sales-stop are deliberately excluded from the historical accepted-offer lineage.
-  validateSaasHonOsOffer({ ...core, position: 1, salesStop: null });
+  // Offers accepted before 0697 carry no capability list; they sold the full HON OS list.
+  validateSaasHonOsOffer({ capabilities: [...HON_OS_PLAN_CAPABILITIES], ...core, position: 1, salesStop: null });
   keys(a, [...Object.keys(core), ...extra], drift);
   if (![r.scheduleId,r.offerId,r.offerSetId,r.renewalOfferId,r.actorPrincipalId].every(uuid)
     || ![r.version,r.offerSetVersion,r.offerSetRevision].every(v => integer(v, 1, 999999999))

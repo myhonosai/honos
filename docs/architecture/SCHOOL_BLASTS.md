@@ -99,8 +99,27 @@ Evidence: `packages/database/scripts/test-school-blast-pictures-integrity.mjs` (
 - In an email with pictures or videos, HON's own `/checkout/<48 hex>` and `/v/<token>` links written in the message become
   links in the HTML part; anything else stays text. Text-only emails and texts keep the plain link.
 
+## Audience filters and picked contacts (BL4, migration 0695)
+
+- The audience may also carry `filters` and `people`. Both are optional, and a blast saved before 0695 reads the same.
+- `filters` are the Contacts list filters (0521/0623), worked out by the same `hon.school_contact_facts` in the school's
+  time zone: belt (`rankId`) or `noBelt`, `programId`, `planId`, `membership` (HAS, NONE, ACTIVE, PAUSED, CANCELLING), and
+  either `endsWithinDays` (7, 30, 60 or 90) or an `endsFrom`/`endsTo` day range, plus `ageMin`/`ageMax` (whole years
+  0 to 120). A contact must match the groups, the tags and every filter set. The shape is closed: an empty object, an
+  unknown key, `noBelt` with `rankId`, a day window with a range, a reversed range or a non-integer age is refused, in the
+  contract and again in `hon.school_blast_audience_ok`.
+- `people` are 1 to 200 distinct hand-picked contact ids. They are reached as well as whoever the groups match (a union),
+  so `groups` may be empty only when someone is picked. Ids that are not a current contact of this school (archived,
+  demo, another school or organization, unknown) are dropped silently, so a save cannot be used to probe ids.
+- Picked people go through every 0621 rule: consent per channel, guardians in place of children, one message per
+  address, the 2,000 recipient limit. Preview and send use the same `hon.school_blast_resolve`.
+- The composer reads the belt, program and plan choices from the Contacts list (`options=true`) and searches contacts by
+  name, email or phone through the same list, so both need `people.read`; without it the composer says so and the saved
+  filters still work. The chips of a reopened draft show names only for contacts seen in this session (the blast stores
+  ids only); others show as "Contact picked earlier".
+
 ## Later pieces
 
 - **BL2b:** per-recipient attribution tokens on checkout links (which blast brought which order), and a save/send check
   that the linked page is still Live. Needs a migration.
-- Belt-rank audience filter, contact-list segments (with the contacts list work), and AI-written blasts with approval.
+- Contact-list segments (Students, Trial, Prospects) as audience choices, and AI-written blasts with approval.

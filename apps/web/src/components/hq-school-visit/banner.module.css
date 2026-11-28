@@ -1,0 +1,8 @@
+.banner { display: grid; gap: 6px; margin: 0 10px 16px; padding: 10px 12px; border: 1px solid #f5dd9a; border-radius: 10px; background: #3a2c08; color: #fff6dc; font-size: 12px; }
+.banner strong { font-size: 13px; }
+.banner p { margin: 0; line-height: 1.4; color: #f4e7c4; }
+.until { color: #f5dd9a; font-weight: 700; }
+.banner button { justify-self: start; min-height: 36px; padding: 6px 14px; border: 0; border-radius: 8px; background: #f5dd9a; color: #2a1f04; font: inherit; font-weight: 800; cursor: pointer; }
+.banner button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.banner button:disabled { opacity: 0.7; cursor: progress; }
+.error { color: #ffd0c4 !important; }

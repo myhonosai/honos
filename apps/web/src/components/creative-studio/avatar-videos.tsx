@@ -56,7 +56,7 @@ export function AvatarVideosPanel({ language, wallet, avatars, videos, outcome, 
       <span>{v.generation.chargedCredits !== null ? t('credits', { n: number(v.generation.chargedCredits) })
         : v.status === 'CREATING' || v.status === 'UNDER_REVIEW' ? t('creditsHeld', { n: number(v.generation.reservedCredits) }) : t('credits', { n: number(0) })}</span>
       {hideText?.(v) ? <p className={styles.meta} data-prompt-hidden="">{t('hiddenPrompt')}</p> : <p className={styles.prompt}>{v.script}</p>}
-      {v.generation.assets.map(x => <small key={x.assetId} className={styles.asset}>{t('assetPreview', { kind: t('VIDEO'), w: String(x.width), h: String(x.height),
+      {v.generation.assets.map(x => <small key={x.assetId} className={styles.asset}>{t(x.origin === 'PROVIDER' ? 'assetStored' : 'assetPreview', { review: t(`review${x.review}`),  kind: t('VIDEO'), w: String(x.width), h: String(x.height),
         d: x.durationSeconds ? t('seconds', { n: number(x.durationSeconds) }) : '' })}</small>)}
     </li>)}</ul> : <p className={styles.meta}>{t('videosNone')}</p>)
       : videos.state === 'LOADING' ? <p className={styles.meta}>{t('loading')}</p> : <p className={styles.meta}>{t('videosUnavailable')}</p>}

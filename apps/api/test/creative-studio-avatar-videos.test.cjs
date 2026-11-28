@@ -28,7 +28,7 @@ const video = (school, g = generation(school), patch = {}) => ({ videoId: U(), s
 const avatarOf = (school, avatarId) => ({ avatarId, schoolId: school, name: 'Master Kim', style: 'REALISTIC', description: DESCRIPTION, status: 'READY', createdAt: T,
   generation: { generationId: U(), schoolId: school, operationCode: 'avatar.create', mediaKind: 'IMAGE', units: 1, format: 'PORTRAIT', prompt: DESCRIPTION,
     status: 'SUCCEEDED', failureReason: null, reservedCredits: 100, chargedCredits: 100, createdAt: T, completedAt: T2,
-    assets: [{ assetId: U(), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC' }] } });
+    assets: [{ assetId: U(), ordinal: 1, mediaType: 'image/png', width: 1080, height: 1920, durationSeconds: null, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] } });
 
 test('A2 avatar video input is closed: avatar, script, 5..60 seconds and a format; no operation, units, provider or price from the client', () => {
   assert.deepEqual(contracts.validateCreativeAvatarVideoInput(videoInput()), videoInput());
@@ -45,7 +45,7 @@ test('A2 avatar video input is closed: avatar, script, 5..60 seconds and a forma
 test('A2 avatar video view fails closed on drift: per-second VIDEO of avatar.video, status follows the generation, exact school', () => {
   const school = U();
   const done = generation(school, { status: 'SUCCEEDED', chargedCredits: 750, completedAt: T2,
-    assets: [{ assetId: U(), ordinal: 1, mediaType: 'video/mp4', width: 1080, height: 1920, durationSeconds: 15, origin: 'SYNTHETIC' }] });
+    assets: [{ assetId: U(), ordinal: 1, mediaType: 'video/mp4', width: 1080, height: 1920, durationSeconds: 15, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] });
   for (const g of [generation(school), done, generation(school, { status: 'UNDER_REVIEW', failureReason: 'PROVIDER_UNKNOWN', completedAt: T2 })])
     assert.doesNotThrow(() => contracts.validateCreativeAvatarVideo(video(school, g)), g.status);
   for (const bad of [video(school, done, { status: 'CREATING' }), video(school, done, { schoolId: U() }), video(school, { ...done, operationCode: 'avatar.create' }),
@@ -69,7 +69,7 @@ function fakeDatabase({ replayed = false, status = 'GENERATING', createdAt = T }
       const body = JSON.parse(params[2]), school = params[1];
       const g = generation(school, { prompt: body.script, units: body.seconds, format: body.format, createdAt, reservedCredits: body.seconds * 50,
         ...(status === 'SUCCEEDED' ? { status: 'SUCCEEDED', chargedCredits: body.seconds * 50, completedAt: new Date(Date.parse(createdAt) + 5000).toISOString(),
-          assets: [{ assetId: U(), ordinal: 1, mediaType: 'video/mp4', width: 1080, height: 1920, durationSeconds: body.seconds, origin: 'SYNTHETIC' }] } : {}) });
+          assets: [{ assetId: U(), ordinal: 1, mediaType: 'video/mp4', width: 1080, height: 1920, durationSeconds: body.seconds, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' }] } : {}) });
       db.video = video(school, g, { avatarId: body.avatarId });
       return { video: db.video, balance: balance(), replayed };
     }
@@ -79,7 +79,7 @@ function fakeDatabase({ replayed = false, status = 'GENERATING', createdAt = T }
       db.video = { ...db.video, status: STATUS[next], generation: { ...g, status: next, failureReason: outcome.failureReason,
         completedAt: new Date(Date.parse(g.createdAt) + 5000).toISOString(), chargedCredits: next === 'SUCCEEDED' ? g.units * 50 : null,
         assets: next === 'SUCCEEDED' ? outcome.assets.map((a, i) => ({ assetId: U(), ordinal: i + 1, mediaType: a.mediaType, width: a.width, height: a.height,
-          durationSeconds: a.durationSeconds, origin: 'SYNTHETIC' })) : [] } };
+          durationSeconds: a.durationSeconds, origin: 'SYNTHETIC', review: 'PENDING_REVIEW' })) : [] } };
       return { generation: db.video.generation, balance: balance(), replayed: false };
     }
     if (operation === 'readCreativeAvatarVideo') return db.video ?? video(params[1]);

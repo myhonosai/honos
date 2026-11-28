@@ -152,6 +152,39 @@ test('HTTP: reads and commands forward only the verified subject, the path id, t
   } finally { await app.close(); if (prior === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = prior; }
 });
 
+const reply1 = (patch = {}) => ({ replyId: U(), messageId: U(), organizationId: U(), organizationDisplayName: 'Fixture Dojo', schoolId: U(), schoolDisplayName: 'Main',
+  purpose: 'SUPPORT', channel: 'SMS', from: person('Owner'), body: 'Thanks, see you Tuesday.', receivedAt: T2, ...patch });
+const replies = (patch = {}) => ({ replies: [reply1()], limit: 50, asOf: T2, ...patch });
+
+test('contracts (0698): owner replies are closed, newest first, never carry an address, and the query is bounded', () => {
+  assert.equal(contracts.validateHqRepliesView(replies()).replies.length, 1);
+  assert.deepEqual(contracts.validateHqRepliesQuery({}), { schoolId: null, limit: 50 });
+  for (const bad of [replies({ replies: [{ ...reply1(), fromAddress: '+15555550100' }] }), replies({ replies: [reply1({ body: '' })] }),
+    replies({ replies: [reply1({ body: 'x'.repeat(1601) })] }), replies({ replies: [reply1({ channel: 'EMAIL' })] }),
+    replies({ replies: [reply1({ purpose: 'BILLING_X' })] }), replies({ replies: [reply1({ receivedAt: T }), reply1({ receivedAt: T2 })] }),
+    replies({ replies: [reply1(), reply1()], limit: 1 }), { ...replies(), extra: 1 }])
+    assert.throws(() => contracts.validateHqRepliesView(bad));
+  for (const bad of [{ limit: '0' }, { limit: '101' }, { schoolId: 'nope' }, { cursor: 'x' }]) assert.throws(() => contracts.validateHqRepliesQuery(bad));
+});
+
+test('HTTP (0698): owner replies forward only the verified subject and the declared query; another school\'s answer is refused', async () => {
+  const calls = []; let reply = () => replies();
+  const { app, base } = await appWith(async (operation, params) => { calls.push([operation, params]); return reply(); });
+  try {
+    const all = await send(`${base}/hq/communications/replies`);
+    assert.equal(all.status, 200, all.body); assert.equal(all.headers['cache-control'], 'private, no-store');
+    assert.deepEqual(calls.at(-1), ['readHqReplies', ['verified-human', null, '50']]);
+    const school = U(); reply = () => replies({ replies: [reply1({ schoolId: school })], limit: 5 });
+    assert.equal((await send(`${base}/hq/communications/replies?schoolId=${school}&limit=5`)).status, 200);
+    assert.deepEqual(calls.at(-1), ['readHqReplies', ['verified-human', school, '5']]);
+    reply = () => replies({ limit: 5 });
+    assert.equal((await send(`${base}/hq/communications/replies?schoolId=${school}&limit=5`)).status, 503, 'a reply from another school is never shown');
+    const n = calls.length;
+    for (const url of ['?limit=0', '?schoolId=nope', '?messageId=x']) assert.equal((await send(`${base}/hq/communications/replies${url}`)).status, 400, url);
+    assert.equal(calls.length, n, 'refused requests never reach the database');
+  } finally { await app.close(); }
+});
+
 const lease = (over = {}) => ({ deliveryId: U(), leaseToken: U(), organizationId: U(), schoolId: U(), messageId: U(), channel: 'SMS',
   recipientAddress: '+15555550101', content: '안녕하세요 '.repeat(200).trim(), senderRef: SID, senderName: 'HON OS', attempt: 1, purpose: 'SUPPORT', ...over });
 function store(claims) {

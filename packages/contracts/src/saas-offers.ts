@@ -32,6 +32,14 @@ export const HON_OS_PRODUCT = Object.freeze({
   capabilities: SAAS_PLAN_CAPABILITIES.COMPLETE, capabilityStatus: 'ENTITLEMENT_POLICY_NOT_A_READINESS_CLAIM', legacyTiersForNewSale: false,
 } as const);
 export type HonOsProduct = typeof HON_OS_PRODUCT;
+/** Every capability one HON OS plan can include (0697). A plan's list is a non-empty subset, in this order. */
+export const HON_OS_PLAN_CAPABILITIES: readonly string[] = HON_OS_PRODUCT.capabilities;
+/** A capability list in canonical HON OS order; null when it is empty, repeats an entry or names an unknown capability. */
+export function saasHonOsPlanCapabilities(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > HON_OS_PLAN_CAPABILITIES.length || new Set(value).size !== value.length
+    || !value.every(c => typeof c === 'string' && HON_OS_PLAN_CAPABILITIES.includes(c))) return null;
+  return HON_OS_PLAN_CAPABILITIES.filter(c => value.includes(c));
+}
 
 export function saasHonOsOfferBillingInterval(kind: SaasHonOsOfferKind): SaasHonOsBillingInterval {
   return kind.endsWith('_MONTHLY') ? 'MONTHLY' : kind.endsWith('_ANNUAL') ? 'ANNUAL' : 'ONE_TIME';
@@ -44,6 +52,8 @@ export interface SaasHonOsOfferInput {
   priceLock: SaasHonOsOfferPriceLock; priceLockMonths: number | null; annualRenewal: SaasHonOsOfferAnnualRenewal | null;
   plannedMonthlyPremiumCredits: number | null; aiFairUseReference: string | null; refundWindowDays: number | null;
   cancellationTiming: 'END_OF_PAID_PERIOD' | null;
+  /** The plan's features (0697). Optional on input (absent = every HON OS capability); always present once validated. */
+  capabilities: string[];
 }
 export interface SaasHonOsOfferSetContent { termsReference: string | null; founderTotalLimit: number | null; offers: SaasHonOsOfferInput[] }
 export interface SaasHonOsOfferSetDraftInput extends SaasHonOsOfferSetContent { basedOnSetId: string | null }
@@ -59,6 +69,8 @@ export interface SaasHonOsOffer {
   eligibility: SaasHonOsOfferEligibility; saleLimit: number | null; priceLock: SaasHonOsOfferPriceLock; priceLockMonths: number | null;
   annualRenewal: SaasHonOsOfferAnnualRenewal | null; plannedMonthlyPremiumCredits: number | null; premiumCreditsStatus: 'PLANNING_ONLY_NOT_A_CREDIT_GRANT';
   aiFairUseReference: string | null; refundWindowDays: number | null; cancellationTiming: 'END_OF_PAID_PERIOD' | null;
+  /** The features of the plan this offer sells, in canonical HON OS order. A policy record, not enforced access (yet). */
+  capabilities: string[];
   salesStop: { reasonCode: SaasHonOsOfferStopReason; stoppedAt: string } | null;
 }
 export interface SaasHonOsOfferSet {
@@ -143,7 +155,9 @@ function offerTermsConsistent(o: Record<string, unknown>): boolean {
 }
 
 function validateOfferInput(value: unknown): SaasHonOsOfferInput {
-  const o = record(value, invalid); exactKeys(o, OFFER_KEYS, invalid);
+  const o = record(value, invalid); exactKeys(o, 'capabilities' in o ? [...OFFER_KEYS, 'capabilities'] : OFFER_KEYS, invalid);
+  const capabilities = 'capabilities' in o ? saasHonOsPlanCapabilities(o.capabilities) : [...HON_OS_PLAN_CAPABILITIES];
+  if (capabilities === null) invalid();
   if (typeof o.offerCode !== 'string' || !OFFER_CODE.test(o.offerCode) || !has(SAAS_HON_OS_OFFER_KINDS, o.offerKind) || !text(o.displayName, 80)
     || !isInt(o.priceMinor, 100, 10_000_000) || !nullable(o.salesOpensAt, inputTs) || !nullable(o.salesClosesAt, inputTs)
     || !has(ELIGIBILITIES, o.eligibility) || !nint(o.saleLimit, 1, 10_000) || !has(PRICE_LOCKS, o.priceLock) || !nint(o.priceLockMonths, 1, 120)
@@ -152,13 +166,19 @@ function validateOfferInput(value: unknown): SaasHonOsOfferInput {
     || !(o.cancellationTiming === null || o.cancellationTiming === 'END_OF_PAID_PERIOD') || !offerTermsConsistent(o)) invalid();
   const out = {} as Record<string, unknown>;
   for (const key of OFFER_KEYS) out[key] = o[key];
+  out.capabilities = capabilities;
   return out as unknown as SaasHonOsOfferInput;
+}
+/** A plan is the offers sharing a display name; they must list the same features (0697 checks the same). */
+function onePlanOneFeatureList(offers: readonly { displayName: string; capabilities: readonly string[] }[]): boolean {
+  const byName = new Map<string, string>();
+  return offers.every(o => { const key = o.capabilities.join(','), seen = byName.get(o.displayName); byName.set(o.displayName, key); return seen === undefined || seen === key; });
 }
 function validateContent(r: Record<string, unknown>): SaasHonOsOfferSetContent {
   if (!(r.termsReference === null || text(r.termsReference, 500)) || !nint(r.founderTotalLimit, 0, 1000)
     || !Array.isArray(r.offers) || r.offers.length < 1 || r.offers.length > 12) invalid();
   const offers = (r.offers as unknown[]).map(validateOfferInput);
-  if (new Set(offers.map(o => o.offerCode)).size !== offers.length) invalid();
+  if (new Set(offers.map(o => o.offerCode)).size !== offers.length || !onePlanOneFeatureList(offers)) invalid();
   return { termsReference: r.termsReference as string | null, founderTotalLimit: r.founderTotalLimit as number | null, offers };
 }
 export function validateSaasHonOsOfferSetDraftInput(value: unknown): SaasHonOsOfferSetDraftInput {
@@ -202,13 +222,14 @@ function validateOfferBody(o: Record<string, unknown>): void {
     || !nint(o.plannedMonthlyPremiumCredits, 0, 1_000_000) || o.premiumCreditsStatus !== 'PLANNING_ONLY_NOT_A_CREDIT_GRANT'
     || !(o.aiFairUseReference === null || text(o.aiFairUseReference, 500)) || !nint(o.refundWindowDays, 0, 365)
     || !(o.cancellationTiming === null || o.cancellationTiming === 'END_OF_PAID_PERIOD')
+    || saasHonOsPlanCapabilities(o.capabilities)?.join(',') !== (o.capabilities as string[]).join(',')
     || !offerTermsConsistent({ ...o, salesOpensAt: o.salesOpensAt ?? null })) drift();
 }
 /** Shared closed offer-row validator; does not authorize sale, stop-sales or publication. */
 export function validateSaasHonOsOffer(value: unknown): void { validateOffer(value); }
 function validateOffer(value: unknown): void {
   const o = record(value, drift);
-  exactKeys(o, ['offerId','position',...OFFER_KEYS,'billingInterval','founder','currency','premiumCreditsStatus','salesStop'], drift);
+  exactKeys(o, ['offerId','position',...OFFER_KEYS,'capabilities','billingInterval','founder','currency','premiumCreditsStatus','salesStop'], drift);
   if (!isUuid(o.offerId) || !isInt(o.position, 1, 12) || !nullable(o.salesOpensAt, isTimestamp) || !has(ELIGIBILITIES, o.eligibility)
     || !nint(o.saleLimit, 1, 10_000)) drift();
   validateOfferBody(o);
@@ -231,7 +252,8 @@ function validateSet(value: unknown): SaasHonOsOfferSet {
     || (s.publishedAt !== null) !== published || (s.approvedPreviewDigest !== null) !== published
     || (s.retiredAt !== null) !== (s.status === 'RETIRED') || (s.discardedAt !== null) !== (s.status === 'DISCARDED')) drift();
   (s.offers as unknown[]).forEach((o, i) => { validateOffer(o); if ((o as SaasHonOsOffer).position !== i + 1) drift(); });
-  if (new Set((s.offers as SaasHonOsOffer[]).map(o => o.offerCode)).size !== (s.offers as unknown[]).length) drift();
+  if (new Set((s.offers as SaasHonOsOffer[]).map(o => o.offerCode)).size !== (s.offers as unknown[]).length
+    || !onePlanOneFeatureList(s.offers as SaasHonOsOffer[])) drift();
   // Sales can only be stopped on a published set; a retired set keeps its stop history.
   if ((s.status === 'DRAFT' || s.status === 'DISCARDED') && (s.offers as SaasHonOsOffer[]).some(o => o.salesStop !== null)) drift();
   return s as unknown as SaasHonOsOfferSet;
@@ -347,7 +369,7 @@ export function validateSaasHonOsSchoolOfferView(value: unknown): SaasHonOsSchoo
     const o = record(value, drift);
     exactKeys(o, ['offerId','offerCode','offerKind','billingInterval','founder','displayName','priceMinor','currency','salesClosesAt','eligibility',
       'priceLock','priceLockMonths','annualRenewal','plannedMonthlyPremiumCredits','premiumCreditsStatus','aiFairUseReference','refundWindowDays',
-      'cancellationTiming','recurringBilling'], drift);
+      'cancellationTiming','capabilities','recurringBilling'], drift);
     // Recurring billing is derived by the server; null only for terms that cannot be sold yet (repricing at renewal).
     const recurring = o.billingInterval === 'MONTHLY' ? 'MONTH' : o.billingInterval === 'ONE_TIME' ? 'NONE'
       : o.annualRenewal === 'AUTO_RENEW_AT_LOCKED_PRICE' ? 'YEAR' : o.annualRenewal === 'NO_AUTO_RENEWAL' ? 'NONE' : null;
@@ -357,4 +379,27 @@ export function validateSaasHonOsSchoolOfferView(value: unknown): SaasHonOsSchoo
     validateOfferBody(o);
   }
   return r as unknown as SaasHonOsSchoolOfferView;
+}
+
+// School plan features (0699): which HON OS features the school's HQ-assigned plan includes. Display only; a LOCKED
+// feature shows locked with an Upgrade button. Not authority: every feature's own API still authorizes on the server.
+export type SaasSchoolPlanFeatureSource = 'OFFER' | 'CUSTOM' | 'NONE';
+export type SaasSchoolPlanFeatures = { schoolId: string; source: SaasSchoolPlanFeatureSource; planName: string | null;
+  included: string[]; locked: string[]; asOf: string };
+export function validateSaasSchoolPlanFeatures(value: unknown): SaasSchoolPlanFeatures {
+  const r = record(value, drift);
+  exactKeys(r, ['schoolId','source','planName','included','locked','asOf'], drift);
+  if (!isUuid(r.schoolId) || !has(['OFFER','CUSTOM','NONE'], r.source) || !isTimestamp(r.asOf)
+    || !(r.planName === null || text(r.planName, 80)) || (r.source === 'NONE') !== (r.planName === null)
+    || !Array.isArray(r.included) || !Array.isArray(r.locked)) drift();
+  const included = r.included as unknown[], locked = r.locked as unknown[];
+  const all = [...included, ...locked];
+  // Together exactly the HON OS list, each part in policy order; only an assigned offer can lock anything.
+  if (all.length !== HON_OS_PLAN_CAPABILITIES.length || new Set(all).size !== all.length
+    || !all.every(c => typeof c === 'string' && HON_OS_PLAN_CAPABILITIES.includes(c))
+    || included.length < 1 || saasHonOsPlanCapabilities(included)?.join(',') !== included.join(',')
+    || HON_OS_PLAN_CAPABILITIES.filter(c => locked.includes(c)).join(',') !== locked.join(',')
+    || (r.source !== 'OFFER' && locked.length !== 0)) drift();
+  return { schoolId: r.schoolId as string, source: r.source as SaasSchoolPlanFeatureSource, planName: r.planName as string | null,
+    included: included as string[], locked: locked as string[], asOf: r.asOf as string };
 }

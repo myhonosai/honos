@@ -17,6 +17,9 @@ export type CreativeViewProps = Readonly<{ language: string; formattingLocale: s
 const formatTime = (locale: string, iso: string) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 const formatMonth = (locale: string, day: string) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', year: 'numeric', month: 'long' }).format(new Date(`${day}T00:00:00.000Z`));
 const n = (locale: string, v: number) => new Intl.NumberFormat(locale).format(v);
+type HqRate = HqCreativeStudio['rates'][number];
+/** Website rates (0690) pay for school AI website edits only; HQ Creative makes images and video. */
+const mediaRates = (rates: readonly HqRate[]) => rates.filter((r): r is HqRate & { mediaKind: 'IMAGE' | 'VIDEO' } => r.mediaKind !== 'WEBSITE');
 const tone = (s: HqCreativeGeneration['status']) => s === 'SUCCEEDED' ? 'ready' : s === 'GENERATING' || s === 'UNDER_REVIEW' ? 'waiting' : s === 'RESOLVED_CHARGED' ? 'ready' : 'blocked';
 
 function Facts({ rows }: { rows: readonly [string, React.ReactNode][] }): React.ReactElement {
@@ -57,7 +60,7 @@ function BudgetForm({ language, locked, onBudget }: { language: string; locked: 
 function RequestForm({ language, view, campaigns, locked, onRequest }: { language: string; view: HqCreativeStudio; campaigns: readonly HqMarketingCampaign[];
   locked: boolean; onRequest: (d: RequestDraft) => void }): React.ReactElement {
   const t = (key: CreativeKey, vars?: Record<string, string>) => creativeText(language, key, vars);
-  const off = view.provider !== 'CONNECTED' || view.budget.creditCap === null || view.rates.length === 0;
+  const off = view.provider !== 'CONNECTED' || view.budget.creditCap === null || mediaRates(view.rates).length === 0;
   const submit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget), v = (k: string) => String(f.get(k) ?? '');
     onRequest({ operationCode: v('operationCode'), units: v('units'), format: v('format'), prompt: v('prompt'), campaignId: v('campaignId') }); };
   return <form className={styles.form} onSubmit={submit} aria-labelledby="hq-cs-request" data-creative-request-form="">
@@ -65,7 +68,7 @@ function RequestForm({ language, view, campaigns, locked, onRequest }: { languag
     {off && <p className={styles.meta} data-creative-requests-off="">{t('requestsOff')}</p>}
     <fieldset className={styles.fields} disabled={locked || off}>
       <label htmlFor="hq-cs-op">{t('operation')}</label>
-      <select id="hq-cs-op" name="operationCode">{view.rates.map(r => <option key={r.operationCode} value={r.operationCode}>
+      <select id="hq-cs-op" name="operationCode">{mediaRates(view.rates).map(r => <option key={r.operationCode} value={r.operationCode}>
         {t('rateLine', { name: r.displayName, credits: String(r.creditsPerUnit), unit: t(r.billingUnit), max: String(r.maxUnitsPerRequest) })}</option>)}</select>
       <div className={styles.pair}>
         <div><label htmlFor="hq-cs-units">{t('units')}</label><input id="hq-cs-units" name="units" required inputMode="numeric" defaultValue="1" autoComplete="off"/></div>

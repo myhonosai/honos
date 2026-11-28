@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { saasUuid, validateHqCommunicationsQuery, validateHqCommunicationsView, validateHqMessageCreateInput, validateHqMessageDetail,
-  validateHqMessageReceipt, validateHqMessageVersionInput, validateHqSenderReceipt, validateHqSenderSetInput } from '@hon/contracts';
+  validateHqMessageReceipt, validateHqMessageVersionInput, validateHqRepliesQuery, validateHqRepliesView, validateHqSenderReceipt, validateHqSenderSetInput } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
 function parse<T>(f: () => T): T { try { return f(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); } }
@@ -21,6 +21,15 @@ export class HqCommunicationsService {
     const id = parse(() => saasUuid(messageId));
     return this.billing.call('readHqMessage', [subject, id], (v) => {
       const d = validateHqMessageDetail(v); if (d.message.messageId.toLowerCase() !== id.toLowerCase()) throw new Error('mismatch'); return d;
+    });
+  }
+  /** 0698 owners' text replies to HQ, newest first, limited to the purposes the viewer holds. */
+  async replies(subject: string, query: unknown) {
+    const q = parse(() => validateHqRepliesQuery(query));
+    return this.billing.call('readHqReplies', [subject, q.schoolId, String(q.limit)], (v) => {
+      const view = validateHqRepliesView(v);
+      if (q.schoolId && view.replies.some((r) => r.schoolId.toLowerCase() !== q.schoolId!.toLowerCase())) throw new Error('mismatch');
+      return view;
     });
   }
   async setSender(subject: string, body: unknown, key: unknown) {

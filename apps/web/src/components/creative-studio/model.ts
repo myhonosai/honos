@@ -20,12 +20,16 @@ export type StudioState =
 /** Most recent first, at most this many ledger lines. */
 export const STUDIO_HISTORY_LIMIT = 12;
 
+type WalletRate = NonNullable<SaasCreativeSchoolWallet['rates']>['rates'][number];
+/** Website rates (0690) pay for AI website edits only; the image and video studio never offers them. */
+const isMediaRate = (rate: WalletRate): rate is WalletRate & { mediaKind: 'IMAGE' | 'VIDEO' } => rate.mediaKind !== 'WEBSITE';
+
 export function studioWallet(data: SaasCreativeSchoolWallet): StudioWallet {
   return {
     programActive: data.program.status === 'ACTIVE', eligible: data.eligibility.eligible, reason: data.eligibility.reason,
     window: data.eligibility.window && { startsAt: data.eligibility.window.startsAt, endsAt: data.eligibility.window.endsAt },
     available: data.balance.availableCredits, held: data.balance.heldCredits, monthlyIncluded: data.program.monthlyIncludedCredits,
-    rates: data.rates && data.rates.rates.map(rate => ({ operationCode: rate.operationCode, mediaKind: rate.mediaKind, displayName: rate.displayName,
+    rates: data.rates && data.rates.rates.filter(isMediaRate).map(rate => ({ operationCode: rate.operationCode, mediaKind: rate.mediaKind, displayName: rate.displayName,
       billingUnit: rate.billingUnit, creditsPerUnit: rate.creditsPerUnit, maxUnitsPerRequest: rate.maxUnitsPerRequest, provisional: rate.rateBasis === 'PROVISIONAL' })),
     history: [...data.history].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, STUDIO_HISTORY_LIMIT)
       .map(entry => ({ entryId: entry.entryId, entryKind: entry.entryKind, lotKind: entry.lotKind, credits: entry.credits, occurredAt: entry.occurredAt })),
@@ -39,7 +43,7 @@ export type GenerationsState =
 /** What the last create attempt from this tab is known to have done. Nothing here is a balance or a charge. */
 export type CreateOutcome =
   | null | Readonly<{ kind: 'SENDING' }> | Readonly<{ kind: 'UNKNOWN' }> | Readonly<{ kind: 'HIDDEN_PENDING' }>
-  | Readonly<{ kind: 'DONE' | 'HELD' | 'FAILED' | 'NOT_CONNECTED' | 'INVALID' }> | Readonly<{ kind: 'REFUSED'; code: string | null }>
+  | Readonly<{ kind: 'DONE' | 'HELD' | 'FAILED' | 'NOT_CONNECTED' | 'INVALID' | 'PROMPT_REFUSED' }> | Readonly<{ kind: 'REFUSED'; code: string | null }>
   /** Check again (or a first attempt refused by access) could not settle an earlier request; it stays unconfirmed and kept. */
   | Readonly<{ kind: 'RETRY_BLOCKED'; cause: 'DENIED' | 'NOT_CONNECTED' | 'REFUSED' | 'INVALID'; code: string | null }>;
 /** Whether this tab holds a create whose outcome is not known. Survives concealment; never shows the request itself. */

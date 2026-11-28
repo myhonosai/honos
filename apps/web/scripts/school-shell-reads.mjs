@@ -10,6 +10,8 @@ const SHELL_READS = [
   /^\/(?:api\/)?v1\/staff\/reporting-schools$/,
   new RegExp(`^/(?:api/)?v1/organizations/${UUID}/schools/${UUID}/reports/operations$`, 'i'),
   new RegExp(`^/(?:api/)?v1/organizations/${UUID}/schools/${UUID}/interface-theme$`, 'i'),
+  // 0699: which menu pages the school's plan leaves out (display only), read once the school is verified.
+  new RegExp(`^/(?:api/)?v1/schools/${UUID}/plan-features$`, 'i'),
 ];
 
 export function isSchoolShellRead(method, pathname) {

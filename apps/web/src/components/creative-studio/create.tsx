@@ -32,6 +32,7 @@ export function outcomeText(language: string, outcome: CreateOutcome): Readonly<
       ? t('causeNotConnected') : outcome.cause === 'INVALID' ? t('causeInvalid') : refusalReason(language, outcome.code) }) };
     case 'NOT_CONNECTED': return { tone: 'blocked', text: t('resultNotConnected') };
     case 'INVALID': return { tone: 'blocked', text: t('resultInvalid') };
+    case 'PROMPT_REFUSED': return { tone: 'blocked', text: t('resultPromptRefused') };
     case 'REFUSED': return { tone: 'blocked', text: t('resultRefused', { reason: refusalReason(language, outcome.code) }) };
   }
 }
@@ -128,7 +129,7 @@ export function GenerationsPanel({ language, generations, hidePrompt }: { langua
         <span className={styles.status} data-tone={g.status === 'SUCCEEDED' || g.status === 'RESOLVED_CHARGED' ? 'ready' : g.status === 'FAILED' || g.status === 'RESOLVED_NOT_CHARGED' ? 'planned' : 'waiting'}>{t(g.status)}</span></span>
       <span>{credits(g)}</span>
       {hidePrompt?.(g) ? <p className={styles.meta} data-prompt-hidden="">{t('hiddenPrompt')}</p> : <p className={styles.prompt}>{g.prompt}</p>}
-      {g.assets.map(a => <small key={a.assetId} className={styles.asset}>{t('assetPreview', { kind: t(g.mediaKind), w: String(a.width), h: String(a.height), d: a.durationSeconds ? t('seconds', { n: String(a.durationSeconds) }) : '' })}</small>)}
+      {g.assets.map(a => <small key={a.assetId} className={styles.asset}>{t(a.origin === 'PROVIDER' ? 'assetStored' : 'assetPreview', { review: t(`review${a.review}`),  kind: t(g.mediaKind), w: String(a.width), h: String(a.height), d: a.durationSeconds ? t('seconds', { n: String(a.durationSeconds) }) : '' })}</small>)}
       <small><time dateTime={g.createdAt}>{date(g.createdAt)}</time></small>
     </li>)}</ul> : <p className={styles.meta}>{t('generationsNone')}</p>
       : generations.state === 'LOADING' ? <p className={styles.meta}>{t('loading')}</p> : <p className={styles.meta}>{t('generationsUnavailable')}</p>}
