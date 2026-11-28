@@ -424,8 +424,21 @@ export const SCHOOL_PLAN_FEATURE_API_AREAS: Readonly<Record<string, string | nul
 };
 /** The plan feature a school API route belongs to, from the route's template (for example
  * 'organizations/:organizationId/schools/:schoolId/ai/team'), or null when the route is not a lockable feature area. */
-export function schoolPlanFeatureForRoute(template: string): string | null {
-  const m = /(?:^|\/)schools\/:schoolId\/(.+)$/.exec(template.replace(/^\/+|\/+$/g, ''));
+// Feature routes that carry the school as a path parameter outside .../schools/:schoolId/ (exact route templates).
+export const SCHOOL_PLAN_FEATURE_STAFF_ROUTES: Readonly<Record<string, string>> = {
+  'staff/action-center/approvals/:schoolId/:actionRequestId/chad-send': 'ai.workforce',
+};
+/** The route's params refine one area: an agent's own speech belongs to HON (`assistant.ordinary`) when the agent is HON. */
+export function schoolPlanFeatureForRoute(template: string, params?: Readonly<Record<string, unknown>>): string | null {
+  const capability = schoolPlanAreaForRoute(template);
+  if (capability === 'ai.workforce' && /\/agents\/:agentKey(\/|$)/i.test(template) && params?.agentKey === 'hon') return 'assistant.ordinary';
+  return capability;
+}
+function schoolPlanAreaForRoute(template: string): string | null {
+  const route = template.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+  const exact = Object.entries(SCHOOL_PLAN_FEATURE_STAFF_ROUTES).find(([t]) => t.toLowerCase() === route.toLowerCase());
+  if (exact) return exact[1];
+  const m = /(?:^|\/)schools\/:schoolId\/(.+)$/.exec(route);
   if (!m) return null;
   const rest = m[1]!.toLowerCase().split('/').filter(Boolean);
   for (let n = Math.min(rest.length, 3); n >= 1; n--) {

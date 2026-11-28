@@ -75,15 +75,19 @@ Upgrade button subscribes the school to the regular plan, which lifts the locks 
 - **Only ever refuses.** Anyone the plan read does not recognise as staff of that school (parent, other school, unknown
   school, no session) passes to the route's own authorization unchanged. Any other failure of the plan read answers 503,
   so a locked feature never slips through on an outage.
-- **Areas.** `ai.workforce`: AI team, agent voices and speech, Alex, Chad, Claire, Jordan, Marcus, Maya, Conversation AI,
-  Kai journal. `assistant.ordinary`: HON. Manual marketing: website, blasts, social posts. Marketing connections: social ads.
+- **Areas.** `ai.workforce`: AI team, agent voice settings and agent speech clips (HON's own clips count as HON), Alex, Chad (including the Action Center
+  Chad send), Claire, Jordan, Marcus, Maya, Conversation AI, Kai journal. `assistant.ordinary`: HON. Manual marketing: website, blasts, social posts. Marketing connections: social ads.
   `ai.premium_metered`: Creative Studio, except a person's own likeness photos (always viewable and deletable). Champions
   Club. Testing and curriculum: tests and curricula.
 - **Never refused.** People, CRM, schedule, billing, payments, reports, settings, staff, texts and email are shared by the
   Dashboard, Calendar and Reports, so their locks stay display only. The HON OS purchase, subscription, plan-features and
   promotion routes are never locked, so the Upgrade path always works. A route test inventories every controller in
   `AppModule` to hold this.
-- **Not covered.** Background work that is not an HTTP request, for example an AI message staff approved before the lock. Pages outside the menu
+- **Not covered yet.** Staff routes that take the school from the body or query (`staff/leads/assistant` Chad lead
+  assistant, `staff/teaching-assistant` Kai, `staff/testing/certificates|scorecards|registrations`) and `staff/voice`, which
+  serves HON and the agents alike. The route test pins this list and every `:schoolId` route outside
+  `schools/:schoolId/`, so a new one fails until it is reviewed. Background work that is not an HTTP request, for example an
+  AI message staff approved before the lock, is not stopped either. Pages outside the menu
   that call a locked area show their usual error.
 
 ## Creative credit program switch (`/hq/revenue/creative-credits`)
