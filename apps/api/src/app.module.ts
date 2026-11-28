@@ -516,6 +516,8 @@ import { SaasBillingHqController, SaasCreditsSchoolController } from './saas-bil
 import { SaasCreativeWalletHqController, SaasCreativeWalletSchoolController } from './saas-billing/saas-creative-wallet.controller.js';
 import { SaasCreativeWalletService } from './saas-billing/saas-creative-wallet.service.js';
 import { SaasBillingService } from './saas-billing/saas-billing.service.js';
+import { SchoolPlanFeatureInterceptor } from './saas-billing/school-plan-feature.interceptor.js';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { SaasOffersHqController, SaasOffersSchoolController, SchoolPlanFeaturesController } from './saas-billing/saas-offers.controller.js';
 import { PaymentWebhookController, SaasHonOsCheckoutSchoolController, SaasPaymentsHqController, SaasPlanSchoolController } from './payments/saas-payments.controller.js';
 import { SaasPaymentsService } from './payments/saas-payments.service.js';
@@ -1191,6 +1193,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     HqEntitlementService,
     HqEntitlementHumanUiGuard,
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
+    // Piece 4 of the HQ plan builder: a feature area the school's plan leaves out answers 403 PLAN_FEATURE_LOCKED.
+    { provide: APP_INTERCEPTOR, useClass: SchoolPlanFeatureInterceptor },
     SaasBillingService, SaasCreativeWalletService, CreativeStudioService, CreativeLimitsService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, HqSupportService, HqMarketingService, HqAdConnectionsService, HqPlanPromotionsService, HqSchoolPlansService, HqCreativeService, HqCreativeDesignsService, HqHonService, AiSpendPauseService, AiSchoolCostLimitService, AiExceptionAllowanceService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard, HqCommunicationsService, HqContactService, HqProspectsService,
     // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
     { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },

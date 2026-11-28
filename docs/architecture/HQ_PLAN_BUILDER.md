@@ -62,8 +62,29 @@ Owner decision 2026-11-26: a feature the school's plan leaves out is shown **loc
   promotions = testing and curriculum; marketing, website, social = manual marketing; ads = marketing connections; Creative
   Studio = `ai.premium_metered`; Community = Champions Club.
 
-Still not in this change: **server refusal.** The lock is display only; a locked feature's own APIs still answer. Refusing
-them on the server (per area) is a separate reviewed change, as is reconciling the accepted-offer `planCode`.
+Server refusal came in piece 4 (below). Reconciling the accepted-offer `planCode` is still separate.
+
+## Piece 4: the server refuses locked features (no migration)
+Owner decision 2026-11-28 ("Those should be both true"): a locked feature is refused by the server too, and later the
+Upgrade button subscribes the school to the regular plan, which lifts the locks (piece 5).
+- **Where.** `SchoolPlanFeatureInterceptor` (`apps/api/src/saas-billing/school-plan-feature.interceptor.ts`) is registered
+  app-wide and runs after each route's own guards. It finds the route's template (controller path + handler path), looks up
+  its feature with `schoolPlanFeatureForRoute` (`SCHOOL_PLAN_FEATURE_API_AREAS` in `@hon/contracts`), reads the 0699 plan
+  features for the signed-in person and the route's `:schoolId`, and answers **403 `PLAN_FEATURE_LOCKED`** (with the
+  capability) before the handler runs when the plan leaves that feature out.
+- **Only ever refuses.** Anyone the plan read does not recognise as staff of that school (parent, other school, unknown
+  school, no session) passes to the route's own authorization unchanged. Any other failure of the plan read answers 503,
+  so a locked feature never slips through on an outage.
+- **Areas.** `ai.workforce`: AI team, agent voices and speech, Alex, Chad, Claire, Jordan, Marcus, Maya, Conversation AI,
+  Kai journal. `assistant.ordinary`: HON. Manual marketing: website, blasts, social posts. Marketing connections: social ads.
+  `ai.premium_metered`: Creative Studio, except a person's own likeness photos (always viewable and deletable). Champions
+  Club. Testing and curriculum: tests and curricula.
+- **Never refused.** People, CRM, schedule, billing, payments, reports, settings, staff, texts and email are shared by the
+  Dashboard, Calendar and Reports, so their locks stay display only. The HON OS purchase, subscription, plan-features and
+  promotion routes are never locked, so the Upgrade path always works. A route test inventories every controller in
+  `AppModule` to hold this.
+- **Not covered.** Background work that is not an HTTP request, for example an AI message staff approved before the lock. Pages outside the menu
+  that call a locked area show their usual error.
 
 ## Creative credit program switch (`/hq/revenue/creative-credits`)
 `ProgramControls` adds HQ-owner buttons using the existing 0202 commands: "Publish credit prices" (the rates David
