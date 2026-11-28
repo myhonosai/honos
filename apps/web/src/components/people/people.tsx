@@ -363,10 +363,11 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   </> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos, details, card]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Add contact: the new adult's card opens (its Family app access is the next step) and the list is read again.
+  // Add contact: the new main contact's card opens (the student when there is one) and the list is read again.
   const onContactAdded = useCallback((added: ContactAdded) => {
-    if (!mounted.current) return; setListRefresh(n => n + 1); onOpen(added.adultId);
-    if (added.familyId) { setCardTab('family'); showCardInAddress({ personId: added.adultId, tab: 'family' }); }
+    // Owner 2026-11-28: the student is the main contact, so the student's card opens (on Family when a parent was linked).
+    if (!mounted.current) return; setListRefresh(n => n + 1); onOpen(added.mainId);
+    if (added.familyId && added.adultId) { setCardTab('family'); showCardInAddress({ personId: added.mainId, tab: 'family' }); }
   }, [onOpen]);
   // Kept here, above the node that is replaced when the page conceals, so an unfinished add is never retyped as a new one.
   const addHold = useRef<ContactCapsule | null>(null);

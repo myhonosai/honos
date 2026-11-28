@@ -150,7 +150,7 @@ function ContactPanel(props: PeopleViewProps & { t: T }): React.ReactElement {
     {props.actionNotice ? <p className={styles.notice} role="status" data-testid="contact-action-done">{props.actionNotice}</p> : null}
     <ContactCardTabs language={language} card={card} initialTab={props.cardTab ?? 'overview'} tab={props.onCardTab ? props.cardTab : undefined} onTab={props.onCardTab}
       membershipSlot={props.membershipSlot} membershipTools={props.membershipTools} agreementSlot={props.agreementSlot} familySlot={props.familySlot} messagesSlot={props.messagesSlot}
-      onEditProfile={canOpenProfile ? () => setProfileOpen(true) : undefined}/>
+      onEditProfile={canOpenProfile ? () => setProfileOpen(true) : undefined} onOpenPerson={props.onOpen}/>
     {cardReady && props.actionsSlot ? props.actionsSlot(card.card) : null}
     {props.record.state === 'NONE' || (!cardReady && !cardLoading) ? <div data-testid="person-details">{recordPanel}</div> : null}
     {profileOpen && cardReady ? <ProfileDialog t={t} onClose={() => setProfileOpen(false)}><div data-testid="person-details">{recordPanel}</div></ProfileDialog> : null}

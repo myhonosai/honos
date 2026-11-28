@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AddContact, saveAfterError, watchContactHold } from '../src/components/people/add-contact';
 import { addContactText } from '../src/components/people/add-contact-copy';
-import { AddContactError, addContactApi, buildContactPlan, prepareContact, type ContactForm } from '../src/components/people/add-contact-http';
+import { AddContactError, addContactApi, buildContactPlan, firstContactStep, prepareContact, type ContactForm } from '../src/components/people/add-contact-http';
 import { PeopleView, type PeopleViewProps } from '../src/components/people/view';
 import { NO_CONTACT_FILTERS } from '../src/components/people/contacts-http';
 import { id, scope } from './account-status-fixtures';
@@ -23,12 +23,22 @@ const capsule = (over: Partial<ContactForm> = {}) => { const f = form(over); con
 const base = `/api/v1/organizations/${scope.organizationId.toLowerCase()}/schools/${scope.schoolId.toLowerCase()}`;
 const sent = (f: ReturnType<typeof stub>) => (f.mock.calls as unknown as [string, RequestInit][]).map(([path, init]) => ({ path, key: (init.headers as Record<string, string>)['Idempotency-Key'], body: JSON.parse(String(init.body)) as Record<string, unknown>, init }));
 
-it('a parent and child become two people, one family and two family links; the child has no address and no consent record', () => {
+it('a student and parent become two people, one family and two family links; the student is the main contact and has no address or consent record', () => {
   const built = buildContactPlan(form());
   expect(built).toEqual({ ok: true, plan: {
     adult: { givenName: 'Dana', familyName: 'Lee', email: 'dana@example.com', phoneE164: '+15555550100' },
-    child: { givenName: 'Mia', familyName: 'Lee', consentChannels: [] }, familyName: 'Lee family', adultRole: 'GUARDIAN', label: 'Dana Lee' } });
-  expect(buildContactPlan(form({ consent: false, childFamilyName: 'Park' }))).toMatchObject({ plan: { adult: { consentChannels: [] }, child: { familyName: 'Park' } } });
+    child: { givenName: 'Mia', familyName: 'Lee', consentChannels: [] }, familyName: 'Lee family', adultRole: 'GUARDIAN', label: 'Mia Lee' } });
+  expect(buildContactPlan(form({ consent: false, childFamilyName: 'Park' }))).toMatchObject({ plan: { adult: { consentChannels: [] }, child: { familyName: 'Park' }, familyName: 'Park family', label: 'Mia Park' } });
+  if (built.ok) expect(firstContactStep(built.plan)).toBe('child');
+});
+
+it('the parent or guardian is optional: an empty parent section adds the student alone, in their own family', () => {
+  const built = buildContactPlan(form({ givenName: ' ', familyName: '', email: '', phone: '', childFamilyName: 'Kim' }));
+  expect(built).toEqual({ ok: true, plan: { adult: null, child: { givenName: 'Mia', familyName: 'Kim', consentChannels: [] }, familyName: 'Kim family', adultRole: null, label: 'Mia Kim' } });
+  // Without a parent the student last name is needed; a half-typed parent is refused rather than guessed.
+  expect(buildContactPlan(form({ givenName: '', familyName: '', email: '', phone: '' }))).toEqual({ ok: false, problem: 'childNameMissing' });
+  expect(buildContactPlan(form({ givenName: '', familyName: 'Lee' }))).toEqual({ ok: false, problem: 'parentNameMissing' });
+  expect(buildContactPlan(form({ givenName: '', familyName: '', phone: '', email: 'dana@example.com', childFamilyName: 'Kim' }))).toEqual({ ok: false, problem: 'parentNameMissing' });
 });
 
 it('one adult is a single person, or a student with their own family record when ticked', () => {
@@ -38,7 +48,8 @@ it('one adult is a single person, or a student with their own family record when
 });
 
 it('refuses a missing name, a bad address and a bad number before anything is sent', () => {
-  expect(buildContactPlan(form({ givenName: ' ' }))).toEqual({ ok: false, problem: 'nameMissing' });
+  expect(buildContactPlan(form({ kind: 'ADULT', givenName: ' ' }))).toEqual({ ok: false, problem: 'nameMissing' });
+  expect(buildContactPlan(form({ givenName: ' ' }))).toEqual({ ok: false, problem: 'parentNameMissing' });
   expect(buildContactPlan(form({ childGivenName: '' }))).toEqual({ ok: false, problem: 'childNameMissing' });
   expect(buildContactPlan(form({ email: 'nope' }))).toEqual({ ok: false, problem: 'emailInvalid' });
   expect(buildContactPlan(form({ phone: '12' }))).toEqual({ ok: false, problem: 'phoneInvalid' });
@@ -47,22 +58,31 @@ it('refuses a missing name, a bad address and a bad number before anything is se
   expect(() => prepareContact(scope, built.plan, form(), () => id(1))).toThrow();
 });
 
-it('sends the five existing commands in order, same-origin, each with its own key', async () => {
-  const f = stub(made(11), made(12), made(13), made(14), made(15));
+it('sends the five existing commands in order, student first, same-origin, each with its own key', async () => {
+  const f = stub(made(12), made(11), made(13), made(14), made(15));
   const c = capsule();
-  await expect(addContactApi.add(c)).resolves.toEqual({ adultId: id(11), childId: id(12), familyId: id(13) });
+  await expect(addContactApi.add(c)).resolves.toEqual({ adultId: id(11), childId: id(12), familyId: id(13), mainId: id(12) });
   const calls = sent(f);
   expect(calls.map(x => x.path)).toEqual([`${base}/people`, `${base}/people`, `${base}/families`, `${base}/families/${id(13)}/members`, `${base}/families/${id(13)}/members`]);
-  expect(calls.map(x => x.key)).toEqual([c.keys.adult, c.keys.child, c.keys.family, c.keys.adultMember, c.keys.childMember]);
-  expect(calls.map(x => x.body)).toEqual([c.plan.adult, c.plan.child, { displayName: 'Lee family' },
+  expect(calls.map(x => x.key)).toEqual([c.keys.child, c.keys.adult, c.keys.family, c.keys.adultMember, c.keys.childMember]);
+  expect(calls.map(x => x.body)).toEqual([c.plan.child, c.plan.adult, { displayName: 'Lee family' },
     { personId: id(11), memberRole: 'GUARDIAN' }, { personId: id(12), memberRole: 'STUDENT' }]);
   for (const x of calls) expect(x.init).toMatchObject({ method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error' });
 });
 
 it('one adult who is not a student sends one command only', async () => {
   const f = stub(made(11));
-  await expect(addContactApi.add(capsule({ kind: 'ADULT', adultStudent: false }))).resolves.toEqual({ adultId: id(11), childId: null, familyId: null });
+  await expect(addContactApi.add(capsule({ kind: 'ADULT', adultStudent: false }))).resolves.toEqual({ adultId: id(11), childId: null, familyId: null, mainId: id(11) });
   expect(f).toHaveBeenCalledTimes(1);
+});
+
+it('a student with no parent sends three commands: the student, their family and their family link', async () => {
+  const f = stub(made(12), made(13), made(15));
+  const c = capsule({ givenName: '', familyName: '', email: '', phone: '', childFamilyName: 'Kim' });
+  await expect(addContactApi.add(c)).resolves.toEqual({ adultId: null, childId: id(12), familyId: id(13), mainId: id(12) });
+  const calls = sent(f);
+  expect(calls.map(x => x.key)).toEqual([c.keys.child, c.keys.family, c.keys.childMember]);
+  expect(calls.map(x => x.body)).toEqual([c.plan.child, { displayName: 'Kim family' }, { personId: id(12), memberRole: 'STUDENT' }]);
 });
 
 it('a lost answer stops the run; trying again replays the same steps with the same keys', async () => {
@@ -70,25 +90,26 @@ it('a lost answer stops the run; trying again replays the same steps with the sa
   let f = stub(made(11), made(12), json({}, 502));
   await expect(addContactApi.add(c)).rejects.toMatchObject({ kind: 'UNKNOWN', step: 'family' });
   expect(f).toHaveBeenCalledTimes(3);
-  f = stub(made(11, 200), made(12, 200), made(13), made(14), made(15));
-  await expect(addContactApi.add(c)).resolves.toMatchObject({ familyId: id(13) });
-  expect(sent(f).map(x => x.key)).toEqual([c.keys.adult, c.keys.child, c.keys.family, c.keys.adultMember, c.keys.childMember]);
+  f = stub(made(12, 200), made(11, 200), made(13), made(14), made(15));
+  await expect(addContactApi.add(c)).resolves.toMatchObject({ familyId: id(13), mainId: id(12) });
+  expect(sent(f).map(x => x.key)).toEqual([c.keys.child, c.keys.adult, c.keys.family, c.keys.adultMember, c.keys.childMember]);
 });
 
 it('names the step that was refused, and treats "still processing" and unreadable answers as unknown', async () => {
   for (const [responses, expected] of [
-    [[json({}, 403)], { kind: 'DENIED', step: 'adult' }], [[json({}, 400)], { kind: 'REJECTED', step: 'adult' }],
-    [[made(11), made(12), json({}, 403)], { kind: 'DENIED', step: 'family' }],
-    [[made(11), made(12), made(13), made(14), json({ code: 'FAMILY_MEMBER_EXISTS' }, 409)], { kind: 'REJECTED', step: 'childMember' }],
-    [[json({ code: 'IDEMPOTENCY_IN_PROGRESS' }, 409)], { kind: 'UNKNOWN', step: 'adult' }],
-    [[json({ data: { id: 'nope' }, meta: {} })], { kind: 'UNKNOWN', step: 'adult' }],
-    [[new Response('ok', { status: 201 })], { kind: 'UNKNOWN', step: 'adult' }],
+    [[json({}, 403)], { kind: 'DENIED', step: 'child' }], [[json({}, 400)], { kind: 'REJECTED', step: 'child' }],
+    [[made(12), json({}, 400)], { kind: 'REJECTED', step: 'adult' }],
+    [[made(12), made(11), json({}, 403)], { kind: 'DENIED', step: 'family' }],
+    [[made(12), made(11), made(13), made(14), json({ code: 'FAMILY_MEMBER_EXISTS' }, 409)], { kind: 'REJECTED', step: 'childMember' }],
+    [[json({ code: 'IDEMPOTENCY_IN_PROGRESS' }, 409)], { kind: 'UNKNOWN', step: 'child' }],
+    [[json({ data: { id: 'nope' }, meta: {} })], { kind: 'UNKNOWN', step: 'child' }],
+    [[new Response('ok', { status: 201 })], { kind: 'UNKNOWN', step: 'child' }],
   ] as const) {
     stub(...responses.map(r => r.clone()));
     await expect(addContactApi.add(capsule())).rejects.toMatchObject(expected);
   }
   vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
-  await expect(addContactApi.add(capsule())).rejects.toMatchObject({ kind: 'UNKNOWN', step: 'adult' });
+  await expect(addContactApi.add(capsule())).rejects.toMatchObject({ kind: 'UNKNOWN', step: 'child' });
 });
 
 it('a lost session is reported once, and only while this form still owns the request', async () => {
@@ -104,13 +125,18 @@ it('after the adult is saved, a later refusal is shown as partly saved and keeps
   expect(saveAfterError(new AddContactError('REJECTED', 'childMember'), 'Dana Lee')).toEqual({ state: 'PARTIAL', name: 'Dana Lee', denied: false });
   expect(saveAfterError(new AddContactError('UNKNOWN', 'child'), 'Dana Lee')).toEqual({ state: 'UNCERTAIN' });
   expect(saveAfterError(new Error('x'), 'Dana Lee')).toEqual({ state: 'UNCERTAIN' });
+  // With a student the student is saved first: a refusal there saved nothing, and a refused parent is "partly saved".
+  expect(saveAfterError(new AddContactError('DENIED', 'child'), 'Mia Lee', 'child')).toEqual({ state: 'DENIED' });
+  expect(saveAfterError(new AddContactError('REJECTED', 'adult'), 'Mia Lee', 'child')).toEqual({ state: 'PARTIAL', name: 'Mia Lee', denied: false });
 });
 
-it('shows one Add contact button, and the open form asks for the parent and the child', () => {
+it('shows one Add contact button, and the open form asks for the student first and the parent or guardian as optional', () => {
   const closed = renderToStaticMarkup(<AddContact scope={scope} language="en"/>);
   expect(closed).toContain('Add contact'); expect(closed).not.toContain('<form');
   const open = renderToStaticMarkup(<AddContact scope={scope} language="en" initialOpen/>);
-  for (const text of ['Add a contact', 'A parent and their child', 'One adult', 'Parent or guardian', 'Child first name', 'Record email and text consent']) expect(open).toContain(text);
+  for (const text of ['Add a contact', 'A child student', 'One adult', 'Parent or guardian (optional)', 'Student first name', 'Record email and text consent']) expect(open).toContain(text);
+  expect(open.indexOf('Student first name')).toBeLessThan(open.indexOf('Parent or guardian (optional)'));
+  for (const language of ['ko', 'es']) expect(addContactText(language, 'parentNameMissing')).not.toBe(addContactText('en', 'parentNameMissing'));
   expect(open).not.toContain('This adult is a student');
   for (const language of ['ko', 'es']) expect(addContactText(language, 'button')).not.toBe(addContactText('en', 'button'));
   expect(addContactText('en', 'saved', { name: 'Dana Lee' })).toContain('Dana Lee was added');
