@@ -127,6 +127,21 @@ it('shows each tab, says when the role does not include one, and formats money i
   expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'NONE' }}/>)).toBe('');
 });
 
+it('a parent or guardian card names their students, and each name opens that student card', async () => {
+  const { verifySchoolContactCard } = await import('@hon/contracts');
+  const members = [{ personId: person, givenName: 'Avery', familyName: 'Able', role: 'GUARDIAN', billingContact: true },
+    { personId: id(413), givenName: 'Mia', familyName: 'Able', role: 'STUDENT', billingContact: false },
+    { personId: id(414), givenName: 'Gale', familyName: 'Able', role: 'GUARDIAN', billingContact: false }];
+  const guardian = verifySchoolContactCard(cardBody({ overview: { ...cardBody().overview, segment: 'OTHER' }, family: { allowed: true, families: [{ familyId: id(411), name: 'Able family', members }] } }), person);
+  const { guardianOf } = await import('../src/components/people/contact-card');
+  expect(guardianOf(guardian).map(m => m.personId)).toEqual([id(413)]);
+  const html = renderToStaticMarkup(<ContactCard language="en" card={{ state: 'READY', card: guardian }} onOpenPerson={() => undefined}/>);
+  expect(html).toContain('Parent or guardian of'); expect(html).toMatch(/data-testid="contact-guardian-of-student"[^>]*>Mia Able</);
+  // A student's own card, or a role without families, names nobody.
+  expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'READY', card: verifySchoolContactCard(cardBody(), person) }}/>)).not.toContain('contact-guardian-of');
+  expect(guardianOf(verifySchoolContactCard(cardBody({ family: { allowed: false } }), person))).toEqual([]);
+});
+
 it('a membership-only role sees memberships but a not-allowed billing tab and no family-thread count', async () => {
   const { verifySchoolContactCard } = await import('@hon/contracts');
   const body = cardBody({ membership: { allowed: true, items: [] }, billing: { allowed: false }, messages: { allowed: true, direct: 2, family: null }, timeline: [] });

@@ -2,7 +2,8 @@ import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 import { normalizePhone } from '../leads/add-lead-http';
 
 /**
- * Add contact (owner, 2026-11-27): one short form on Contacts that adds a parent with a child, or one adult.
+ * Add contact (owner, 2026-11-27): one short form on Contacts that adds a child student (owner, 2026-11-28: the student is
+ * the main contact, the parent or guardian is optional), or one adult.
  * It sends only the school's existing human commands, in order: create person, create family, add family member.
  * The API derives the staff member, the school and every permission from the signed session; the ids here are
  * selectors. Each step has its own Idempotency-Key made on the button press, so "Try again" replays the same steps
@@ -14,16 +15,18 @@ export type ContactForm = Readonly<{
   kind: ContactKind; givenName: string; familyName: string; email: string; phone: string;
   childGivenName: string; childFamilyName: string; adultStudent: boolean; consent: boolean;
 }>;
-export type ContactProblem = 'nameMissing' | 'childNameMissing' | 'emailInvalid' | 'phoneInvalid';
+export type ContactProblem = 'nameMissing' | 'parentNameMissing' | 'childNameMissing' | 'emailInvalid' | 'phoneInvalid';
 type PersonBody = Readonly<{ givenName: string; familyName: string; email?: string; phoneE164?: string; consentChannels?: readonly [] }>;
+/** `adult` is the parent or guardian (optional with a child) or the one adult; `label` names the main contact (the student when there is one). */
 export type ContactPlan = Readonly<{
-  adult: PersonBody; child: PersonBody | null; familyName: string | null; adultRole: 'GUARDIAN' | 'STUDENT' | null; label: string;
+  adult: PersonBody | null; child: PersonBody | null; familyName: string | null; adultRole: 'GUARDIAN' | 'STUDENT' | null; label: string;
 }>;
 /** The five keys of one press. A step the plan does not need never uses its key. */
 export type ContactKeys = Readonly<{ adult: string; child: string; family: string; adultMember: string; childMember: string }>;
 export type ContactCapsule = Readonly<{ organizationId: string; schoolId: string; plan: ContactPlan; keys: ContactKeys; form: ContactForm }>;
 export type ContactStep = 'adult' | 'child' | 'family' | 'adultMember' | 'childMember';
-export type ContactAdded = Readonly<{ adultId: string; childId: string | null; familyId: string | null }>;
+/** `mainId` is the contact to open: the student when one was added, otherwise the adult. */
+export type ContactAdded = Readonly<{ adultId: string | null; childId: string | null; familyId: string | null; mainId: string }>;
 export type ContactErrorKind = 'SESSION' | 'DENIED' | 'REJECTED' | 'UNKNOWN';
 /** `step` is the step that did not finish; every step before it is saved. */
 export class AddContactError extends Error {
@@ -37,20 +40,28 @@ const NAME_MAX = 120;
 /** Turns the typed form into the exact plan. A child never carries a contact address or a consent record. */
 export function buildContactPlan(form: ContactForm): { ok: true; plan: ContactPlan } | { ok: false; problem: ContactProblem } {
   const givenName = form.givenName.trim(), familyName = form.familyName.trim(), email = form.email.trim().toLowerCase(), phone = form.phone.trim();
-  if (!givenName || !familyName || givenName.length > NAME_MAX || familyName.length > NAME_MAX) return { ok: false, problem: 'nameMissing' };
-  if (email && (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return { ok: false, problem: 'emailInvalid' };
-  const phoneE164 = phone ? normalizePhone(phone) : null;
-  if (phone && !phoneE164) return { ok: false, problem: 'phoneInvalid' };
-  const adult: PersonBody = { givenName, familyName, ...(email ? { email } : {}), ...(phoneE164 ? { phoneE164 } : {}), ...(form.consent ? {} : { consentChannels: [] as const }) };
-  const label = `${givenName} ${familyName}`;
-  if (form.kind === 'ADULT') {
-    return { ok: true, plan: { adult, child: null, familyName: form.adultStudent ? `${familyName} family` : null, adultRole: form.adultStudent ? 'STUDENT' : null, label } };
+  const family = form.kind === 'FAMILY';
+  // With a child the parent or guardian is optional: an untouched parent section adds no adult.
+  const hasAdult = !family || Boolean(givenName || familyName || email || phone);
+  let adult: PersonBody | null = null;
+  if (hasAdult) {
+    if (!givenName || !familyName || givenName.length > NAME_MAX || familyName.length > NAME_MAX) return { ok: false, problem: family ? 'parentNameMissing' : 'nameMissing' };
+    if (email && (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return { ok: false, problem: 'emailInvalid' };
+    const phoneE164 = phone ? normalizePhone(phone) : null;
+    if (phone && !phoneE164) return { ok: false, problem: 'phoneInvalid' };
+    adult = { givenName, familyName, ...(email ? { email } : {}), ...(phoneE164 ? { phoneE164 } : {}), ...(form.consent ? {} : { consentChannels: [] as const }) };
+  }
+  if (!family) {
+    return { ok: true, plan: { adult, child: null, familyName: form.adultStudent ? `${familyName} family` : null, adultRole: form.adultStudent ? 'STUDENT' : null, label: `${givenName} ${familyName}` } };
   }
   const childGivenName = form.childGivenName.trim(), childFamilyName = form.childFamilyName.trim() || familyName;
-  if (!childGivenName || childGivenName.length > NAME_MAX || childFamilyName.length > NAME_MAX) return { ok: false, problem: 'childNameMissing' };
+  if (!childGivenName || !childFamilyName || childGivenName.length > NAME_MAX || childFamilyName.length > NAME_MAX) return { ok: false, problem: 'childNameMissing' };
   return { ok: true, plan: { adult, child: { givenName: childGivenName, familyName: childFamilyName, consentChannels: [] as const },
-    familyName: `${familyName} family`, adultRole: 'GUARDIAN', label } };
+    familyName: `${childFamilyName} family`, adultRole: adult ? 'GUARDIAN' : null, label: `${childGivenName} ${childFamilyName}` } };
 }
+
+/** The first command of a plan: a refusal there means nothing was saved. */
+export const firstContactStep = (plan: ContactPlan): ContactStep => plan.child ? 'child' : 'adult';
 
 export function prepareContact(scope: ContactScope, plan: ContactPlan, form: ContactForm, key: () => string): ContactCapsule {
   if (!UUID.test(scope.organizationId) || !UUID.test(scope.schoolId)) throw new Error('A verified school is required.');
@@ -90,13 +101,16 @@ async function command(path: string, body: unknown, key: string, step: ContactSt
 async function add(capsule: ContactCapsule, owned: () => boolean = () => true): Promise<ContactAdded> {
   const base = `/api/v1/organizations/${capsule.organizationId}/schools/${capsule.schoolId}`;
   const { plan, keys } = capsule;
-  const adultId = await command(`${base}/people`, plan.adult, keys.adult, 'adult', owned);
+  // The student is saved first (owner, 2026-11-28: the student is the main contact).
   const childId = plan.child ? await command(`${base}/people`, plan.child, keys.child, 'child', owned) : null;
-  if (!plan.familyName || !plan.adultRole) return { adultId, childId, familyId: null };
+  const adultId = plan.adult ? await command(`${base}/people`, plan.adult, keys.adult, 'adult', owned) : null;
+  const mainId = childId ?? adultId;
+  if (!mainId) throw new AddContactError('REJECTED', 'adult');
+  if (!plan.familyName || (!childId && !plan.adultRole)) return { adultId, childId, familyId: null, mainId };
   const familyId = await command(`${base}/families`, { displayName: plan.familyName.slice(0, 160) }, keys.family, 'family', owned);
-  await command(`${base}/families/${familyId}/members`, { personId: adultId, memberRole: plan.adultRole }, keys.adultMember, 'adultMember', owned);
+  if (adultId && plan.adultRole) await command(`${base}/families/${familyId}/members`, { personId: adultId, memberRole: plan.adultRole }, keys.adultMember, 'adultMember', owned);
   if (childId) await command(`${base}/families/${familyId}/members`, { personId: childId, memberRole: 'STUDENT' }, keys.childMember, 'childMember', owned);
-  return { adultId, childId, familyId };
+  return { adultId, childId, familyId, mainId };
 }
 
 export interface AddContactApi { add(capsule: ContactCapsule, owned?: () => boolean): Promise<ContactAdded> }

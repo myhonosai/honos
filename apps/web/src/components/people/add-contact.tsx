@@ -1,7 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { addContactText, type AddContactKey } from './add-contact-copy';
-import { AddContactError, addContactApi, buildContactPlan, prepareContact, type AddContactApi, type ContactAdded, type ContactCapsule, type ContactForm, type ContactProblem, type ContactScope } from './add-contact-http';
+import { AddContactError, addContactApi, buildContactPlan, firstContactStep, prepareContact, type AddContactApi, type ContactAdded, type ContactCapsule, type ContactForm, type ContactProblem, type ContactScope } from './add-contact-http';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import styles from './people.module.css';
 
@@ -9,11 +9,11 @@ export type AddContactSave = { state: 'IDLE' | 'SAVING' | 'DENIED' | 'REJECTED' 
   | { state: 'PROBLEM'; problem: ContactProblem } | { state: 'PARTIAL'; name: string; denied: boolean };
 const EMPTY: ContactForm = Object.freeze({ kind: 'FAMILY', givenName: '', familyName: '', email: '', phone: '', childGivenName: '', childFamilyName: '', adultStudent: true, consent: true });
 
-/** What a failed run means. Once the adult exists, a later refusal is "partly saved", and the same capsule finishes it. */
-export function saveAfterError(error: unknown, name: string): AddContactSave {
+/** What a failed run means. Once the first person exists, a later refusal is "partly saved", and the same capsule finishes it. */
+export function saveAfterError(error: unknown, name: string, first: 'adult' | 'child' = 'adult'): AddContactSave {
   if (!(error instanceof AddContactError)) return { state: 'UNCERTAIN' };
   if (error.kind === 'UNKNOWN') return { state: 'UNCERTAIN' };
-  if (error.step === 'adult') return { state: error.kind === 'REJECTED' ? 'REJECTED' : 'DENIED' };
+  if (error.step === first) return { state: error.kind === 'REJECTED' ? 'REJECTED' : 'DENIED' };
   return { state: 'PARTIAL', name, denied: error.kind !== 'REJECTED' };
 }
 
@@ -51,8 +51,8 @@ export function AddContact({ scope, language, onAdded, api = addContactApi, newK
     setSave({ state: 'SAVING' });
     api.add(capsule, () => alive.current && held.current === capsule).then(
       (added) => { if (held.current === capsule) held.current = null; if (!alive.current) return;
-        setForm(EMPTY); setOpen(false); setSave({ state: 'SAVED', name: capsule.plan.label, family: added.familyId !== null }); onAdded?.(added); },
-      (error) => { if (!alive.current) return; const next = saveAfterError(error, capsule.plan.label);
+        setForm(EMPTY); setOpen(false); setSave({ state: 'SAVED', name: capsule.plan.label, family: added.familyId !== null && added.adultId !== null }); onAdded?.(added); },
+      (error) => { if (!alive.current) return; const next = saveAfterError(error, capsule.plan.label, firstContactStep(capsule.plan) as 'adult' | 'child');
         if (next.state === 'DENIED' || next.state === 'REJECTED') { if (held.current === capsule) held.current = null; }
         setSave(next); });
   }, [api, onAdded, held]);
@@ -90,7 +90,13 @@ export function AddContact({ scope, language, onAdded, api = addContactApi, newK
         {(['FAMILY', 'ADULT'] as const).map(kind => <label key={kind} className={styles.check}>
           <input type="radio" name="add-contact-kind" value={kind} checked={form.kind === kind} onChange={() => set('kind', kind)}/> {t(`kind${kind}`)}</label>)}
       </fieldset>
+      {family ? <><h3>{t('childHead')}</h3>
+        <div className={styles.filterGrid}>
+          {text('childGivenName', ids.childGiven, 'childGivenName', 'text', 'off', 120)}
+          {text('childFamilyName', ids.childFamily, 'childFamilyName', 'text', 'off', 120)}
+        </div></> : null}
       <h3>{t(family ? 'parentHead' : 'adultHead')}</h3>
+      {family ? <p className={styles.meta}>{t('parentOptional')}</p> : null}
       <div className={styles.filterGrid}>
         {text('givenName', ids.given, 'givenName', 'text', 'off', 120)}
         {text('familyName', ids.family, 'familyName', 'text', 'off', 120)}
@@ -98,12 +104,7 @@ export function AddContact({ scope, language, onAdded, api = addContactApi, newK
         {text('phone', ids.phone, 'phone', 'tel', 'off', 32, { 'aria-describedby': ids.phoneHelp })}
       </div>
       <p id={ids.phoneHelp} className={styles.meta}>{t('phoneHelp')}</p>
-      {family ? <p id={ids.help} className={styles.meta}>{t('emailTip')}</p> : null}
-      {family ? <><h3>{t('childHead')}</h3>
-        <div className={styles.filterGrid}>
-          {text('childGivenName', ids.childGiven, 'childGivenName', 'text', 'off', 120)}
-          {text('childFamilyName', ids.childFamily, 'childFamilyName', 'text', 'off', 120)}
-        </div></> : <><label className={styles.check}><input type="checkbox" name="adult-student" checked={form.adultStudent} disabled={locked} onChange={e => set('adultStudent', e.target.checked)}/> {t('adultStudent')}</label>
+      {family ? <p id={ids.help} className={styles.meta}>{t('emailTip')}</p> : <><label className={styles.check}><input type="checkbox" name="adult-student" checked={form.adultStudent} disabled={locked} onChange={e => set('adultStudent', e.target.checked)}/> {t('adultStudent')}</label>
         <p className={styles.meta}>{t('adultStudentHelp')}</p></>}
       <label className={styles.check}><input type="checkbox" name="record-consent" checked={form.consent} disabled={locked} onChange={e => set('consent', e.target.checked)}/> {t('consent')}</label>
       <p className={styles.meta}>{t('consentHelp')}</p>
