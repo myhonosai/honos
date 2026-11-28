@@ -156,6 +156,9 @@ test('2026-11-28: HON knows HON OS itself (team chat, voice, menu), and the spec
   assert.match(HON_REPLY_SYSTEM_PROMPT, /HON OS guide below/);
   assert(HON_REPLY_SYSTEM_PROMPT.endsWith(HON_OS_PRODUCT_GUIDE));
   assert.match(HON_OS_PRODUCT_GUIDE, /Dashboard has a Team chat where the person talks to the whole AI team at once/);
+  // Owner 2026-11-28: HON answers first and points the person to Send to HQ for what it cannot settle, never claiming it sent it.
+  assert.match(HON_OS_PRODUCT_GUIDE, /press "Send to HQ" under your answer/);
+  assert.match(HON_OS_PRODUCT_GUIDE, /never claim you sent it or that HQ was told/);
   assert.match(HON_OS_PRODUCT_GUIDE, /microphone/);
   assert.match(HON_OS_PRODUCT_GUIDE, /Make a plan together/);
   assert.match(HON_OS_PRODUCT_GUIDE, /drafts wait for a person to approve/);

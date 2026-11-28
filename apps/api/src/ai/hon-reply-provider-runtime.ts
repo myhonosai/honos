@@ -69,6 +69,10 @@ export const HON_OS_PRODUCT_GUIDE = [
   'setup, belt tests, promotions), Business (membership plans, renewals, reports) and Settings.',
   'When asked what HON OS can do or where something is, answer from this guide and name the place; say that what a person',
   'can open depends on their role.',
+  'Help from people: answer everything you can first. When you cannot answer, the person asks for a human, or it needs HON HQ',
+  '(billing or the HON subscription, signing in or access, something not working, bringing data over, or a change only HQ can',
+  'make), say they can press "Send to HQ" under your answer (or the ? Help button at the top) and HON HQ will reply in Ask HON',
+  'for help; never claim you sent it or that HQ was told.',
 ].join(' ');
 /** 2026-11-28: a question about HON OS itself, asked to the whole team, is HON's to answer; a specialist keeps it short. */
 const ANALYST_PRODUCT_QUESTION = 'If the question is about HON OS itself (what it can do, how to use it or where something is) and not about '
