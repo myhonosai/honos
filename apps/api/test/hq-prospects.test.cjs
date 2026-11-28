@@ -95,3 +95,71 @@ test('HTTP: the verified subject and the validated body reach the database; mism
     }
   } finally { await app.close(); if (prior === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = prior; }
 });
+
+// ---------- 0715 pipeline board ----------
+const S1 = U(), S2 = U(), SCHOOL = U();
+const stage = (id, name, position, patch = {}) => ({ stageId: id, name, color: 'BLUE', position, hidden: false, openCount: 0, ...patch });
+const card = (patch = {}) => ({ prospectId: PID, fullName: 'Synthetic Prospect', schoolName: null, email: 'p@example.test', phone: null, source: 'IMPORT',
+  stageId: S1, status: 'ACTIVE', closedOutcome: null, textOptedOut: false, createdAt: T, version: 1, ...patch });
+const boardAnswer = (patch = {}) => ({ pipelineVersion: 1, stages: [stage(S1, 'Lead', 1, { openCount: 1 }), stage(S2, 'Contacted', 2)], prospects: [card()], truncated: false,
+  closed: { won: 0, lost: 0 }, schools: [{ schoolId: SCHOOL, schoolName: 'Synthetic Dojo', organizationName: 'Synthetic Org', status: 'ACTIVE', tier: 'CORE', trialEndsAt: null, createdAt: T }],
+  asOf: T2, ...patch });
+
+test('contracts: pipeline board answers and inputs', () => {
+  assert.equal(contracts.verifyHqProspectBoard(boardAnswer()).prospects[0].stageId, S1);
+  for (const bad of [boardAnswer({ prospects: [card({ stageId: U() })] }), boardAnswer({ prospects: [card({ status: 'ARCHIVED' })] }),
+    boardAnswer({ stages: [stage(S1, 'Lead', 1, { hidden: true })] }), boardAnswer({ stages: [stage(S1, 'Lead', 1), stage(S2, 'lead', 2)] }),
+    boardAnswer({ stages: [stage(S1, 'Lead', 2)] }), boardAnswer({ schools: [{ ...boardAnswer().schools[0], status: 'TRIAL' }] }), boardAnswer({ extra: 1 })])
+    assert.throws(() => contracts.verifyHqProspectBoard(bad), JSON.stringify(bad).slice(0, 200));
+  assert.deepEqual(contracts.validateHqProspectMoveInput({ expectedVersion: 1, stageId: S2.toUpperCase(), outcome: null }), { expectedVersion: 1, stageId: S2, outcome: null });
+  for (const bad of [{ expectedVersion: 1, stageId: S2, outcome: 'WON' }, { expectedVersion: 1, stageId: null, outcome: null }, { expectedVersion: 1, stageId: null, outcome: 'MAYBE' }])
+    assert.throws(() => contracts.validateHqProspectMoveInput(bad));
+  const ok = { expectedVersion: 1, stages: [{ id: S1, name: 'Lead', color: 'BLUE', hidden: false }, { id: null, name: 'Demo', color: 'RED', hidden: false }], moves: [] };
+  assert.equal(contracts.validateHqProspectStagesInput(ok).stages.length, 2);
+  for (const bad of [{ ...ok, stages: [{ id: S1, name: 'Lead', color: 'BLUE', hidden: true }] }, { ...ok, stages: [...ok.stages, { id: null, name: 'lead', color: 'RED', hidden: false }] },
+    { ...ok, stages: [{ id: S1, name: ' Lead', color: 'BLUE', hidden: false }] }, { ...ok, stages: [{ id: S1, name: 'Lead', color: 'PINK', hidden: false }] }])
+    assert.throws(() => contracts.validateHqProspectStagesInput(bad), JSON.stringify(bad));
+  assert.deepEqual(Object.values(contracts.HQ_PROSPECT_BOARD_COMMANDS), [contracts.SAAS_COMMANDS.moveHqProspectStage, contracts.SAAS_COMMANDS.saveHqProspectStages]);
+});
+
+test('HTTP: board read, move and stage save', async () => {
+  const prior = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const calls = []; let reply = () => boardAnswer();
+  const module = await Test.createTestingModule({ controllers: [HqProspectsController],
+    providers: [HqProspectsService, SaasBillingService, SaasReadGuard, SaasCommandGuard,
+      { provide: RuntimeDatabaseService, useValue: { callSaasBilling: async (op, params) => { calls.push([op, params]); return reply(); } } }] })
+    .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
+  const app = module.createNestApplication({ bodyParser: false });
+  app.use(json({ strict: true })); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
+  const base = `http://127.0.0.1:${app.getHttpServer().address().port}/v1/hq/prospects`;
+  try {
+    const b = await send(`${base}/board`, { headers: read });
+    assert.equal(b.status, 200, b.body);
+    assert.deepEqual(calls.at(-1), ['readHqProspectBoard', ['verified-human']]);
+    assert.equal((await send(`${base}/board?x=1`, { headers: read })).status, 400, 'no query on the board');
+    reply = () => boardAnswer({ prospects: [card({ stageId: U() })] });
+    assert.equal((await send(`${base}/board`, { headers: read })).status, 503, 'a prospect in an unknown stage is never shown');
+    const key = U(), move = { expectedVersion: 1, stageId: S2, outcome: null };
+    reply = () => ({ operation: 'MOVE', prospect: card({ stageId: S2, version: 2 }), replayed: false });
+    const moved = await send(`${base}/${PID}/stage`, { method: 'POST', headers: command('hq-prospect-stage-move', key), body: JSON.stringify(move) });
+    assert.equal(moved.status, 200, moved.body);
+    assert.deepEqual(calls.at(-1), ['moveHqProspectStage', ['verified-human', PID, JSON.stringify(move), key]]);
+    reply = () => ({ operation: 'MOVE', prospect: card({ stageId: S1, version: 2 }), replayed: false });
+    assert.equal((await send(`${base}/${PID}/stage`, { method: 'POST', headers: command('hq-prospect-stage-move'), body: JSON.stringify(move) })).status, 503, 'a receipt for another stage is never shown');
+    const n = calls.length;
+    assert.equal((await send(`${base}/${PID}/stage`, { method: 'POST', headers: command('hq-prospect-update'), body: JSON.stringify(move) })).status, 403, 'wrong marker');
+    assert.equal(calls.length, n);
+    const input = { expectedVersion: 1, stages: [{ id: S2, name: 'Contacted', color: 'AMBER', hidden: false }, { id: S1, name: 'Lead', color: 'BLUE', hidden: false }], moves: [] };
+    reply = () => ({ operation: 'STAGES', pipelineVersion: 2, stages: [stage(S2, 'Contacted', 1, { color: 'AMBER' }), stage(S1, 'Lead', 2)], replayed: false });
+    const saved = await send(`${base}/stages`, { method: 'POST', headers: command('hq-prospect-stages-save'), body: JSON.stringify(input) });
+    assert.equal(saved.status, 200, saved.body);
+    assert.equal(calls.at(-1)[0], 'saveHqProspectStages');
+    reply = () => ({ operation: 'STAGES', pipelineVersion: 2, stages: [stage(S1, 'Lead', 1), stage(S2, 'Contacted', 2)], replayed: false });
+    assert.equal((await send(`${base}/stages`, { method: 'POST', headers: command('hq-prospect-stages-save'), body: JSON.stringify(input) })).status, 503, 'out-of-order answer refused');
+    for (const code of ['HQ_PROSPECT_STAGE_MOVE_REQUIRED', 'HQ_PROSPECT_STAGE_NAME_TAKEN', 'HQ_PROSPECT_STAGE_UNAVAILABLE']) {
+      reply = () => { const e = new Error(code); e.code = '23514'; throw e; };
+      const r = await send(`${base}/stages`, { method: 'POST', headers: command('hq-prospect-stages-save'), body: JSON.stringify(input) });
+      assert.deepEqual([r.status, JSON.parse(r.body).code], [422, code], code);
+    }
+  } finally { await app.close(); if (prior === undefined) delete process.env.HON_PUBLIC_ORIGIN; else process.env.HON_PUBLIC_ORIGIN = prior; }
+});

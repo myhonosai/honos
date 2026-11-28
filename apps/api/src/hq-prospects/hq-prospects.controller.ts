@@ -15,6 +15,17 @@ function subject(req: HonRequest): string {
 @UseGuards(HonIdentityGuard)
 export class HqProspectsController {
   constructor(private readonly prospects: HqProspectsService) {}
+  // 0715 pipeline board; declared before ':prospectId' so 'board' and 'stages' never read as an id.
+  @Get('board') @UseGuards(SaasReadGuard)
+  async board(@Req() req: HonRequest) { return { data: await this.prospects.board(subject(req)) }; }
+  @Post('stages') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.saveHqProspectStages)
+  async stages(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.prospects.saveStages(subject(req), body, key) };
+  }
+  @Post(':prospectId/stage') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.moveHqProspectStage)
+  async move(@Req() req: HonRequest, @Param('prospectId') id: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.prospects.move(subject(req), id, body, key) };
+  }
   @Get() @UseGuards(SaasReadGuard) @SaasReadQuery(['status', 'campaignId', 'cursor', 'limit'])
   async list(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { return { data: await this.prospects.list(subject(req), query) }; }
   @Get(':prospectId') @UseGuards(SaasReadGuard)
