@@ -1,0 +1,51 @@
+/** /staff/subscription single HON OS plan copy (one plan, monthly or yearly; standard or founder). */
+export const onePlanSubscriptionEn = {
+  'One plan. Everything in it.': 'One plan. Everything in it.',
+  'HON OS is one plan for your whole school. Choose monthly or yearly below.': 'HON OS is one plan for your whole school. Choose monthly or yearly below.',
+  "WHAT'S INCLUDED": "WHAT'S INCLUDED",
+  'Everything your school runs on.': 'Everything your school runs on.',
+  'Leads, memberships and classes': 'Leads, memberships and classes',
+  'Belt testing and attendance': 'Belt testing and attendance',
+  'Payments and marketing tools': 'Payments and marketing tools',
+  'HON and the AI team, with no per-message charges': 'HON and the AI team, with no per-message charges',
+  '{credits} Creative Studio credits every month': '{credits} Creative Studio credits every month',
+  'No HON fee on tuition': 'No HON fee on tuition',
+  'All three views: Big Button, Modern and Classic': 'All three views: Big Button, Modern and Classic',
+  'HON confirms the price and your eligibility when you subscribe. Choosing a price here never changes your plan by itself.': 'HON confirms the price and your eligibility when you subscribe. Choosing a price here never changes your plan by itself.',
+  'What does HON OS include?': 'What does HON OS include?',
+  'HON OS is one plan with everything in it: school operations, marketing tools, HON and the AI team, and Creative Studio credits each month. You only choose monthly or yearly, and founder pricing while founder spots last.': 'HON OS is one plan with everything in it: school operations, marketing tools, HON and the AI team, and Creative Studio credits each month. You only choose monthly or yearly, and founder pricing while founder spots last.',
+} as const;
+
+export const onePlanSubscriptionKo: Record<keyof typeof onePlanSubscriptionEn, string> = {
+  'One plan. Everything in it.': '하나의 요금제. 모든 기능 포함.',
+  'HON OS is one plan for your whole school. Choose monthly or yearly below.': 'HON OS는 도장 전체를 위한 하나의 요금제입니다. 아래에서 월간 또는 연간을 선택하세요.',
+  "WHAT'S INCLUDED": '포함 내용',
+  'Everything your school runs on.': '도장 운영에 필요한 모든 것.',
+  'Leads, memberships and classes': '리드, 회원권, 수업',
+  'Belt testing and attendance': '승급 심사와 출석',
+  'Payments and marketing tools': '결제와 마케팅 도구',
+  'HON and the AI team, with no per-message charges': 'HON과 AI 팀, 메시지당 요금 없음',
+  '{credits} Creative Studio credits every month': '매월 크리에이티브 스튜디오 크레딧 {credits}',
+  'No HON fee on tuition': '수강료에 HON 수수료 없음',
+  'All three views: Big Button, Modern and Classic': '세 가지 보기 모두: 큰 버튼, 모던, 클래식',
+  'HON confirms the price and your eligibility when you subscribe. Choosing a price here never changes your plan by itself.': '구독할 때 HON이 가격과 자격을 확인합니다. 여기서 가격을 고르는 것만으로는 요금제가 바뀌지 않습니다.',
+  'What does HON OS include?': 'HON OS에는 무엇이 포함되나요?',
+  'HON OS is one plan with everything in it: school operations, marketing tools, HON and the AI team, and Creative Studio credits each month. You only choose monthly or yearly, and founder pricing while founder spots last.': 'HON OS는 모든 기능이 포함된 하나의 요금제입니다: 도장 운영, 마케팅 도구, HON과 AI 팀, 매월 크리에이티브 스튜디오 크레딧. 월간 또는 연간만 선택하면 되고, 창립 회원 자리가 남아 있는 동안 창립 가격을 받을 수 있습니다.',
+};
+
+export const onePlanSubscriptionEs: Record<keyof typeof onePlanSubscriptionEn, string> = {
+  'One plan. Everything in it.': 'Un plan. Todo incluido.',
+  'HON OS is one plan for your whole school. Choose monthly or yearly below.': 'HON OS es un solo plan para toda tu escuela. Elige mensual o anual abajo.',
+  "WHAT'S INCLUDED": 'QUÉ INCLUYE',
+  'Everything your school runs on.': 'Todo lo que tu escuela necesita.',
+  'Leads, memberships and classes': 'Prospectos, membresías y clases',
+  'Belt testing and attendance': 'Exámenes de cinturón y asistencia',
+  'Payments and marketing tools': 'Pagos y herramientas de marketing',
+  'HON and the AI team, with no per-message charges': 'HON y el equipo de IA, sin cargos por mensaje',
+  '{credits} Creative Studio credits every month': '{credits} créditos de Creative Studio cada mes',
+  'No HON fee on tuition': 'Sin comisión de HON sobre las cuotas',
+  'All three views: Big Button, Modern and Classic': 'Las tres vistas: Botón grande, Moderna y Clásica',
+  'HON confirms the price and your eligibility when you subscribe. Choosing a price here never changes your plan by itself.': 'HON confirma el precio y tu elegibilidad cuando te suscribes. Elegir un precio aquí nunca cambia tu plan por sí solo.',
+  'What does HON OS include?': '¿Qué incluye HON OS?',
+  'HON OS is one plan with everything in it: school operations, marketing tools, HON and the AI team, and Creative Studio credits each month. You only choose monthly or yearly, and founder pricing while founder spots last.': 'HON OS es un solo plan con todo incluido: operación de la escuela, herramientas de marketing, HON y el equipo de IA, y créditos de Creative Studio cada mes. Solo eliges mensual o anual, y el precio de fundador mientras haya lugares.',
+};

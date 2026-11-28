@@ -2,11 +2,13 @@ import { planBuilderEn } from './plan-builder.js';
 import { pricingOperationsEn } from './pricing-operations.js';
 import { pricingEn } from './pricing-offers.js';
 import { honOsPricesEn } from './hon-os-prices.js';
+import { onePlanSubscriptionEn } from './one-plan-subscription.js';
 import { zernioEn } from './zernio.js';
 export const en = {
   ...zernioEn,
   ...pricingEn,
   ...honOsPricesEn,
+  ...onePlanSubscriptionEn,
   ...pricingOperationsEn,
   ...planBuilderEn,
   " · Deterministic simulator, not Stripe sandbox": " · Deterministic simulator, not Stripe sandbox",
