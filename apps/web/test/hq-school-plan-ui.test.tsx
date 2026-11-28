@@ -16,10 +16,10 @@ const who = { principalId: id(9), displayName: 'HQ Owner' };
 const offer = (patch: Record<string, unknown> = {}) => ({ offerId: id(5), offerCode: 'CORE_MONTHLY', offerKind: 'REGULAR_MONTHLY', billingInterval: 'MONTHLY',
   founder: false, displayName: 'Core monthly', priceMinor: 14900, currency: 'USD', offerSetVersion: 3, ...patch });
 const custom = (revision: number, patch: Record<string, unknown> = {}) => ({ revision, action: 'ASSIGN', source: 'CUSTOM', offerId: null, offerKind: null,
-  offerSetVersion: null, planName: 'Friends price', billingInterval: 'MONTHLY', priceMinor: 9900, currency: 'USD', founder: false, freeUntil: null,
+  offerSetVersion: null, planName: 'Friends price', billingInterval: 'MONTHLY', priceMinor: 9900, currency: 'USD', founder: false, freeUntil: null, startDate: '2026-12-01',
   note: null, schoolId: id(1), recordedBy: who, recordedAt: T, ...patch });
 const removed = (revision: number) => ({ revision, action: 'REMOVE', source: null, offerId: null, offerKind: null, offerSetVersion: null, planName: null,
-  billingInterval: null, priceMinor: null, currency: null, founder: null, freeUntil: null, note: null, schoolId: id(1), recordedBy: who, recordedAt: T });
+  billingInterval: null, priceMinor: null, currency: null, founder: null, freeUntil: null, startDate: null, note: null, schoolId: id(1), recordedBy: who, recordedAt: T });
 function raw(patch: Record<string, unknown> = {}) {
   return { schoolId: id(1), organizationId: id(2), schoolName: 'Synthetic Academy', schoolStatus: 'ACTIVE', organizationStatus: 'ACTIVE', revision: 0,
     current: null, history: [], onNow: 'TRIAL', offers: [offer()], viewer: { ...who, canManage: true }, effect: 'RECORD_ONLY', charging: 'OFF', asOf: T, ...patch };
@@ -30,7 +30,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const stub = (...answers: Response[]) => { const f = vi.fn(async () => answers.shift() ?? json({}, 500)); vi.stubGlobal('fetch', f); return f; };
 const t = (key: Parameters<typeof schoolPlanText>[1], vars?: Record<string, string>) => schoolPlanText('en', key, vars);
 const f = { money: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }), day: new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' }) };
-const blank: PlanForm = { name: '', price: '', interval: 'MONTHLY', freeUntil: '', note: '' };
+const blank: PlanForm = { name: '', price: '', interval: 'MONTHLY', freeUntil: '', startDate: '2026-12-01', note: '' };
 const noop = () => {};
 function render(patch: Partial<PlanCardViewProps> = {}) {
   return renderToStaticMarkup(<PlanCardView language="en" formattingLocale="en-US" load={{ state: 'READY', view: view() }} step={{ step: 'VIEW' }} pick={null}
@@ -58,21 +58,21 @@ it('reads one school plan with a plain same-origin GET and refuses a bad id or a
 it('assigns and removes with the command marker, JSON body and the given Idempotency-Key, and checks the receipt', async () => {
   const fx = stub(json({ data: receipt('ASSIGN', custom(1)) }), json({ data: receipt('REMOVE', removed(2)) }), json({ data: receipt('ASSIGN', custom(5)) }));
   const key = id(77), plan = { source: 'CUSTOM' as const, name: 'Friends price', billingInterval: 'MONTHLY' as const, priceMinor: 9900, freeUntil: null };
-  const a = await schoolPlanApi.assign(id(1), { expectedRevision: 0, plan, note: null }, key, new AbortController().signal, yes);
+  const a = await schoolPlanApi.assign(id(1), { expectedRevision: 0, plan, startDate: '2026-12-01', note: null }, key, new AbortController().signal, yes);
   expect(a.assignment.revision).toBe(1);
   const [path, init] = fx.mock.calls[0] as unknown as [string, RequestInit];
   expect(path).toBe(`/api/v1/hq/schools/${id(1)}/plan/assign`);
   expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', mode: 'same-origin', redirect: 'error' });
   expect(init.headers).toEqual({ Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': 'hq-school-plan-assign', 'Idempotency-Key': key });
-  expect(JSON.parse(init.body as string)).toEqual({ expectedRevision: 0, plan, note: null });
+  expect(JSON.parse(init.body as string)).toEqual({ expectedRevision: 0, plan, startDate: '2026-12-01', note: null });
   await schoolPlanApi.remove(id(1), { expectedRevision: 1, note: 'closing' }, key, new AbortController().signal, yes);
   const [rpath, rinit] = fx.mock.calls[1] as unknown as [string, RequestInit];
   expect(rpath).toBe(`/api/v1/hq/schools/${id(1)}/plan/remove`);
   expect((rinit.headers as Record<string, string>)['X-HON-Human-Command']).toBe('hq-school-plan-remove');
   // A receipt for the wrong revision is not trusted.
-  await expect(schoolPlanApi.assign(id(1), { expectedRevision: 0, plan, note: null }, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+  await expect(schoolPlanApi.assign(id(1), { expectedRevision: 0, plan, startDate: '2026-12-01', note: null }, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'UNKNOWN' });
   // Bad input never leaves the browser.
-  await expect(schoolPlanApi.assign(id(1), { expectedRevision: 0, plan: { ...plan, priceMinor: -1 }, note: null }, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'INVALID' });
+  await expect(schoolPlanApi.assign(id(1), { expectedRevision: 0, plan: { ...plan, priceMinor: -1 }, startDate: '2026-12-01', note: null }, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'INVALID' });
   await expect(schoolPlanApi.remove('nope', { expectedRevision: 0, note: null }, key, new AbortController().signal, yes)).rejects.toMatchObject({ kind: 'INVALID' });
   expect(fx).toHaveBeenCalledTimes(3);
 });
@@ -109,22 +109,28 @@ it('reads typed dollar amounts as exact cents', () => {
 });
 
 it('turns the picker into the exact choice the server gets, or a reason', () => {
-  const v = view(), today = '2026-11-24', limit = '2029-11-24';
-  expect(reviewChoice(v, null, blank, t, f, today, limit)).toEqual({ ok: false, problem: 'pickOne' });
-  expect(reviewChoice(v, { kind: 'OFFER', offerId: id(6) }, blank, t, f, today, limit)).toEqual({ ok: false, problem: 'pickOne' });
-  expect(reviewChoice(v, { kind: 'OFFER', offerId: id(5) }, blank, t, f, today, limit))
-    .toEqual({ ok: true, choice: { source: 'OFFER', offerId: id(5) }, label: 'Core monthly', price: '$149.00 / month' });
+  const v = view(), today = '2026-11-24', limit = '2029-11-24', from = '2025-11-24', to = '2027-11-24';
+  expect(reviewChoice(v, null, blank, t, f, today, limit, from, to)).toEqual({ ok: false, problem: 'pickOne' });
+  expect(reviewChoice(v, { kind: 'OFFER', offerId: id(6) }, blank, t, f, today, limit, from, to)).toEqual({ ok: false, problem: 'pickOne' });
+  expect(reviewChoice(v, { kind: 'OFFER', offerId: id(5) }, blank, t, f, today, limit, from, to))
+    .toEqual({ ok: true, choice: { source: 'OFFER', offerId: id(5) }, startDate: '2026-12-01', label: 'Core monthly', price: '$149.00 / month', start: 'Dec 1, 2026' });
   const c = { kind: 'CUSTOM' as const };
-  expect(reviewChoice(v, c, { ...blank, name: 'ab', price: '10' }, t, f, today, limit)).toEqual({ ok: false, problem: 'invalidName' });
-  expect(reviewChoice(v, c, { ...blank, name: 'Friends', price: 'x' }, t, f, today, limit)).toEqual({ ok: false, problem: 'invalidPrice' });
-  expect(reviewChoice(v, c, { ...blank, name: ' Friends ', price: '99', interval: 'ANNUAL', freeUntil: '2027-01-31' }, t, f, today, limit))
-    .toEqual({ ok: true, choice: { source: 'CUSTOM', name: 'Friends', billingInterval: 'ANNUAL', priceMinor: 9900, freeUntil: null }, label: 'Friends', price: '$99.00 / year' });
-  expect(reviewChoice(v, c, { ...blank, name: 'Free school', price: '0' }, t, f, today, limit))
+  expect(reviewChoice(v, c, { ...blank, name: 'ab', price: '10' }, t, f, today, limit, from, to)).toEqual({ ok: false, problem: 'invalidName' });
+  expect(reviewChoice(v, c, { ...blank, name: 'Friends', price: 'x' }, t, f, today, limit, from, to)).toEqual({ ok: false, problem: 'invalidPrice' });
+  expect(reviewChoice(v, c, { ...blank, name: ' Friends ', price: '99', interval: 'ANNUAL', freeUntil: '2027-01-31' }, t, f, today, limit, from, to))
+    .toEqual({ ok: true, choice: { source: 'CUSTOM', name: 'Friends', billingInterval: 'ANNUAL', priceMinor: 9900, freeUntil: null }, startDate: '2026-12-01', label: 'Friends', price: '$99.00 / year', start: 'Dec 1, 2026' });
+  expect(reviewChoice(v, c, { ...blank, name: 'Free school', price: '0' }, t, f, today, limit, from, to))
     .toMatchObject({ ok: true, choice: { priceMinor: 0, freeUntil: null }, price: 'Free, no end date' });
-  expect(reviewChoice(v, c, { ...blank, name: 'Free school', price: '0', freeUntil: '2027-01-31' }, t, f, today, limit))
+  expect(reviewChoice(v, c, { ...blank, name: 'Free school', price: '0', freeUntil: '2027-01-31' }, t, f, today, limit, from, to))
     .toMatchObject({ ok: true, choice: { priceMinor: 0, freeUntil: '2027-01-31' }, price: 'Free until Jan 31, 2027' });
   for (const bad of [today, '2026-01-01', '2029-11-25'])
-    expect(reviewChoice(v, c, { ...blank, name: 'Free school', price: '0', freeUntil: bad }, t, f, today, limit)).toEqual({ ok: false, problem: 'invalidDate' });
+    expect(reviewChoice(v, c, { ...blank, name: 'Free school', price: '0', freeUntil: bad }, t, f, today, limit, from, to)).toEqual({ ok: false, problem: 'invalidDate' });
+  // Start date (0700): one year back to one year ahead, a real day; a free plan must end after it starts.
+  for (const bad of ['', '2025-11-23', '2027-11-25', '2026-13-01', 'soon'])
+    expect(reviewChoice(v, { kind: 'OFFER', offerId: id(5) }, { ...blank, startDate: bad }, t, f, today, limit, from, to)).toEqual({ ok: false, problem: 'invalidStart' });
+  expect(reviewChoice(v, { kind: 'OFFER', offerId: id(5) }, { ...blank, startDate: '2025-11-24' }, t, f, today, limit, from, to)).toMatchObject({ ok: true, startDate: '2025-11-24' });
+  expect(reviewChoice(v, c, { ...blank, name: 'Free pilot', price: '0', freeUntil: '2027-01-31', startDate: '2027-01-31' }, t, f, today, limit, from, to))
+    .toEqual({ ok: false, problem: 'freeAfterStart' });
 });
 
 it('shows loading, denied and unavailable without any plan facts', () => {
@@ -155,7 +161,8 @@ it('shows the current custom or offer plan with change and remove, and history',
   expect(html).toContain(t('change'));
   expect(html).toContain(t('remove'));
   expect(html).toContain('History (1)');
-  expect(html).toContain('Nov 1, 2026: Friends price at $99.00 / month, by HQ Owner');
+  expect(html).toContain('Nov 1, 2026: Friends price at $99.00 / month, starts Dec 1, 2026, by HQ Owner');
+  expect(html).toContain('Starts Dec 1, 2026');
   const o = { ...custom(2), source: 'OFFER', offerId: id(5), offerKind: 'FOUNDER_MONTHLY', offerSetVersion: 3, planName: 'Founder monthly', priceMinor: 7900, founder: true };
   const offerHtml = render({ load: { state: 'READY', view: view(raw({ revision: 2, current: o, history: [o, removed(1)] })) } });
   expect(offerHtml).toContain('Founder monthly · $79.00 / month');
@@ -176,6 +183,7 @@ it('is read-only for a viewer who cannot manage', () => {
 it('picker lists published offers plus a custom price, and links to Pricing & Offers when none are published', () => {
   const html = render({ step: { step: 'PICK' }, pick: { kind: 'OFFER', offerId: id(5) } });
   expect(html).toContain('Choose a plan for Synthetic Academy');
+  expect(html).toContain(t('startLabel')); expect(html).toMatch(/id="plan-start" type="date" required="" min="[0-9-]{10}" max="[0-9-]{10}" value="2026-12-01"/);
   expect(html).toContain('Core monthly');
   expect(html).toContain('$149.00 / month');
   expect(html).toContain(t('customTile'));
@@ -191,8 +199,8 @@ it('picker lists published offers plus a custom price, and links to Pricing & Of
 });
 
 it('confirm and remove steps spell out the change and lock buttons while saving', () => {
-  const confirm = render({ step: { step: 'CONFIRM', choice: { source: 'OFFER', offerId: id(5) }, label: 'Core monthly', price: '$149.00 / month' }, busy: true });
-  expect(confirm).toContain('Synthetic Academy will be on “Core monthly” at $149.00 / month.');
+  const confirm = render({ step: { step: 'CONFIRM', choice: { source: 'OFFER', offerId: id(5) }, startDate: '2026-12-01', label: 'Core monthly', price: '$149.00 / month', start: 'Dec 1, 2026' }, busy: true });
+  expect(confirm).toContain('Synthetic Academy will be on “Core monthly” at $149.00 / month, starting Dec 1, 2026.');
   expect(confirm).toContain(t('saving'));
   expect(confirm).toMatch(/disabled=""/);
   const remove = render({ load: { state: 'READY', view: view(raw({ revision: 1, current: custom(1), history: [custom(1)] })) }, step: { step: 'REMOVE' }, problem: t('UNKNOWN') });

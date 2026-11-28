@@ -65,7 +65,7 @@ async function publish(basedOnSetId,patch={}){
   return {set,offers:Object.fromEntries(set.offers.map(o=>[o.offerKind,o]))};
 }
 const custom=(patch={})=>({source:'CUSTOM',name:'Dojo partner deal',billingInterval:'MONTHLY',priceMinor:15000,freeUntil:null,...patch});
-const assign=(who,o,expectedRevision,plan,key=K(),note=null)=>plans.assign(who.subject,o.school,{expectedRevision,plan,note},key);
+const assign=(who,o,expectedRevision,plan,key=K(),note=null,startDate=dateIn(0))=>plans.assign(who.subject,o.school,{expectedRevision,plan,startDate,note},key);
 const effects=async()=>row(`SELECT (SELECT count(*) FROM hon.saas_subscriptions)::int subs,(SELECT count(*) FROM hon.saas_checkout_sessions)::int checkouts,
   (SELECT count(*) FROM hon.saas_schedule_bindings)::int bindings,(SELECT count(*) FROM hon.saas_access_exceptions)::int exceptions,
   (SELECT count(*) FROM hon.saas_founder_reservations)::int founder,(SELECT md5(string_agg(organization_id::text||tier::text||status::text,',' ORDER BY organization_id)) FROM hon.organization_entitlements) ent`);
@@ -120,7 +120,9 @@ try {
   for(const bad of [custom({priceMinor:-1}),custom({priceMinor:10_000_001}),custom({billingInterval:'ONE_TIME'}),custom({name:' padded'}),
     custom({name:'ab'}),custom({freeUntil:dateIn(30)}),custom({priceMinor:0,freeUntil:'2026-02-30'}),{...custom(),extra:1},{source:'OFFER'},{source:'OTHER'}])
     await deny(()=>assign(hq,A,1,bad),400,'INVALID_SAAS_INPUT');
-  await deny(()=>plans.assign(hq.subject,A.school,{expectedRevision:1,plan:custom(),note:' x'},K()),400,'INVALID_SAAS_INPUT');
+  await deny(()=>plans.assign(hq.subject,A.school,{expectedRevision:1,plan:custom(),startDate:dateIn(0),note:' x'},K()),400,'INVALID_SAAS_INPUT');
+  for(const startDate of [undefined,null,'2026-02-30','soon'])
+    await deny(()=>plans.assign(hq.subject,A.school,{expectedRevision:1,plan:custom({priceMinor:9900}),startDate,note:null},K()),400,'INVALID_SAAS_INPUT');
   await deny(()=>assign(hq,A,0,custom({priceMinor:9900})),409,'SAAS_VERSION_CONFLICT');
   await deny(()=>assign(hq,A,1,custom()),422,'HQ_SCHOOL_PLAN_NO_CHANGE');
   const key=K(),r2=await assign(hq,A,1,custom({priceMinor:12900,billingInterval:'ANNUAL'}),key,'Annual deal agreed by phone');
@@ -138,6 +140,28 @@ try {
   await deny(()=>assign(hq,A,4,custom({name:'Free pilot',priceMinor:0,freeUntil:dateIn(0)})),422,'HQ_SCHOOL_PLAN_FREE_END_INVALID');
   await deny(()=>assign(hq,A,4,custom({name:'Free pilot',priceMinor:0,freeUntil:dateIn(4*366)})),422,'HQ_SCHOOL_PLAN_FREE_END_INVALID');
   passed('a free custom plan may last forever or end on a chosen date after today and within three years');
+
+  // ---------- start date (0700) ----------
+  assert.equal(r1.assignment.startDate,dateIn(0));assert.equal(freeEnds.assignment.startDate,dateIn(0));
+  for(const d of [-367,367])await deny(()=>assign(hq,A,4,custom({priceMinor:9900}),K(),null,dateIn(d)),422,'HQ_SCHOOL_PLAN_START_INVALID');
+  await deny(()=>assign(hq,A,4,custom({name:'Free pilot',priceMinor:0,freeUntil:dateIn(60)}),K(),null,dateIn(60)),422,'HQ_SCHOOL_PLAN_FREE_END_INVALID');
+  const moved=await assign(hq,A,4,custom({name:'Free pilot',priceMinor:0,freeUntil:dateIn(60)}),K(),'Starts next week',dateIn(7));
+  assert.equal(moved.assignment.startDate,dateIn(7),'changing only the start date is a change');
+  await deny(()=>assign(hq,A,5,custom({name:'Free pilot',priceMinor:0,freeUntil:dateIn(60)}),K(),null,dateIn(7)),422,'HQ_SCHOOL_PLAN_NO_CHANGE');
+  const back=await assign(hq,A,5,custom({name:'Free pilot',priceMinor:9900}),K(),'Paying since last spring',dateIn(-300));
+  assert.equal(back.assignment.startDate,dateIn(-300));
+  // An API built before 0700 sends no startDate: the database records today.
+  await admin.query('BEGIN');
+  const legacy=(await admin.query('SELECT hon.assign_hq_school_plan($1,$2,$3::jsonb,$4) r',[hq.subject,A.school,JSON.stringify({expectedRevision:6,plan:custom({priceMinor:9800}),note:null}),K()])).rows[0].r;
+  await admin.query('ROLLBACK');
+  assert.equal(legacy.assignment.startDate,dateIn(0));
+  for(const bad of [{expectedRevision:6,plan:custom({priceMinor:9800}),note:null,startDate:null},{expectedRevision:6,plan:custom({priceMinor:9800}),note:null,startDate:'2026-02-30'},
+    {expectedRevision:6,plan:custom({priceMinor:9800}),note:null,startDate:'26-01-01'}]){
+    await admin.query('BEGIN');
+    await sqlDeny(admin.query('SELECT hon.assign_hq_school_plan($1,$2,$3::jsonb,$4)',[hq.subject,A.school,JSON.stringify(bad),K()]),'22023');
+    await admin.query('ROLLBACK');
+  }
+  passed('every plan records its start date (one year back to one year ahead); a free end must follow the start; changing only the start is a change; a pre-0700 API without startDate records today');
 
   // ---------- published offers: assign, freeze, new version ----------
   const v1=await publish(null);
@@ -201,7 +225,7 @@ try {
 
   // ---------- remove, history, archived ----------
   const removed=await plans.remove(hq.subject,B.school,{expectedRevision:2,note:'School closed its account'},K());
-  assert.equal(removed.assignment.action,'REMOVE');assert.equal(removed.assignment.planName,null);
+  assert.equal(removed.assignment.action,'REMOVE');assert.equal(removed.assignment.planName,null);assert.equal(removed.assignment.startDate,null);
   const viewB=await plans.read(hq.subject,B.school);
   assert.equal(viewB.current,null);assert.equal(viewB.revision,3);assert.deepEqual(viewB.history.map(h=>[h.revision,h.action]),[[3,'REMOVE'],[2,'ASSIGN'],[1,'ASSIGN']]);
   await deny(()=>plans.remove(hq.subject,B.school,{expectedRevision:3,note:null},K()),422,'HQ_SCHOOL_PLAN_NONE');
@@ -209,7 +233,7 @@ try {
   await deny(()=>assign(hq,B,3,custom()),422,'HQ_SCHOOL_PLAN_SCHOOL_ARCHIVED');
   const viewA=await plans.read(hq.subject,A.school);
   const removedA=await plans.remove(hq.subject,A.school,{expectedRevision:viewA.revision,note:null},K());
-  assert.equal(removedA.assignment.revision,5);
+  assert.equal(removedA.assignment.revision,7);
   passed('remove appends a REMOVE revision and keeps history newest first; removing with no plan is refused; an archived school refuses a new plan');
 
   // ---------- immutability and no side effects ----------
@@ -221,11 +245,14 @@ try {
   await admin.query('BEGIN');
   await sqlDeny(admin.query("INSERT INTO hon.hq_school_plan_assignments(organization_id,revision,school_id,action,source,plan_name,billing_interval,price_minor,currency,founder,free_until,actor_principal_id,recorded_at) VALUES($1,99,$2,'ASSIGN','CUSTOM','Bad end',  'MONTHLY',5000,'USD',false,'2030-01-01',$3,clock_timestamp())",[A.id,A.school,hq.id]),'23514');
   await admin.query('ROLLBACK');
+  await admin.query('BEGIN');
+  await sqlDeny(admin.query("INSERT INTO hon.hq_school_plan_assignments(organization_id,revision,school_id,action,source,plan_name,billing_interval,price_minor,currency,founder,actor_principal_id,recorded_at) VALUES($1,99,$2,'ASSIGN','CUSTOM','No start','MONTHLY',5000,'USD',false,$3,clock_timestamp())",[A.id,A.school,hq.id]),'23514');
+  await admin.query('ROLLBACK');
   const end=await effects();
   assert.deepEqual(end,before,'no subscription, checkout, schedule binding, access exception, founder reservation or entitlement changed');
   assert.equal((await row('SELECT count(*)::int n FROM hon.saas_audit WHERE action_code LIKE $1',['%school_plan%'])).n,0);
   passed('records and receipts never change (even for the owner role); runtime has no table path; table checks back the rules; no billing, access or entitlement effect');
-  console.log(`PASS: HQ school plan assignments (0676) ${groups} scenario groups; no checkout, charge, message, provider call or deployment.`);
+  console.log(`PASS: HQ school plan assignments (0676 + 0700 start date) ${groups} scenario groups; no checkout, charge, message, provider call or deployment.`);
 } finally {
   await Promise.allSettled([admin.query('ROLLBACK'),restricted.query('ROLLBACK')]);
   try { await cleanup(); }

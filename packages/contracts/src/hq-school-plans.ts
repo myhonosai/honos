@@ -1,6 +1,6 @@
 // HQ school plan assignments (migration 0676). An HQ owner records which HON OS plan a school's organization is on: one
 // offer of the published offer set (frozen when assigned) or a custom plan for that organization only (name, monthly or
-// annual, price; a free custom plan may carry an optional end date). Changing appends a revision; removing appends a REMOVE revision.
+// annual, price; a free custom plan may carry an optional end date). Each ASSIGN records the day the plan starts (0700). Changing appends a revision; removing appends a REMOVE revision.
 // This only RECORDS the plan: nothing is charged, no checkout opens and no subscription, entitlement or access changes.
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsRecord as record } from './champions-club.js';
@@ -30,7 +30,8 @@ const isDate = (v: unknown): v is string => typeof v === 'string' && DATE.test(v
 export type HqSchoolPlanChoice =
   | { source: 'OFFER'; offerId: string }
   | { source: 'CUSTOM'; name: string; billingInterval: HqSchoolPlanCustomInterval; priceMinor: number; freeUntil: string | null };
-export interface HqSchoolPlanAssignInput { expectedRevision: number; plan: HqSchoolPlanChoice; note: string | null }
+/** startDate (0700): the UTC day the plan starts, YYYY-MM-DD; the server allows one year back to one year ahead. */
+export interface HqSchoolPlanAssignInput { expectedRevision: number; plan: HqSchoolPlanChoice; startDate: string; note: string | null }
 export interface HqSchoolPlanRemoveInput { expectedRevision: number; note: string | null }
 
 const revision = (v: unknown): number => (isInt(v, 0, HQ_SCHOOL_PLAN_LIMITS.revision) ? v as number : invalid());
@@ -53,8 +54,9 @@ export function validateHqSchoolPlanChoice(value: unknown): HqSchoolPlanChoice {
     priceMinor: p.priceMinor as number, freeUntil: p.freeUntil as string | null };
 }
 export function validateHqSchoolPlanAssignInput(value: unknown): HqSchoolPlanAssignInput {
-  const r = record(value, invalid); exactKeys(r, ['expectedRevision','plan','note'], invalid);
-  return { expectedRevision: revision(r.expectedRevision), plan: validateHqSchoolPlanChoice(r.plan), note: note(r.note) };
+  const r = record(value, invalid); exactKeys(r, ['expectedRevision','plan','startDate','note'], invalid);
+  if (!isDate(r.startDate)) invalid();
+  return { expectedRevision: revision(r.expectedRevision), plan: validateHqSchoolPlanChoice(r.plan), startDate: r.startDate as string, note: note(r.note) };
 }
 export function validateHqSchoolPlanRemoveInput(value: unknown): HqSchoolPlanRemoveInput {
   const r = record(value, invalid); exactKeys(r, ['expectedRevision','note'], invalid);
@@ -72,7 +74,7 @@ export interface HqSchoolPlanRecord {
   revision: number; action: 'ASSIGN' | 'REMOVE'; source: 'OFFER' | 'CUSTOM' | null; offerId: string | null;
   offerKind: typeof OFFER_KINDS[number] | null; offerSetVersion: number | null; planName: string | null;
   billingInterval: HqSchoolPlanInterval | null; priceMinor: number | null; currency: 'USD' | null; founder: boolean | null;
-  freeUntil: string | null; note: string | null; schoolId: string; recordedBy: HqSchoolPlanPerson; recordedAt: string;
+  freeUntil: string | null; startDate: string | null; note: string | null; schoolId: string; recordedBy: HqSchoolPlanPerson; recordedAt: string;
 }
 export interface HqSchoolPlanView {
   schoolId: string; organizationId: string; schoolName: string; schoolStatus: typeof STATUSES[number];
@@ -97,7 +99,7 @@ function offer(value: unknown): HqSchoolPlanOffer {
     || !isInt(o.offerSetVersion, 1, 999_999_999)) drift();
   return o as unknown as HqSchoolPlanOffer;
 }
-const PLAN_FIELDS = ['source','offerId','offerKind','offerSetVersion','planName','billingInterval','priceMinor','currency','founder','freeUntil'] as const;
+const PLAN_FIELDS = ['source','offerId','offerKind','offerSetVersion','planName','billingInterval','priceMinor','currency','founder','freeUntil','startDate'] as const;
 function planRecord(value: unknown): HqSchoolPlanRecord {
   const a = record(value, drift);
   exactKeys(a, ['revision','action', ...PLAN_FIELDS, 'note','schoolId','recordedBy','recordedAt'], drift);
@@ -110,7 +112,8 @@ function planRecord(value: unknown): HqSchoolPlanRecord {
   }
   if (!has(['OFFER','CUSTOM'], a.source) || !label(a.planName, HQ_SCHOOL_PLAN_LIMITS.name) || !has(INTERVALS, a.billingInterval)
     || !isInt(a.priceMinor, 0, HQ_SCHOOL_PLAN_LIMITS.priceMinor) || a.currency !== 'USD' || typeof a.founder !== 'boolean'
-    || !(a.freeUntil === null || isDate(a.freeUntil))) drift();
+    || !(a.freeUntil === null || isDate(a.freeUntil)) || !isDate(a.startDate)
+    || (a.freeUntil !== null && (a.freeUntil as string) <= (a.startDate as string))) drift();
   if (a.source === 'OFFER') {
     if (!isUuid(a.offerId) || !has(OFFER_KINDS, a.offerKind) || !isInt(a.offerSetVersion, 1, 999_999_999) || a.freeUntil !== null) drift();
   } else if (a.offerId !== null || a.offerKind !== null || a.offerSetVersion !== null || a.founder || a.billingInterval === 'ONE_TIME'

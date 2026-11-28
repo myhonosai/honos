@@ -7265,7 +7265,7 @@ BEGIN
 END $$;
 -- End HQ school lifecycle exact verification.
 
--- HQ school plan assignments exact verification (0676): three runtime entry points, eleven private helpers, two forced-RLS tables.
+-- HQ school plan assignments exact verification (0676; 0700 start date replaced assign + json bodies): three runtime entry points, eleven private helpers, two forced-RLS tables.
 DO $$ DECLARE f text; t text; c text; d boolean; s text;
 BEGIN
   FOREACH f IN ARRAY ARRAY['hon.read_hq_school_plan(text,uuid)','hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','hon.remove_hq_school_plan(text,uuid,jsonb,uuid)'] LOOP
@@ -7295,12 +7295,12 @@ BEGIN
   IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname LIKE '%hq_school_plan%')<>14 THEN
     RAISE EXCEPTION 'Unexpected HQ school plan overload'; END IF;
   FOR f,t,c,d,s IN SELECT * FROM (VALUES
-    ('hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','8d5bdf65bd58cf2ca8df26abbcdd8ed5','v',true),
+    ('hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','c443425ca5d999c6d72d3cf998d33df5','v',true),
     ('hon.guard_hq_school_plan_evidence()','038a3ad60cf851ce84ba3330bd4f322f','v',false),
     ('hon.hq_school_plan_claim(uuid,uuid,text,text)','0a52e5a8f7173cab4dea868e50576ecc','v',false),
     ('hon.hq_school_plan_current(uuid)','48f22d7aa8b47ced2aa0919af9fe9321','s',false),
     ('hon.hq_school_plan_expected(jsonb)','6005bd5c38be258c8367427e3a30e3c9','i',false),
-    ('hon.hq_school_plan_json(hon.hq_school_plan_assignments)','ecd31086f6b67be84a2bf9909a12b44f','s',false),
+    ('hon.hq_school_plan_json(hon.hq_school_plan_assignments)','c7bff4b414af640628afdc9ae004e812','s',false),
     ('hon.hq_school_plan_lock(uuid,integer,boolean)','a27fab280c617381ef01c69dcbd09c2b','v',false),
     ('hon.hq_school_plan_note(jsonb)','5b8a66141e4fbf795300b6fc4d7b432f','i',false),
     ('hon.hq_school_plan_offers()','180aff67b318b9fc3c25f7a0c5641179','s',false),

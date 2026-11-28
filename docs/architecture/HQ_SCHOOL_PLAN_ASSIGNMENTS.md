@@ -1,4 +1,4 @@
-# HQ school plan assignments (migration 0676)
+# HQ school plan assignments (migrations 0676, 0700)
 
 Status: source only, not deployed. Records a plan; **charges nothing**. Owner ask 2026-11-24 (David): open or add a school in
 HQ and give it a published HON OS offer or a custom plan, change it, or remove it, like GoHighLevel's "assign SaaS plan" and
@@ -21,17 +21,26 @@ UPDATE/DELETE/TRUNCATE refused by trigger even for the owner role.
 Assigning a founder offer does **not** reserve a founder spot; spots are still counted at first payment (founder piece 4).
 A new offer price version never changes an assigned plan; the retired offer can no longer be newly assigned.
 
+## Start date (migration 0700)
+Owner ask 2026-11-26 (David, create-school "Pick a plan" step): "It should set start date too right? So it can schedule
+payments". Every `ASSIGN` row has `start_date` (UTC day, one year back to one year ahead; `HQ_SCHOOL_PLAN_START_INVALID`
+otherwise). A free plan's `free_until` must be after it. Changing only the start date is a change. `REMOVE` rows have none.
+Rows recorded before 0700 were backfilled with their recorded UTC day. The command input is
+`{expectedRevision, plan, startDate, note}`; the database also accepts the pre-0700 shape without `startDate` (records today)
+so an API deployed just before or after the migration keeps working. The later billing piece will use the start date as the
+first billing date; 0700 itself records only.
+
 ## Authority and API
 | Route | Who | Function |
 |---|---|---|
 | `GET /v1/hq/schools/:schoolId/plan` | HQ owner, or HQ operator with `hq.billing.manage` (read only, `viewer.canManage=false`) | `read_hq_school_plan` |
-| `POST /v1/hq/schools/:schoolId/plan/assign` (`hq-school-plan-assign`) | HQ owner | `assign_hq_school_plan` `{expectedRevision, plan, note}` |
+| `POST /v1/hq/schools/:schoolId/plan/assign` (`hq-school-plan-assign`) | HQ owner | `assign_hq_school_plan` `{expectedRevision, plan, startDate, note}` |
 | `POST /v1/hq/schools/:schoolId/plan/remove` (`hq-school-plan-remove`) | HQ owner | `remove_hq_school_plan` `{expectedRevision, note}` |
 
 `plan` is `{source:'OFFER', offerId}` or `{source:'CUSTOM', name, billingInterval, priceMinor, freeUntil}`. Commands need an
 `Idempotency-Key` UUID and the same-origin human-command header. Refusals: `SAAS_VERSION_CONFLICT` (409),
 `HQ_SCHOOL_PLAN_OFFER_NOT_AVAILABLE`, `HQ_SCHOOL_PLAN_NO_CHANGE`, `HQ_SCHOOL_PLAN_NONE`, `HQ_SCHOOL_PLAN_SCHOOL_ARCHIVED`,
-`HQ_SCHOOL_PLAN_FREE_END_INVALID`, `HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE` (422). The read also returns what the school is on
+`HQ_SCHOOL_PLAN_FREE_END_INVALID`, `HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE`, `HQ_SCHOOL_PLAN_START_INVALID` (422). The read also returns what the school is on
 today from existing records (`onNow`: TRIAL/MONTHLY/ANNUAL/ONE_TIME/NONE), the assignable offers, and `effect: RECORD_ONLY`,
 `charging: OFF`. Contracts: `packages/contracts/src/hq-school-plans.ts`.
 
