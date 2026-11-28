@@ -12,6 +12,7 @@ import styles from './workbench.module.css';
 import { AddressFields } from '../school-location/address-fields';
 import { FaceCheckInNoticeView } from '../school-location/notice';
 import { locationCopy } from '../school-location/copy';
+import { SIGNUP_TERMS_V2_DIGEST, SIGNUP_TERMS_V2_TEXT } from './terms-text';
 import { EMPTY_LOCATION_DRAFT, draftLocation, type LocationDraft } from '../school-location/draft';
 
 /**
@@ -140,6 +141,7 @@ export function HonOsStart({ sessionSubject }: { sessionSubject: string }) {
           <AddressFields draft={location} language={preferences.language} onEdit={(f, v) => setLocation({ ...location, [f]: v })} />
           {/* Placeholder: the legal sign-up terms wording is David's decision and is not written yet. */}
           {draft && <p className={styles.notice} data-start-legal-pending>{c.legalTermsPending}</p>}
+          {terms.status === 'FINAL' && terms.documentDigest === SIGNUP_TERMS_V2_DIGEST && <details data-start-terms><summary>{c.readTerms}</summary><div className={styles.terms}>{SIGNUP_TERMS_V2_TEXT}</div></details>}
           <label><input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} />{c.agree(terms.title, terms.version, draft)}</label>
           <button type="button" disabled={!formValid || !termsAccepted} onClick={() => send('signup', 'account/sign-up', form)}>{c.createButton}</button>
         </>}

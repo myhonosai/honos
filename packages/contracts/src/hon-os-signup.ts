@@ -52,18 +52,18 @@ export function validateSignupResult(v: unknown): SignupResult {
 }
 
 export type SignupEligibility = 'ELIGIBLE' | 'ALREADY_REGISTERED' | 'HAS_OTHER_ACCESS' | 'VERIFIED_SIGN_IN_REQUIRED';
-export interface SignupTerms { termsVersionId: string; version: number; status: 'TEST_ONLY_DRAFT'; title: string; documentDigest: string }
-export interface SignupStatus { signupStatus: 'CLOSED' | 'TEST_MODE'; terms: SignupTerms | null; eligibility: SignupEligibility; registration: SignupRegistration | null }
+export interface SignupTerms { termsVersionId: string; version: number; status: 'TEST_ONLY_DRAFT' | 'FINAL'; title: string; documentDigest: string }
+export interface SignupStatus { signupStatus: 'CLOSED' | 'TEST_MODE' | 'OPEN'; terms: SignupTerms | null; eligibility: SignupEligibility; registration: SignupRegistration | null }
 export function validateSignupStatus(v: unknown): SignupStatus {
   const o = accountClosed(v, ['signupStatus', 'terms', 'eligibility', 'registration']);
-  if (!['CLOSED', 'TEST_MODE'].includes(String(o.signupStatus)) || !['ELIGIBLE', 'ALREADY_REGISTERED', 'HAS_OTHER_ACCESS', 'VERIFIED_SIGN_IN_REQUIRED'].includes(String(o.eligibility)))
+  if (!['CLOSED', 'TEST_MODE', 'OPEN'].includes(String(o.signupStatus)) || !['ELIGIBLE', 'ALREADY_REGISTERED', 'HAS_OTHER_ACCESS', 'VERIFIED_SIGN_IN_REQUIRED'].includes(String(o.eligibility)))
     throw new Error('ACCOUNT_RESPONSE_INVALID');
   let terms: SignupTerms | null = null;
   if (o.terms !== null) {
     const t = accountClosed(o.terms, ['termsVersionId', 'version', 'status', 'title', 'documentDigest']);
-    if (!Number.isInteger(t.version) || (t.version as number) < 1 || t.status !== 'TEST_ONLY_DRAFT' || typeof t.title !== 'string' || t.title.length < 1 || t.title.length > 200
+    if (!Number.isInteger(t.version) || (t.version as number) < 1 || (t.status !== 'TEST_ONLY_DRAFT' && t.status !== 'FINAL') || typeof t.title !== 'string' || t.title.length < 1 || t.title.length > 200
       || typeof t.documentDigest !== 'string' || !/^[0-9a-f]{64}$/.test(t.documentDigest)) throw new Error('ACCOUNT_RESPONSE_INVALID');
-    terms = Object.freeze({ termsVersionId: accountUuid(t.termsVersionId), version: t.version as number, status: 'TEST_ONLY_DRAFT', title: t.title, documentDigest: t.documentDigest });
+    terms = Object.freeze({ termsVersionId: accountUuid(t.termsVersionId), version: t.version as number, status: t.status as SignupTerms['status'], title: t.title, documentDigest: t.documentDigest });
   }
   const registration = o.registration === null ? null : validateSignupRegistration(o.registration);
   if ((registration !== null) !== (o.eligibility === 'ALREADY_REGISTERED')) throw new Error('ACCOUNT_RESPONSE_INVALID');

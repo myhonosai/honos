@@ -1699,8 +1699,11 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
   }
 
   /** 0274 admission limits: HQ read, HQ owner change, and the post-refusal cap-hit record (its own transaction). */
-  async callHonOsAdmission(operation: 'read'|'set'|'refused', params: readonly string[]): Promise<unknown> {
+  async callHonOsAdmission(operation: 'read'|'set'|'refused'|'programs'|'setPrograms', params: readonly string[]): Promise<unknown> {
     const calls = {
+      // 0710: HQ read of the sign-up/trial programs and the HQ-owner open/close switch.
+      programs: {sql: 'SELECT hon.read_hon_os_programs($1) data',arity:1,readOnly:true},
+      setPrograms: {sql: 'SELECT hon.set_hon_os_programs($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) data',arity:5,readOnly:false},
       read: {sql: 'SELECT hon.read_hon_os_admission_status($1) data',arity:1,readOnly:true},
       set: {sql: 'SELECT hon.set_hon_os_admission_limits($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) data',arity:5,readOnly:false},
       refused: {sql: 'SELECT hon.record_hon_os_admission_refusal($1) data',arity:1,readOnly:false},

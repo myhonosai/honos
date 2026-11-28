@@ -14,7 +14,7 @@ export type StartCopy = Readonly<{
   signupClosed: string; verifiedRequired: string; hasOtherAccess: string; openWorkspace: string; termsUnavailable: string;
   ownerName: string; schoolName: string; legalName: string; timezone: string; chooseZone: string; commonZones: string; allZones: string;
   agree: (title: string, version: number, draft: boolean) => string;
-  legalTermsPending: string; createButton: string;
+  legalTermsPending: string; readTerms: string; createButton: string;
   created: string; trialStarted: string;
   trialActive: string; trialEnded: string; trialReplaced: string;
   trialDates: (days: number, from: string, until: string) => string;
@@ -69,6 +69,7 @@ const en: StartCopy = {
   termsUnavailable: 'Sign-up terms are not available. Check again later.',
   ownerName: 'Your name', schoolName: 'School name', legalName: 'Legal business name', timezone: 'School time zone', chooseZone: 'Choose your school\'s time zone', commonZones: 'Common time zones', allZones: 'All time zones',
   agree: (t, v, d) => `I agree to ${t} (version ${v}${d ? ', a test-only draft' : ''}) and confirm I own or run this school.`,
+  readTerms: 'Read the sign-up and free trial terms',
   legalTermsPending: 'The final legal terms are still being prepared and will be shown here before sign-up opens.',
   createButton: 'Create my school account',
   created: 'Your school account is created. It has no access yet; start your free trial below.',
@@ -128,6 +129,7 @@ const ko: StartCopy = {
   termsUnavailable: '가입 약관을 불러올 수 없습니다. 나중에 다시 확인하세요.',
   ownerName: '이름', schoolName: '도장 이름', legalName: '법적 사업자명', timezone: '도장 시간대', chooseZone: '도장 시간대를 선택하세요', commonZones: '자주 쓰는 시간대', allZones: '모든 시간대',
   agree: (t, v, d) => `${t}(버전 ${v}${d ? ', 테스트 전용 초안' : ''})에 동의하며 이 도장을 소유하거나 운영하고 있음을 확인합니다.`,
+  readTerms: '가입 및 무료 체험 약관 읽기',
   legalTermsPending: '최종 법적 약관은 준비 중이며 가입이 열리기 전에 여기에 표시됩니다.',
   createButton: '내 도장 계정 만들기',
   created: '도장 계정이 만들어졌습니다. 아직 접근 권한은 없습니다. 아래에서 무료 체험을 시작하세요.',
@@ -187,6 +189,7 @@ const es: StartCopy = {
   termsUnavailable: 'Los términos de registro no están disponibles. Vuelva a comprobar más tarde.',
   ownerName: 'Su nombre', schoolName: 'Nombre de la escuela', legalName: 'Razón social', timezone: 'Zona horaria de la escuela', chooseZone: 'Elija la zona horaria de su escuela', commonZones: 'Zonas horarias comunes', allZones: 'Todas las zonas horarias',
   agree: (t, v, d) => `Acepto ${t} (versión ${v}${d ? ', un borrador solo de prueba' : ''}) y confirmo que soy dueño o dirijo esta escuela.`,
+  readTerms: 'Leer los términos de registro y prueba gratuita',
   legalTermsPending: 'Los términos legales definitivos aún se están preparando y se mostrarán aquí antes de abrir el registro.',
   createButton: 'Crear la cuenta de mi escuela',
   created: 'La cuenta de su escuela está creada. Aún no tiene acceso; inicie su prueba gratuita abajo.',

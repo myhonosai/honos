@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { accountUuid, validateAdmissionLimitsInput, validateAdmissionLimitsReceipt, validateAdmissionStatus } from '@hon/contracts';
+import { accountUuid, validateAdmissionLimitsInput, validateAdmissionLimitsReceipt, validateAdmissionStatus, validateSignupProgramsInput, validateSignupProgramsReceipt, validateSignupProgramsStatus } from '@hon/contracts';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 
@@ -12,7 +12,7 @@ import { RuntimeDatabaseService } from '../foundation/runtime-database.service.j
 export class HonOsAdmissionService {
   private readonly log = new Logger('HonOsAdmission');
   constructor(private readonly database: RuntimeDatabaseService) {}
-  private async run(operation: 'read' | 'set', args: string[]): Promise<unknown> {
+  private async run(operation: 'read' | 'set' | 'programs' | 'setPrograms', args: string[]): Promise<unknown> {
     try { return await this.database.callHonOsAdmission(operation, args); }
     catch (e) {
       const { code } = e as { code?: string };
@@ -33,6 +33,18 @@ export class HonOsAdmissionService {
     try { accountUuid(key); input = validateAdmissionLimitsInput(raw); } catch { throw new BadRequestException({ code: 'ADMISSION_INPUT_INVALID' }); }
     const data = await this.run('set', [req.honIdentity!.externalSubject, JSON.stringify(input), key as string, randomUUID(), randomUUID()]);
     try { return validateAdmissionLimitsReceipt(data); } catch { throw new ServiceUnavailableException({ code: 'ADMISSION_UNAVAILABLE', outcome: 'UNKNOWN_OR_RETRY_REQUIRED' }); }
+  }
+  /** 0710: the sign-up and trial programs, their history and the current terms (HQ owner or HQ billing reader). */
+  async programs(req: HonRequest) {
+    const data = await this.run('programs', [req.honIdentity!.externalSubject]);
+    try { return validateSignupProgramsStatus(data); } catch { throw new ServiceUnavailableException({ code: 'ADMISSION_UNAVAILABLE' }); }
+  }
+  /** 0710: HQ owner only; CLOSED or OPEN, never TEST_MODE. */
+  async setPrograms(req: HonRequest, raw: unknown, key: unknown) {
+    let input: object;
+    try { accountUuid(key); input = validateSignupProgramsInput(raw); } catch { throw new BadRequestException({ code: 'ADMISSION_INPUT_INVALID' }); }
+    const data = await this.run('setPrograms', [req.honIdentity!.externalSubject, JSON.stringify(input), key as string, randomUUID(), randomUUID()]);
+    try { return validateSignupProgramsReceipt(data); } catch { throw new ServiceUnavailableException({ code: 'ADMISSION_UNAVAILABLE', outcome: 'UNKNOWN_OR_RETRY_REQUIRED' }); }
   }
   /**
    * After a CAPACITY_REACHED refusal: record it for HQ in a separate transaction. The database counts it only while the

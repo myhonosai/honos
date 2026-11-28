@@ -17,8 +17,8 @@ const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const {HonOsSignupService}=require('./dist/accounts/hon-os-signup.service.js');
 const {HonOsSignupController,HonOsSignupHumanGuard}=require('./dist/accounts/hon-os-signup.controller.js');
 const {HonOsAdmissionService}=require('./dist/hon-os-admission/hon-os-admission.service.js');
-const {HonOsAdmissionHqController,HonOsAdmissionHumanGuard}=require('./dist/hon-os-admission/hon-os-admission.controller.js');
-const {SIGNUP_CONFIRMATION,SIGNUP_HUMAN_COMMAND,ADMISSION_LIMITS_COMMAND}=require('@hon/contracts');
+const {HonOsAdmissionHqController,HonOsAdmissionHumanGuard,HonOsProgramsHqController,HonOsProgramsHumanGuard}=require('./dist/hon-os-admission/hon-os-admission.controller.js');
+const {SIGNUP_CONFIRMATION,SIGNUP_HUMAN_COMMAND,ADMISSION_LIMITS_COMMAND,SIGNUP_PROGRAMS_COMMAND}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
 const session={mode:'OIDC',audience:'signup-disposable',secret:randomBytes(32).toString('hex')};
@@ -60,7 +60,7 @@ try{
  terms=(await q('SELECT id FROM hon.hon_os_signup_terms_versions ORDER BY version DESC LIMIT 1'))[0].id;
  pass('forced deny-all RLS on three new tables; runtime executes exactly two entry points; 0183 initializer stays private; program seeded CLOSED with no LIVE value');
 
- const module=await Test.createTestingModule({controllers:[HonOsSignupController,HonOsAdmissionHqController],providers:[HonOsSignupService,HonOsSignupHumanGuard,HonOsAdmissionService,HonOsAdmissionHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
+ const module=await Test.createTestingModule({controllers:[HonOsSignupController,HonOsAdmissionHqController,HonOsProgramsHqController],providers:[HonOsSignupService,HonOsSignupHumanGuard,HonOsAdmissionService,HonOsAdmissionHumanGuard,HonOsProgramsHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  const excluded=new Set([...tables,'hon_os_signup_program','hq_operator_grants','families','family_access_grants','hon_os_admission_limit_versions','hon_os_admission_refusals','school_locations','school_location_versions']);
  const others=(await q("SELECT tablename FROM pg_tables WHERE schemaname='hon' ORDER BY tablename")).map(r=>r.tablename).filter(t=>!excluded.has(t));
@@ -69,7 +69,7 @@ try{
  // 2. Closed program: read says CLOSED, sign-up refused with zero effects.
  const dana=person('dana');
  const closed=ok(await send('account/sign-up',{identity:dana,method:'GET'}));
- assert.deepEqual({...closed,terms:undefined},{signupStatus:'CLOSED',terms:undefined,eligibility:'ELIGIBLE',registration:null});assert.equal(closed.terms.termsVersionId,terms);assert.equal(closed.terms.status,'TEST_ONLY_DRAFT');
+ assert.deepEqual({...closed,terms:undefined},{signupStatus:'CLOSED',terms:undefined,eligibility:'ELIGIBLE',registration:null});assert.equal(closed.terms.termsVersionId,terms);assert.equal(closed.terms.status,'FINAL');assert.equal(closed.terms.version,2);
  await denied(()=>send('account/sign-up',{identity:dana,body:form()}),409,'SIGNUP_CLOSED');
  await setProgram('TEST_MODE');
  pass('CLOSED by default: the read reports it and sign-up is refused with no identity or school written');
@@ -169,7 +169,7 @@ try{
  assert.equal((await q('SELECT status FROM hon.hon_os_signup_program'))[0].status,'TEST_MODE');
  for(const sql of ["UPDATE hon.hon_os_school_registrations SET verified_email='x@example.invalid'","DELETE FROM hon.hon_os_school_registrations","UPDATE hon.hon_os_signup_terms_versions SET title='x'","DELETE FROM hon.hon_os_signup_terms_versions"])
   await assert.rejects(()=>q(sql),e=>/ACCOUNT_EVIDENCE_IMMUTABLE/.test(e.message));
- await assert.rejects(()=>q("INSERT INTO hon.hon_os_signup_terms_versions(version,status,title,document_digest,recorded_at) VALUES(2,'OWNER_APPROVED','x',$1,clock_timestamp())",['a'.repeat(64)]),e=>e.code==='23514');
+ await assert.rejects(()=>q("INSERT INTO hon.hon_os_signup_terms_versions(version,status,title,document_digest,recorded_at) VALUES(3,'OWNER_APPROVED','x',$1,clock_timestamp())",['a'.repeat(64)]),e=>e.code==='23514');
  pass('closing the program between the writes and commit aborts the whole sign-up; registrations and terms are append-only; no approved-terms status exists yet');
 
  // 10 (0273, limits versioned in 0274). Abuse protection held in the database: disposable email domains and global admission limits.
@@ -261,5 +261,67 @@ try{
   assert.equal((await q('SELECT has_function_privilege($1,$2,$3) ok',[runtime.username,'hon.'+f,'EXECUTE']))[0].ok,want,f);
  await setLimits(original.signups_per_hour,original.signups_per_day);
  pass('0274: HQ owner and HQ billing reader see limits, history, usage and cap hits; only the HQ owner changes limits (expected version, idempotent replay, key reuse refused, audit + outbox); the new version applies at once; no forged HQ version; runtime executes three entry points');
+ // 13 (0710). The HQ owner opens and closes sign-up and trials; OPEN admits like TEST_MODE; terms v2 FINAL is required.
+ const prog=(identity,{body,key=K(),method='POST',command=SIGNUP_PROGRAMS_COMMAND}={})=>send('hq/signup-programs',{identity,body,key,method,headers:method==='POST'?{'x-hon-human-command':command}:{}});
+ const termsRows=await q('SELECT id,version,status,document_digest FROM hon.hon_os_signup_terms_versions ORDER BY version');
+ assert.deepEqual(termsRows.map(t=>[t.version,t.status]),[[1,'TEST_ONLY_DRAFT'],[2,'FINAL']]);
+ assert.equal(termsRows[1].document_digest,'1e7ad73b54f574e333071c37883f2eb313a05e4063860547df7575615a303fdb');assert.equal(terms,termsRows[1].id);
+ // A draft added above FINAL never becomes the current terms.
+ await admin.query('BEGIN');try{await q("INSERT INTO hon.hon_os_signup_terms_versions(version,status,title,document_digest,recorded_at) VALUES(3,'TEST_ONLY_DRAFT','Synthetic later draft',$1,clock_timestamp())",['c'.repeat(64)]);
+  assert.equal((await q('SELECT (hon.hon_os_signup_terms_current()).version v'))[0].v,2);}finally{await admin.query('ROLLBACK');}
+ const pv=(await q('SELECT relrowsecurity rls,relforcerowsecurity forced FROM pg_class WHERE oid=$1::regclass',['hon.hon_os_program_versions']))[0];assert(pv.rls&&pv.forced);
+ for(const p of ['SELECT','INSERT','UPDATE','DELETE'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.hon_os_program_versions',p]))[0].ok,false,p);
+ for(const [f,want] of [['set_hon_os_programs(text,jsonb,uuid,uuid,uuid)',true],['read_hon_os_programs(text)',true],['hon_os_programs_now()',false],['hon_os_signup_status()',false],['hon_os_trial_status()',false],['guard_hon_os_program_version_insert()',false],['verify_hon_os_program_version_evidence()',false],['stamp_hon_os_signup_program_status()',false],['guard_hon_os_signup_current_terms()',false]])
+  assert.equal((await q('SELECT has_function_privilege($1,$2,$3) ok',[runtime.username,'hon.'+f,'EXECUTE']))[0].ok,want,f);
+ const first13=ok(await prog(hqPerson,{method:'GET'}));
+ assert.equal(first13.programs.version,1);assert.equal(first13.programs.recordedBy,'MIGRATION_OWNER');assert.deepEqual([first13.programs.signup,first13.programs.trial],['CLOSED','CLOSED']);
+ assert.deepEqual(first13.current,{signup:'TEST_MODE',trial:'CLOSED'});assert.equal(first13.terms.status,'FINAL');assert.equal(first13.terms.version,2);
+ assert.equal(ok(await prog(operatorPerson,{method:'GET'})).programs.version,1);
+ for(const who of [person('nobody'),staffPerson,dana])assert.equal((await prog(who,{method:'GET'})).status,403);
+ const open13={expectedVersion:1,signup:'OPEN',trial:'OPEN',reason:'Synthetic: open sign-up and trials'};
+ const progAudits=async()=>Number((await q("SELECT count(*) n FROM hon.saas_audit WHERE action_code='saas.signup_programs.set'"))[0].n);
+ const pa=await progAudits();
+ for(const who of [operatorPerson,staffPerson,person('nobody')])assert.equal((await prog(who,{body:open13})).status,403);
+ for(const bad of [{...open13,signup:'TEST_MODE'},{...open13,trial:'LIVE'},{...open13,reason:'short'},{...open13,extra:1},{...open13,expectedVersion:'1'}])assert.equal((await prog(hqPerson,{body:bad})).status,400,JSON.stringify(bad));
+ assert.equal((await prog(hqPerson,{body:open13,command:ADMISSION_LIMITS_COMMAND})).status,403);
+ assert.equal((await send('hq/signup-programs',{identity:hqPerson,body:open13})).status,403);
+ assert.equal((await prog(hqPerson,{body:{...open13,expectedVersion:2}})).status,409);
+ // TEST_MODE can never be set at runtime, even calling the function directly as the HQ owner.
+ await assert.rejects(()=>restricted.query('SELECT hon.set_hon_os_programs($1,$2::jsonb,$3,$4,$5)',[hqPerson.externalSubject,JSON.stringify({...open13,signup:'TEST_MODE'}),K(),K(),K()]),e=>e.code==='22023');
+ assert.equal(await progAudits(),pa);assert.equal((await q('SELECT count(*) n FROM hon.hon_os_program_versions'))[0].n,'1');
+ const k13=K(),opened=ok(await prog(hqPerson,{body:open13,key:k13}));
+ assert.equal(opened.replayed,false);assert.equal(opened.programs.version,2);assert.equal(opened.programs.recordedBy,'HQ_OWNER');assert.equal(opened.programs.actorPrincipalId,hqP);
+ assert.deepEqual([opened.programs.signup,opened.programs.trial,opened.programs.reason],['OPEN','OPEN',open13.reason]);
+ const again13=ok(await prog(hqPerson,{body:open13,key:k13}));assert.equal(again13.replayed,true);assert.equal(again13.programs.versionId,opened.programs.versionId);
+ assert.equal((await prog(hqPerson,{body:{...open13,reason:'Synthetic: a different reason'},key:k13})).status,409);
+ assert.equal(await progAudits(),pa+1);
+ assert.equal((await q("SELECT count(*) n FROM hon.saas_outbox o JOIN hon.saas_audit a ON a.id=o.audit_id WHERE a.action_code='saas.signup_programs.set' AND o.event_type='saas.signup_programs.set' AND a.entity_type='SIGNUP_PROGRAMS' AND a.entity_id=$1",[opened.programs.versionId]))[0].n,'1');
+ assert.deepEqual((await q('SELECT (SELECT status FROM hon.hon_os_signup_program) s,(SELECT status FROM hon.hon_os_trial_program) t'))[0],{s:'OPEN',t:'OPEN'});
+ const view13=ok(await prog(hqPerson,{method:'GET'}));assert.deepEqual(view13.current,{signup:'OPEN',trial:'OPEN'});assert.deepEqual(view13.history.map(h=>h.version),[2,1]);
+ assert.deepEqual(ok(await hqSend(hqPerson,{method:'GET'})).programs,{signup:'OPEN',trial:'OPEN'});
+ // OPEN admits a sign-up; the registration records OPEN and terms v2; v1 is refused.
+ const olive=person('olive');
+ const oread=ok(await send('account/sign-up',{identity:olive,method:'GET'}));assert.equal(oread.signupStatus,'OPEN');assert.equal(oread.terms.termsVersionId,termsRows[1].id);
+ await denied(()=>send('account/sign-up',{identity:olive,body:form({termsVersionId:termsRows[0].id,schoolName:'Olive Taekwondo'})}),409,'SIGNUP_TERMS_CHANGED');
+ const oreg=ok(await send('account/sign-up',{identity:olive,body:form({schoolName:'Olive Taekwondo'})})).registration;
+ const orow=(await q('SELECT program_status,terms_version_id FROM hon.hon_os_school_registrations WHERE id=$1',[oreg.registrationId]))[0];
+ assert.deepEqual(orow,{program_status:'OPEN',terms_version_id:termsRows[1].id});
+ // A writer cannot stamp its own program status: the trigger takes it from the program row.
+ assert.equal((await q('SELECT hon.hon_os_signup_open() s,hon.hon_os_trial_open() t'))[0].s,true);assert.equal((await q('SELECT hon.hon_os_trial_open() t'))[0].t,true);
+ assert.equal((await restricted.query('SELECT hon.read_hon_os_trial($1) d',[olive.externalSubject])).rows[0].d.trialStatus,'OPEN');
+ // The 0274 caps still apply while OPEN.
+ const used13=await recent('1 hour');await setLimits(Math.max(1,used13),Math.max(1,await recent('1 day')));
+ try{await denied(()=>send('account/sign-up',{identity:person('open-cap'),body:form()}),409,'SIGNUP_CAPACITY_REACHED');}finally{await setLimits(original.signups_per_hour,original.signups_per_day);}
+ // Forged history is refused; history is append-only.
+ await assert.rejects(()=>q("INSERT INTO hon.hon_os_program_versions(version,signup_status,trial_status,reason,actor_principal_id,idempotency_key) VALUES(3,'OPEN','OPEN','Synthetic forged change',$1,$2)",[hqP,K()]),e=>/PROGRAM_EVIDENCE_REQUIRED/.test(e.message));
+ await assert.rejects(()=>q("INSERT INTO hon.hon_os_program_versions(version,signup_status,trial_status,reason) VALUES(9,'OPEN','OPEN','Synthetic skipped version')"),e=>e.code==='40001');
+ await assert.rejects(()=>q("UPDATE hon.hon_os_program_versions SET reason='Synthetic rewrite here'"),e=>e.code==='42501'||/IMMUTABLE|EVIDENCE/.test(e.message));
+ await assert.rejects(()=>q('DELETE FROM hon.hon_os_program_versions'),e=>e.code==='42501'||/IMMUTABLE|EVIDENCE/.test(e.message));
+ // HQ closes both again: sign-up is refused at once.
+ const shut=ok(await prog(hqPerson,{body:{expectedVersion:2,signup:'CLOSED',trial:'CLOSED',reason:'Synthetic: close sign-up and trials'}}));
+ assert.equal(shut.programs.version,3);assert.equal(ok(await send('account/sign-up',{identity:person('late'),method:'GET'})).signupStatus,'CLOSED');
+ await denied(()=>send('account/sign-up',{identity:person('late2'),body:form()}),409,'SIGNUP_CLOSED');
+ assert.equal((await restricted.query('SELECT hon.read_hon_os_trial($1) d',[olive.externalSubject])).rows[0].d.trialStatus,'CLOSED');
+ pass('0710: HQ owner alone opens/closes sign-up and trials (CLOSED or OPEN only, never TEST_MODE; expected version, idempotent replay, key reuse refused, own command header, audit + outbox, append-only history, no forged version); OPEN admits sign-up recording OPEN and terms v2 FINAL, v1 refused, a later draft never current; 0274 caps still apply; closing refuses at once; runtime executes two new entry points');
  console.log(`PASS: HON OS public sign-up (${groups} groups)`);
 }finally{await setProgram('CLOSED').catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end(),blocker.end()]);}

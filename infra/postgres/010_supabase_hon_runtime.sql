@@ -5892,3 +5892,25 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_plan_features(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0710 open HON OS sign-up and trials: one private forced-RLS table (program versions); the HQ program switch and the HQ
+-- program read are the new runtime entry points. Helpers and triggers stay migration-owner only.
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.set_hon_os_programs(text,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0710 first'; END IF;
+  ALTER TABLE hon.hon_os_program_versions ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.hon_os_program_versions FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON TABLE hon.hon_os_program_versions FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON TABLE hon.hon_os_program_versions FROM %I',r); END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.hon_os_signup_status()','hon.hon_os_trial_status()','hon.stamp_hon_os_signup_program_status()',
+      'hon.stamp_hon_os_trial_program_status()','hon.hon_os_signup_terms_current()','hon.guard_hon_os_signup_current_terms()',
+      'hon.hon_os_programs_now()','hon.hon_os_programs_json(hon.hon_os_program_versions)','hon.guard_hon_os_program_version_insert()',
+      'hon.verify_hon_os_program_version_evidence()','hon.set_hon_os_programs(text,jsonb,uuid,uuid,uuid)','hon.read_hon_os_programs(text)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.set_hon_os_programs(text,jsonb,uuid,uuid,uuid),hon.read_hon_os_programs(text) TO hon_runtime;
+  END IF;
+END $$;

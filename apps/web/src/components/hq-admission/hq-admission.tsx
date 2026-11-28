@@ -6,6 +6,7 @@ import { HON_SESSION_INVALIDATED_EVENT } from '../session-invalidation';
 import styles from '../hq-trials/hq-trials.module.css';
 import { admissionCopy } from './copy';
 import { AdmissionError, admissionApi, keepForRetry, type AdmissionApi, type AdmissionErrorKind } from './http';
+import { ProgramsSwitch } from './programs';
 
 export type ReadState = { state: 'LOADING' } | { state: 'DENIED' } | { state: 'UNAVAILABLE' } | { state: 'READY'; view: AdmissionStatus };
 export type Outcome = null | { kind: 'SENDING' } | { kind: 'DONE'; version: number; replayed: boolean } | { kind: AdmissionErrorKind };
@@ -27,6 +28,7 @@ const num = (language: string, n: number) => n.toLocaleString(language);
 
 export type AdmissionViewProps = {
   language: string; concealed: boolean; read: ReadState; formOpen?: boolean; outcome?: Outcome; locked?: boolean; canRetry?: boolean;
+  /** 0710: the open/close switch, shown under the Programs card when the page is ready. */ programs?: React.ReactNode;
   onRefresh: () => void; onReveal?: () => void; onOpen?: () => void; onClose?: () => void; onSubmit?: (fields: Fields) => void; onTryAgain?: () => void; onStop?: () => void;
 };
 
@@ -73,6 +75,7 @@ export function AdmissionView(p: AdmissionViewProps): React.ReactElement {
       <div><dt>{t('signupProgram')}</dt><dd data-admission-program="signup">{t(`p_${v.programs.signup}`)}</dd></div>
       <div><dt>{t('trialProgram')}</dt><dd data-admission-program="trial">{t(`p_${v.programs.trial}`)}</dd></div>
     </dl><p className={styles.meta}>{t('domains', { n: num(p.language, v.blockedEmailDomains) })}</p></section>
+    {p.programs ?? null}
     <div className={styles.grid}>
       <Usage title={t('signups')} usage={v.usage.signups} language={p.language} t={t}/>
       <Usage title={t('trials')} usage={v.usage.trials} language={p.language} t={t}/>
@@ -122,7 +125,7 @@ type Lock = 'NONE' | 'SENDING' | 'KEPT';
 
 /**
  * HQ Sign-up Limits. A session end hide everything, retire every read and drop a kept
- * change; Show again reads fresh. Every change answer is followed by a fresh read. Nothing here opens sign-up or trials.
+ * change; Show again reads fresh. Every change answer is followed by a fresh read. Only the 0710 switch (HQ owner, after a confirmation) opens or closes sign-up and trials.
  */
 export function HqAdmission({ api = admissionApi }: { api?: AdmissionApi }): React.ReactElement {
   const { preferences } = useLocale();
@@ -190,6 +193,7 @@ export function HqAdmission({ api = admissionApi }: { api?: AdmissionApi }): Rea
   }, [lock, reread]);
 
   return <AdmissionView language={preferences.language} concealed={concealed} read={read} formOpen={formOpen} outcome={outcome}
+    programs={concealed ? null : <ProgramsSwitch language={preferences.language} refresh={refresh} onChanged={reread}/>}
     locked={lock !== 'NONE'} canRetry={lock === 'KEPT'} onRefresh={reread} onReveal={() => setConcealed(false)}
     onOpen={() => { if (lock === 'NONE') { setOutcome(null); setFormOpen(true); } }} onClose={() => setFormOpen(false)}
     onSubmit={onSubmit} onTryAgain={() => { void send(); }} onStop={onStop}/>;
