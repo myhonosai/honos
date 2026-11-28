@@ -5903,3 +5903,22 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_plan_features(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0705 design AI draft: the DESIGN_DRAFT kind on the shared AI text proposals; seven runtime entry points, every helper closed.
+DO $$ DECLARE r text; f regprocedure; BEGIN
+  IF to_regprocedure('hon.begin_design_draft(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0705 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.design_draft_word_ok(jsonb,integer,integer,boolean)','hon.design_draft_ok(jsonb)','hon.design_draft_brief_ok(jsonb)',
+    'hon.design_draft_ai_actor(text)','hon.design_draft_facts(jsonb)','hon.design_draft_view(uuid,uuid)',
+    'hon.begin_design_draft(text,jsonb,uuid)','hon.plan_design_draft(text,uuid)','hon.prepare_design_draft(text,uuid,uuid,boolean)',
+    'hon.fail_design_draft(text,uuid,text,text)','hon.record_design_draft(text,uuid,jsonb)','hon.read_design_drafts(text,uuid)',
+    'hon.close_design_draft(text,uuid,text)']::regprocedure[] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.begin_design_draft(text,jsonb,uuid), hon.plan_design_draft(text,uuid),
+      hon.prepare_design_draft(text,uuid,uuid,boolean), hon.fail_design_draft(text,uuid,text,text),
+      hon.record_design_draft(text,uuid,jsonb), hon.read_design_drafts(text,uuid), hon.close_design_draft(text,uuid,text) TO hon_runtime;
+  END IF;
+END $$;

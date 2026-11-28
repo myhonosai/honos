@@ -16,7 +16,7 @@ export type AiUsageSpendClass = typeof AI_USAGE_SPEND_CLASSES[number];
  * 0474 and 0638: the parent app's Eian counts as EIAN (answers) and EIAN_SPEECH (the natural voice). 0652: AGENT_SPEECH is the
  * staff agents' natural voices. */
 export const AI_USAGE_AGENTS = ['MARKETING', 'TEACHING', 'CHAD_FOLLOW_UP', 'HON_REPLY', 'BUSINESS_PERFORMANCE', 'GENERAL_MANAGEMENT', 'OPERATIONS',
-  'CREATIVE_COMMERCE', 'RETENTION', 'WEBSITE_EDIT', 'MERCH_IDEAS', 'COMMERCE_REVIEW', 'PAPER_READING', 'RANK_CHART', 'EIAN', 'EIAN_SPEECH', 'AGENT_SPEECH', 'CONVERSATION_TEST', 'UNATTRIBUTED'] as const;
+  'CREATIVE_COMMERCE', 'RETENTION', 'WEBSITE_EDIT', 'MERCH_IDEAS', 'COMMERCE_REVIEW', 'PAPER_READING', 'RANK_CHART', 'DESIGN_DRAFT', 'EIAN', 'EIAN_SPEECH', 'AGENT_SPEECH', 'CONVERSATION_TEST', 'UNATTRIBUTED'] as const;
 export type AiUsageAgent = typeof AI_USAGE_AGENTS[number];
 
 export interface AiUsageAmount {

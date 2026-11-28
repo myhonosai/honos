@@ -160,7 +160,7 @@ import { WebsiteAiService } from './website/website-ai.service.js';
 import { WEBSITE_PROVIDER_RUNTIME, OpenRouterWebsiteRuntime } from './ai/website-provider-runtime.js';
 import { MerchAiController } from './commerce/shopify/merch-ai.controller.js';
 import { MerchAiService } from './commerce/shopify/merch-ai.service.js';
-import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime, RANK_CHART_PROVIDER_RUNTIME, RANK_CHART_TEXT_PROFILE } from './commerce/shopify/merch-provider-runtime.js';
+import { COMMERCE_REVIEW_PROVIDER_RUNTIME, COMMERCE_REVIEW_TEXT_PROFILE, MERCH_PROVIDER_RUNTIME, OpenRouterMerchRuntime, RANK_CHART_PROVIDER_RUNTIME, RANK_CHART_TEXT_PROFILE, DESIGN_DRAFT_PROVIDER_RUNTIME, DESIGN_DRAFT_TEXT_PROFILE } from './commerce/shopify/merch-provider-runtime.js';
 import { CommerceReviewController } from './commerce/shopify/commerce-review.controller.js';
 import { CommerceReviewService } from './commerce/shopify/commerce-review.service.js';
 import { AlexPlanController } from './alex-delegation/alex-plan.controller.js';
@@ -378,6 +378,8 @@ import { SchoolMessageTemplatesController, SchoolTemplateSaveGuard, SchoolTempla
 import { SchoolMessageTemplatesService } from './communication/school-message-templates.service.js';
 import { CreativeDesignPhotoGuard, CreativeDesignSaveGuard, CreativeDesignStatusGuard, CreativeDesignsController, CreativeDesignsReadGuard } from './creative-studio/creative-designs.controller.js';
 import { CreativeDesignsService } from './creative-studio/creative-designs.service.js';
+import { DesignDraftController, DesignDraftHumanUiGuard } from './creative-studio/design-draft.controller.js';
+import { DesignDraftService } from './creative-studio/design-draft.service.js';
 import { ConversationAiController, ConversationAiFileGuard, ConversationAiItemSaveGuard, ConversationAiItemStatusGuard, ConversationAiKnowledgeGuard, ConversationAiProgramHqController, ConversationAiReadGuard, ConversationAiSettingsGuard, ConversationAiUploadGuard } from './conversations/conversation-ai.controller.js';
 import { ConversationAiProgramService, ConversationAiService } from './conversations/conversation-ai.service.js';
 import { ParentMessageHistoryController, ParentMessageHistoryReadGuard } from './families/parent-message-history.controller.js';
@@ -663,6 +665,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     SchoolMessagesController,
     SchoolMessageTemplatesController,
     CreativeDesignsController,
+    DesignDraftController,
     ConversationAiController,
     ConversationAiProgramHqController,
     ParentMessageHistoryController,
@@ -930,6 +933,8 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     CreativeDesignSaveGuard,
     CreativeDesignStatusGuard,
     CreativeDesignPhotoGuard,
+    DesignDraftService,
+    DesignDraftHumanUiGuard,
     SchoolMessageHistoryReadGuard,
     SchoolTemplatesReadGuard,
     SchoolTemplateSaveGuard,
@@ -1083,6 +1088,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     { provide: CHAD_LEAD_PLAN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, CHAD_LEAD_PLAN_TEXT_PROFILE) },
     { provide: MAYA_CHECK_IN_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, MAYA_CHECK_IN_TEXT_PROFILE) },
     { provide: RANK_CHART_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, RANK_CHART_TEXT_PROFILE) },
+    { provide: DESIGN_DRAFT_PROVIDER_RUNTIME, useFactory: () => new OpenRouterMerchRuntime(undefined, undefined, DESIGN_DRAFT_TEXT_PROFILE) },
     ConversationAiTestService,
     { provide: CONVERSATION_TEST_PROVIDER_RUNTIME, useFactory: () => new OpenRouterConversationTestRuntime() },
     SchoolOnboardingService,
