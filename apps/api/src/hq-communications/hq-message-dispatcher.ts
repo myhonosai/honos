@@ -14,13 +14,20 @@ import type { CommunicationSendResult, VerifiedProviderReceipt } from '../commun
 import type { DispatchSummary } from '../communication/delivery/communication-dispatcher.js';
 
 /** One leased HQ delivery: the address and body exist only in memory for this one send. */
-export type HqDeliveryPurpose = 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT';
+export type HqDeliveryPurpose = 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT' | 'ANNOUNCEMENT';
 export interface ClaimedHqMessageDelivery {
   deliveryId: string; leaseToken: string; organizationId: string; schoolId: string; messageId: string; channel: DeliverableChannel;
   recipientAddress: string; content: string; senderRef: string; senderName: string; attempt: number;
   /** The message purpose (0282 claim). BILLING and ACCOUNT email are required notices. */
   purpose: HqDeliveryPurpose;
+  /** 0712: the email subject HQ wrote (blast email), or null for the standard subject. */
+  subject: string | null;
+  /** 0712: the blast this message belongs to, or null for a one-off HQ message. */
+  blastId: string | null;
 }
+
+/** 0712: every HQ blast text ends with how to stop texts; the body limit (1,400) leaves room for it. */
+export const HQ_BLAST_SMS_STOP_LINE = 'Reply STOP to stop texts from HON OS.';
 
 /**
  * The request an adapter receives for an HQ send. It is the school request plus the HQ sender: `senderServiceId` (the HQ
@@ -92,11 +99,12 @@ export class HqMessageWorkerDatabase implements HqMessageWorkerStore, OnModuleDe
     const rows = await this.query<{
       delivery_id: string; lease_token: string; organization_id: string; school_id: string; message_id: string; channel: DeliverableChannel;
       recipient_address: string; content: string; sender_ref: string; sender_name: string; attempt: number; purpose: HqDeliveryPurpose;
+      subject: string | null; blast_id: string | null;
     }>('SELECT * FROM hon.claim_hq_message_deliveries($1::text[], $2, $3)', [channels, limit, leaseSeconds]);
     return rows.map((r) => ({
       deliveryId: r.delivery_id, leaseToken: r.lease_token, organizationId: r.organization_id, schoolId: r.school_id, messageId: r.message_id,
       channel: r.channel, recipientAddress: r.recipient_address, content: r.content, senderRef: r.sender_ref, senderName: r.sender_name, attempt: r.attempt,
-      purpose: r.purpose,
+      purpose: r.purpose, subject: r.subject ?? null, blastId: r.blast_id ?? null,
     }));
   }
 
@@ -154,8 +162,11 @@ export class HqMessageDispatcher {
       const adapter = ready.get(d.channel)!;
       const request: HqCommunicationSendRequest = {
         deliveryId: d.deliveryId, messageId: d.messageId, organizationId: d.organizationId, schoolId: d.schoolId, channel: d.channel,
-        recipientAddress: d.recipientAddress, content: d.content, schoolName: d.senderName, attempt: d.attempt, origin: 'HQ', senderName: d.senderName,
+        recipientAddress: d.recipientAddress, schoolName: d.senderName, attempt: d.attempt, origin: 'HQ', senderName: d.senderName,
+        content: d.blastId && d.channel === 'SMS' ? `${d.content}\n\n${HQ_BLAST_SMS_STOP_LINE}` : d.content,
         hqPurpose: d.purpose,
+        ...(d.blastId ? { hqBlast: true } : {}),
+        ...(d.channel === 'EMAIL' && d.subject ? { subject: d.subject } : {}),
         ...(d.channel === 'SMS' ? { senderServiceId: d.senderRef } : { senderEmail: d.senderRef }),
       };
       let result: CommunicationSendResult;

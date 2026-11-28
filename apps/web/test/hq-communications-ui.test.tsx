@@ -20,7 +20,7 @@ const SID = 'MG' + '0123456789abcdef'.repeat(2);
 const agent = { principalId: id(50), displayName: 'Synthetic Agent' };
 const summary = { pending: 0, accepted: 0, delivered: 0, suppressed: 0, failed: 0, unknown: 0 };
 const msg = (patch: Record<string, unknown> = {}) => ({ messageId: id(1), organizationId: id(2), organizationDisplayName: 'Synthetic Dojo', schoolId: id(3),
-  schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, status: 'DRAFT',
+  schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, subject: null, blastId: null, status: 'DRAFT',
   recipientCount: 0, createdBy: agent, createdAt: T, queuedAt: null, cancelledAt: null, updatedAt: T, version: 1, deliverySummary: summary, ...patch });
 const sender = (patch: Record<string, unknown> = {}) => ({ senderId: id(20), channel: 'EMAIL', status: 'ACTIVE', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS',
   smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null, createdBy: agent, createdAt: T, version: 1, ...patch });
@@ -123,6 +123,7 @@ it('builds closed requests from the forms: only purposes held, content trimmed a
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'SMS', content: long + '안' }, target, ['SUPPORT'])).toBeNull();
   expect(createInputFrom({ purpose: 'BILLING', channel: 'EMAIL', content: 'Hi' }, target, ['SUPPORT'])).toBeNull();
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'EMAIL', content: '   ' }, target, ['SUPPORT'])).toBeNull();
+  expect(createInputFrom({ purpose: 'ANNOUNCEMENT', channel: 'EMAIL', content: 'Hi' }, target, ['ANNOUNCEMENT', 'SUPPORT'])).toBeNull(); // 0712: blasts only
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'EMAIL', content: 'Hi' }, null, ['SUPPORT'])).toBeNull();
   const sms = { channel: 'SMS' as const, emailFrom: '', emailDisplayName: '', smsServiceSid: SID.toUpperCase().replace(/^MG/, 'MG'), smsReplyNumber: '(555) 555-0123', a2pState: 'PENDING', mms: true };
   expect(senderInputFrom(sms)).toEqual({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true });

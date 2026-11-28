@@ -45,7 +45,12 @@ export interface CommunicationSendRequest {
   origin?: 'HQ' | undefined;
   senderEmail?: string | undefined;
   senderName?: string | undefined;
-  hqPurpose?: 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT' | undefined;
+  hqPurpose?: 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT' | 'ANNOUNCEMENT' | undefined;
+  /**
+   * 0712: an HQ blast to school owners. Email gets the fixed footer (why, HON_MAILING_ADDRESS, SendGrid unsubscribe) and
+   * never bypasses unsubscribe handling; without HON_MAILING_ADDRESS the send waits and retries.
+   */
+  hqBlast?: boolean | undefined;
 }
 
 export interface CommunicationSendAccepted {

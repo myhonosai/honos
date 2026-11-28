@@ -23,7 +23,7 @@ const SID = 'MG' + '0123456789abcdef'.repeat(2);
 const person = (n = 'HQ Agent') => ({ principalId: U(), displayName: n });
 const summary = (patch = {}) => ({ pending: 0, accepted: 0, delivered: 0, suppressed: 0, failed: 0, unknown: 0, ...patch });
 const msg = (patch = {}) => ({ messageId: U(), organizationId: U(), organizationDisplayName: 'Fixture Dojo', schoolId: U(), schoolDisplayName: 'Main',
-  purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your link was reset.', supportCaseId: null, status: 'DRAFT', recipientCount: 0, createdBy: person(),
+  purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your link was reset.', supportCaseId: null, subject: null, blastId: null, status: 'DRAFT', recipientCount: 0, createdBy: person(),
   createdAt: T, queuedAt: null, cancelledAt: null, updatedAt: T, version: 1, deliverySummary: summary(), ...patch });
 const sender = (patch = {}) => ({ senderId: U(), channel: 'EMAIL', status: 'ACTIVE', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS', smsServiceSid: null, smsReplyNumber: null,
   a2pState: null, mmsConverterConfirmed: null, createdBy: person(), createdAt: T, version: 1, ...patch });
@@ -186,7 +186,7 @@ test('HTTP (0698): owner replies forward only the verified subject and the decla
 });
 
 const lease = (over = {}) => ({ deliveryId: U(), leaseToken: U(), organizationId: U(), schoolId: U(), messageId: U(), channel: 'SMS',
-  recipientAddress: '+15555550101', content: '안녕하세요 '.repeat(200).trim(), senderRef: SID, senderName: 'HON OS', attempt: 1, purpose: 'SUPPORT', ...over });
+  recipientAddress: '+15555550101', content: '안녕하세요 '.repeat(200).trim(), senderRef: SID, senderName: 'HON OS', attempt: 1, purpose: 'SUPPORT', subject: null, blastId: null, ...over });
 function store(claims) {
   const calls = { claim: [], results: [] };
   return { calls, isConfigured: () => true,

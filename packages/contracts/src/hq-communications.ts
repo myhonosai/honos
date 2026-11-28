@@ -4,7 +4,10 @@
 import { championsDrift as drift, championsExactKeys as exactKeys, championsInvalid as invalid, championsIsInt as isInt,
   championsIsTimestamp as isTimestamp, championsIsUuid as isUuid, championsNullable as nullable, championsRecord as record } from './champions-club.js';
 
-export const HQ_MESSAGE_PURPOSES = ['SUPPORT', 'BILLING', 'ONBOARDING', 'ACCOUNT'] as const;
+/** Every purpose an HQ message may carry. ANNOUNCEMENT (0712) is the HQ owner's, for blasts only. */
+export const HQ_MESSAGE_PURPOSES = ['SUPPORT', 'BILLING', 'ONBOARDING', 'ACCOUNT', 'ANNOUNCEMENT'] as const;
+/** The purposes a one-off HQ message (create_hq_message) may use. */
+export const HQ_ONE_OFF_PURPOSES = ['SUPPORT', 'BILLING', 'ONBOARDING', 'ACCOUNT'] as const;
 export const HQ_MESSAGE_CHANNELS = ['EMAIL', 'SMS'] as const;
 export const HQ_MESSAGE_STATUSES = ['DRAFT', 'QUEUED', 'CANCELLED'] as const;
 export const HQ_SENDER_A2P_STATES = ['NOT_REGISTERED', 'PENDING', 'REGISTERED_SERVICE', 'REGISTERED_MARKETING'] as const;
@@ -21,6 +24,7 @@ export const HQ_COMMUNICATION_COMMANDS = {
   queueMessage: 'hq-message-queue', cancelMessage: 'hq-message-cancel',
 } as const;
 export type HqMessagePurpose = typeof HQ_MESSAGE_PURPOSES[number];
+export type HqOneOffPurpose = typeof HQ_ONE_OFF_PURPOSES[number];
 export type HqMessageChannel = typeof HQ_MESSAGE_CHANNELS[number];
 export type HqMessageStatus = typeof HQ_MESSAGE_STATUSES[number];
 export type HqSenderA2pState = typeof HQ_SENDER_A2P_STATES[number];
@@ -49,7 +53,7 @@ export interface HqSenderSetInput {
   a2pState: HqSenderA2pState | null; mmsConverterConfirmed: true | null;
 }
 export interface HqMessageCreateInput {
-  organizationId: string; schoolId: string; purpose: HqMessagePurpose; channel: HqMessageChannel; content: string; supportCaseId: string | null;
+  organizationId: string; schoolId: string; purpose: HqOneOffPurpose; channel: HqMessageChannel; content: string; supportCaseId: string | null;
 }
 export interface HqMessageVersionInput { expectedVersion: number }
 
@@ -67,9 +71,9 @@ export function validateHqSenderSetInput(value: unknown): HqSenderSetInput {
 }
 export function validateHqMessageCreateInput(value: unknown): HqMessageCreateInput {
   const r = record(value, invalid); exactKeys(r, ['organizationId', 'schoolId', 'purpose', 'channel', 'content', 'supportCaseId'], invalid);
-  if (!has(HQ_MESSAGE_PURPOSES, r.purpose) || !has(HQ_MESSAGE_CHANNELS, r.channel)
+  if (!has(HQ_ONE_OFF_PURPOSES, r.purpose) || !has(HQ_MESSAGE_CHANNELS, r.channel)
     || !text(r.content, 1, hqMessageMaxLength(r.channel as HqMessageChannel))) invalid();
-  return { organizationId: uuid(r.organizationId), schoolId: uuid(r.schoolId), purpose: r.purpose as HqMessagePurpose,
+  return { organizationId: uuid(r.organizationId), schoolId: uuid(r.schoolId), purpose: r.purpose as HqOneOffPurpose,
     channel: r.channel as HqMessageChannel, content: r.content as string, supportCaseId: r.supportCaseId === null ? null : uuid(r.supportCaseId) };
 }
 export function validateHqMessageVersionInput(value: unknown): HqMessageVersionInput {
@@ -110,6 +114,8 @@ export interface HqMessage {
   purpose: HqMessagePurpose; channel: HqMessageChannel; content: string; supportCaseId: string | null; status: HqMessageStatus;
   recipientCount: number; createdBy: HqCommunicationPerson; createdAt: string; queuedAt: string | null; cancelledAt: string | null;
   updatedAt: string; version: number; deliverySummary: HqMessageDeliverySummary;
+  /** 0712: the email subject of a blast message (null for one-off messages and texts) and the blast it came from. */
+  subject: string | null; blastId: string | null;
 }
 export interface HqMessageDelivery {
   deliveryId: string; recipient: HqCommunicationPerson; status: typeof HQ_MESSAGE_DELIVERY_STATUSES[number];
@@ -149,14 +155,18 @@ function sender(value: unknown): HqCommunicationSender {
 function message(value: unknown): HqMessage {
   const m = record(value, drift);
   exactKeys(m, ['messageId', 'organizationId', 'organizationDisplayName', 'schoolId', 'schoolDisplayName', 'purpose', 'channel', 'content',
-    'supportCaseId', 'status', 'recipientCount', 'createdBy', 'createdAt', 'queuedAt', 'cancelledAt', 'updatedAt', 'version', 'deliverySummary'], drift);
+    'supportCaseId', 'status', 'recipientCount', 'createdBy', 'createdAt', 'queuedAt', 'cancelledAt', 'updatedAt', 'version', 'deliverySummary',
+    'subject', 'blastId'], drift);
   if (!isUuid(m.messageId) || !isUuid(m.organizationId) || !label(m.organizationDisplayName, 300) || !isUuid(m.schoolId) || !label(m.schoolDisplayName, 300)
     || !has(HQ_MESSAGE_PURPOSES, m.purpose) || !has(HQ_MESSAGE_CHANNELS, m.channel)
     || !text(m.content, 1, hqMessageMaxLength(m.channel as HqMessageChannel)) || !nullable(m.supportCaseId, isUuid)
     || !has(HQ_MESSAGE_STATUSES, m.status) || !isInt(m.recipientCount, 0, COUNT_MAX) || !isTimestamp(m.createdAt)
     || !nullable(m.queuedAt, isTimestamp) || !nullable(m.cancelledAt, isTimestamp) || !isTimestamp(m.updatedAt)
     || (m.status === 'CANCELLED') !== (m.cancelledAt !== null) || (m.status === 'QUEUED' && (m.queuedAt === null || (m.recipientCount as number) < 1))
-    || (m.status === 'DRAFT' && (m.queuedAt !== null || m.recipientCount !== 0)) || !isInt(m.version, 1, 999_999_999)) drift();
+    || (m.status === 'DRAFT' && (m.queuedAt !== null || m.recipientCount !== 0)) || !isInt(m.version, 1, 999_999_999)
+    || !nullable(m.blastId, isUuid) || (m.subject !== null && (!text(m.subject, 1, 300) || /[\t\n\r]/.test(m.subject as string)))
+    || (m.blastId === null && (m.subject !== null || m.purpose === 'ANNOUNCEMENT'))
+    || (m.blastId !== null && ((m.channel === 'EMAIL') !== (m.subject !== null) || !has(['ANNOUNCEMENT', 'SUPPORT', 'ONBOARDING'], m.purpose)))) drift();
   person(m.createdBy);
   const s = record(m.deliverySummary, drift); exactKeys(s, ['pending', 'accepted', 'delivered', 'suppressed', 'failed', 'unknown'], drift);
   if (Object.values(s).some((n) => !isInt(n, 0, COUNT_MAX))) drift();

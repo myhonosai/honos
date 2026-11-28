@@ -13,6 +13,10 @@ const ADDRESS = /^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$/;
 const PROVIDER_ID = /^[A-Za-z0-9._:@<>+=-]{1,200}$/;
 /** 0423 email_subject shape: one trimmed line of 1-150 characters with no control characters. */
 const SUBJECT = /^(?=\S)[^\u0000-\u001f\u007f]{1,150}(?<=\S)$/;
+/** 0712 HON_MAILING_ADDRESS: one line of 10-200 characters with no control characters. */
+const MAILING_ADDRESS = /^(?=\S)[^\u0000-\u001f\u007f<>]{10,200}(?<=\S)$/;
+/** 0712: why a school owner gets an HQ blast; followed by HON's mailing address and SendGrid's unsubscribe link. */
+export const HQ_BLAST_EMAIL_REASON = 'You get this because you run a school on HON OS.';
 
 type Env = Record<string, string | undefined>;
 
@@ -48,7 +52,9 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
     // HQ BILLING and ACCOUNT mail are required notices: HON already let them through an HQ email opt-out (0281), so
     // SendGrid must not drop them for an earlier unsubscribe. Spam reports and bounces still suppress.
     // HqMessageDispatcher passes hqPurpose from the 0282 claim.
-    const requiredNotice = hq && (request.hqPurpose === 'BILLING' || request.hqPurpose === 'ACCOUNT');
+    // 0712: a blast is never a required notice, whatever its purpose.
+    const blast = hq && request.hqBlast === true;
+    const requiredNotice = hq && !blast && (request.hqPurpose === 'BILLING' || request.hqPurpose === 'ACCOUNT');
     // 0653: a blast email with pictures gets an HTML part; the picture links point at the HON site's /m/<token>.
     let content: { type: string; value: string }[] = [{ type: 'text/plain', value: request.content }];
     if (!hq && request.pictures) {
@@ -57,13 +63,20 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
       const parts = renderEmailWithPictures(request.content, request.pictures, origin);
       content = [{ type: 'text/plain', value: parts.text }, { type: 'text/html', value: parts.html }];
     }
+    if (blast) {
+      // Never sent without HON's mailing address: a missing or malformed setting waits and retries.
+      const address = this.environment().HON_MAILING_ADDRESS?.trim() ?? '';
+      if (!MAILING_ADDRESS.test(address)) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
+      content = [{ type: 'text/plain', value: `${request.content}\n\n--\n${HQ_BLAST_EMAIL_REASON}\nHON OS, ${address}` }];
+    }
     return {
       personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
         hon_delivery_id: request.deliveryId, ...(purpose ? { hon_purpose: purpose } : {}),
       } }],
       from: { email: from, name: hq ? name : `${name} via HON` },
       // 0424: a school email carries its author's subject when there is one (one line, 150 characters, checked in 0423).
-      subject: !hq && request.subject && SUBJECT.test(request.subject) ? request.subject : `A message from ${name}`,
+      // 0712: an HQ blast email carries the subject HQ wrote (checked in 0712: one line, 150 characters).
+      subject: (!hq || blast) && request.subject && SUBJECT.test(request.subject) ? request.subject : `A message from ${name}`,
       content,
       mail_settings: { sandbox_mode: { enable: this.sandbox() }, ...(requiredNotice ? { bypass_unsubscribe_management: { enable: true } } : {}) },
       tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } },

@@ -443,6 +443,7 @@
     "0699_school_plan_features.sql": "58ae0072195b790c2d9d7ef71e2c06db44df99d01f73f28257c5f9b17b7dbbc8",
     "0700_hq_school_plan_start_date.sql": "2ce441c4506cc0c770fd49343acc78d41cb5672f65a1899de554d0435f51f56c",
     "0701_school_contact_type_program_expired.sql": "8ac263c23617af1e777e525e8bc0ef3cdaaa17171f15c851481323eceb2deadd",
-    "0702_hq_creative_no_monthly_limit.sql": "9068b8679d2e68a74e306d8bf9c87abd4843316d543df45bae51967fe7204979"
+    "0702_hq_creative_no_monthly_limit.sql": "9068b8679d2e68a74e306d8bf9c87abd4843316d543df45bae51967fe7204979",
+    "0712_hq_blasts.sql": "f4227ed3cae9b2b98a8bbea732217ac718d900dd9c2b6a6f9a3a2d444acedd78"
   }
 }

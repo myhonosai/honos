@@ -7725,3 +7725,58 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+-- HQ blasts exact verification (0712): the runtime runs three HQ-owner commands and four reads, the communication worker
+-- claims HQ deliveries; the five blast tables are forced-RLS, policy-free and grant-free; hq_messages gains ANNOUNCEMENT and the blast shape.
+DO $$ DECLARE f text; t text; c text; d boolean; s text; r boolean; w boolean; tb text;
+BEGIN
+  FOR f,t,c,d,s,r,w IN SELECT * FROM (VALUES
+    ('hon.cancel_hq_blast(text,jsonb,uuid,uuid,uuid)','ed563529a8c410eb3b4566ee89d672eb','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.claim_hq_message_deliveries(text[],integer,integer)','ff8dfc30ad4e6bf8fb267439de5b68b1','v',true,'search_path=pg_catalog, hon',false,true),
+    ('hon.guard_hq_blast()','7c8045d42f90ae062e09a9734971eb44','v',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_args_ok(uuid,uuid,uuid)','172c34bf00025f62d012fda59ca3835e','i',false,'search_path=pg_catalog',false,false),
+    ('hon.hq_blast_audience_ok(jsonb)','88a6f02be789d62c633ddd790e905963','i',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_claim(uuid,uuid,text,text)','b69bf7be7a01762cc2174239de4e753c','v',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_day_ok(jsonb)','a45aa83ecec700df377621eb8492b766','i',false,'search_path=pg_catalog',false,false),
+    ('hon.hq_blast_fill(text,text,text)','c275d232114ba7bb3f3f0673193a7e00','i',false,'search_path=pg_catalog',false,false),
+    ('hon.hq_blast_json(hon.hq_blasts)','450c5f67c05beb594aa43da36b4e49ec','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_line_ok(jsonb,integer)','2b9beb7ba2da4156877940e71bf9240d','i',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_record(uuid,uuid,uuid,uuid,text,text,text,hon.hq_blasts,jsonb,timestamp with time zone)','f6a2e4d971d691117cc61ed8c8e5aa1e','v',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_resolve(jsonb,text)','5849afa830ff7f6625da62363f39ce21','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_results_json(uuid)','6b95bb8412577f584d1f895d677f16d9','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_strings_ok(jsonb,integer,text)','bf888b8b1a137cd6f34307d84fd3c807','i',false,'search_path=pg_catalog',false,false),
+    ('hon.hq_blast_text_ok(jsonb,integer,integer)','6d3729ab1cc4a3721763b3b8917486f2','i',false,'search_path=pg_catalog',false,false),
+    ('hon.hq_communication_is_owner(uuid)','b31d58fb31534fd6d1704f454081a31c','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_communication_purposes(uuid)','196be9bdacca39c7517517e16151de37','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_message_json(hon.hq_messages)','55434ef378f2525095e5d16337c9cbba','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.read_hq_blast(text,uuid)','c34c3ba924b4cf37594616516bb47728','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.read_hq_blast_audience(text,uuid)','690c0b6ce4aac23cc6d1d1c9ba99eaad','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.read_hq_blast_options(text,text)','7228c00d6389015d2b61d82055a67ed5','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.read_hq_blasts(text)','b6e91a131c0bd844325ebe587e72003e','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.save_hq_blast(text,jsonb,uuid,uuid,uuid)','b27b25f73629618f88dba04fb7f0e113','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.send_hq_blast(text,jsonb,uuid,uuid,uuid)','d4e81affc8cfe3f226c6d10adf20c5de','v',true,'search_path=pg_catalog, hon',true,false)) x(f,t,c,d,s,r,w) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')<>r
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker') AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE')<>w)
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'HQ blast function body/posture drift: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('cancel_hq_blast','claim_hq_message_deliveries','guard_hq_blast','hq_blast_args_ok','hq_blast_audience_ok','hq_blast_claim','hq_blast_day_ok','hq_blast_fill','hq_blast_json','hq_blast_line_ok','hq_blast_record','hq_blast_resolve','hq_blast_results_json','hq_blast_strings_ok','hq_blast_text_ok','hq_communication_is_owner','hq_communication_purposes','hq_message_json','read_hq_blast','read_hq_blast_audience','read_hq_blast_options','read_hq_blasts','save_hq_blast','send_hq_blast'))<>24 THEN
+    RAISE EXCEPTION 'Unexpected HQ blast overload'; END IF;
+  FOREACH tb IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||tb)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=tb)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||tb)::regclass AND a.grantee<>c.relowner)
+      OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||tb)::regclass AND tgname='no_truncate' AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Unsafe HQ blast table: %',tb; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.hq_blast_schools'::regclass,'hon.hq_blast_requests'::regclass,'hon.hq_blast_events'::regclass,'hon.hq_blast_outbox'::regclass)
+      AND tgname='immutable' AND tgfoid='hon.guard_hq_communication_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>4
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_blasts'::regclass AND tgname='guarded' AND tgfoid='hon.guard_hq_blast()'::regprocedure AND tgenabled='O') THEN
+    RAISE EXCEPTION 'HQ blast evidence triggers missing'; END IF;
+  IF (SELECT count(*) FROM pg_constraint WHERE conrelid='hon.hq_messages'::regclass AND contype='c' AND convalidated AND (
+      (conname='hq_messages_blast_shape' AND md5(pg_get_constraintdef(oid))='59cb56621a67131fa4b48abf52f48979') OR
+      (conname='hq_messages_purpose_check' AND md5(pg_get_constraintdef(oid))='b0fb1e44c3c145ba089a838874edf5c2')))<>2 THEN
+    RAISE EXCEPTION 'HQ message purpose or blast shape check drift'; END IF;
+END $$;
+-- End HQ blasts exact verification.

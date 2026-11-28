@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { HQ_MESSAGE_CHANNELS, hqMessageMaxLength, type HqInboundReply, type HqMessage, type HqMessageChannel, type HqMessagePurpose, type HqSchoolDirectoryEntry } from '@hon/contracts';
+import { HQ_MESSAGE_CHANNELS, HQ_ONE_OFF_PURPOSES, hqMessageMaxLength, type HqInboundReply, type HqMessage, type HqMessageChannel, type HqMessagePurpose, type HqOneOffPurpose, type HqSchoolDirectoryEntry } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { loadHqSchoolDirectory } from '../hq-school-directory-http';
 import { schoolDetailApi } from '../hq-school-detail/http';
@@ -13,6 +13,9 @@ import { commsText, type CommsKey } from './copy';
 import { PieceCounter } from './view';
 import { inboxText, inboxWhyKey, type InboxKey } from './inbox-copy';
 import { HqSendFlow, filterConversations, groupConversations, threadItems, type HqConversation, type SendState } from './inbox-model';
+
+/** Blasts (0712, ANNOUNCEMENT) go out from the Blasts tab only; the one-off composer offers the four one-off purposes. */
+const oneOffPurposes = (all: readonly HqMessagePurpose[]): HqMessagePurpose[] => all.filter(x => (HQ_ONE_OFF_PURPOSES as readonly string[]).includes(x));
 
 /** Which school's owners the open conversation is with. The ids only point the composer; the server confirms them on save. */
 export type InboxTarget = Readonly<{ organizationId: string; schoolId: string; supportCaseId: string | null }>;
@@ -75,7 +78,7 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
     Promise.all([api.list({ schoolId: null, cursor: null }, signal, owned), readReplies(api, null, signal, owned)]).then(([view, r]) => {
       if (!owned()) return;
       listCursor.current = view.nextCursor;
-      setList({ state: 'READY', messages: view.messages, purposes: view.viewer.purposes, next: view.nextCursor !== null, loadingMore: false, moreFailed: false, ...r });
+      setList({ state: 'READY', messages: view.messages, purposes: oneOffPurposes(view.viewer.purposes), next: view.nextCursor !== null, loadingMore: false, moreFailed: false, ...r });
     }, error => {
       if (!owned() || abort.signal.aborted) return;
       setList(error instanceof CommsError && error.kind === 'DENIED' ? { state: 'DENIED' } : { state: 'UNAVAILABLE' });
@@ -168,7 +171,7 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
       if (!open || list.state !== 'READY') return false;
       const content = d.content.trim();
       if (!list.purposes.includes(d.purpose) || content.length < 1 || content.length > hqMessageMaxLength(d.channel)) return false;
-      return flow.send({ organizationId: open.organizationId, schoolId: open.schoolId, purpose: d.purpose, channel: d.channel, content, supportCaseId: open.supportCaseId });
+      return flow.send({ organizationId: open.organizationId, schoolId: open.schoolId, purpose: d.purpose as HqOneOffPurpose, channel: d.channel, content, supportCaseId: open.supportCaseId });
     }}
     onTryAgain={() => flow.tryAgain()} onDismiss={() => flow.reset()}/>;
 }

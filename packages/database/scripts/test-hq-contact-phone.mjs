@@ -88,7 +88,7 @@ try {
   const claimSig = 'claim_hq_message_deliveries(text[],integer,integer)';
   eq(await has(worker, claimSig), true, 'worker still claims HQ deliveries after the claim is recreated'); eq(await has(runtime, claimSig), false, 'runtime cannot claim HQ deliveries');
   eq((await one(admin, "SELECT has_function_privilege('public',$1,'EXECUTE') a", ['hon.' + claimSig])).a, false, 'PUBLIC cannot claim HQ deliveries');
-  ok(/attempt integer, purpose text\)$/.test((await one(admin, "SELECT pg_get_function_result($1::regprocedure) r", ['hon.' + claimSig])).r), 'the claim returns the message purpose');
+  ok(/attempt integer, purpose text(?:, subject text, blast_id uuid)?\)$/.test((await one(admin, "SELECT pg_get_function_result($1::regprocedure) r", ['hon.' + claimSig])).r), 'the claim returns the message purpose');
   for (const sig of ['require_hq_contact_self(text)', 'hq_contact_json(uuid)', 'hq_contact_sms_address(uuid)', 'hq_contact_set_preference(uuid,text,text,timestamp with time zone)'])
     eq(await has(runtime, sig), false, `runtime cannot run helper ${sig}`);
   for (const t of ['hq_contact_phones', 'hq_inbound_texts', 'hq_contact_requests']) {
