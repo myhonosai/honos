@@ -691,3 +691,19 @@
 }
 /* While the chat is open it sits above the sections that follow the stage. */
 .commandStage:has([data-hon-orb-ask=open]),.commandLineup:has([data-hon-orb-ask=open]),.commandCore:has([data-hon-orb-ask=open]){position:relative;z-index:40}
+/* Unslop pass (owner 2026-11-28, "Ink surfaces, blue accent"): the executive portraits and the HON orb carry the colour.
+   The headline sits on a darkened band of the command-room photo so it reads; cards are plain ink with hairlines, no glass or glow. */
+.workspace{background-image:linear-gradient(180deg,#0b0d14f0 0,#0b0d14d9 200px,#0b0d1480 300px,#0b0d14e6 650px,#0b0d14 820px),url('/hq-assets/reference-refinement/command-room.png');background-color:#0b0d14}
+.topbar h1{font-weight:600;letter-spacing:-.02em;text-shadow:none}
+.subtitle{text-shadow:none;color:var(--hon-text-muted)}
+.eyebrow,.topbar .eyebrow{font-size:12px;letter-spacing:0;text-transform:none;color:var(--hon-text-subtle)!important}
+.brand span{font-size:12px;letter-spacing:0;text-transform:none}
+.commercialList dt{font-size:12px;letter-spacing:0;text-transform:none;color:var(--hon-text-muted)}
+.appearance{background:#11141c;border-color:rgba(238,240,245,.08);box-shadow:none;backdrop-filter:none}
+.appearance button[aria-pressed=true],.tabBar button[aria-pressed=true]{background:#1d63f0;border-color:transparent;color:#fff;box-shadow:none}
+.panel,.performanceTile,.commandBar{background:#11141c;border-color:rgba(238,240,245,.08);box-shadow:none;backdrop-filter:none}
+.stageExecutive{background:#1a1e28;border-color:rgba(238,240,245,.08);border-top-color:rgba(238,240,245,.12);box-shadow:none;backdrop-filter:none}
+.metricIcon{background:#1a1e28;border-color:rgba(238,240,245,.08);box-shadow:none;color:var(--hon-text-muted)}
+.shell .honEntry{background:#1d63f0;border-color:transparent;box-shadow:none;color:#fff}
+.assistantPanel{background:#11141c;border-color:rgba(238,240,245,.16);box-shadow:0 16px 40px rgba(0,0,0,.4);backdrop-filter:none}
+.workspaceEntry{background:#1a1e28;border-color:rgba(238,240,245,.12);box-shadow:none}
