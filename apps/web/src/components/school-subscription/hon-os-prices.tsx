@@ -8,6 +8,7 @@ import { loadHonOsPrices, type HonOsPriceReads, type SchoolAccount } from './htt
 import { PlanPromotionBanner } from '../school-plan-promotions/banner';
 import { offerHintFrom } from '../school-plan-promotions/http';
 import { schoolPromotionText } from '../school-plan-promotions/copy';
+import { SubscribeToPlan } from './subscribe';
 import styles from './subscription.module.css';
 
 /**
@@ -47,7 +48,9 @@ export function HonOsPrices({ account }: { account: SchoolAccount | null }): Rea
       {rows.map((row) => <HonOsPriceCard key={row.kind} row={row} highlighted={!!hint && row.eligible && row.offerId === hint}/>)}
       {oneTime.map((row) => <HonOsOneTimeCard key={row.offerCode} row={row} highlighted={!!hint && row.available && row.offerId === hint}/>)}
     </ul>
-    <p className={styles.small}>{t("Checkout for these prices is not open yet. No payment is taken on this page, and a refund never returns a founder spot.")}</p>
+    <p className={styles.small}>{account?.plan.payments.status === 'TEST_MODE' ? t("Subscribe below in test mode. No card details are collected here, and a refund never returns a founder spot.")
+      : t("Checkout for these prices is not open yet. No payment is taken on this page, and a refund never returns a founder spot.")}</p>
+    <SubscribeToPlan account={account} offers={reads?.offers?.offers ?? null}/>
   </section>;
 }
 

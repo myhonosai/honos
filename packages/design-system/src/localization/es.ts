@@ -3,11 +3,13 @@ import { pricingOperationsEs } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingEs } from './pricing-offers.js';
 import { honOsPricesEs } from './hon-os-prices.js';
+import { planUpgradeEs } from './plan-upgrade.js';
 import { zernioEs } from './zernio.js';
 export const es = {
   ...zernioEs,
   ...pricingEs,
   ...honOsPricesEs,
+  ...planUpgradeEs,
   ...pricingOperationsEs,
   ...planBuilderEs,
   " · Deterministic simulator, not Stripe sandbox": " · Simulador determinista, no sandbox de Stripe",

@@ -4,7 +4,7 @@ const { randomUUID } = require('node:crypto');
 const { request: httpRequest } = require('node:http');
 require('reflect-metadata');
 const { Test } = require('@nestjs/testing');
-const { SaasOffersHqController, SaasOffersSchoolController, SchoolPlanFeaturesController } = require('../dist/saas-billing/saas-offers.controller.js');
+const { SaasOffersHqController, SaasOffersSchoolController, SchoolPlanFeaturesController, SchoolPriceSchedulesController } = require('../dist/saas-billing/saas-offers.controller.js');
 const { SaasBillingService } = require('../dist/saas-billing/saas-billing.service.js');
 const { SaasCommandGuard, SaasReadGuard } = require('../dist/saas-billing/saas-billing.guards.js');
 const { HonIdentityGuard } = require('../dist/foundation/hon-identity.guard.js');
@@ -162,7 +162,7 @@ test('responses fail closed on activation flags, repricing claims, credit grants
 
 async function boot(respond) {
   const calls = [];
-  const module = await Test.createTestingModule({ controllers:[SaasOffersHqController, SaasOffersSchoolController, SchoolPlanFeaturesController], providers:[SaasBillingService, SaasCommandGuard, SaasReadGuard,
+  const module = await Test.createTestingModule({ controllers:[SaasOffersHqController, SaasOffersSchoolController, SchoolPlanFeaturesController, SchoolPriceSchedulesController], providers:[SaasBillingService, SaasCommandGuard, SaasReadGuard,
     { provide:RuntimeDatabaseService, useValue:{ callSaasBilling:async (operation, params) => { calls.push([operation, params]); return respond(operation, params); } } }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject:'verified-human' }; return true; } }).compile();
   const app = module.createNestApplication(); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
@@ -271,4 +271,28 @@ test('school plan features (0699): subject-only read of the exact school, valida
   }
   const none = new SaasBillingService({ callSaasBilling:async () => view({ source:'NONE', planName:null, included:ALL(), locked:[] }) });
   assert.deepEqual((await none.readSchoolPlanFeatures('verified-human', school)).locked, []);
+});
+
+test('school plan upgrade (0707): a paid subscription is a lock source; the school reads its price schedules, validated', async () => {
+  const school = randomUUID(), AI = ['ai.workforce','ai.orchestration'];
+  const paid = new SaasBillingService({ callSaasBilling:async () => ({ schoolId:school, source:'SUBSCRIPTION', planName:'HON OS Core', included:ALL().filter(c => !AI.includes(c)), locked:AI, asOf:T }) });
+  assert.deepEqual((await paid.readSchoolPlanFeatures('verified-human', school)).locked, AI);
+  const list = (over = {}) => ({ schoolId:school, schedules:[{ offerId:randomUUID(), scheduleId:randomUUID(), version:2 }], asOf:T, ...over });
+  const { app, calls, base } = await boot((operation, params) => operation === 'readSchoolPriceSchedules' ? list({ schoolId:params[1] }) : null);
+  try {
+    const read = await send(`${base}/schools/${school}/hon-os-price-schedules`); assert.equal(read.status, 200, read.body);
+    assert.equal(JSON.parse(read.body).data.schedules[0].version, 2); assert.deepEqual(calls.at(-1), ['readSchoolPriceSchedules', ['verified-human', school]]);
+    assert.equal((await send(`${base}/schools/${school}/hon-os-price-schedules?offer=x`)).status, 400);
+    assert.equal((await send(`${base}/schools/not-a-uuid/hon-os-price-schedules`)).status, 400);
+    assert.equal((await send(`${base}/schools/${school}/hon-os-price-schedules`, { method:'POST', headers:human('x') })).status, 404);
+  } finally { await app.close(); }
+  const offer = randomUUID();
+  for (const bad of [list({ schoolId:randomUUID() }), list({ schedules:[{ offerId:'x', scheduleId:randomUUID(), version:1 }] }),
+    list({ schedules:[{ offerId:offer, scheduleId:randomUUID(), version:0 }] }), list({ schedules:[{ offerId:offer, scheduleId:randomUUID(), version:1, price:1 }] }),
+    list({ schedules:[1,2].map(() => ({ offerId:offer, scheduleId:randomUUID(), version:1 })) }), { ...list(), extra:1 }]) {
+    const drifted = new SaasBillingService({ callSaasBilling:async () => bad });
+    await assert.rejects(drifted.readSchoolPriceSchedules('verified-human', school), e => e.getStatus() === 503);
+  }
+  const neverCalled = new SaasBillingService({ callSaasBilling:async () => { throw new Error('must not be called'); } });
+  await assert.rejects(neverCalled.readSchoolPriceSchedules('verified-human', 'x'), e => e.getStatus() === 400);
 });

@@ -383,25 +383,42 @@ export function validateSaasHonOsSchoolOfferView(value: unknown): SaasHonOsSchoo
 
 // School plan features (0699): which HON OS features the school's HQ-assigned plan includes. Display only; a LOCKED
 // feature shows locked with an Upgrade button. Not authority: every feature's own API still authorizes on the server.
-export type SaasSchoolPlanFeatureSource = 'OFFER' | 'CUSTOM' | 'NONE';
+// 0707: SUBSCRIPTION = the school's own paid HON OS subscription decides, ahead of the HQ assignment.
+export type SaasSchoolPlanFeatureSource = 'SUBSCRIPTION' | 'OFFER' | 'CUSTOM' | 'NONE';
 export type SaasSchoolPlanFeatures = { schoolId: string; source: SaasSchoolPlanFeatureSource; planName: string | null;
   included: string[]; locked: string[]; asOf: string };
 export function validateSaasSchoolPlanFeatures(value: unknown): SaasSchoolPlanFeatures {
   const r = record(value, drift);
   exactKeys(r, ['schoolId','source','planName','included','locked','asOf'], drift);
-  if (!isUuid(r.schoolId) || !has(['OFFER','CUSTOM','NONE'], r.source) || !isTimestamp(r.asOf)
+  if (!isUuid(r.schoolId) || !has(['SUBSCRIPTION','OFFER','CUSTOM','NONE'], r.source) || !isTimestamp(r.asOf)
     || !(r.planName === null || text(r.planName, 80)) || (r.source === 'NONE') !== (r.planName === null)
     || !Array.isArray(r.included) || !Array.isArray(r.locked)) drift();
   const included = r.included as unknown[], locked = r.locked as unknown[];
   const all = [...included, ...locked];
-  // Together exactly the HON OS list, each part in policy order; only an assigned offer can lock anything.
+  // Together exactly the HON OS list, each part in policy order; only an assigned or subscribed offer can lock anything.
   if (all.length !== HON_OS_PLAN_CAPABILITIES.length || new Set(all).size !== all.length
     || !all.every(c => typeof c === 'string' && HON_OS_PLAN_CAPABILITIES.includes(c))
     || included.length < 1 || saasHonOsPlanCapabilities(included)?.join(',') !== included.join(',')
     || HON_OS_PLAN_CAPABILITIES.filter(c => locked.includes(c)).join(',') !== locked.join(',')
-    || (r.source !== 'OFFER' && locked.length !== 0)) drift();
+    || (r.source !== 'OFFER' && r.source !== 'SUBSCRIPTION' && locked.length !== 0)) drift();
   return { schoolId: r.schoolId as string, source: r.source as SaasSchoolPlanFeatureSource, planName: r.planName as string | null,
     included: included as string[], locked: locked as string[], asOf: r.asOf as string };
+}
+
+// 0707: the current price schedule of each published HON OS offer, for an exact-school purchaser (preview, then accept).
+export type SaasSchoolPriceSchedules = { schoolId: string; schedules: { offerId: string; scheduleId: string; version: number }[]; asOf: string };
+export function validateSaasSchoolPriceSchedules(value: unknown): SaasSchoolPriceSchedules {
+  const r = record(value, drift);
+  exactKeys(r, ['schoolId','schedules','asOf'], drift);
+  if (!isUuid(r.schoolId) || !isTimestamp(r.asOf) || !Array.isArray(r.schedules) || r.schedules.length > 100) drift();
+  const schedules = (r.schedules as unknown[]).map(item => {
+    const x = record(item, drift);
+    exactKeys(x, ['offerId','scheduleId','version'], drift);
+    if (!isUuid(x.offerId) || !isUuid(x.scheduleId) || typeof x.version !== 'number' || !Number.isSafeInteger(x.version) || x.version < 1) drift();
+    return { offerId: x.offerId as string, scheduleId: x.scheduleId as string, version: x.version as number };
+  });
+  if (new Set(schedules.map(x => x.offerId)).size !== schedules.length) drift();
+  return { schoolId: r.schoolId as string, schedules, asOf: r.asOf as string };
 }
 
 // Server refusal of locked features (piece 4). The school API areas that belong to one feature, by the path after

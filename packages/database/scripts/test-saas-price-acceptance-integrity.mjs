@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID as K, createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
 import { pricingOffers, scheduleInput, acceptanceInput } from './price-acceptance-fixture.mjs';
 import { verifySaasBillingSecurity } from './saas-billing-security.mjs';
 // Canonical DISPOSABLE credentials only; never permit URL/PG override paths or provider credentials.
@@ -209,6 +210,35 @@ try{
    passed('actual signed-session HTTP/API/restricted PostgreSQL acceptance, exact replay, missing/invalid session, cross-school denial and revoked permission');
   }finally{await app.close();process.env=saved;}
  }
+ // 0707: several plans in one set (offers that share a display name, 0697). Each plan's terms use that plan's own regular
+ // price; before 0707 two regular monthly offers in one set made every offer's terms unsupported.
+ const plan=(name,code,kind,price)=>({...pricingOffers().find(x=>x.offerKind===kind),offerCode:code,displayName:name,priceMinor:price});
+ const multi=await publish([plan('Core','CORE_M','REGULAR_MONTHLY',14900),plan('Core','CORE_FM','FOUNDER_MONTHLY',7900),
+  plan('Complete','COMPLETE_M','REGULAR_MONTHLY',24900),plan('Complete','COMPLETE_A','REGULAR_ANNUAL',209700),
+  plan('Complete','COMPLETE_FM','FOUNDER_MONTHLY',14900),plan('Complete','COMPLETE_FA','FOUNDER_ANNUAL',149400)]);
+ const mo=Object.fromEntries(multi.offers.map(o=>[o.offerCode,o]));
+ const mp={};for(const code of Object.keys(mo))mp[code]=(await record(mo[code],mo[code])).schedule;
+ assert.deepEqual([mp.CORE_M.terms.initialPriceMinor,mp.CORE_M.terms.monthlyListReferenceMinor],[14900,14900]);
+ assert.deepEqual([mp.CORE_FM.terms.initialPriceMinor,mp.CORE_FM.terms.standardPriceMinor,mp.CORE_FM.terms.monthlyListReferenceMinor],[7900,14900,14900]);
+ assert(mp.CORE_FM.disclosureText.startsWith('$79.00 per month for as long as this subscription stays active. If it is canceled, or lapses for more than the 7-day grace period, a new subscription is at the standard price of $149.00 per month.'));
+ assert.deepEqual([mp.COMPLETE_M.terms.monthlyListReferenceMinor,mp.COMPLETE_FM.terms.standardPriceMinor,mp.COMPLETE_FA.terms.standardPriceMinor,mp.COMPLETE_A.terms.monthlyListReferenceMinor],[24900,24900,209700,24900]);
+ // A founder price must still be below its own plan's standard price (Complete founder $249 is not below Complete $249).
+ const tooHigh=await publish([plan('Core','CORE_M','REGULAR_MONTHLY',14900),plan('Complete','COMPLETE_M','REGULAR_MONTHLY',24900),plan('Complete','COMPLETE_FM','FOUNDER_MONTHLY',24900)]);
+ const th=Object.fromEntries(tooHigh.offers.map(o=>[o.offerCode,o]));
+ await nothing(()=>record(th.COMPLETE_FM,th.COMPLETE_FM),422,'SAAS_PRICE_TERMS_UNSUPPORTED');
+ assert.deepEqual((await record(th.CORE_M,th.CORE_M)).schedule.terms.monthlyListReferenceMinor,14900);
+ // The school reads the current schedule of each offer of the published set (purchaser of the exact school only).
+ const listed=await billing.readSchoolPriceSchedules(H('school'),org.school);
+ assert.deepEqual(c.validateSaasSchoolPriceSchedules(listed),listed);assert.equal(listed.schoolId,org.school);
+ assert.deepEqual(listed.schedules.map(x=>x.offerId).sort(),[th.CORE_M.offerId].sort(),'only offers of the current published set that have a schedule');
+ assert.equal(listed.schedules[0].version,1);
+ for(const who of ['hq','operator','other','expired','ai'])await nothing(()=>billing.readSchoolPriceSchedules(H(who),org.school),403,'SAAS_FORBIDDEN');
+ await nothing(()=>billing.readSchoolPriceSchedules(H('school'),org.second),403,'SAAS_FORBIDDEN');
+ await nothing(()=>billing.readSchoolPriceSchedules(H('school'),'not-a-uuid'),400,'INVALID_SAAS_INPUT');
+ const verify=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
+ const block=verify.split('-- School plan upgrade exact verification (0707)')[1]?.split('-- End school plan upgrade exact verification.')[0];
+ assert.ok(block,'011 0707 section present');await admin.query(block.slice(block.indexOf('\n')+1).replaceAll('hon_runtime',runtime.username));
+ passed('0707 per-plan terms: each plan in a set uses its own regular and standard price, founder still below its own standard; the school purchaser reads the current schedule per offer, HQ, other schools and other people are refused; 011 verification passes');
  await verifySaasBillingSecurity(admin,'hon_champions_runtime');assert.deepEqual(await snapshot(),before);await gates();passed('all pre-existing business tables unchanged, D9/D10/D11-A and legacy rights preserved, no AI allowances/ledger effects');
  console.log(`PASS: Commercial A2 ${groups} scenario groups; real restricted PostgreSQL, actual lock waits; synthetic acceptance ONLY; no providers/payment/activation.`);
 }finally{

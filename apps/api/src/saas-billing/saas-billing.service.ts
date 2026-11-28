@@ -20,7 +20,7 @@ import {
   validateSaasRewardPreview,
   validateSaasHonOsOfferManagementView, validateSaasHonOsOfferSetDetail, validateSaasHonOsOfferSetDraftInput, validateSaasHonOsOfferSetReviseInput,
   validateSaasHonOsOfferSetDiscardInput, validateSaasHonOsOfferSetPublishInput, validateSaasHonOsOfferStopSalesInput, validateSaasHonOsOfferSetReceipt,
-  validateSaasHonOsOfferSetDiscardReceipt, validateSaasHonOsOfferSetPublishReceipt, validateSaasHonOsOfferStopSalesReceipt, validateSaasHonOsSchoolOfferView, validateSaasSchoolPlanFeatures,
+  validateSaasHonOsOfferSetDiscardReceipt, validateSaasHonOsOfferSetPublishReceipt, validateSaasHonOsOfferStopSalesReceipt, validateSaasHonOsSchoolOfferView, validateSaasSchoolPlanFeatures, validateSaasSchoolPriceSchedules,
 } from '@hon/contracts';
 import { RuntimeDatabaseService, type SaasBillingOperation } from '../foundation/runtime-database.service.js';
 
@@ -286,6 +286,14 @@ export class SaasBillingService {
     const school = parse(() => saasUuid(schoolId));
     return this.run('readSchoolPlanFeatures', [subject, school], (v) => {
       const r = validateSaasSchoolPlanFeatures(v); if (r.schoolId.toLowerCase() !== school.toLowerCase()) throw new Error('mismatch'); return r;
+    });
+  }
+
+  /** The current price schedule of each published HON OS offer, for an exact-school purchaser (0707). Read only. */
+  async readSchoolPriceSchedules(subject: string, schoolId: unknown) {
+    const school = parse(() => saasUuid(schoolId));
+    return this.run('readSchoolPriceSchedules', [subject, school], (v) => {
+      const r = validateSaasSchoolPriceSchedules(v); if (r.schoolId.toLowerCase() !== school.toLowerCase()) throw new Error('mismatch'); return r;
     });
   }
 

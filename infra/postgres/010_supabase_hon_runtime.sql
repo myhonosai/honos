@@ -5892,3 +5892,18 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_plan_features(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0707 school plan upgrade: one runtime entry point (an exact-school purchaser reads the current price schedule of each
+-- published offer); per-plan price terms and the plan features helper stay migration-owner only.
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.read_saas_school_price_schedules(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0707 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.saas_price_content(uuid,uuid)','hon.school_plan_features(uuid,uuid)','hon.read_saas_school_price_schedules(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_saas_school_price_schedules(text,uuid) TO hon_runtime;
+  END IF;
+END $$;

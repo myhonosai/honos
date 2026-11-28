@@ -105,7 +105,7 @@ test('a locked feature area answers 403 PLAN_FEATURE_LOCKED before the handler r
   for (const [cls, m] of [[Mixed, 'people'], [Mixed, 'hon'], [Mixed, 'ads'], [Plan, 'buy']]) assert.equal((await run(h, cls, m)).handled, 1);
   assert.equal(h.calls.length, 4, 'people and hon-plan never read the plan');
   // A feature route that carries the school outside .../schools/:schoolId/ (Chad send from the Action Center).
-  const Approvals = decorate('staff/action-center/approvals/:schoolId', [['send', 'POST', ':actionRequestId/chad-send'], ['decide', 'POST', ':actionRequestId/decision']]);
+  const Approvals = decorate('staff/action-center/approvals/:schoolId', [['send', 'GET', ':actionRequestId/chad-send'], ['decide', 'POST', ':actionRequestId/decision']]);
   await assert.rejects(run(h, Approvals, 'send'), e => e.getResponse().code === 'PLAN_FEATURE_LOCKED' && e.getResponse().capability === 'ai.workforce');
   assert.equal((await run(h, Approvals, 'decide')).handled, 1);
   // HON's own speech belongs to HON, not the AI team: a plan without the AI team keeps HON's voice.

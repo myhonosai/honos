@@ -522,6 +522,30 @@ try {
   assert.deepEqual(await row("SELECT status,mutations_enabled FROM hon.saas_access_program"),{status:'INACTIVE',mutations_enabled:false});
   assert.equal((await row("SELECT pg_get_constraintdef(oid) definition FROM pg_constraint WHERE conname='saas_access_program_status_check'")).definition,STATUS_CHECK);
   passed('0235 access: the first verified payment switches on COMPLETE access for the paid period plus the 7-day grace (program INACTIVE -> HQ review, payment kept); HQ-owner retry, renewal extension, no shortening, gap review, concurrent single activation, time lapse, and savepoint isolation');
+  // ---------- 0707: a paid subscription decides which plan features are locked ----------
+  const paSchool=accessOrgs.pa.schoolId,pbSchool=accessOrgs.pb.schoolId,every=contracts.HON_OS_PLAN_CAPABILITIES;
+  const paFeatures=await billing.readSchoolPlanFeatures(H('pa'),paSchool);
+  assert.deepEqual([paFeatures.source,paFeatures.planName,paFeatures.included,paFeatures.locked],['SUBSCRIPTION','REGULAR_MONTHLY',[...every],[]]);
+  assert.deepEqual(contracts.validateSaasSchoolPlanFeatures(paFeatures),paFeatures);
+  // Awaiting the first payment (d7) or lapsed (pb, window past): nothing paid decides and nothing is locked.
+  for(const [who,school] of [['d7',d7.schoolId],['pb',pbSchool]])
+    {const f=await billing.readSchoolPlanFeatures(H(who),school);assert.deepEqual([f.source,f.planName,f.included,f.locked],['NONE',null,[...every],[]],who);}
+  // Precedence, in a rolled-back transaction with guards off only there: the paid offer leaves out the AI team, and HQ has
+  // assigned an everything-included plan. The paid plan decides for pa; for pb (lapsed) the HQ plan decides again.
+  const noTeam=every.filter(x=>!['ai.workforce','ai.orchestration'].includes(x)),setVersion=(await row('SELECT set_version v FROM hon.saas_offer_sets WHERE id=$1',[set.setId])).v;
+  await admin.query('BEGIN');
+  try {
+    await admin.query('ALTER TABLE hon.saas_offer_set_offers DISABLE TRIGGER USER');await admin.query('ALTER TABLE hon.hq_school_plan_assignments DISABLE TRIGGER USER');
+    await admin.query('UPDATE hon.saas_offer_set_offers SET capabilities=$2 WHERE id=$1',[offer.offerId,noTeam]);
+    for(const [o,school,target,kind] of [[paOrg,paSchool,founder,'FOUNDER_MONTHLY'],[pbOrg,pbSchool,offer,'REGULAR_MONTHLY']])
+      await admin.query(`INSERT INTO hon.hq_school_plan_assignments(organization_id,revision,school_id,action,source,offer_id,offer_kind,offer_set_version,plan_name,
+        billing_interval,price_minor,currency,founder,actor_principal_id,recorded_at,start_date) VALUES($1,1,$2,'ASSIGN','OFFER',$3,$4,$5,$4,'MONTHLY',19920,'USD',$6,$7,clock_timestamp(),current_date)`,
+        [o,school,target.offerId,kind,setVersion,kind.startsWith('FOUNDER'),humans.hq.id]);
+    const pf=(await row('SELECT hon.school_plan_features($1,$2) f',[paOrg,paSchool])).f,bf=(await row('SELECT hon.school_plan_features($1,$2) f',[pbOrg,pbSchool])).f;
+    assert.deepEqual([pf.source,pf.planName,pf.included,pf.locked],['SUBSCRIPTION','REGULAR_MONTHLY',noTeam,['ai.workforce','ai.orchestration'].filter(x=>every.includes(x))]);
+    assert.deepEqual([bf.source,bf.planName,bf.locked],['OFFER','REGULAR_MONTHLY',['ai.workforce','ai.orchestration'].filter(x=>every.includes(x))]);
+  } finally { await admin.query('ROLLBACK'); }
+  passed('0707 plan features: a verified paid schedule subscription decides which features are included (source SUBSCRIPTION), ahead of the HQ plan; awaiting payment or a lapsed window falls back to the HQ plan or nothing locked');
   // ---------- 0237 piece 3: HQ review queue for held schedule money; refund obligation and verified refund ----------
   const queue=async(who='hq')=>{const items=[];let cursor=null;do{const page=await reviews.list(H(who),cursor);items.push(...page.items);cursor=page.nextCursor;}while(cursor);return items;};
   const itemOf=async id=>(await queue()).find(i=>i.subjectId===id);

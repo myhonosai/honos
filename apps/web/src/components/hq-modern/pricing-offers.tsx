@@ -8,6 +8,7 @@ import { HqIcon } from './icon';
 import { PricingController, type PricingScreen } from './pricing-offers-controller';
 import { kindLabels, type OfferFields } from './pricing-offers-model';
 import { PlanBuilder } from './pricing-plan-builder';
+import { PriceTerms } from './price-terms';
 import base from './hq-modern.module.css';
 import styles from './pricing-offers.module.css';
 
@@ -98,6 +99,7 @@ export function PricingOffersView({controller}:{controller:PricingController}):R
         <section className={base.panel}><h3>{op('published')}</h3>{state.management?.published?<><p>{setName(state.management.published)} · {label(state.management.published.status)}</p><button type="button" disabled={state.busy||!!state.pending} onClick={()=>openSet(state.management!.published!.setId)}>{op('open')}</button></>:<p>{op('empty')}</p>}</section>
         <section className={styles.cards}>{SAAS_HON_OS_OFFER_KINDS.map(kind=><article className={styles.offer} key={kind}><h3>{title(kind)}</h3>{(state.management?.published?.offers.filter(o=>o.offerKind===kind)??[]).map(o=><div key={o.offerId}><strong className={styles.price}>{price(o.priceMinor)}</strong><p>{o.offerCode} · {saleLabel(o)}</p></div>)}<p className={styles.note}>{op('wholeSet')}</p></article>)}</section>
         {state.management&&<section className={base.panel}><h3>{op('founderInventory')}</h3><p>{op('inventoryNote')}</p><dl className={styles.facts}>{(['limit','allocated','held','remaining'] as const).map(key=><div key={key}><dt>{op(key)}</dt><dd>{state.management!.honOsSales.founderPool[key]===null?op('notRecorded'):number(state.management!.honOsSales.founderPool[key]!)}</dd></div>)}</dl></section>}
+        <PriceTerms published={state.management?.published} owner={state.owner}/>
         <section className={base.panel}><h3>{op('drafts')}</h3>{state.management?.drafts.length?state.management.drafts.map(s=><div key={s.setId} className={styles.versionRow}><span>{setName(s)} · {label(s.status)}</span><button type="button" disabled={state.busy||!!state.pending} onClick={()=>openSet(s.setId)}>{op('open')}</button></div>):<p>{op('empty')}</p>}</section>
       </>}
       {state.screen==='editor'&&(!form?<section className={base.panel}><p>{t('planBuilder.intro')}</p><button type="button" data-plan-create disabled={!state.owner||state.busy||!!state.pending} onClick={()=>void controller.open(null)}>{op('newSet')}</button></section>:<>
