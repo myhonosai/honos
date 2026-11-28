@@ -141,8 +141,8 @@ test('presents online family tuition payments as coming soon, not available', ()
 test('yearly savings are stated per plan and never rounded up to a false figure', () => {
   // $2,097 vs 12 x $249 = 29.82%; $1,494 vs 12 x $199.20 = 37.5%.
   assert.doesNotMatch(html, /30% or more|save 30%|30% off/i);
-  assert.match(html, /\$2,097 a year, about 30% less than paying monthly/);
-  assert.match(html, /\$1,494 a year, about 37% less than paying monthly/);
+  assert.match(html, /\$2,097 a year, 29% less than paying \$249 monthly/);
+  assert.match(html, /\$1,494 a year, 37% less than paying \$199\.20 monthly/);
 });
 
 test('states the 30-day money-back guarantee exactly as David decided (2026-11-12)', () => {

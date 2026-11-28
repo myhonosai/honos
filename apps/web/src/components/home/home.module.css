@@ -27,8 +27,8 @@
 .portrait img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; }
 .agentText { display: grid; gap: 2px; padding: 0 6px; }
 .agent strong { font-family: var(--hon-font-display); font-size: var(--hon-text-md); }
-.agentTitle { color: var(--hon-text-muted); font-size: 11px; line-height: 1.3; }
-.agentStatus { display: inline-flex; justify-content: center; align-items: center; gap: 6px; margin-top: 2px; font-size: 11px; line-height: 1.3; color: var(--hon-text-subtle); }
+.agentTitle { color: var(--hon-text-muted); font-size: var(--hon-text-xs, 12px); line-height: 1.3; }
+.agentStatus { display: inline-flex; justify-content: center; align-items: center; gap: 6px; margin-top: 2px; font-size: var(--hon-text-xs, 12px); line-height: 1.3; color: var(--hon-text-subtle); }
 .agentStatus i { width: 7px; height: 7px; border-radius: 50%; background: var(--hon-text-subtle); flex: none; }
 .agent[data-status='READY'] .agentStatus { color: var(--hon-success); }
 .agent[data-status='READY'] .agentStatus i { background: var(--hon-success); }
@@ -37,7 +37,7 @@
 .agent[data-status='NOT_AVAILABLE'] { border-color: var(--hon-border); box-shadow: none; }
 .agent[data-status='NOT_AVAILABLE'] .portrait img { filter: saturate(0.55) brightness(0.72); }
 .agentLink {
-  justify-self: center; margin-top: 2px; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-decoration: none;
+  justify-self: center; margin-top: 2px; padding: 4px 10px; border-radius: 999px; font-size: var(--hon-text-xs, 12px); font-weight: 700; text-decoration: none;
   border: 1px solid color-mix(in srgb, var(--agent) 60%, transparent); color: var(--hon-text) !important; background: var(--hon-surface);
 }
 .agentLink:hover { background: color-mix(in srgb, var(--agent) 24%, transparent); }
@@ -46,7 +46,7 @@
 .orb { width: 168px; height: 168px; margin: 18px 0 14px; }
 .honCore h2 { margin: 0; font-family: var(--hon-font-display); font-size: var(--hon-text-2xl); letter-spacing: 0.08em; }
 .honRole { margin: 0; color: var(--hon-text-muted); font-size: var(--hon-text-sm); }
-.honStatus { display: flex; gap: 6px; align-items: baseline; margin: 2px 0 var(--hon-space-2); color: var(--hon-warning); font-size: 11px; line-height: 1.4; max-width: 30ch; text-align: left; }
+.honStatus { display: flex; gap: 6px; align-items: baseline; margin: 2px 0 var(--hon-space-2); color: var(--hon-warning); font-size: var(--hon-text-xs, 12px); line-height: 1.4; max-width: 30ch; text-align: left; }
 .honStatus::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .honStatus[data-status="ready"] { color: var(--hon-success); }
 .honStatus[data-status="checking"] { color: var(--hon-text-muted); }
@@ -58,6 +58,11 @@
 
 .teamFoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--hon-space-3); }
 .teamFoot p { margin: 0; color: var(--hon-text-subtle); font-size: var(--hon-text-xs); }
+.teamFoot .teamStatus { display: inline-flex; align-items: center; gap: 8px; color: var(--hon-text-muted); font-size: var(--hon-text-sm, 13px); }
+.teamStatus i { width: 7px; height: 7px; border-radius: 50%; background: var(--hon-text-subtle); flex: none; }
+.teamStatus[data-status='PROVIDER_OFF'] i, .teamStatus[data-status='AI_OFF'] i, .teamStatus[data-status='BUDGET'] i, .teamStatus[data-status='NO_ROUTE'] i { background: var(--hon-warning); }
+/* Team first, just tighter (owner 2026-11-28): square portraits on wide screens so the stage takes less height */
+@media (min-width: 1100px) { .portrait { aspect-ratio: 1 / 1; } }
 .artStyle { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: 999px; background: var(--hon-surface-solid); border: 1px solid var(--hon-border); }
 .artStyle > span { padding: 0 8px; color: var(--hon-text-muted); font-size: var(--hon-text-xs); }
 .artStyle button {
@@ -193,11 +198,11 @@
   .agents { gap: 6px; }
   .agentText { padding: 0 3px; }
   .agent strong { font-size: var(--hon-text-sm); }
-  .agentTitle { font-size: 10px; }
-  .agentStatus { font-size: 10px; gap: 4px; }
-  .agentLink, [data-hon-mode='big-button'] .agentLink { padding: 3px 6px; min-height: 32px; font-size: 10px; }
+  .agentTitle { font-size: var(--hon-text-xs, 12px); }
+  .agentStatus { font-size: var(--hon-text-xs, 12px); gap: 4px; }
+  .agentLink, [data-hon-mode='big-button'] .agentLink { padding: 3px 6px; min-height: 32px; font-size: var(--hon-text-xs, 12px); }
   [data-hon-mode='big-button'] .agent strong { font-size: var(--hon-text-sm); }
-  [data-hon-mode='big-button'] .agentStatus { font-size: 10px; }
+  [data-hon-mode='big-button'] .agentStatus { font-size: var(--hon-text-xs, 12px); }
   .helpAsk strong { font-size: var(--hon-text-md); }
   .kpis, [data-hon-mode='big-button'] .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid, [data-hon-mode='big-button'] .grid { grid-template-columns: 1fr; }

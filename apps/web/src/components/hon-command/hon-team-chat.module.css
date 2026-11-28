@@ -1,11 +1,11 @@
 /* Team chat on the school Dashboard. Uses the shell tokens (--hon-*); data-mode tunes size per mode. */
 .chat { display: grid; gap: var(--hon-space-4, 16px); min-width: 0; padding: var(--hon-space-5, 20px); border-radius: var(--hon-radius-lg, 18px);
   border: 1px solid var(--hon-border-strong, #2b4766); background: var(--hon-surface, #0d1a2e); color: var(--hon-text, #eaf4fb); }
-.chat button { min-height: var(--hon-target, 44px); padding: 8px 16px; border: 0; border-radius: 12px; background: linear-gradient(135deg, #8de3d8, #5fb8f0);
-  color: #04202a; font: inherit; font-weight: 800; cursor: pointer; }
+.chat button { min-height: var(--hon-target, 44px); padding: 8px 16px; border: 0; border-radius: 12px; background: var(--hon-accent-strong, #1d63f0);
+  color: var(--hon-accent-contrast, #fff); font: inherit; font-weight: 600; cursor: pointer; }
 .chat button:disabled { opacity: .55; cursor: not-allowed; }
-.chat button:focus-visible, .chat textarea:focus-visible, .chat a:focus-visible, .chat summary:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
-.chat .secondary { border: 1px solid var(--hon-border, #24405a); background: var(--hon-surface-2, #13263a); color: var(--hon-text, #eaf4fb); font-weight: 700; }
+.chat button:focus-visible, .chat textarea:focus-visible, .chat a:focus-visible, .chat summary:focus-visible { outline: none; box-shadow: var(--hon-focus, 0 0 0 2px #0b0d14, 0 0 0 4px #2f7bff); }
+.chat .secondary { border: 1px solid var(--hon-border, #24405a); background: var(--hon-surface-2, #13263a); color: var(--hon-text, #eaf4fb); font-weight: 600; }
 .chat a { color: var(--hon-info, #8fd0ff); }
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -21,34 +21,34 @@
 .chat .member:disabled { opacity: .62; }
 .member img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px var(--member, #8de3d8); }
 .member strong { font-size: 14px; }
-.member small { color: var(--hon-text-muted, #a9bdd1); font-size: 11px; line-height: 1.25; }
+.member small { color: var(--hon-text-muted, #a9bdd1); font-size: var(--hon-text-xs, 12px); line-height: 1.25; }
 .group { display: flex; }
 .group img { width: 28px; height: 28px; margin-left: -8px; border: 2px solid var(--hon-surface-2, #13263a); box-shadow: none; }
 .group img:first-child { margin-left: 0; }
-.memberState { margin: 0; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-.memberState[data-tone='ready'] { background: #10392f; color: #8ff0c9; }
-.memberState[data-tone='neutral'] { background: #15283c; color: #cfe0f2; }
-.memberState[data-tone='blocked'] { background: #3a1b27; color: #ffc3cf; }
+.memberState { margin: 0; padding: 1px 8px; border-radius: 999px; font-size: var(--hon-text-xs, 12px); font-weight: 700; }
+.memberState[data-tone='ready'] { background: var(--hon-success-soft, #10392f); color: var(--hon-success, #8ff0c9); }
+.memberState[data-tone='neutral'] { background: var(--hon-surface, #15283c); color: var(--hon-text-muted, #cfe0f2); }
+.memberState[data-tone='blocked'] { background: var(--hon-danger-soft, #3a1b27); color: var(--hon-danger, #ffc3cf); }
 
 .notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; padding: 12px; border-radius: 12px; background: var(--hon-surface-2, #13263a); }
 .messages { display: grid; gap: 10px; max-height: 520px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; }
 .empty { color: var(--hon-text-muted, #a9bdd1); }
-.you { justify-self: end; max-width: min(640px, 92%); padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: #1d3b5c; }
+.you { justify-self: end; max-width: min(640px, 92%); padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--hon-surface-2, #1d3b5c); border: 1px solid var(--hon-border-strong, #2b4766); }
 .agent { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; max-width: min(760px, 96%); padding: 10px 14px; border-radius: 16px 16px 16px 4px;
-  background: var(--hon-surface-2, #13263a); border-left: 4px solid var(--member, #8de3d8); }
+  background: var(--hon-surface-2, #13263a); border: 1px solid var(--hon-border, #24405a); }
 .agent img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
-.agent[data-plan='true'] { border: 2px solid var(--member, #8de3d8); background: #102c2c; }
+.agent[data-plan='true'] { border: 1px solid var(--hon-border-strong, #2b4766); background: var(--hon-surface, #102c2c); }
 .byline { margin: 0 0 2px; font-size: 13px; }
 .byline span { color: var(--hon-text-muted, #a9bdd1); }
 .text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
 .typing { color: var(--hon-text-muted, #a9bdd1); font-style: italic; }
-.stalled { display: grid; gap: 8px; padding: 12px; border: 1px solid #7c6125; border-radius: 12px; background: #251d0c; }
+.stalled { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--hon-border-strong, #7c6125); border-radius: 12px; background: var(--hon-warning-soft, #251d0c); }
 .stalled p { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .composer { display: grid; gap: 8px; }
 .composer textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--hon-border, #24405a);
   background: var(--hon-surface-solid, #0a1524); color: var(--hon-text, #eaf4fb); font: inherit; resize: vertical; }
-.chat .planButton { background: linear-gradient(135deg, #ffd27a, #ff9f6b); }
+.chat .planButton { border: 1px solid var(--hon-border-strong, #2b4766); background: var(--hon-surface-2, #13263a); color: var(--hon-text, #eaf4fb); }
 .whoElse summary { cursor: pointer; font-weight: 700; min-height: 32px; }
 .whoElse ul { display: grid; gap: 6px; margin: 8px 0 0; padding-left: 18px; color: var(--hon-text-muted, #a9bdd1); font-size: 14px; }
 .whoElse strong { color: var(--hon-text, #eaf4fb); }

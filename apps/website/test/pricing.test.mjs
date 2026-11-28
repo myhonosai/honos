@@ -89,7 +89,8 @@ test('each card has a big rounded start button and the same eight-item checklist
 test('the banner shows the founder discount that really applies today', () => {
   const banner = section.match(/<div class="offer"[\s\S]*?<\/div>/)?.[0] ?? '';
   assert.match(banner, /role="note"/);
-  assert.match(plain(banner), /first 50 schools get 20% off/);
+  assert.match(plain(banner), /first 50 schools pay \$199\.20 a month or \$1,494 a year/);
+  assert.doesNotMatch(plain(banner), /20% off/, 'one basis: the banner states prices, badges carry the percentages');
   assert.match(plain(banner), /standard price/);
   assert.equal(19920 / 24900, 0.8, 'founder monthly is exactly 20% off the standard price');
 });
