@@ -68,3 +68,15 @@ export class SaasOffersSchoolController {
     return { data: await this.billing.readSchoolHonOsOffers(subject(req), schoolId) };
   }
 }
+
+/** The features the school's HQ-assigned plan includes and leaves out (0699), for any eligible staff member of the exact
+ * school. Display only: the school app shows left-out features locked with an Upgrade button. */
+@Controller('schools/:schoolId/plan-features')
+@UseGuards(HonIdentityGuard)
+export class SchoolPlanFeaturesController {
+  constructor(private readonly billing: SaasBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async features(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.billing.readSchoolPlanFeatures(subject(req), schoolId) };
+  }
+}

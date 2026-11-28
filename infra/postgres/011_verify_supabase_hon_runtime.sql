@@ -7709,3 +7709,19 @@ BEGIN
     RAISE EXCEPTION 'HQ inbound text outcome check drift'; END IF;
 END $$;
 -- End HQ inbound owner replies exact verification.
+-- School plan features exact verification (0699)
+DO $$ BEGIN
+  IF to_regprocedure('hon.read_school_plan_features(text,uuid)') IS NULL OR to_regprocedure('hon.school_plan_features(uuid,uuid)') IS NULL
+    OR NOT has_function_privilege('hon_runtime','hon.read_school_plan_features(text,uuid)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.school_plan_features(uuid,uuid)','EXECUTE')
+    OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE p.oid IN ('hon.read_school_plan_features(text,uuid)'::regprocedure,'hon.school_plan_features(uuid,uuid)'::regprocedure)
+        AND a.grantee<>p.proowner AND a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')) THEN
+    RAISE EXCEPTION 'Unsafe school plan features ACL'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.read_school_plan_features(text,uuid)'::regprocedure AND p.prosecdef
+      AND position('staff_member_eligible' IN p.prosrc)>0 AND position('family_access_grants' IN p.prosrc)>0)
+    OR NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.school_plan_features(uuid,uuid)'::regprocedure AND NOT p.prosecdef
+      AND position('hq_school_plan_current' IN p.prosrc)>0 AND position('cur.school_id = p_school' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'School plan features read drift'; END IF;
+END $$;
+-- End school plan features exact verification.
