@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { OpenRouterHonReplyRuntime, HonReplyProviderRuntimeError, HON_REPLY_SYSTEM_PROMPT, CLAIRE_ANALYSIS_SYSTEM_PROMPT, ALEX_ANALYSIS_SYSTEM_PROMPT, JORDAN_ANALYSIS_SYSTEM_PROMPT, LENA_ANALYSIS_SYSTEM_PROMPT, MAYA_ANALYSIS_SYSTEM_PROMPT, HON_OS_PRODUCT_GUIDE, honReplyInputTokenBound, honReplySystemPrompt, splitHonReplySuggestions } = require('../dist/ai/hon-reply-provider-runtime.js');
+const { OpenRouterHonReplyRuntime, HonReplyProviderRuntimeError, HON_REPLY_SYSTEM_PROMPT, CLAIRE_ANALYSIS_SYSTEM_PROMPT, ALEX_ANALYSIS_SYSTEM_PROMPT, JORDAN_ANALYSIS_SYSTEM_PROMPT, LENA_ANALYSIS_SYSTEM_PROMPT, MAYA_ANALYSIS_SYSTEM_PROMPT, HON_OS_PRODUCT_GUIDE, HQ_PRODUCT_GUIDE, honReplyInputTokenBound, honReplySystemPrompt, splitHonReplySuggestions } = require('../dist/ai/hon-reply-provider-runtime.js');
 const { HON_REPLY_LIMITS, HON_REPLY_MODES } = require('@hon/contracts');
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -164,8 +164,18 @@ test('2026-11-28: HON knows HON OS itself (team chat, voice, menu), and the spec
   for (const prompt of [CLAIRE_ANALYSIS_SYSTEM_PROMPT, ALEX_ANALYSIS_SYSTEM_PROMPT, JORDAN_ANALYSIS_SYSTEM_PROMPT, LENA_ANALYSIS_SYSTEM_PROMPT, MAYA_ANALYSIS_SYSTEM_PROMPT]) {
     assert.match(prompt, /about HON OS itself .* one or two sentences without the labeled parts and say that HON can explain how HON OS works/);
   }
-  // HQ HON is unchanged here (its own guide comes with the HQ team chat).
-  assert.doesNotMatch(honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', 'hon'), /Team chat/);
+  // HQ HON gets its own HQ guide (the HQ team chat), never the school one.
+  const hq = honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', 'hon');
+  assert(hq.includes(HQ_PRODUCT_GUIDE));
+  assert(!hq.includes(HON_OS_PRODUCT_GUIDE));
+  assert.match(HQ_PRODUCT_GUIDE, /"Talk to your team", a group chat .* Everyone .* microphone/);
+  assert.match(HQ_PRODUCT_GUIDE, /depends on their HQ role/);
+  assert.doesNotMatch(HQ_PRODUCT_GUIDE, /https?:|\/hq\//);
+  for (const a of ['chase', 'mia', 'ethan', 'olivia', 'ryan', 'sophia']) {
+    const p = honReplySystemPrompt('STANDARD', 1, 'hq_hon', 'STANDARD', a);
+    assert.match(p, /about HON HQ itself .* HON can explain how HQ works/);
+    assert(!p.includes(HQ_PRODUCT_GUIDE));
+  }
 });
 
 test('2026-11-28: a team chat follow-up and "Make a plan together" fit their budgets and are sent (they were refused before)', async () => {
