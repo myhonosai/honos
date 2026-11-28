@@ -1,4 +1,5 @@
 import type { CreativeDesignFont, CreativeDesignSizeCode } from '@hon/contracts';
+import { DESIGN_FONTS } from './fonts';
 
 const en = {
   hqTitle: 'Designs for HON', hqIntro: 'Make flyers, posters and social graphics to market HON OS. Drag things around, click to change them, and download when you are done. Nothing here costs anything or uses AI.',
@@ -139,4 +140,6 @@ const SIZE_MEASURE: Record<CreativeDesignSizeCode, string> = {
 };
 export function sizeName(language: string, code: CreativeDesignSizeCode): string { return (SIZE_NAMES[language.slice(0, 2)] ?? SIZE_NAMES.en!)[code]; }
 export function sizeMeasure(code: CreativeDesignSizeCode): string { return SIZE_MEASURE[code]; }
-export const FONT_NAMES: Record<CreativeDesignFont, string> = { SANS: 'Sans', SERIF: 'Serif', DISPLAY: 'Display', ROUNDED: 'Rounded', HANDWRITING: 'Handwriting', MONO: 'Typewriter' };
+/** Font names are the fonts' own names, the same in every language. */
+export const FONT_NAMES: Readonly<Record<CreativeDesignFont, string>> =
+  Object.fromEntries(Object.entries(DESIGN_FONTS).map(([k, f]) => [k, f.name])) as Record<CreativeDesignFont, string>;

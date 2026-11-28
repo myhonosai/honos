@@ -253,6 +253,11 @@ try{
     "UPDATE hon.school_creative_designs SET name='x' WHERE id=$1",`UPDATE hon.school_creative_designs SET school_id='${b.school}',version=version+1 WHERE id=$1`]){
    await admin.query('BEGIN');try{await assert.rejects(admin.query(sql,[id]),/CREATIVE_DESIGN_IMMUTABLE|violates/,sql);}finally{await admin.query('ROLLBACK');}}
   await admin.query('BEGIN');try{await assert.rejects(admin.query("UPDATE hon.school_creative_designs SET document=$2,version=version+1 WHERE id=$1",[id,doc([title({font:'COMIC'})])]),/school_creative_designs_document/);}finally{await admin.query('ROLLBACK');}}
+  // E1 (0703): every designer font the contract lists is valid in the database too; the old six still are.
+  {const{CREATIVE_DESIGN_FONTS}=C;assert.equal(CREATIVE_DESIGN_FONTS.length,22);
+   for(const font of CREATIVE_DESIGN_FONTS)assert.equal((await admin.query("SELECT hon.creative_design_document_ok($1::jsonb,'FLYER_LETTER') ok",[JSON.stringify(doc([title({font})]))])).rows[0].ok,true,font);
+   assert.equal((await admin.query("SELECT hon.creative_design_document_ok($1::jsonb,'FLYER_LETTER') ok",[JSON.stringify(doc([title({font:'bebas'})]))])).rows[0].ok,false,'font values are exact');
+   await admin.query('BEGIN');try{await admin.query("UPDATE hon.school_creative_designs SET document=$2,version=version+1 WHERE id=$1",[flyer.designId,doc([title({font:"BEBAS"})])]);}finally{await admin.query('ROLLBACK');}}
  pass('direct runtime calls with input the contract would refuse fail VALIDATION_FAILED in the database too; calls without the human session, from another source, another subject, an action request or a foreign request id are refused; the tables refuse deletes, size or school moves, version skips and malformed documents even for the owner');
  console.log(`PASS CREATIVE DESIGNS: ${groups} groups`);
 }finally{await app?.close();await Promise.allSettled([admin.end(),restricted.end(),worker.end(),database.onModuleDestroy?.()]);}

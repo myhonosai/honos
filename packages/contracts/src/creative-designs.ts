@@ -20,7 +20,10 @@ export const CREATIVE_DESIGN_SIZES: Readonly<Record<CreativeDesignSizeCode, Crea
   SOCIAL_STORY: { code: 'SOCIAL_STORY', medium: 'SCREEN', width: 1080, height: 1920, sides: 1 },
   EVENT_COVER: { code: 'EVENT_COVER', medium: 'SCREEN', width: 1920, height: 1005, sides: 1 },
 };
-export const CREATIVE_DESIGN_FONTS = ['SANS', 'SERIF', 'DISPLAY', 'ROUNDED', 'HANDWRITING', 'MONO'] as const;
+/** The six original system-font families (0617) and, from 0703, 16 open-licence designer fonts the web app ships. */
+export const CREATIVE_DESIGN_FONTS = ['SANS', 'SERIF', 'DISPLAY', 'ROUNDED', 'HANDWRITING', 'MONO',
+  'MONTSERRAT', 'POPPINS', 'OSWALD', 'BEBAS', 'ANTON', 'ARCHIVO_BLACK', 'PLAYFAIR', 'MERRIWEATHER', 'RALEWAY', 'NUNITO',
+  'ROBOTO_SLAB', 'MARKER', 'PACIFICO', 'DANCING', 'LOBSTER', 'BANGERS'] as const;
 export type CreativeDesignFont = (typeof CREATIVE_DESIGN_FONTS)[number];
 export const CREATIVE_DESIGN_ELEMENT_KINDS = ['text', 'rect', 'ellipse', 'line', 'image', 'qr'] as const;
 export type CreativeDesignElementKind = (typeof CREATIVE_DESIGN_ELEMENT_KINDS)[number];

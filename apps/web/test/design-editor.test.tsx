@@ -495,3 +495,70 @@ describe('design review fixes', () => {
     expect(createInput('Open\u0085house', 'FLYER_LETTER')).toBeNull();
   });
 });
+
+describe('design E1: designer fonts (0703)', () => {
+  it('every contract font has a name and a stack; shipped fonts point at files that exist with a licence row', async () => {
+    const { CREATIVE_DESIGN_FONTS } = await import('@hon/contracts');
+    const { DESIGN_FONTS, fontStack } = await import('../src/components/design-editor/fonts');
+    const { FONT_NAMES } = await import('../src/components/design-editor/copy');
+    const fs = await import('node:fs'), path = await import('node:path');
+    const dir = path.resolve(__dirname, '../public/fonts/design');
+    const licences = fs.readFileSync(path.join(dir, 'LICENSES.md'), 'utf8');
+    expect(CREATIVE_DESIGN_FONTS.length).toBe(22);
+    for (const f of CREATIVE_DESIGN_FONTS) {
+      expect(FONT_NAMES[f]).toBe(DESIGN_FONTS[f].name);
+      expect(fontStack(f).length).toBeGreaterThan(5);
+      for (const file of DESIGN_FONTS[f].files) {
+        expect(fs.existsSync(path.join(dir, file.file))).toBe(true);
+        expect(licences).toContain(file.file.replace(/-(400|700)\.woff2$/, ''));
+      }
+    }
+    expect(fontStack('BEBAS')).toBe('"HON Bebas Neue", Impact, "Arial Narrow", sans-serif');
+    expect(fontStack('SANS')).toBe('Arial, Helvetica, sans-serif');
+    expect(DESIGN_FONTS.SANS.files).toEqual([]);
+  });
+
+  it('a document using a new font still validates, and an unknown font is refused', () => {
+    const doc = blankCreativeDesignDocument('FLYER_LETTER');
+    const text = { ...newElement('text', 'FLYER_LETTER', 'ta'), font: 'BEBAS' } as CreativeDesignElement;
+    expect(() => validateCreativeDesignDocument({ v: 1, pages: [{ ...doc.pages[0]!, elements: [text] }] }, 'FLYER_LETTER')).not.toThrow();
+    expect(() => validateCreativeDesignDocument({ v: 1, pages: [{ ...doc.pages[0]!, elements: [{ ...text, font: 'COMIC' }] }] }, 'FLYER_LETTER')).toThrow();
+  });
+
+  it('loads each shipped font once, skips system fonts, retries a font that failed', async () => {
+    const { loadDesignFonts, resetDesignFontsForTests, fontsInDocument } = await import('../src/components/design-editor/fonts');
+    resetDesignFontsForTests();
+    const created: string[] = [], added: string[] = [];
+    let fail = true;
+    const host = {
+      create: (family: string, source: string, weight: string) => {
+        created.push(`${family}|${source}|${weight}`);
+        return { load: () => family === 'HON Lobster' && fail ? Promise.reject(new Error('net')) : Promise.resolve(), family } as unknown as FontFace;
+      },
+      add: (face: FontFace) => { added.push(face.family); },
+    };
+    expect(await loadDesignFonts(['SANS', 'POPPINS', 'MONTSERRAT', 'POPPINS', 'LOBSTER'], host)).toEqual(['POPPINS', 'MONTSERRAT']);
+    expect(created).toEqual([
+      'HON Poppins|url(/fonts/design/poppins-400.woff2) format("woff2")|400',
+      'HON Poppins|url(/fonts/design/poppins-700.woff2) format("woff2")|700',
+      'HON Montserrat|url(/fonts/design/montserrat.woff2) format("woff2")|400 700',
+      'HON Lobster|url(/fonts/design/lobster-400.woff2) format("woff2")|400',
+    ]);
+    expect(added).toEqual(['HON Poppins', 'HON Poppins', 'HON Montserrat']);
+    fail = false;
+    expect(await loadDesignFonts(['POPPINS', 'LOBSTER'], host)).toEqual(['POPPINS', 'LOBSTER']);
+    expect(created.length).toBe(5);
+    expect(await loadDesignFonts(['POPPINS'], null)).toEqual([]);
+    const doc = blankCreativeDesignDocument('FLYER_LETTER');
+    const t1 = { ...newElement('text', 'FLYER_LETTER', 't1'), font: 'ANTON' } as CreativeDesignElement, t2 = { ...newElement('text', 'FLYER_LETTER', 't2'), font: 'ANTON' } as CreativeDesignElement;
+    expect(fontsInDocument({ v: 1, pages: [{ ...doc.pages[0]!, elements: [t1, newElement('rect', 'FLYER_LETTER', 'r1'), t2, newElement('text', 'FLYER_LETTER', 't3')] }] })).toEqual(['ANTON', 'SANS']);
+  });
+
+  it('the painter draws a shipped font by its family with the fallback stack', () => {
+    const doc = blankCreativeDesignDocument('FLYER_LETTER');
+    const fonts: string[] = [];
+    const ctx = new Proxy({}, { get: (_t, k) => k === 'measureText' ? () => ({ width: 10 }) : () => undefined, set: (_t, k, v) => { if (k === 'font') fonts.push(v); return true; } });
+    paintPage(ctx as CanvasRenderingContext2D, { ...doc.pages[0]!, elements: [{ ...newElement('text', 'FLYER_LETTER', 'ta'), font: 'PLAYFAIR' } as CreativeDesignElement] }, { width: 612, height: 792, sides: 1, medium: 'PRINT' } as never, 1, new Map());
+    expect(fonts[0]).toMatch(/700 \d+(\.\d+)?px "HON Playfair Display", Georgia/);
+  });
+});

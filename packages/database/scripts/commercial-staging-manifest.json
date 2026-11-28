@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "bafc29f0d6738c43c450cb6d5540528cf0bbc1a7018cad6c3e22c83348f5a304",
+  "chainSha256": "24efe69f0220557b80714b86e08e93ad310407a043bee00cc0e5de5a69723a2a",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -1069,6 +1069,10 @@
     {
       "file": "0698_hq_inbound_owner_replies.sql",
       "sha256": "cbd99d366661f7f44a2ad05b12cf13766fc928384f142b2c41b5637b9436ccbc"
+    },
+    {
+      "file": "0703_creative_design_fonts.sql",
+      "sha256": "dbfbb616d2457e8c88bf8e0bce7870c37c925a3cbb1d6840ae3b3c03e81f0aa8"
     }
   ]
 }

@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CREATIVE_DESIGN_FONTS, CREATIVE_DESIGN_LIMITS, creativeDesignPhotoIds, creativeDesignQrDataOk, creativeDesignTextOk,
-  type CreativeDesign, type CreativeDesignElement, type CreativeDesignPhotoReceipt, type CreativeDesignReceipt, type AddCreativeDesignPhotoInput,
+  type CreativeDesign, type CreativeDesignElement, type CreativeDesignFont, type CreativeDesignPhotoReceipt, type CreativeDesignReceipt, type AddCreativeDesignPhotoInput,
   type CreativeDesignPhoto, type SaveCreativeDesignInput, type SetCreativeDesignStatusInput,
 } from '@hon/contracts';
 import {
@@ -11,6 +11,7 @@ import {
   type AddKind, type Handle, type History, type LayerMove,
 } from './model';
 import { exportScale, paintPage, type PhotoSource } from './paint';
+import { fontStack, fontsInDocument, loadDesignFonts } from './fonts';
 import { PRINT_BLEED, buildPrintPdf, type PdfImage } from './pdf';
 import { NO_BRAND, type Brand } from './templates';
 import { DesignSaver, type SaveState } from './saver';
@@ -153,6 +154,16 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     }
   }, [doc]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load the designer fonts the design uses; paint again as each arrives (until then its text uses the system fallback).
+  const [fontsLoaded, setFontsLoaded] = useState(0);
+  const fontKey = fontsInDocument(doc).join(',');
+  useEffect(() => {
+    let alive = true;
+    void loadDesignFonts(fontKey ? fontKey.split(',') as CreativeDesignFont[] : [])
+      .then(ready => { if (alive && ready.length) setFontsLoaded(n => n + 1); });
+    return () => { alive = false; };
+  }, [fontKey]);
+
   // Paint.
   useEffect(() => {
     const canvas = canvasRef.current, ctx = canvas?.getContext('2d');
@@ -160,7 +171,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     const ratio = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(size.width * scale * ratio); canvas.height = Math.round(size.height * scale * ratio);
     paintPage(ctx, page, size, scale * ratio, photos);
-  }, [page, size, scale, photos]);
+  }, [page, size, scale, photos, fontsLoaded]);
 
   const edit = useCallback((fn: (d: History['present']) => History['present'], mergeKey: string | null = null) => {
     if (!editable) return;
@@ -242,6 +253,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
   };
   const download = async () => {
     if (!photosReady()) return;
+    await loadDesignFonts(fontsInDocument(doc));
     const k = exportScale(size), canvas = document.createElement('canvas');
     canvas.width = Math.round(size.width * k); canvas.height = Math.round(size.height * k);
     const ctx = canvas.getContext('2d');
@@ -255,6 +267,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     if (busy || !photosReady()) return;
     setBusy('PDF');
     try {
+      await loadDesignFonts(fontsInDocument(doc));
       const bleedSize = { ...size, width: size.width + 2 * PRINT_BLEED, height: size.height + 2 * PRINT_BLEED };
       const k = exportScale(bleedSize), images: PdfImage[] = [];
       for (const side of doc.pages) {
@@ -487,7 +500,7 @@ export function Properties({ element: e, language, editable, patch, layer, remov
           <div className={s.pair}>
             <label className={s.field}>{t('font')}
               <select value={e.font} disabled={off} onChange={event => patch('font', { font: event.target.value as typeof e.font })}>
-                {CREATIVE_DESIGN_FONTS.map(f => <option key={f} value={f}>{FONT_NAMES[f]}</option>)}
+                {CREATIVE_DESIGN_FONTS.map(f => <option key={f} value={f} style={{ fontFamily: fontStack(f) }}>{FONT_NAMES[f]}</option>)}
               </select>
             </label>
             <NumberField label={t('fontSize')} value={e.size} min={4} max={600} disabled={off} onChange={v => patch('size', { size: v })} />

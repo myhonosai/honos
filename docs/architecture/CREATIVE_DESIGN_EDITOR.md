@@ -102,3 +102,19 @@ version only, never the text or photos.
 ## What stays off
 
 No AI provider, paid service, print ordering, payment or outside call. Nothing is sent or published from the editor in D1.
+
+## E1 designer fonts (0703, 2026-11-28)
+
+Owner decision (David, 2026-11-28, card "Which way should we get Canva-quality designs with AI?"): "Upgrade ours now,
+Canva later". Plan for the upgrade (E1 fonts, E2 pro templates, E3 element upgrades, E4 AI "describe your design",
+E5 AI rewrite, E6 stock and AI photos, E7 resize and send; "Open in Canva" later with his OK) is in the project file
+design-editor-canva/SPEC.md.
+
+- `CREATIVE_DESIGN_FONTS` adds 16 open-licence fonts (Montserrat, Poppins, Oswald, Bebas Neue, Anton, Archivo Black,
+  Playfair Display, Merriweather, Raleway, Nunito, Roboto Slab, Permanent Marker, Pacifico, Dancing Script, Lobster,
+  Bangers). The six original values stay valid; no saved design changes.
+- 0703 replaces only `hon.creative_design_document_ok` (same signature and rules, wider font list); the 011 body hash
+  moves with it. School (0617) and HQ (0678) designs both use it.
+- The web app serves Latin woff2 files from `apps/web/public/fonts/design/` (licences in LICENSES.md there); no outside
+  font service at run time. `fonts.ts` loads the fonts a design uses with the FontFace API before painting or exporting
+  and repaints when they arrive; missing letters (Korean, for example) fall back to the system stack.
