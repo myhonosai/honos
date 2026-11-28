@@ -17,3 +17,7 @@ it('fails closed for a missing or invalid session', async () => {
   h.token = undefined; await expect(requireVerifiedWebSession()).rejects.toThrow('REDIRECT /auth/login');
   h.token = 'x'; h.invalid = true; await expect(requireVerifiedWebSession()).rejects.toThrow('REDIRECT /auth/login');
 });
+it('a page may name its fixed sign-in link; the default stays plain sign-in', async () => {
+  h.token = undefined; await expect(requireVerifiedWebSession('/auth/login?for=start')).rejects.toThrow('REDIRECT /auth/login?for=start');
+  h.token = undefined; await expect(requireVerifiedWebSession()).rejects.toThrow(/REDIRECT \/auth\/login$/);
+});

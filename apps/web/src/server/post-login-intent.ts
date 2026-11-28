@@ -7,8 +7,10 @@ export const POST_LOGIN_INTENT_COOKIE = 'hon_post_login';
 /**
  * `mobile`: the HON Family app's sign-in (/auth/mobile/start) and `staff-mobile`: the HON Staff app's
  * (/auth/staff-mobile/start) return to their confirmation step, never straight to the app.
+ * `start`: someone who tapped "Start a new school" (the website or the app home) and had to sign in or create a
+ * login first comes back to /account/start, which still decides everything itself.
  */
-export const POST_LOGIN_INTENTS = { parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish', 'staff-mobile': '/auth/staff-mobile/finish' } as const;
+export const POST_LOGIN_INTENTS = { parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish', 'staff-mobile': '/auth/staff-mobile/finish', start: '/account/start' } as const;
 export type PostLoginIntent = keyof typeof POST_LOGIN_INTENTS;
 export type PostLoginIntentPath = (typeof POST_LOGIN_INTENTS)[PostLoginIntent];
 
@@ -24,3 +26,4 @@ export function postLoginIntentFromQuery(search: URLSearchParams): PostLoginInte
 
 export const PARENT_SIGN_IN = '/auth/login?for=parent';
 export const FAMILY_INVITATION_SIGN_IN = '/auth/login?for=family-invitation';
+export const START_SIGN_IN = '/auth/login?for=start';
