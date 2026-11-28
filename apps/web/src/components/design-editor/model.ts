@@ -1,20 +1,15 @@
 import {
-  CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZES, type CreativeDesignDocument, type CreativeDesignElement, type CreativeDesignFont, type CreativeDesignPage,
+  CREATIVE_DESIGN_FONTS, CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZES, type CreativeDesignDocument, type CreativeDesignElement, type CreativeDesignFont, type CreativeDesignPage,
   type CreativeDesignSize, type CreativeDesignSizeCode,
 } from '@hon/contracts';
+import { fontStack } from './fonts';
 
 /**
  * Design editor D1 (0617) pure model: element defaults, edits, layer order, hit testing and undo/redo history. Every edit
  * returns a new document that still passes validateCreativeDesignDocument; nothing here talks to the server.
  */
-export const FONT_STACKS: Readonly<Record<CreativeDesignFont, string>> = {
-  SANS: 'Arial, Helvetica, sans-serif',
-  SERIF: 'Georgia, "Times New Roman", serif',
-  DISPLAY: 'Impact, "Arial Black", "Helvetica Neue", sans-serif',
-  ROUNDED: '"Trebuchet MS", "Segoe UI", Verdana, sans-serif',
-  HANDWRITING: '"Comic Sans MS", "Segoe Print", "Bradley Hand", cursive',
-  MONO: '"Courier New", Courier, monospace',
-};
+export const FONT_STACKS: Readonly<Record<CreativeDesignFont, string>> =
+  Object.fromEntries(CREATIVE_DESIGN_FONTS.map(f => [f, fontStack(f)])) as Record<CreativeDesignFont, string>;
 
 export type AddKind = 'text' | 'rect' | 'ellipse' | 'line' | 'qr';
 type Box = { x: number; y: number; w: number; h: number };
