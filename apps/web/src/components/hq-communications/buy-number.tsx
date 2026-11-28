@@ -13,7 +13,7 @@ import { CommsError, commsCommand, commsRead, type Owned } from './http';
  * Converter on and sets it as the HQ text sender (A2P not registered yet). Nothing is texted. The server decides who may.
  */
 const BASE = '/api/v1/hq/communications';
-const REFUSED = new Set(['HQ_SENDER_EXISTS', 'HQ_NUMBER_ORDER_OPEN', 'HQ_NUMBER_ORDER_FINISHED']);
+const REFUSED = new Set(['HQ_SENDER_EXISTS', 'HQ_NUMBER_ORDER_OPEN', 'HQ_NUMBER_ORDER_FINISHED', 'HQ_NUMBER_ORDER_BUSY']);
 /** 409 answers the buy route gives on purpose: each is definitive. */
 const DEFINITE = new Set(['NUMBER_UNAVAILABLE', 'PRICE_CHANGED', 'HQ_NUMBER_ORDER_OPEN', 'HQ_SENDER_EXISTS', 'HQ_NUMBER_SETUP_INCOMPLETE']);
 
@@ -66,6 +66,7 @@ const en = {
   r_NUMBER_UNAVAILABLE: 'that number is no longer available. Search again.', r_PRICE_CHANGED: 'Twilio\'s price went up. Search again to see it.',
   r_HQ_SENDER_EXISTS: 'HQ already has a texting number.', r_HQ_NUMBER_ORDER_OPEN: 'another number is still being set up.',
   r_NUMBER_PROVISIONING_OFF: 'buying is switched off.', r_PROVIDER_REJECTED: 'Twilio refused it.', r_OTHER: 'Twilio refused it.',
+  r_HQ_NUMBER_ORDER_BUSY: 'it is already being set up. Wait a few minutes, then reload.', working: 'HON is setting this number up right now. Reload in a few minutes.',
 } as const;
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
@@ -83,6 +84,7 @@ const ko: Record<Key, string> = {
   r_NUMBER_UNAVAILABLE: '그 번호는 더 이상 없습니다. 다시 검색하세요.', r_PRICE_CHANGED: 'Twilio 가격이 올랐습니다. 다시 검색하세요.',
   r_HQ_SENDER_EXISTS: 'HQ에 이미 문자 번호가 있습니다.', r_HQ_NUMBER_ORDER_OPEN: '다른 번호가 아직 설정 중입니다.',
   r_NUMBER_PROVISIONING_OFF: '구매가 꺼져 있습니다.', r_PROVIDER_REJECTED: 'Twilio가 거절했습니다.', r_OTHER: 'Twilio가 거절했습니다.',
+  r_HQ_NUMBER_ORDER_BUSY: '이미 설정 중입니다. 몇 분 뒤 새로고침하세요.', working: 'HON이 지금 이 번호를 설정하고 있습니다. 몇 분 뒤 새로고침하세요.',
 };
 const es: Record<Key, string> = {
   title: 'Comprar un número', intro: 'HON compra un número local de EE. UU. en la cuenta de Twilio de HON, configura su servicio de textos (MMS Converter activado) y lo usa como remitente de textos de HQ.',
@@ -99,6 +101,7 @@ const es: Record<Key, string> = {
   r_NUMBER_UNAVAILABLE: 'ese número ya no está disponible. Busque otra vez.', r_PRICE_CHANGED: 'el precio de Twilio subió. Busque otra vez.',
   r_HQ_SENDER_EXISTS: 'HQ ya tiene un número de textos.', r_HQ_NUMBER_ORDER_OPEN: 'otro número aún se está configurando.',
   r_NUMBER_PROVISIONING_OFF: 'la compra está desactivada.', r_PROVIDER_REJECTED: 'Twilio lo rechazó.', r_OTHER: 'Twilio lo rechazó.',
+  r_HQ_NUMBER_ORDER_BUSY: 'ya se está configurando. Espere unos minutos y recargue.', working: 'HON está configurando este número ahora. Recargue en unos minutos.',
 };
 const COPY: Record<string, Record<Key, string>> = { en, ko, es };
 export function buyNumberText(language: string, key: Key, vars: Record<string, string> = {}): string {
@@ -189,14 +192,14 @@ export function HqBuyNumber({ language, onChanged, api = numberApi }: { language
   return <article className={styles.card} aria-labelledby="hq-buy-number-title" data-hq-buy-number={open ? 'open' : step.kind.toLowerCase()}>{head}
     {status}
     {open ? <>
-      <p className={styles.meta}>{t('openOrder', { number: formatUsNumber(open.phoneE164) })}</p>
-      <div className={styles.actions}><button type="button" className={styles.primary} disabled={busy}
-        onClick={() => settle(api.finish(open.orderId, globalThis.crypto.randomUUID(), AbortSignal.timeout(60000), owned))}>{t('finish')}</button></div>
+      <p className={styles.meta}>{t(open.inProgress ? 'working' : 'openOrder', { number: formatUsNumber(open.phoneE164) })}</p>
+      <div className={styles.actions}><button type="button" className={styles.primary} disabled={busy || open.inProgress}
+        onClick={() => settle(api.finish(open.orderId, globalThis.crypto.randomUUID(), AbortSignal.timeout(180000), owned))}>{t('finish')}</button></div>
     </> : view.hasActiveSmsSender || step.kind === 'DONE' ? null : step.kind === 'CONFIRM' ? <div data-hq-buy-confirm="">
       <p><strong>{t('confirmTitle', { number: formatUsNumber(step.number.phoneE164) })}</strong></p>
       <p className={styles.meta}>{t('confirmBody', { price: formatMonthlyPrice(step.number.monthlyPriceMicrounits) })}</p>
       <div className={styles.actions}>
-        <button type="button" className={styles.primary} onClick={() => settle(api.buy(step.number, globalThis.crypto.randomUUID(), AbortSignal.timeout(60000), owned))}>{t('buy')}</button>
+        <button type="button" className={styles.primary} onClick={() => settle(api.buy(step.number, globalThis.crypto.randomUUID(), AbortSignal.timeout(180000), owned))}>{t('buy')}</button>
         <button type="button" className={styles.secondary} onClick={() => setStep({ kind: 'RESULTS', numbers: step.numbers })}>{t('back')}</button>
       </div>
     </div> : <>

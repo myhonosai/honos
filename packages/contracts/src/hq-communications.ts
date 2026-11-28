@@ -356,10 +356,14 @@ export interface HqNumberSearchResult { status: 'READY' | 'SWITCHED_OFF'; number
 export interface HqNumberOrder {
   orderId: string; phoneE164: string; locality: string | null; region: string | null; monthlyPriceMicrounits: number; status: HqNumberOrderStatus;
   numberSid: string | null; serviceSid: string | null; failureCode: string | null; senderId: string | null; requestedBy: HqCommunicationPerson;
-  requestedAt: string; finishedAt: string | null; version: number;
+  requestedAt: string; finishedAt: string | null;
+  /** True while a run holds the order's lease (another Buy or Finish setup is refused until it ends). */
+  inProgress: boolean; version: number;
 }
 export interface HqNumberOrdersView { orders: HqNumberOrder[]; hasActiveSmsSender: boolean; provisioning: 'READY' | 'SWITCHED_OFF'; asOf: string }
 export interface HqNumberOrderReceipt { order: HqNumberOrder; replayed: boolean; sender: HqCommunicationSender | null }
+/** 0704 claim: the lease token for this run, or null when the order is already finished. */
+export interface HqNumberOrderClaim { order: HqNumberOrder; leaseToken: string | null }
 /** The buy body: the number and the monthly price the owner saw and confirmed (the API re-quotes it from Twilio). */
 export interface HqNumberBuyInput { phoneE164: string; monthlyPriceMicrounits: number }
 
@@ -376,9 +380,10 @@ function availableNumber(value: unknown): HqAvailableNumber {
 function numberOrder(value: unknown): HqNumberOrder {
   const o = record(value, drift);
   exactKeys(o, ['orderId', 'phoneE164', 'locality', 'region', 'monthlyPriceMicrounits', 'status', 'numberSid', 'serviceSid', 'failureCode', 'senderId',
-    'requestedBy', 'requestedAt', 'finishedAt', 'version'], drift);
+    'requestedBy', 'requestedAt', 'finishedAt', 'inProgress', 'version'], drift);
   availableNumber({ phoneE164: o.phoneE164, locality: o.locality, region: o.region, monthlyPriceMicrounits: o.monthlyPriceMicrounits });
-  if (!isUuid(o.orderId) || !has(HQ_NUMBER_ORDER_STATUSES, o.status) || !isTimestamp(o.requestedAt) || !isInt(o.version, 1, 999_999_999)) drift();
+  if (!isUuid(o.orderId) || !has(HQ_NUMBER_ORDER_STATUSES, o.status) || !isTimestamp(o.requestedAt) || !isInt(o.version, 1, 999_999_999)
+    || typeof o.inProgress !== 'boolean' || (o.inProgress && o.status !== 'BUYING')) drift();
   const ready = o.status === 'READY', failed = o.status === 'FAILED', buying = o.status === 'BUYING';
   if (ready && !(typeof o.numberSid === 'string' && NUMBER_SID.test(o.numberSid) && typeof o.serviceSid === 'string' && SERVICE_SID.test(o.serviceSid)
     && o.failureCode === null && isUuid(o.senderId) && isTimestamp(o.finishedAt))) drift();
@@ -424,4 +429,10 @@ export function validateHqNumberBuyInput(value: unknown): HqNumberBuyInput {
   const r = record(value, invalid); exactKeys(r, ['phoneE164', 'monthlyPriceMicrounits'], invalid);
   if (typeof r.phoneE164 !== 'string' || !NANP.test(r.phoneE164) || !isInt(r.monthlyPriceMicrounits, 0, PRICE_MAX)) invalid();
   return r as unknown as HqNumberBuyInput;
+}
+export function validateHqNumberOrderClaim(value: unknown): HqNumberOrderClaim {
+  const r = record(value, drift); exactKeys(r, ['order', 'leaseToken'], drift);
+  const order = numberOrder(r.order);
+  if (order.status === 'BUYING' ? !(isUuid(r.leaseToken) && order.inProgress) : r.leaseToken !== null) drift();
+  return r as unknown as HqNumberOrderClaim;
 }

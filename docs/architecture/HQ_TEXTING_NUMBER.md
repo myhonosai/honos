@@ -33,8 +33,14 @@ existing paste form. Nothing is searched or bought.
   does the Twilio steps in the request, reading before every create (number by phone on HON's account, service by
   friendly name `hon-hq`, number-in-service). If an answer is lost, the order stays `BUYING` and the owner presses
   **Finish setup**, which re-runs the same read-before-create steps. No worker, no lease.
+- **One run at a time:** before any Twilio call the API claims a five-minute lease on the order
+  (`claim_hq_number_order`); finishing needs that lease's token. A double click or an early Finish setup is refused
+  (`HQ_NUMBER_ORDER_BUSY`) without calling Twilio. When HON holds the number but setup stopped, the lease is released at
+  once; after a buy with an unknown outcome it is kept for its five minutes so Twilio's number list catches up.
+- **Reused service:** a `hon-hq` service found on the account is set again to HON's webhooks with MMS Converter on
+  before it becomes the sender.
 - **When an order fails:** `FAILED` is recorded only when Twilio definitely refused before HON holds the number (e.g.
-  number gone). Anything after the number is held keeps the order `BUYING` for Finish setup, so a bought number is never
+  number gone) and a fresh read shows HON does not hold it. Anything after the number is held keeps the order `BUYING` for Finish setup, so a bought number is never
   forgotten.
 - **Price shown = price recorded:** the browser sends the monthly price it showed; the API re-quotes the number from
   Twilio and refuses with `PRICE_CHANGED` (nothing ordered) if the price rose; the order keeps the API's quote.
@@ -54,7 +60,7 @@ existing paste form. Nothing is searched or bought.
 `FAILED`), number_sid (`PN…`), service_sid (`MG…`), failure_code, sender_id, idempotency_key (unique) + fingerprint,
 requested_by/at, finished_by/at, version. Partial unique index: one `BUYING` row. Guard trigger: no delete/truncate,
 only `BUYING` → `READY|FAILED` keeping the request fields. Forced RLS, no policies, no table grants. SECURITY DEFINER
-functions (HQ owner, proved again before returning): `start_hq_number_order`, `finish_hq_number_order`,
+functions (HQ owner, proved again before returning): `start_hq_number_order`, `claim_hq_number_order`, `finish_hq_number_order`,
 `read_hq_number_orders`. 010 grant block, 011 exact verification, `verify-rls.mjs` entry.
 
 ## 4. API

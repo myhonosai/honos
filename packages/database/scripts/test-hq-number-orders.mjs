@@ -50,8 +50,11 @@ const input = (phoneE164, patch = {}) => ({ phoneE164, locality: 'Austin', regio
 const start = (who, body, key = K()) => call('start_hq_number_order', [H(who), JSON.stringify(body), key], ['', '::jsonb', '::uuid']);
 const finish = (who, order, body) => call('finish_hq_number_order', [H(who), order, JSON.stringify(body)], ['', '::uuid', '::jsonb']);
 const read = (who) => call('read_hq_number_orders', [H(who)]);
-const ready = (numberSid = PN(), serviceSid = MG()) => ({ outcome: 'READY', numberSid, serviceSid, failureCode: null });
-const failed = (failureCode = 'NUMBER_UNAVAILABLE') => ({ outcome: 'FAILED', numberSid: null, serviceSid: null, failureCode });
+const claim = (who, order) => call('claim_hq_number_order', [H(who), order], ['', '::uuid']);
+let lease = null; // the token of the current run's lease
+const ready = (numberSid = PN(), serviceSid = MG()) => ({ outcome: 'READY', numberSid, serviceSid, failureCode: null, leaseToken: lease });
+const failed = (failureCode = 'NUMBER_UNAVAILABLE') => ({ outcome: 'FAILED', numberSid: null, serviceSid: null, failureCode, leaseToken: lease });
+const release = () => ({ outcome: 'RELEASE', numberSid: null, serviceSid: null, failureCode: null, leaseToken: lease });
 
 const tables = ['hq_number_orders', 'hq_communication_requests', 'hq_communication_senders'];
 async function cleanup() {
@@ -73,7 +76,7 @@ await Promise.all([admin.connect(), runtime.connect(), worker.connect()]);
 try {
   // ---------- 0. posture ----------
   const has = async (client, sig) => (await one(client, "SELECT has_function_privilege(current_user,$1,'EXECUTE') a", ['hon.' + sig])).a;
-  for (const sig of ['start_hq_number_order(text,jsonb,uuid)', 'finish_hq_number_order(text,uuid,jsonb)', 'read_hq_number_orders(text)']) {
+  for (const sig of ['start_hq_number_order(text,jsonb,uuid)', 'claim_hq_number_order(text,uuid)', 'finish_hq_number_order(text,uuid,jsonb)', 'read_hq_number_orders(text)']) {
     eq(await has(runtime, sig), true, `runtime runs ${sig}`);
     eq(await has(worker, sig), false, `worker cannot run ${sig}`);
     eq((await one(admin, "SELECT has_function_privilege('public',$1,'EXECUTE') a", ['hon.' + sig])).a, false, `PUBLIC cannot run ${sig}`);
@@ -139,9 +142,31 @@ try {
   await refuse('23514', () => start('hqOwner', input(B)), 'another number waits for the open order', 'HQ_NUMBER_ORDER_OPEN');
   eq((await one(admin, "SELECT count(*)::int n FROM hon.hq_number_orders WHERE status='BUYING'")).n, 1, 'only one BUYING row');
 
+  // ---------- 3b. one run at a time (lease) ----------
+  eq(first.order.inProgress, false, 'no run yet');
+  await refuse('42501', () => claim('supportOp', first.order.orderId), 'support cannot claim');
+  await refuse('P0002', () => claim('hqOwner', K()), 'unknown order cannot be claimed');
+  const c1 = await claim('hqOwner', first.order.orderId);
+  ok(/^[0-9a-f-]{36}$/.test(c1.leaseToken) && c1.order.inProgress === true, 'first run gets a lease');
+  await refuse('23514', () => claim('hqOwner', first.order.orderId), 'a second run is refused while the lease holds', 'HQ_NUMBER_ORDER_BUSY');
+  lease = K();
+  await refuse('23514', () => finish('hqOwner', first.order.orderId, ready()), 'a run without the lease cannot finish', 'HQ_NUMBER_ORDER_BUSY');
+  await refuse('23514', () => finish('hqOwner', first.order.orderId, release()), 'nor release', 'HQ_NUMBER_ORDER_BUSY');
+  lease = c1.leaseToken;
+  const freed = await finish('hqOwner', first.order.orderId, release());
+  eq([freed.order.status, freed.order.inProgress], ['BUYING', false], 'release ends the lease and keeps BUYING');
+  const c2 = await claim('hqOwner', first.order.orderId);
+  await admin.query("UPDATE hon.hq_number_orders SET lease_until = clock_timestamp() - interval '1 second', version = version + 1 WHERE id=$1", [first.order.orderId]);
+  const c3 = await claim('hqOwner', first.order.orderId);
+  ok(c3.leaseToken !== c2.leaseToken, 'an expired lease is taken over');
+  lease = c2.leaseToken;
+  await refuse('23514', () => finish('hqOwner', first.order.orderId, ready()), 'the expired run cannot finish', 'HQ_NUMBER_ORDER_BUSY');
+  lease = c3.leaseToken;
+
   // ---------- 4. finish input ----------
   for (const bad of [{ ...ready(), numberSid: 'PN1' }, { ...ready(), serviceSid: 'PN' + hex() }, { ...ready(), failureCode: 'X_Y_Z' },
-    { ...failed(), numberSid: PN() }, { ...failed(), failureCode: 'lower' }, { ...ready(), outcome: 'BOUGHT' }, { outcome: 'READY' }]) {
+    { ...failed(), numberSid: PN() }, { ...failed(), failureCode: 'lower' }, { ...ready(), outcome: 'BOUGHT' }, { outcome: 'READY' },
+    { ...ready(), leaseToken: null }, { ...ready(), leaseToken: 'x' }, { ...release(), numberSid: PN() }]) {
     await refuse('22023', () => finish('hqOwner', first.order.orderId, bad), `bad finish ${JSON.stringify(bad)}`);
   }
   await refuse('42501', () => finish('supportOp', first.order.orderId, ready()), 'support cannot finish');
@@ -158,15 +183,19 @@ try {
   await refuse('23514', () => finish('hqOwner', first.order.orderId, ready()), 'a finished order never changes', 'HQ_NUMBER_ORDER_FINISHED');
   await refuse('23514', () => finish('hqOwner', first.order.orderId, failed()), 'a READY order never fails', 'HQ_NUMBER_ORDER_FINISHED');
   eq((await read('hqOwner')).hasActiveSmsSender, true, 'sender now active');
+  eq((await claim('hqOwner', first.order.orderId)).leaseToken, null, 'a finished order has nothing to claim');
+  eq((await one(admin, 'SELECT lease_token FROM hon.hq_number_orders WHERE id=$1', [first.order.orderId])).lease_token, null, 'lease cleared on finish');
   await refuse('23514', () => start('hqOwner', input(B)), 'no order while an SMS sender is active', 'HQ_SENDER_EXISTS');
 
   // ---------- 6. FAILED frees the slot; READY refused if a sender appeared meanwhile ----------
   await call('retire_hq_communication_sender', [H('hqOwner'), done.sender.senderId, K()], ['', '::uuid', '::uuid']);
   const second = await start('hqOwner', input(B));
+  lease = (await claim('hqOwner', second.order.orderId)).leaseToken;
   const lost = await finish('hqOwner', second.order.orderId, failed('NUMBER_UNAVAILABLE'));
   eq([lost.order.status, lost.order.failureCode, lost.sender], ['FAILED', 'NUMBER_UNAVAILABLE', null], 'order FAILED');
   const third = await start('hqOwner', input(C));
   eq(third.order.status, 'BUYING', 'a FAILED order frees the slot');
+  lease = (await claim('hqOwner', third.order.orderId)).leaseToken;
   await call('set_hq_communication_sender', [H('hqOwner'), JSON.stringify({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: MG(),
     smsReplyNumber: '+15125550199', a2pState: 'PENDING', mmsConverterConfirmed: true }), K()], ['', '::jsonb', '::uuid']);
   await refuse('23514', () => finish('hqOwner', third.order.orderId, ready()), 'READY refused when a sender was set by hand meanwhile', 'HQ_SENDER_EXISTS');
@@ -175,7 +204,7 @@ try {
   // ---------- 7. read ----------
   const view = await read('hqOwner');
   eq(view.orders.map((o) => o.phoneE164), [C, B, A], 'newest first');
-  ok(!JSON.stringify(view).includes('idempotency') && !JSON.stringify(view).includes('fingerprint'), 'no key or fingerprint in reads');
+  ok(!JSON.stringify(view).includes('idempotency') && !JSON.stringify(view).includes('fingerprint') && !JSON.stringify(view).includes(lease), 'no key, fingerprint or lease token in reads');
 
   // ---------- 8. evidence ----------
   await refuse('55000', () => admin.query('DELETE FROM hon.hq_number_orders WHERE id=$1', [first.order.orderId]), 'never deleted');

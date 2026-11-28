@@ -3403,14 +3403,15 @@ DO $$ DECLARE r text; BEGIN
   GRANT EXECUTE ON FUNCTION hon.read_hq_replies(text,uuid,integer) TO hon_runtime;
 END $$;
 
--- HQ-NUM 0704 HQ "Buy a number": no table privileges; the HQ owner's read and two commands. The projection stays private.
+-- HQ-NUM 0704 HQ "Buy a number": no table privileges; the HQ owner's read and three commands. The projection stays private.
 DO $$ DECLARE r text; BEGIN
   IF to_regprocedure('hon.start_hq_number_order(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply HQ number orders migration 0704 first'; END IF;
   ALTER TABLE hon.hq_number_orders ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.hq_number_orders FORCE ROW LEVEL SECURITY;
   REVOKE ALL ON hon.hq_number_orders FROM PUBLIC;
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.hq_number_orders FROM %I',r); END LOOP;
   REVOKE ALL ON FUNCTION hon.hq_number_order_json(hon.hq_number_orders), hon.guard_hq_number_order() FROM PUBLIC, hon_runtime;
-  GRANT EXECUTE ON FUNCTION hon.start_hq_number_order(text,jsonb,uuid), hon.finish_hq_number_order(text,uuid,jsonb), hon.read_hq_number_orders(text) TO hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.start_hq_number_order(text,jsonb,uuid), hon.claim_hq_number_order(text,uuid), hon.finish_hq_number_order(text,uuid,jsonb),
+    hon.read_hq_number_orders(text) TO hon_runtime;
 END $$;
 
 -- HQ-COMM 0283 HON prospects and their consent: no table privileges; HQ marketing reads and three commands.

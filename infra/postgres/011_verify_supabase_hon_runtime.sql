@@ -7710,15 +7710,16 @@ BEGIN
 END $$;
 -- End HQ inbound owner replies exact verification.
 
--- HQ number orders exact verification (0704): the runtime may run the HQ owner's read and two commands only; the worker
--- none; the order table is forced-RLS, policy-free, grant-free, never deleted and changes only BUYING -> READY|FAILED.
+-- HQ number orders exact verification (0704): the runtime may run the HQ owner's read and three commands only; the worker
+-- none; the order table is forced-RLS, policy-free, grant-free, never deleted; only a BUYING row changes (lease or finish).
 DO $$ DECLARE f text; t text; c text; d boolean; r boolean;
 BEGIN
   FOR f,t,c,d,r IN SELECT * FROM (VALUES
-    ('hon.guard_hq_number_order()','209d96ebcca1e8ee4bfc894d78db6566','v',false,false),
-    ('hon.hq_number_order_json(hon.hq_number_orders)','4adb45d071d59e71c953f2a50de68365','s',false,false),
+    ('hon.guard_hq_number_order()','3c6c0369b3d52a0309aa0ca8723e80b2','v',false,false),
+    ('hon.hq_number_order_json(hon.hq_number_orders)','941e8b735f43b808929bab46c4ba5d2b','s',false,false),
     ('hon.start_hq_number_order(text,jsonb,uuid)','ee66b575244bdc0b73b12990d431fc1e','v',true,true),
-    ('hon.finish_hq_number_order(text,uuid,jsonb)','dac5780f327f7aa3c18d8f77216ed360','v',true,true),
+    ('hon.claim_hq_number_order(text,uuid)','027693cbbe6196a177d5476e3400ef91','v',true,true),
+    ('hon.finish_hq_number_order(text,uuid,jsonb)','f9b2bc0db5541aad6652e2fea176e068','v',true,true),
     ('hon.read_hq_number_orders(text)','3743bde21a96b88792f037f5e43034ed','v',true,true)) x(f,t,c,d,r) LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
         AND p.proconfig IS NOT DISTINCT FROM ARRAY['search_path=pg_catalog, hon'])
@@ -7728,7 +7729,7 @@ BEGIN
       RAISE EXCEPTION 'HQ number order function drift: %',f; END IF;
   END LOOP;
   IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace
-      AND proname IN ('guard_hq_number_order','hq_number_order_json','start_hq_number_order','finish_hq_number_order','read_hq_number_orders'))<>5 THEN
+      AND proname IN ('guard_hq_number_order','hq_number_order_json','start_hq_number_order','claim_hq_number_order','finish_hq_number_order','read_hq_number_orders'))<>6 THEN
     RAISE EXCEPTION 'Unexpected HQ number order overload'; END IF;
   IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid='hon.hq_number_orders'::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
     OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename='hq_number_orders')

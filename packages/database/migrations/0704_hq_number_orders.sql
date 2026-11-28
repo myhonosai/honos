@@ -11,8 +11,11 @@ BEGIN;
 --   HN4  READY needs the number (PN...) and Messaging Service (MG...) SIDs and makes the HQ SMS sender in the same
 --        transaction (A2P NOT_REGISTERED, MMS Converter on). FAILED is recorded only when nothing was bought (no number
 --        SID). A lost or partial outcome leaves the order BUYING, and the owner's "Finish setup" re-runs it.
---   HN5  Orders are evidence: never deleted; only a BUYING order changes, once, to READY or FAILED.
---   HN6  Forced RLS, no policies, no table privileges; the runtime gains EXECUTE on three functions only.
+--   HN5  Orders are evidence: never deleted; only a BUYING order changes (its lease, or once to READY or FAILED).
+--   HN7  One run at a time: the API claims a five-minute lease on the BUYING order before any Twilio call, and finishing
+--        (READY, FAILED or RELEASE) needs that lease's token, so a double click or an early "Finish setup" never runs
+--        Twilio twice. RELEASE ends the lease early when HON already holds the number.
+--   HN6  Forced RLS, no policies, no table privileges; the runtime gains EXECUTE on four functions only.
 -- Nothing here sends, charges or calls an outside service. Live texting stays behind HON_SMS_SEND_APPROVED.
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolbypassrls)
@@ -40,7 +43,10 @@ CREATE TABLE hon.hq_number_orders (
   requested_at timestamptz NOT NULL,
   finished_by uuid REFERENCES hon.principals(id),
   finished_at timestamptz,
+  lease_token uuid,
+  lease_until timestamptz,
   version integer NOT NULL DEFAULT 1 CHECK (version > 0),
+  CHECK ((lease_token IS NULL) = (lease_until IS NULL) AND (status = 'BUYING' OR lease_token IS NULL)),
   CHECK (status <> 'BUYING' OR (number_sid IS NULL AND service_sid IS NULL AND failure_code IS NULL AND sender_id IS NULL
     AND finished_by IS NULL AND finished_at IS NULL)),
   CHECK (status <> 'READY' OR (number_sid IS NOT NULL AND service_sid IS NOT NULL AND failure_code IS NULL AND sender_id IS NOT NULL
@@ -51,11 +57,11 @@ CREATE TABLE hon.hq_number_orders (
 CREATE UNIQUE INDEX hq_number_orders_one_buying ON hon.hq_number_orders ((true)) WHERE status = 'BUYING';
 CREATE INDEX hq_number_orders_time ON hon.hq_number_orders (requested_at DESC, id DESC);
 
--- HN5: never deleted or truncated; only BUYING -> READY|FAILED, keeping who asked, what and at what price.
+-- HN5: never deleted or truncated; only a BUYING row changes (lease, or READY|FAILED), keeping who asked, what and the price.
 CREATE FUNCTION hon.guard_hq_number_order() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, hon AS $$
 BEGIN
   IF TG_OP <> 'UPDATE' THEN RAISE EXCEPTION 'HQ_NUMBER_ORDER_IMMUTABLE' USING ERRCODE = '55000'; END IF;
-  IF OLD.status <> 'BUYING' OR NEW.status NOT IN ('READY','FAILED') OR NEW.version <> OLD.version + 1
+  IF OLD.status <> 'BUYING' OR NEW.version <> OLD.version + 1
     OR (NEW.id, NEW.phone_e164, NEW.locality, NEW.region, NEW.monthly_price_microunits, NEW.idempotency_key, NEW.fingerprint, NEW.requested_by, NEW.requested_at)
       IS DISTINCT FROM (OLD.id, OLD.phone_e164, OLD.locality, OLD.region, OLD.monthly_price_microunits, OLD.idempotency_key, OLD.fingerprint, OLD.requested_by, OLD.requested_at) THEN
     RAISE EXCEPTION 'HQ_NUMBER_ORDER_IMMUTABLE' USING ERRCODE = '55000';
@@ -74,7 +80,7 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
     'monthlyPriceMicrounits', o.monthly_price_microunits, 'status', o.status, 'numberSid', o.number_sid, 'serviceSid', o.service_sid,
     'failureCode', o.failure_code, 'senderId', o.sender_id, 'requestedBy', hon.hq_communication_person_json(o.requested_by),
     'requestedAt', hon.saas_ts(o.requested_at), 'finishedAt', CASE WHEN o.finished_at IS NULL THEN NULL ELSE hon.saas_ts(o.finished_at) END,
-    'version', o.version)
+    'inProgress', o.lease_until IS NOT NULL AND o.lease_until > clock_timestamp(), 'version', o.version)
 $$;
 
 -- START: {phoneE164, locality|null, region|null, monthlyPriceMicrounits}
@@ -123,16 +129,43 @@ BEGIN
   RETURN result;
 END $$;
 
--- FINISH: {outcome: READY|FAILED, numberSid, serviceSid, failureCode}. A repeat of the same finish returns the order.
+-- CLAIM (HN7): a five-minute lease on a BUYING order; refused while another run holds one. A finished order is returned
+-- with a null token (nothing to do).
+CREATE FUNCTION hon.claim_hq_number_order(p_subject text, p_order uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE actor uuid; o hon.hq_number_orders%ROWTYPE; result jsonb; v_token uuid;
+BEGIN
+  actor := hon.require_hq_communication_actor(p_subject, 'OWNER');
+  IF p_order IS NULL THEN RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('hq-number-order', 0));
+  SELECT * INTO o FROM hon.hq_number_orders WHERE id = p_order FOR UPDATE;
+  IF o.id IS NULL THEN RAISE EXCEPTION 'HQ_NUMBER_ORDER_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
+  IF o.status = 'BUYING' THEN
+    IF o.lease_until IS NOT NULL AND o.lease_until > clock_timestamp() THEN RAISE EXCEPTION 'HQ_NUMBER_ORDER_BUSY' USING ERRCODE = '23514'; END IF;
+    v_token := gen_random_uuid();
+    UPDATE hon.hq_number_orders SET lease_token = v_token, lease_until = clock_timestamp() + interval '5 minutes', version = version + 1
+    WHERE id = o.id RETURNING * INTO o;
+  END IF;
+  result := jsonb_build_object('order', hon.hq_number_order_json(o), 'leaseToken', v_token);
+  PERFORM hon.require_hq_communication_actor(p_subject, 'OWNER');
+  RETURN result;
+END $$;
+
+-- FINISH: {outcome: READY|FAILED|RELEASE, numberSid, serviceSid, failureCode, leaseToken}. READY/FAILED end the order;
+-- RELEASE only ends the lease. A repeat of the same READY/FAILED returns the order.
 CREATE FUNCTION hon.finish_hq_number_order(p_subject text, p_order uuid, p_input jsonb) RETURNS jsonb
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
 DECLARE actor uuid; o hon.hq_number_orders%ROWTYPE; s hon.hq_communication_senders%ROWTYPE; at timestamptz := clock_timestamp(); result jsonb;
   v_out text; v_number text; v_service text; v_code text;
 BEGIN
   actor := hon.require_hq_communication_actor(p_subject, 'OWNER');
-  PERFORM hon.hq_communication_keys(p_input, ARRAY['failureCode','numberSid','outcome','serviceSid']);
+  PERFORM hon.hq_communication_keys(p_input, ARRAY['failureCode','leaseToken','numberSid','outcome','serviceSid']);
   v_out := p_input->>'outcome'; v_number := p_input->>'numberSid'; v_service := p_input->>'serviceSid'; v_code := p_input->>'failureCode';
-  IF p_order IS NULL OR jsonb_typeof(p_input->'outcome') IS DISTINCT FROM 'string' OR v_out NOT IN ('READY','FAILED')
+  IF p_order IS NULL OR jsonb_typeof(p_input->'outcome') IS DISTINCT FROM 'string' OR v_out NOT IN ('READY','FAILED','RELEASE')
+    OR jsonb_typeof(p_input->'leaseToken') IS DISTINCT FROM 'string'
+    OR (p_input->>'leaseToken') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    OR (v_out = 'RELEASE' AND (jsonb_typeof(p_input->'numberSid') <> 'null' OR jsonb_typeof(p_input->'serviceSid') <> 'null'
+      OR jsonb_typeof(p_input->'failureCode') <> 'null'))
     OR (v_out = 'READY' AND (jsonb_typeof(p_input->'numberSid') IS DISTINCT FROM 'string' OR v_number !~ '^PN[0-9a-f]{32}$'
       OR jsonb_typeof(p_input->'serviceSid') IS DISTINCT FROM 'string' OR v_service !~ '^MG[0-9a-f]{32}$' OR jsonb_typeof(p_input->'failureCode') <> 'null'))
     OR (v_out = 'FAILED' AND (jsonb_typeof(p_input->'failureCode') IS DISTINCT FROM 'string' OR v_code !~ '^[A-Z_]{3,60}$'
@@ -151,7 +184,11 @@ BEGIN
     END IF;
     RAISE EXCEPTION 'HQ_NUMBER_ORDER_FINISHED' USING ERRCODE = '23514';
   END IF;
-  IF v_out = 'READY' THEN
+  -- HN7: only the run holding the lease finishes or releases it.
+  IF o.lease_token IS DISTINCT FROM (p_input->>'leaseToken')::uuid THEN RAISE EXCEPTION 'HQ_NUMBER_ORDER_BUSY' USING ERRCODE = '23514'; END IF;
+  IF v_out = 'RELEASE' THEN
+    UPDATE hon.hq_number_orders SET lease_token = NULL, lease_until = NULL, version = version + 1 WHERE id = o.id RETURNING * INTO o;
+  ELSIF v_out = 'READY' THEN
     PERFORM pg_advisory_xact_lock(hashtextextended('hq-communication-sender:SMS', 0));
     IF EXISTS (SELECT 1 FROM hon.hq_communication_senders WHERE channel = 'SMS' AND status = 'ACTIVE') THEN
       RAISE EXCEPTION 'HQ_SENDER_EXISTS' USING ERRCODE = '23514';
@@ -159,9 +196,9 @@ BEGIN
     INSERT INTO hon.hq_communication_senders (channel, status, sms_service_sid, sms_reply_number, a2p_state, mms_converter_confirmed, created_by, created_at)
     VALUES ('SMS', 'ACTIVE', v_service, o.phone_e164, 'NOT_REGISTERED', true, actor, at) RETURNING * INTO s;
     UPDATE hon.hq_number_orders SET status = 'READY', number_sid = v_number, service_sid = v_service, sender_id = s.id,
-      finished_by = actor, finished_at = at, version = version + 1 WHERE id = o.id RETURNING * INTO o;
+      lease_token = NULL, lease_until = NULL, finished_by = actor, finished_at = at, version = version + 1 WHERE id = o.id RETURNING * INTO o;
   ELSE
-    UPDATE hon.hq_number_orders SET status = 'FAILED', failure_code = v_code, finished_by = actor, finished_at = at, version = version + 1
+    UPDATE hon.hq_number_orders SET status = 'FAILED', failure_code = v_code, lease_token = NULL, lease_until = NULL, finished_by = actor, finished_at = at, version = version + 1
     WHERE id = o.id RETURNING * INTO o;
   END IF;
   result := jsonb_build_object('order', hon.hq_number_order_json(o), 'replayed', false,
@@ -189,6 +226,7 @@ DO $$ DECLARE r text; f text; BEGIN
     EXECUTE format('REVOKE ALL ON TABLE hon.hq_number_orders FROM %I', r);
   END LOOP;
   FOREACH f IN ARRAY ARRAY['hon.guard_hq_number_order()','hon.hq_number_order_json(hon.hq_number_orders)','hon.start_hq_number_order(text,jsonb,uuid)',
+    'hon.claim_hq_number_order(text,uuid)',
     'hon.finish_hq_number_order(text,uuid,jsonb)','hon.read_hq_number_orders(text)'] LOOP
     EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC', f);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker') LOOP
@@ -196,8 +234,8 @@ DO $$ DECLARE r text; f text; BEGIN
     END LOOP;
   END LOOP;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
-    GRANT EXECUTE ON FUNCTION hon.start_hq_number_order(text,jsonb,uuid), hon.finish_hq_number_order(text,uuid,jsonb),
-      hon.read_hq_number_orders(text) TO hon_runtime;
+    GRANT EXECUTE ON FUNCTION hon.start_hq_number_order(text,jsonb,uuid), hon.claim_hq_number_order(text,uuid),
+      hon.finish_hq_number_order(text,uuid,jsonb), hon.read_hq_number_orders(text) TO hon_runtime;
   END IF;
 END $$;
 

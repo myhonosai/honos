@@ -19,7 +19,7 @@ const person = { principalId: U(), displayName: 'David' };
 function fakeBilling({ owner = true, activeSender = false } = {}) {
   const state = { orders: [], activeSender, calls: [] };
   const deny = () => { const e = new Error('SAAS_FORBIDDEN'); e.status = 403; e.getStatus = () => 403; throw e; };
-  const json = (o) => ({ ...o });
+  const json = (o) => { const { lease, ...rest } = o; return { ...rest, inProgress: !!lease }; };
   return {
     state,
     async call(op, params, validate) {
@@ -29,13 +29,22 @@ function fakeBilling({ owner = true, activeSender = false } = {}) {
       if (op === 'startHqNumberOrder') {
         const input = JSON.parse(params[1]);
         const order = { orderId: U(), ...input, status: 'BUYING', numberSid: null, serviceSid: null, failureCode: null, senderId: null,
-          requestedBy: person, requestedAt: T, finishedAt: null, version: 1 };
+          requestedBy: person, requestedAt: T, finishedAt: null, version: 1, lease: null };
         state.orders.unshift(order);
         return validate({ order: json(order), replayed: false });
       }
+      if (op === 'claimHqNumberOrder') {
+        const order = state.orders.find((o) => o.orderId === params[1]);
+        if (order.status !== 'BUYING') return validate({ order: json(order), leaseToken: null });
+        if (order.lease) { const e = new Error('busy'); e.response = { code: 'HQ_NUMBER_ORDER_BUSY' }; e.getStatus = () => 422; throw e; }
+        order.lease = U(); order.version += 1;
+        return validate({ order: json(order), leaseToken: order.lease });
+      }
       if (op === 'finishHqNumberOrder') {
         const order = state.orders.find((o) => o.orderId === params[1]); const input = JSON.parse(params[2]);
-        Object.assign(order, { status: input.outcome, numberSid: input.numberSid, serviceSid: input.serviceSid, failureCode: input.failureCode,
+        if (order.lease !== input.leaseToken) { const e = new Error('busy'); e.response = { code: 'HQ_NUMBER_ORDER_BUSY' }; e.getStatus = () => 422; throw e; }
+        if (input.outcome === 'RELEASE') { order.lease = null; order.version += 1; return validate({ order: json(order), replayed: false, sender: null }); }
+        Object.assign(order, { lease: null, status: input.outcome, numberSid: input.numberSid, serviceSid: input.serviceSid, failureCode: input.failureCode,
           finishedAt: T, version: order.version + 1 });
         let sender = null;
         if (input.outcome === 'READY') {
@@ -117,6 +126,12 @@ test('lost answers: the order stays BUYING and Finish setup completes it without
     await assert.rejects(service.buy('s', { phoneE164: PHONE, monthlyPriceMicrounits: 1150000 }, U()), (e) => e.response?.code === 'HQ_NUMBER_SETUP_INCOMPLETE', lose);
     const order = billing.state.orders[0];
     assert.equal(order.status, 'BUYING', lose);
+    // After a lost buy the lease stays (Twilio's list may lag); after the number is held it is released at once.
+    assert.equal(!!order.lease, lose === 'buy', `${lose}: lease kept only when the buy outcome is unknown`);
+    if (lose === 'buy') {
+      await assert.rejects(service.finish('s', order.orderId, {}), (e) => e.response?.code === 'HQ_NUMBER_ORDER_BUSY');
+      order.lease = null; // the five minutes pass
+    }
     const done = await service.finish('s', order.orderId, {});
     assert.equal(done.order.status, 'READY', lose);
     assert.equal(twilio.calls.filter((c) => c === 'buy').length, 1, `${lose}: bought once`);
@@ -156,4 +171,44 @@ test('environment setup: parent credentials only with a valid account SID and a 
   assert.equal(environmentHqNumberSetup(() => ({})).parent(), null);
   assert.equal(environmentHqNumberSetup(() => ({ TWILIO_ACCOUNT_SID: 'ACnope', TWILIO_AUTH_TOKEN: 'x' })).parent(), null);
   assert.deepEqual(environmentHqNumberSetup(() => ({ TWILIO_ACCOUNT_SID: PARENT.accountSid, TWILIO_AUTH_TOKEN: ' t ' })).parent(), { accountSid: PARENT.accountSid, authToken: 't' });
+});
+
+test('two runs at once (double click, early Finish setup): one Twilio run, one purchase, order READY', async () => {
+  const twilio = new FakeTwilioNumberClient();
+  const realFind = twilio.findIncomingNumber.bind(twilio);
+  let release; const gate = new Promise((r) => { release = r; });
+  twilio.findIncomingNumber = async (...args) => { const r = await realFind(...args); await gate; return r; };
+  const { service, billing } = make({ twilio });
+  const body = { phoneE164: PHONE, monthlyPriceMicrounits: 1150000 };
+  const first = service.buy('s', body, U());
+  await new Promise((r) => setImmediate(r));
+  const order = billing.state.orders[0];
+  await assert.rejects(service.buy('s', body, U()), (e) => e.response?.code === 'HQ_NUMBER_ORDER_BUSY', 'second Buy refused before Twilio');
+  await assert.rejects(service.finish('s', order.orderId, {}), (e) => e.response?.code === 'HQ_NUMBER_ORDER_BUSY', 'early Finish setup refused');
+  release();
+  assert.equal((await first).order.status, 'READY');
+  assert.equal(twilio.calls.filter((c) => c === 'buy').length, 1);
+});
+
+test('"not available" for a number HON already holds never fails the order', async () => {
+  const twilio = new FakeTwilioNumberClient();
+  let first = true;
+  twilio.findIncomingNumber = async (sub, phone) => { twilio.calls.push('findNumber'); if (first) { first = false; return null; } return { numberSid: 'PN' + 'c'.repeat(32) }; };
+  twilio.buyNumber = async () => { twilio.calls.push('buy'); throw new TwilioProvisioningError('FAILED', 'NUMBER_UNAVAILABLE'); };
+  const { service, billing } = make({ twilio });
+  await assert.rejects(service.buy('s', { phoneE164: PHONE, monthlyPriceMicrounits: 1150000 }, U()), (e) => e.response?.code === 'HQ_NUMBER_SETUP_INCOMPLETE');
+  assert.equal(billing.state.orders[0].status, 'BUYING');
+  assert.equal(billing.state.orders[0].lease, null, 'released: HON holds the number');
+});
+
+test('a hon-hq service made earlier is set to HON\'s webhooks with MMS Converter on before it is used', async () => {
+  const twilio = new FakeTwilioNumberClient();
+  const old = await twilio.createService(PARENT, HQ_SERVICE_FRIENDLY_NAME, { inboundUrl: 'https://old.example/in', statusUrl: 'https://old.example/st' });
+  twilio.mmsOff.add(old.serviceSid);
+  const { service } = make({ twilio });
+  const r = await service.buy('s', { phoneE164: PHONE, monthlyPriceMicrounits: 1150000 }, U());
+  assert.equal(r.order.serviceSid, old.serviceSid);
+  assert.ok(twilio.calls.includes('configureService'));
+  assert.ok(!twilio.mmsOff.has(old.serviceSid));
+  assert.equal(twilio.services.get(PARENT.accountSid).get(HQ_SERVICE_FRIENDLY_NAME).urls.inboundUrl, 'https://api.hon.example/v1/communications/webhooks/twilio/inbound');
 });

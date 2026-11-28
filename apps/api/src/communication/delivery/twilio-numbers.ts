@@ -27,6 +27,8 @@ export interface TwilioNumberClient {
   buyNumber(sub: TwilioSubaccountCredential, phoneE164: string, voiceUrl: string): Promise<{ numberSid: string }>;
   findService(sub: TwilioSubaccountCredential, friendlyName: string): Promise<{ serviceSid: string } | null>;
   createService(sub: TwilioSubaccountCredential, friendlyName: string, urls: SchoolServiceUrls): Promise<{ serviceSid: string }>;
+  /** Sets an existing service's webhooks and texting settings (MMS Converter on) to HON's; the same values every time. */
+  configureService(sub: TwilioSubaccountCredential, serviceSid: string, urls: SchoolServiceUrls): Promise<void>;
   serviceHasNumber(sub: TwilioSubaccountCredential, serviceSid: string, numberSid: string): Promise<boolean>;
   addNumberToService(sub: TwilioSubaccountCredential, serviceSid: string, numberSid: string): Promise<void>;
 }
@@ -165,14 +167,23 @@ export class TwilioRestNumberClient implements TwilioNumberClient {
     return found[0] ? { serviceSid: found[0].sid as string } : null;
   }
 
+  private static serviceSettings(urls: SchoolServiceUrls): Record<string, string> {
+    return { InboundRequestUrl: urls.inboundUrl, InboundMethod: 'POST', StatusCallback: urls.statusUrl,
+      UseInboundWebhookOnNumber: 'false', SmartEncoding: 'true', MmsConverter: 'true', StickySender: 'true' };
+  }
+
   async createService(credential: TwilioSubaccountCredential, friendlyName: string, urls: SchoolServiceUrls) {
     const sub = this.sub(credential);
-    const body = await this.post('https://messaging.twilio.com/v1/Services', sub, {
-      FriendlyName: friendlyName, InboundRequestUrl: urls.inboundUrl, InboundMethod: 'POST', StatusCallback: urls.statusUrl,
-      UseInboundWebhookOnNumber: 'false', SmartEncoding: 'true', MmsConverter: 'true', StickySender: 'true',
-    });
+    const body = await this.post('https://messaging.twilio.com/v1/Services', sub, { FriendlyName: friendlyName, ...TwilioRestNumberClient.serviceSettings(urls) });
     if (typeof body.sid !== 'string' || !SERVICE_SID.test(body.sid)) throw new TwilioProvisioningError('UNKNOWN');
     return { serviceSid: body.sid };
+  }
+
+  async configureService(credential: TwilioSubaccountCredential, serviceSid: string, urls: SchoolServiceUrls) {
+    const sub = this.sub(credential);
+    if (!SERVICE_SID.test(serviceSid)) throw new TwilioProvisioningError('FAILED', 'INVALID_SERVICE');
+    const body = await this.post(`https://messaging.twilio.com/v1/Services/${serviceSid}`, sub, TwilioRestNumberClient.serviceSettings(urls));
+    if (body.sid !== serviceSid || body.mms_converter !== true) throw new TwilioProvisioningError('UNKNOWN');
   }
 
   async serviceHasNumber(credential: TwilioSubaccountCredential, serviceSid: string, numberSid: string) {
@@ -252,6 +263,12 @@ export class FakeTwilioNumberClient implements TwilioNumberClient {
     this.services.get(sub.accountSid)!.set(friendlyName, { sid, urls, numbers: new Set() });
     this.lost('service');
     return { serviceSid: sid };
+  }
+  readonly mmsOff = new Set<string>(); // service SIDs a test made with MMS Converter off
+  async configureService(sub: TwilioSubaccountCredential, serviceSid: string, urls: SchoolServiceUrls) {
+    this.calls.push('configureService');
+    const service = this.service(sub, serviceSid);
+    service.urls = urls; this.mmsOff.delete(serviceSid);
   }
   private service(sub: TwilioSubaccountCredential, serviceSid: string) {
     const found = [...(this.services.get(sub.accountSid)?.values() ?? [])].find((s) => s.sid === serviceSid);

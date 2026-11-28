@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import {
-  saasUuid, validateHqNumberBuyInput, validateHqNumberOrderReceipt, validateHqNumberOrdersRead, validateSchoolNumberSearch,
+  saasUuid, validateHqNumberBuyInput, validateHqNumberOrderClaim, validateHqNumberOrderReceipt, validateHqNumberOrdersRead, validateSchoolNumberSearch,
   type HqNumberOrder, type HqNumberOrderReceipt, type HqNumberOrdersView, type HqNumberSearchResult,
 } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
@@ -109,30 +109,45 @@ export class HqNumberService {
 
   private async complete(subject: string, order: HqNumberOrder, ready: { parent: TwilioSubaccountCredential; origin: string }): Promise<HqNumberOrderReceipt> {
     const { parent, origin } = ready;
+    // One run at a time (0704 HN7): a second Buy click or an early Finish setup is refused here, before any Twilio call.
+    const claim = await this.billing.call('claimHqNumberOrder', [subject, order.orderId], validateHqNumberOrderClaim);
+    if (!claim.leaseToken) return { order: claim.order, replayed: true, sender: null };
+    const leaseToken = claim.leaseToken;
+    const record = (body: Record<string, unknown>) => this.billing.call('finishHqNumberOrder',
+      [subject, order.orderId, JSON.stringify({ numberSid: null, serviceSid: null, failureCode: null, ...body, leaseToken })], validateHqNumberOrderReceipt);
+    const urls = { inboundUrl: `${origin}${TWILIO_INBOUND_PATH}`, statusUrl: `${origin}${TWILIO_HQ_STATUS_PATH}` };
     let held = false;
     try {
       const found = await this.numbers.findIncomingNumber(parent, order.phoneE164);
       held = !!found;
       const number = found ?? await this.numbers.buyNumber(parent, order.phoneE164, `${origin}${HQ_CALL_PATHS.voice}`);
       held = true;
-      const service = await this.numbers.findService(parent, HQ_SERVICE_FRIENDLY_NAME)
-        ?? await this.numbers.createService(parent, HQ_SERVICE_FRIENDLY_NAME, { inboundUrl: `${origin}${TWILIO_INBOUND_PATH}`, statusUrl: `${origin}${TWILIO_HQ_STATUS_PATH}` });
+      const existing = await this.numbers.findService(parent, HQ_SERVICE_FRIENDLY_NAME);
+      // A service HON made earlier is set again to HON's webhooks with MMS Converter on before it becomes the sender.
+      if (existing) await this.numbers.configureService(parent, existing.serviceSid, urls);
+      const service = existing ?? await this.numbers.createService(parent, HQ_SERVICE_FRIENDLY_NAME, urls);
       if (!await this.numbers.serviceHasNumber(parent, service.serviceSid, number.numberSid)) {
         await this.numbers.addNumberToService(parent, service.serviceSid, number.numberSid);
       }
-      return await this.billing.call('finishHqNumberOrder', [subject, order.orderId, JSON.stringify({ outcome: 'READY', numberSid: number.numberSid,
-        serviceSid: service.serviceSid, failureCode: null })], validateHqNumberOrderReceipt);
+      return await record({ outcome: 'READY', numberSid: number.numberSid, serviceSid: service.serviceSid });
     } catch (error) {
-      // Only a definite refusal before HON holds the number ends the order; anything else stays BUYING for "Finish setup".
       if (error instanceof TwilioProvisioningError && error.outcome === 'FAILED' && !held) {
-        const failureCode = CODE.test(error.code) ? error.code : 'TWILIO_PROVISIONING_FAILED';
-        return this.billing.call('finishHqNumberOrder', [subject, order.orderId, JSON.stringify({ outcome: 'FAILED', numberSid: null, serviceSid: null, failureCode })],
-          validateHqNumberOrderReceipt);
+        // "Not available" can mean an earlier run of this order bought it: read again, and never fail a number HON holds.
+        let holds: boolean | null = null;
+        try { holds = !!await this.numbers.findIncomingNumber(parent, order.phoneE164); } catch { /* unknown: keep BUYING */ }
+        if (holds === false) {
+          const failureCode = CODE.test(error.code) ? error.code : 'TWILIO_PROVISIONING_FAILED';
+          return record({ outcome: 'FAILED', failureCode });
+        }
+        held = holds === true;
       }
       if (error instanceof Error && 'getStatus' in error) throw error;
+      // HON holds the number: free the lease so Finish setup can run now. If the buy's outcome is unknown, the lease
+      // stays for its five minutes so Twilio's list catches up before anyone reads it again.
+      if (held) await record({ outcome: 'RELEASE' }).catch(() => undefined);
       throw new ConflictException({ code: 'HQ_NUMBER_SETUP_INCOMPLETE', detail: held
         ? 'The number is on HON\'s Twilio account but its texting service is not finished. Press Finish setup.'
-        : 'Twilio did not confirm the purchase. Press Finish setup to check; it never buys twice.' });
+        : 'Twilio did not confirm the purchase. Wait a few minutes, then press Finish setup; it checks first and never buys twice.' });
     }
   }
 }

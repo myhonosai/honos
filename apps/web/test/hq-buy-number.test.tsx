@@ -13,7 +13,7 @@ const T = '2026-11-28T00:00:00.000Z';
 const PHONE = '+15125550111';
 const person = { principalId: id(50), displayName: 'Synthetic Owner' };
 const order = (patch: Record<string, unknown> = {}) => ({ orderId: id(1), phoneE164: PHONE, locality: 'Austin', region: 'TX', monthlyPriceMicrounits: 1150000,
-  status: 'BUYING', numberSid: null, serviceSid: null, failureCode: null, senderId: null, requestedBy: person, requestedAt: T, finishedAt: null, version: 1, ...patch });
+  status: 'BUYING', numberSid: null, serviceSid: null, failureCode: null, senderId: null, requestedBy: person, requestedAt: T, finishedAt: null, inProgress: false, version: 1, ...patch });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const stub = (...answers: Response[]) => { const f = vi.fn(async () => answers.shift() ?? json({}, 500)); vi.stubGlobal('fetch', f); return f; };
 const call = (f: ReturnType<typeof stub>, n = 0) => f.mock.calls[n] as unknown as [string, RequestInit];
@@ -62,7 +62,7 @@ it('buy sends the number and the price the owner saw, with the buy marker and a 
 it('maps the buy route\'s definite answers to REFUSED with their code; anything else stays UNKNOWN', async () => {
   const pick = { phoneE164: PHONE, locality: null, region: null, monthlyPriceMicrounits: 1150000 };
   for (const [status, code] of [[409, 'PRICE_CHANGED'], [409, 'NUMBER_UNAVAILABLE'], [409, 'HQ_NUMBER_SETUP_INCOMPLETE'], [503, 'NUMBER_PROVISIONING_OFF'],
-    [422, 'HQ_NUMBER_ORDER_OPEN'], [422, 'HQ_SENDER_EXISTS']] as const) {
+    [422, 'HQ_NUMBER_ORDER_OPEN'], [422, 'HQ_SENDER_EXISTS'], [422, 'HQ_NUMBER_ORDER_BUSY']] as const) {
     stub(json({ code }, status));
     await expect(numberApi.buy(pick, id(1), signal(), yes)).rejects.toMatchObject({ kind: 'REFUSED', code });
   }
