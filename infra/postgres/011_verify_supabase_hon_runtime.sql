@@ -7725,3 +7725,19 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+-- School blast recipients read exact verification (0716)
+DO $$ BEGIN
+  IF to_regprocedure('hon.read_school_blast_recipients(text,uuid)') IS NULL
+    OR NOT has_function_privilege('hon_runtime','hon.read_school_blast_recipients(text,uuid)','EXECUTE')
+    OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE p.oid='hon.read_school_blast_recipients(text,uuid)'::regprocedure AND a.grantee<>p.proowner
+        AND (a.is_grantable OR a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime'))) THEN
+    RAISE EXCEPTION 'Unsafe school blast recipients ACL'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_roles o ON o.oid=p.proowner WHERE p.oid='hon.read_school_blast_recipients(text,uuid)'::regprocedure
+      AND p.prosecdef AND (o.rolsuper OR o.rolbypassrls)
+      AND (length(p.prosrc)-length(replace(p.prosrc,'require_school_blast_actor(subject,''marketing.blast.read'')','')))
+        /length('require_school_blast_actor(subject,''marketing.blast.read'')')=2
+      AND position('x.organization_id=org AND x.school_id=school' IN p.prosrc)>0 AND position('LIMIT 2000' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'School blast recipients read drift'; END IF;
+END $$;
+-- End school blast recipients read exact verification.

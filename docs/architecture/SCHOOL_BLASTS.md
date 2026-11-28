@@ -118,6 +118,23 @@ Evidence: `packages/database/scripts/test-school-blast-pictures-integrity.mjs` (
   filters still work. The chips of a reopened draft show names only for contacts seen in this session (the blast stores
   ids only); others show as "Contact picked earlier".
 
+## Recipients and sent emails (migration 0716)
+
+Owner ask (David, 2026-11-28): "Emails also needs to be saved on history so we can go back and see what was sent."
+
+- Every blast message is already kept: 0621 queues one 0243 message per reachable person with its own rendered subject
+  and body. Nothing new is stored.
+- `hon.read_school_blast_recipients(subject, blast)` (GET `.../marketing/blasts/:blastId/recipients`) lists the 0621
+  recipient rows of one blast, at most 2,000: the person's current name, the outcome, and for a queued person the message
+  id, the delivery state (WAITING until the worker makes a delivery, then the 0243 status, or CANCELLED) and the provider
+  failure code. A draft has none. No address, body or consent detail. It needs `marketing.blast.read`, re-checked before
+  it answers; another school's blast is not found.
+- The blast Detail shows **View recipients**. On an email blast each queued person has **Open email**, which shows that
+  person's email exactly as sent (subject, body with pictures and videos, delivery events) through the contact history
+  read `hon.read_contact_message_email` (0424), so it also needs contact history access. Without it, the row says the
+  email could not be opened.
+- Email > History opens the same full email in its drawer (the list itself still shows a 160-character preview).
+
 ## Later pieces
 
 - **BL2b:** per-recipient attribution tokens on checkout links (which blast brought which order), and a save/send check

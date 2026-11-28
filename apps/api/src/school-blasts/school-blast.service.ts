@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import {
-  validateCancelSchoolBlast, validateSaveSchoolBlast, validateSendSchoolBlast, verifySchoolBlast, verifySchoolBlastAudience, verifySchoolBlastList,
-  verifySchoolBlastReceipt, type SchoolBlast, type SchoolBlastAudiencePreview, type SchoolBlastReceipt, type SchoolBlastSummary,
+  validateCancelSchoolBlast, validateSaveSchoolBlast, validateSendSchoolBlast, verifySchoolBlast, verifySchoolBlastAudience, verifySchoolBlastList, verifySchoolBlastRecipients,
+  verifySchoolBlastReceipt, type SchoolBlast, type SchoolBlastAudiencePreview, type SchoolBlastReceipt, type SchoolBlastRecipients, type SchoolBlastSummary,
 } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
@@ -72,6 +72,14 @@ export class SchoolBlastService {
     if (!UUID.test(blastId)) invalidInput();
     return this.read(context, 'SELECT hon.read_school_blast_audience($1,$2::uuid) AS data', [context.externalSubject, blastId],
       value => verifySchoolBlastAudience(value, { blastId }));
+  }
+
+  /** 0716: who a sent blast went to, with each message's delivery state (no addresses). */
+  async recipients(context: MembershipLifecycleContext, blastId: string): Promise<SchoolBlastRecipients> {
+    this.assertHumanContext(context, false);
+    if (!UUID.test(blastId)) invalidInput();
+    return this.read(context, 'SELECT hon.read_school_blast_recipients($1,$2::uuid) AS data', [context.externalSubject, blastId],
+      value => verifySchoolBlastRecipients(value, { blastId }));
   }
 
   async save(context: MembershipLifecycleContext, value: unknown): Promise<SchoolBlastReceipt> {

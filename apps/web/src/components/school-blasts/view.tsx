@@ -53,6 +53,8 @@ export type SchoolBlastsViewProps = Readonly<{
   onScheduleLocal?: ((value: string) => void) | undefined; onAsk?: ((mode: 'NOW' | 'AT') => void) | undefined;
   onConfirm?: (() => void) | undefined; onBack?: (() => void) | undefined; onCancelBlast?: (() => void) | undefined;
   onRefresh?: (() => void) | undefined; onTryAgain?: (() => void) | undefined;
+  /** 0716: View recipients of a sent blast (the container's stateful list). */
+  recipients?: React.ReactNode;
 }>;
 
 const CALM: readonly BlastOutcomeKind[] = ['SAVING', 'SAVED', 'SENT', 'SCHEDULED', 'CANCELLED'];
@@ -64,7 +66,7 @@ function when(language: string, iso: string): string {
  * A body as text, with each picture line shown as its picture and each video line as its poster (or a plain marker when it is not
  * in the library, or its copy is not ready).
  */
-function BodyText({ body, pictures, c }: { body: string; pictures: PicturesRead | undefined; c: BlastCopy }): React.ReactElement {
+export function BodyText({ body, pictures, c }: { body: string; pictures: PicturesRead | undefined; c: BlastCopy }): React.ReactElement {
   const known = new Map((pictures?.state === 'READY' ? pictures.assets : []).map(a => [a.assetId, a]));
   const out: React.ReactNode[] = [];
   let text: string[] = [];
@@ -374,6 +376,7 @@ function Detail({ p, c, blast }: { p: SchoolBlastsViewProps; c: BlastCopy; blast
         <div key={s}><dt>{c.deliveries[s]}</dt><dd data-delivery={s}>{blast.deliveries![s].toLocaleString(p.language)}</dd></div>)}</dl>
       {blast.deliveries.WAITING > 0 ? <p className={page.meta}>{c.workerNote}</p> : null}
     </> : null}
+    {blast.status !== 'DRAFT' && p.recipients ? p.recipients : null}
     {cancellable ? <div className={`${page.form} ${page.danger}`}>
       <p className={page.meta}>{c.cancelHint}</p>
       <div className={page.row}><button type="button" className={page.secondary} disabled={p.locked} onClick={() => p.onCancelBlast?.()} data-action="cancel">{c.cancelBlast}</button></div>

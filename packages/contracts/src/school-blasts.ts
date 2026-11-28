@@ -61,6 +61,14 @@ export interface SchoolBlastAudiencePreview {
   sample: { firstName: string; subject: string | null; body: string } | null;
 }
 export interface SchoolBlastReceipt { blast: SchoolBlast; replayed: boolean }
+/**
+ * 0716: who a sent blast went to. A queued person has the message id (opened in full through contact history, 0424) and its
+ * delivery state; everyone else shows why they were skipped. No addresses. A draft has no rows.
+ */
+export interface SchoolBlastRecipient {
+  personId: string; name: string; outcome: SchoolBlastOutcome; messageId: string | null; delivery: SchoolBlastDeliveryState | null; failureCode: string | null;
+}
+export interface SchoolBlastRecipients { blastId: string; channel: SchoolBlastChannel; status: SchoolBlastStatus; items: SchoolBlastRecipient[] }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -274,6 +282,27 @@ export function verifySchoolBlastAudience(value: unknown, expected: Readonly<{ b
   const blastId = uuid(row.blastId);
   if (blastId !== expected.blastId.toLowerCase()) invalid();
   return Object.freeze({ blastId, version: count(row.version, 1, 999_999_999), channel, matched: count(row.matched, 0, 1_000_000), outcomes, sample });
+}
+export function verifySchoolBlastRecipients(value: unknown, expected: Readonly<{ blastId: string }>): SchoolBlastRecipients {
+  const row = record(value, ['blastId', 'channel', 'status', 'items']);
+  const blastId = uuid(row.blastId);
+  if (blastId !== expected.blastId.toLowerCase()) invalid();
+  const status = oneOf(row.status, SCHOOL_BLAST_STATUSES);
+  if (!Array.isArray(row.items) || row.items.length > SCHOOL_BLAST_LIMITS.recipients || (status === 'DRAFT' && row.items.length > 0)) invalid();
+  const items = row.items.map(item => {
+    const r = record(item, ['personId', 'name', 'outcome', 'messageId', 'delivery', 'failureCode']);
+    const outcome = oneOf(r.outcome, SCHOOL_BLAST_OUTCOMES);
+    if (typeof r.name !== 'string' || r.name.length > 200 || CONTROL.test(r.name)) invalid();
+    const queued = outcome === 'QUEUED';
+    if (queued !== (r.messageId !== null) || queued !== (r.delivery !== null)) invalid();
+    if (r.failureCode !== null && (!queued || typeof r.failureCode !== 'string' || r.failureCode.length < 1 || r.failureCode.length > 80 || CONTROL.test(r.failureCode))) invalid();
+    return Object.freeze({ personId: uuid(r.personId), name: r.name, outcome, messageId: queued ? uuid(r.messageId) : null,
+      delivery: queued ? oneOf(r.delivery, SCHOOL_BLAST_DELIVERY_STATES) : null, failureCode: r.failureCode as string | null });
+  });
+  if (new Set(items.map(i => i.personId)).size !== items.length) invalid();
+  const messages = items.flatMap(i => i.messageId ? [i.messageId] : []);
+  if (new Set(messages).size !== messages.length) invalid();
+  return Object.freeze({ blastId, channel: oneOf(row.channel, SCHOOL_BLAST_CHANNELS), status, items: Object.freeze(items) as SchoolBlastRecipient[] });
 }
 export function verifySchoolBlastReceipt(value: unknown, expected: Readonly<{ blastId?: string | null; version: number; status: SchoolBlastStatus }>): SchoolBlastReceipt {
   const row = record(value, ['blast', 'replayed']);

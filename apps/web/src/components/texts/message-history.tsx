@@ -8,6 +8,7 @@ import {
 import { MessagesAccessError, loadHistory, type MessagesScope } from './messages-http';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { initials } from '../comms-kit/initials';
+import { SentEmail } from './sent-email';
 import s from '../comms-kit/comms.module.css';
 
 export type Filters = Readonly<{ outcome: SchoolMessageOutcome | 'ALL'; origin: SchoolMessageOrigin | 'ALL'; range: SchoolMessageRange; search: string }>;
@@ -115,15 +116,16 @@ export function MessageHistory({ scope, channel, when }: { scope: MessagesScope;
             <span className={s.rowMain}><strong>{open.personName}</strong><span className={s.rowSub}>{open.address ?? 'No address on file'}</span></span></span>
           <button type="button" className={s.ghost} onClick={() => setOpen(null)}>Close</button>
         </div>
-        {open.subject && <h3 style={{ margin: 0 }}>{open.subject}</h3>}
-        <p className={s.bubble} data-from="out" style={{ margin: 0, maxWidth: '100%' }}>{open.preview}</p>
+        {channel === 'EMAIL' ? <SentEmail key={open.messageId} scope={scope} personId={open.personId} messageId={open.messageId} preview={open.preview} when={when} /> : <>
+          {open.subject && <h3 style={{ margin: 0 }}>{open.subject}</h3>}
+          <p className={s.bubble} data-from="out" style={{ margin: 0, maxWidth: '100%' }}>{open.preview}</p></>}
         <dl className={s.facts}>
           <div><dt>Status</dt><dd><span className={s.badge} data-tone={OUTCOME_TONE[open.outcome]}>{OUTCOME_LABEL[open.outcome]}</span></dd></div>
           <div><dt>Sent</dt><dd>{when.full(open.at)}</dd></div>
           <div><dt>Sent by</dt><dd>{open.by ? `${open.by} (${ORIGIN_LABEL[open.origin]})` : ORIGIN_LABEL[open.origin]}</dd></div>
           <div><dt>Address</dt><dd>{open.address ?? 'No address on file'}</dd></div>
         </dl>
-        <p className={s.muted}>The preview shows the first {SCHOOL_MESSAGES_LIMITS.previewMax} characters. The address is the one on file now.</p>
+        <p className={s.muted}>{channel === 'EMAIL' ? 'The address is the one on file now.' : `The preview shows the first ${SCHOOL_MESSAGES_LIMITS.previewMax} characters. The address is the one on file now.`}</p>
       </aside>}
     </div>
   </div>;
