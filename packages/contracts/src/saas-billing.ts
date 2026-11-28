@@ -132,6 +132,8 @@ export const SAAS_COMMANDS = {
   openSupportCase: 'hq-support-case-open',
   addSupportNote: 'hq-support-case-note',
   changeSupportCase: 'hq-support-case-change',
+  // 0713: HQ reply the school sees.
+  replySupportCase: 'hq-support-case-reply',
   // M1 (0252): HQ marketing campaigns; same values as HQ_MARKETING_COMMANDS.
   createMarketingCampaign: 'hq-marketing-campaign-create',
   updateMarketingCampaign: 'hq-marketing-campaign-update',

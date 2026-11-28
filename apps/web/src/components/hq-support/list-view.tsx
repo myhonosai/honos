@@ -1,4 +1,5 @@
 import React from 'react';
+import { HqSupportAlertBar } from './alerts';
 import { HQ_SUPPORT_CATEGORIES, HQ_SUPPORT_NOTE_MAX, HQ_SUPPORT_PRIORITIES, HQ_SUPPORT_STATUSES, HQ_SUPPORT_SUBJECT_MAX,
   type HqSupportCase, type HqSupportCaseList, type HqSupportListFilter, type HqSupportOpenInput, type HqSupportSchools } from '@hon/contracts';
 import { supportText, type SupportKey } from './copy';
@@ -95,6 +96,7 @@ export function HqSupportListView(props: SupportListViewProps): React.ReactEleme
   const done = props.outcome?.kind === 'DONE' ? props.outcome.receipt.case : null;
   return <section className={styles.access} data-hq-support="ready">{head}
     <p className={styles.meta}>{t('viewer', { name: v.viewer.displayName })}</p>
+    <HqSupportAlertBar language={language}/>
     <Facts rows={[[t('summaryUrgent'), String(s.urgentActive)], [t('summaryUnassigned'), String(s.unassignedActive)]]}/>
     <div className={styles.filters} role="group" aria-label={t('filterLabel')}>
       {FILTERS.map(f => <button key={f ?? 'ALL'} type="button" aria-pressed={filter === f} onClick={() => props.onFilter(f)}>
@@ -108,7 +110,9 @@ export function HqSupportListView(props: SupportListViewProps): React.ReactEleme
       {state.cases.map(c => <li key={c.caseId} className={styles.card} data-support-case={c.caseId}>
         <div className={styles.cardHead}><h2><a href={`/hq/support/${c.caseId}`}>{c.subject}</a></h2>
           <span className={styles.status} data-tone={priorityTone(c.priority)}>{t(c.priority)}</span>
-          <span className={styles.status} data-tone={statusTone(c.status)}>{t(c.status)}</span></div>
+          <span className={styles.status} data-tone={statusTone(c.status)}>{t(c.status)}</span>
+          {c.fromSchool && <span className={styles.status} data-tone="ready" data-from-school="">{t('fromSchool')}</span>}
+          {c.needsReply && <span className={styles.status} data-tone="waiting" data-needs-reply="">{t('needsReply')}</span>}</div>
         <Facts rows={[[t('organization'), c.organizationDisplayName], [t('school'), c.schoolDisplayName ?? t('wholeOrganization')],
           [t('category'), t(c.category)], [t('assignee'), c.assignee?.displayName ?? t('unassigned')],
           [t('opened'), `${formatTime(formattingLocale, c.openedAt)} UTC`], [t('updated'), `${formatTime(formattingLocale, c.updatedAt)} UTC`],

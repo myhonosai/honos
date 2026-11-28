@@ -32,10 +32,11 @@ function RequestCard({ r, t, p }: { r: SupportRequest; t: T; p: SupportViewProps
   return <li className={styles.step} data-request={r.requestId} data-status={r.status}>
     <div className={styles.stepMain}>
       <strong>{r.subject}</strong>
-      <div className={styles.chips}><span className={styles.chip} data-state={r.status}>{t(`st_${r.status}`)}</span><span className={styles.chip}>{t(`t_${r.topic}`)}</span></div>
+      <div className={styles.chips}><span className={styles.chip} data-state={r.status}>{t(`st_${r.status}`)}</span><span className={styles.chip}>{t(`t_${r.topic}`)}</span>
+        {r.awaitingSchool && <span className={styles.chip} data-state="WAITING_ON_SCHOOL" data-awaiting-school="">{t('awaitingYou')}</span>}</div>
       <span className={styles.meta}>{t('opened', { time: when(p.locale, r.openedAt) })} · {t('updated', { time: when(p.locale, r.updatedAt) })}</span>
       {help && <p className={r.status === 'WAITING_ON_SCHOOL' ? styles.warnText : styles.meta}>{t(help)}</p>}
-      <ol className={styles.messages}>{r.messages.map((m) => <li key={m.seq}><span className={styles.meta}>{m.author} · {when(p.locale, m.at)}</span>{m.note}</li>)}</ol>
+      <ol className={styles.messages}>{r.messages.map((m) => <li key={m.seq} data-from={m.from}><span className={styles.meta}>{m.from === 'HON' ? t('fromHon') : m.author} · {when(p.locale, m.at)}</span>{m.note}</li>)}</ol>
       {replying && <form className={styles.form} onSubmit={(e) => { e.preventDefault(); if (supportTextOk(p.replyText, 1, SUPPORT_MESSAGE_MAX)) p.onReply?.(); }}>
         <label className={styles.field}>{t('replyLabel')}<textarea rows={4} maxLength={SUPPORT_MESSAGE_MAX} value={p.replyText} disabled={p.locked} onChange={(e) => p.onReplyText?.(e.target.value)} /></label>
         {textBad(p.replyText) && <p className={styles.warnText} role="alert">{t('textProblem')}</p>}
@@ -85,6 +86,7 @@ export function SupportView(p: SupportViewProps): React.ReactElement {
     </div>
     <div className={styles.card} data-support-list>
       <h2>{t('listTitle')}</h2><p className={styles.meta}>{t('replies')}</p>
+      {p.list.list.awaitingSchoolCount > 0 && <p className={styles.warnText} role="status" data-awaiting-count={p.list.list.awaitingSchoolCount}>{t('awaitingCount', { count: String(p.list.list.awaitingSchoolCount) })}</p>}
       {p.list.list.requests.length === 0 ? <p className={styles.meta}>{t('none')}</p>
         : <ol className={styles.steps}>{p.list.list.requests.map((r) => <RequestCard key={r.requestId} r={r} t={t} p={p} />)}</ol>}
     </div>

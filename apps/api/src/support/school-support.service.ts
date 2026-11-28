@@ -30,7 +30,7 @@ function translate(error: unknown): never {
 }
 function receipt(data: Record<string, unknown> | undefined, rows: number): { request: SupportRequest; replayed: boolean } {
   if (rows !== 1 || !data || Object.keys(data).sort().join(',') !== 'record,replayed' || typeof data.replayed !== 'boolean') throw new Error('Unverified support receipt.');
-  return { request: verifySupportRequest(data.record), replayed: data.replayed };
+  return { request: verifySupportRequest(data.record, data.replayed === true), replayed: data.replayed };
 }
 
 /**

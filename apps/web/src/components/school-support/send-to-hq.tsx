@@ -42,7 +42,7 @@ export function SendToHq({ question, answer, api = supportApi, classes = {} }: {
   const kept = useRef<{ key: string; body: { topic: SupportTopic; subject: string; message: string; pageHint: string | null } } | null>(null);
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; kept.current = null; }, []);
-  const language = typeof document !== 'undefined' ? document.documentElement.lang || 'en' : 'en';
+  const language = typeof document !== 'undefined' ? (document.documentElement.lang || 'en').slice(0, 2).toLowerCase() : 'en';
   const t = (key: Parameters<typeof supportText>[1]) => supportText(language, key);
   if (!selection) return null;
   const scope = { organizationId: selection.organizationId, schoolId: selection.schoolId };
@@ -67,22 +67,22 @@ export function SendToHq({ question, answer, api = supportApi, classes = {} }: {
   };
 
   if (phase === 'CLOSED') return <div className={classes.box} data-send-to-hq="">
-    <button type="button" className={classes.button} onClick={open}>Send to HQ</button>
-    <span className={classes.meta}>Still need help? HON HQ gets your question and this answer.</span>
+    <button type="button" className={classes.button} onClick={open}>{t('sendToHq')}</button>
+    <span className={classes.meta}>{t('sendToHqHint')}</span>
   </div>;
-  if (phase === 'DONE') return <p className={classes.meta} role="status" data-send-to-hq="DONE">Sent to HON HQ. You will see their answer in <a href="/staff/help">Ask HON for help</a>.</p>;
+  if (phase === 'DONE') return <p className={classes.meta} role="status" data-send-to-hq="DONE">{t('sentToHq')} <a href="/staff/help">{t('helpLink')}</a>.</p>;
   const busy = phase === 'SENDING';
   const editable = phase === 'OPEN' || (phase !== 'SENDING' && kept.current === null);
   return <form className={classes.box} data-send-to-hq={phase} onSubmit={(e) => { e.preventDefault(); if (ready && !busy) void send(); }}>
-    <label>What is it about?{' '}
+    <label>{t('topic')}{' '}
       <select value={topic} disabled={!editable || busy} onChange={(e) => setTopic(e.target.value as SupportTopic)}>
         {SUPPORT_TOPICS.map((k) => <option key={k} value={k}>{t(`t_${k}`)}</option>)}</select></label>
-    <label>Subject<input maxLength={SUPPORT_SUBJECT_MAX} value={subject} disabled={!editable || busy} onChange={(e) => setSubject(e.target.value)} /></label>
-    <label>Message to HON HQ<textarea rows={5} maxLength={SUPPORT_MESSAGE_MAX} value={message} disabled={!editable || busy} onChange={(e) => setMessage(e.target.value)} /></label>
+    <label>{t('subject')}<input maxLength={SUPPORT_SUBJECT_MAX} value={subject} disabled={!editable || busy} onChange={(e) => setSubject(e.target.value)} /></label>
+    <label>{t('messageToHq')}<textarea rows={5} maxLength={SUPPORT_MESSAGE_MAX} value={message} disabled={!editable || busy} onChange={(e) => setMessage(e.target.value)} /></label>
     <span className={classes.meta}>{t('privacy')}</span>
     {phase !== 'OPEN' && phase !== 'SENDING' ? <p role="alert">{t(`e_${phase}`)}</p> : null}
     <div>
-      <button type="submit" className={classes.button} disabled={busy || !ready || phase === 'DENIED' || phase === 'LIMIT'}>{busy ? t('sending') : kept.current && phase === 'UNKNOWN' ? t('tryAgain') : 'Send to HQ'}</button>
+      <button type="submit" className={classes.button} disabled={busy || !ready || phase === 'DENIED' || phase === 'LIMIT'}>{busy ? t('sending') : kept.current && phase === 'UNKNOWN' ? t('tryAgain') : t('sendToHq')}</button>
       <button type="button" className={classes.button} disabled={busy} onClick={() => { kept.current = null; setPhase('CLOSED'); }}>{t('cancel')}</button>
     </div>
   </form>;

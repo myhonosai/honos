@@ -13,13 +13,19 @@ export type SupportTopic = typeof SUPPORT_TOPICS[number];
 export type SupportStatus = typeof SUPPORT_STATUSES[number];
 export interface SupportSubmitInput { topic: SupportTopic; subject: string; message: string; pageHint: string | null }
 export interface SupportMessageInput { message: string }
-export interface SupportMessage { seq: number; note: string; at: string; author: string }
+/** 0713: `from` HON for an HQ reply (author "HON support"), SCHOOL for the school's own message. */
+export type SupportMessageFrom = 'SCHOOL' | 'HON';
+export interface SupportMessage { seq: number; note: string; at: string; author: string; from: SupportMessageFrom }
 export interface SupportRequest {
   requestId: string; topic: SupportTopic; subject: string; status: SupportStatus; pageHint: string | null;
   openedAt: string; updatedAt: string; closedAt: string | null; messages: SupportMessage[];
+  /** 0713: HON support answered last and the request is still active. */
+  awaitingSchool: boolean;
 }
 export interface SupportRequestList {
   requests: SupportRequest[]; limits: { requestsPerDay: number; messagesPerDay: number; subjectMax: number; messageMax: number }; checkedAt: string;
+  /** 0713: active requests where HON support answered last (all of the school's, not only the 50 shown). */
+  awaitingSchoolCount: number;
 }
 
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
@@ -60,8 +66,12 @@ export function validateSupportMessageInput(v: unknown): SupportMessageInput {
   return { message: text(o.message, 1, SUPPORT_MESSAGE_MAX, 'message') };
 }
 
-export function verifySupportRequest(v: unknown): SupportRequest {
-  const o = record(v, ['requestId', 'topic', 'subject', 'status', 'pageHint', 'openedAt', 'updatedAt', 'closedAt', 'messages'], 'request');
+const REQUEST_KEYS = ['requestId', 'topic', 'subject', 'status', 'pageHint', 'openedAt', 'updatedAt', 'closedAt', 'messages'] as const;
+/** `legacy`: a saved command answer from before 0713 replays without `awaitingSchool` and message `from`; it reads as the school's own. */
+export function verifySupportRequest(v: unknown, legacy = false): SupportRequest {
+  const old = legacy && !!v && typeof v === 'object' && !Array.isArray(v) && !Object.hasOwn(v, 'awaitingSchool');
+  const o = record(old ? { ...(v as object), awaitingSchool: false } : v, [...REQUEST_KEYS, 'awaitingSchool'], 'request');
+  if (typeof o.awaitingSchool !== 'boolean') fail('awaiting');
   if (typeof o.requestId !== 'string' || !UUID.test(o.requestId)) fail('request id');
   if (o.pageHint !== null && (typeof o.pageHint !== 'string' || !PAGE_HINT.test(o.pageHint))) fail('page');
   const status = oneOf(o.status, SUPPORT_STATUSES, 'status'), closedAt = time(o.closedAt, 'closed time', true);
@@ -69,21 +79,27 @@ export function verifySupportRequest(v: unknown): SupportRequest {
   if (!Array.isArray(o.messages) || o.messages.length > 500) fail('messages');
   let last = 0;
   const messages = o.messages.map((m): SupportMessage => {
-    const x = record(m, ['seq', 'note', 'at', 'author'], 'message');
+    const x = record(old && m && typeof m === 'object' && !Object.hasOwn(m, 'from') ? { ...(m as object), from: 'SCHOOL' } : m, ['seq', 'note', 'at', 'author', 'from'], 'message');
     if (typeof x.seq !== 'number' || !Number.isInteger(x.seq) || x.seq <= last) fail('message order');
     last = x.seq;
-    return { seq: x.seq, note: text(x.note, 1, SUPPORT_MESSAGE_MAX, 'message'), at: time(x.at, 'message time')!, author: text(x.author, 1, 120, 'author') };
+    return { seq: x.seq, note: text(x.note, 1, SUPPORT_MESSAGE_MAX, 'message'), at: time(x.at, 'message time')!, author: text(x.author, 1, 120, 'author'),
+      from: oneOf(x.from, ['SCHOOL', 'HON'] as const, 'message from') };
   });
+  const lastFrom = messages.at(-1)?.from ?? null;
+  if (o.awaitingSchool !== ((status === 'OPEN' || status === 'WAITING_ON_SCHOOL') && lastFrom === 'HON')) fail('awaiting');
   return { requestId: o.requestId, topic: oneOf(o.topic, SUPPORT_TOPICS, 'topic'), subject: text(o.subject, 3, SUPPORT_SUBJECT_MAX, 'subject'), status,
-    pageHint: o.pageHint as string | null, openedAt: time(o.openedAt, 'opened time')!, updatedAt: time(o.updatedAt, 'updated time')!, closedAt, messages };
+    pageHint: o.pageHint as string | null, openedAt: time(o.openedAt, 'opened time')!, updatedAt: time(o.updatedAt, 'updated time')!, closedAt, messages,
+    awaitingSchool: o.awaitingSchool as boolean };
 }
 
 export function verifySupportRequestList(v: unknown): SupportRequestList {
-  const o = record(v, ['requests', 'limits', 'checkedAt'], 'list');
+  const o = record(v, ['requests', 'limits', 'checkedAt', 'awaitingSchoolCount'], 'list');
+  if (typeof o.awaitingSchoolCount !== 'number' || !Number.isInteger(o.awaitingSchoolCount) || o.awaitingSchoolCount < 0) fail('awaiting count');
   if (!Array.isArray(o.requests) || o.requests.length > 50) fail('requests');
   const l = record(o.limits, ['requestsPerDay', 'messagesPerDay', 'subjectMax', 'messageMax'], 'limits');
   for (const k of ['requestsPerDay', 'messagesPerDay', 'subjectMax', 'messageMax'] as const) if (typeof l[k] !== 'number' || !Number.isInteger(l[k]) || (l[k] as number) < 1) fail('limits');
-  const requests = o.requests.map(verifySupportRequest);
+  const requests = o.requests.map((r) => verifySupportRequest(r));
   if (new Set(requests.map((r) => r.requestId.toLowerCase())).size !== requests.length) fail('duplicate request');
-  return { requests, limits: l as SupportRequestList['limits'], checkedAt: time(o.checkedAt, 'checked time')! };
+  if ((o.awaitingSchoolCount as number) < requests.filter((r) => r.awaitingSchool).length) fail('awaiting count');
+  return { requests, limits: l as SupportRequestList['limits'], checkedAt: time(o.checkedAt, 'checked time')!, awaitingSchoolCount: o.awaitingSchoolCount as number };
 }

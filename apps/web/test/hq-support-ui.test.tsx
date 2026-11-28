@@ -19,7 +19,8 @@ const T = '2026-11-01T00:00:00.000Z', T2 = '2026-11-02T00:00:00.000Z';
 const agent = { principalId: id(50), displayName: 'Synthetic Agent' }, lead = { principalId: id(51), displayName: 'Synthetic Lead' };
 const kase = (patch: Record<string, unknown> = {}) => ({ caseId: id(1), organizationId: id(2), organizationDisplayName: 'Synthetic Dojo', schoolId: id(3),
   schoolDisplayName: 'Synthetic Academy', subject: 'Owner cannot sign in', category: 'ACCOUNT_ACCESS', priority: 'HIGH', status: 'OPEN', assignee: null,
-  openedBy: agent, openedAt: T, updatedAt: T, closedAt: null, version: 1, noteCount: 1, ...patch });
+  openedBy: agent, openedAt: T, updatedAt: T, closedAt: null, version: 1, noteCount: 1,
+  fromSchool: false, needsReply: false, lastSchoolMessageAt: null, lastReplyAt: null, ...patch });
 const summary = { OPEN: 1, WAITING_ON_SCHOOL: 0, RESOLVED: 0, CLOSED: 0, urgentActive: 0, unassignedActive: 1 };
 const listRaw = (patch: Record<string, unknown> = {}) => ({ cases: [kase()], limit: 25, nextCursor: null, summary, viewer: agent, asOf: T2, ...patch });
 const event = (patch: Record<string, unknown> = {}) => ({ seq: 1, kind: 'OPENED', actor: agent, note: 'Reported twice.', statusFrom: null, statusTo: null,

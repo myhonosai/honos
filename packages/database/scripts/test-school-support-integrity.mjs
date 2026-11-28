@@ -138,5 +138,52 @@ try{
  await assert.rejects(q("UPDATE hon.school_support_commands SET fingerprint=repeat('0',64) WHERE organization_id=$1",[a.org]),/SUPPORT_REQUEST_IMMUTABLE/);
  await assert.rejects(q('TRUNCATE hon.school_support_commands CASCADE'),/SUPPORT_REQUEST_IMMUTABLE|cannot truncate/);
  pass('request links and command receipts cannot be edited, deleted or truncated');
+ // 7. 0713: HQ answers inside the request. The school sees it as "HON support"; HQ sees which requests need a reply.
+ {
+  const c=await register('gamma');let mine=ok(await submit(c,{...ask,subject:'Cannot find billing'}));
+  const id=(await q('SELECT case_id FROM hon.school_support_requests WHERE id=$1',[mine.requestId]))[0].case_id;
+  const version=async()=>(await q('SELECT version FROM hon.hq_support_cases WHERE id=$1',[id]))[0].version;
+  let alerts=await hq('read_hq_support_alerts($1)',[hqSubject]);
+  assert(alerts.latest.some(x=>x.caseId===id&&x.schoolDisplayName==='Synthetic gamma Dojo'));assert(!JSON.stringify(alerts).includes('Tuesdays'),'alerts carry no school words');
+  let detail=await hq('read_hq_support_case($1,$2)',[hqSubject,id]);assert.equal(detail.case.fromSchool,true);assert.equal(detail.case.needsReply,true);assert(detail.case.lastSchoolMessageAt);
+  const before=alerts.needsReply;
+  await hq('add_hq_support_note($1,$2,$3::jsonb,$4)',[hqSubject,id,{expectedVersion:await version(),note:'Internal only: check their plan'},K()]);
+  const key=K(),body={expectedVersion:await version(),message:'Billing is in Settings > HON subscription.',waitForSchool:true};
+  const first=await hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,body,key]);
+  assert.equal(first.operation,'REPLY');assert.equal(first.replayed,false);assert.equal(first.case.status,'WAITING_ON_SCHOOL');assert.equal(first.case.needsReply,false);assert(first.case.lastReplyAt);
+  const again=await hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,body,key]);assert.equal(again.replayed,true);assert.deepEqual(again.case,first.case);
+  await assert.rejects(hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,{...body,message:'different'},key]),/SAAS_KEY_REUSED/);
+  await assert.rejects(hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,body,K()]),/SAAS_VERSION_CONFLICT/);
+  for(const bad of [{...body,waitForSchool:'yes'},{expectedVersion:body.expectedVersion,message:'x'},{...body,message:''},{...body,extra:1}])
+   await assert.rejects(hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,bad,K()]),/INVALID_SAAS_INPUT/,JSON.stringify(bad));
+  await assert.rejects(hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[c.externalSubject,id,{...body,expectedVersion:await version()},K()]),/SAAS_FORBIDDEN/,'a school owner cannot write an HQ reply');
+  await assert.rejects(hq('read_hq_support_alerts($1)',[c.externalSubject]),/SAAS_FORBIDDEN/);
+  assert.equal((await q("SELECT count(*) n FROM hon.hq_support_case_events WHERE case_id=$1 AND kind='REPLY'",[id]))[0].n,'1');
+  mine=(await list(c));const r1=mine.requests.find(x=>x.requestId===first.case.caseId)??mine.requests[0];
+  assert.equal(r1.status,'WAITING_ON_SCHOOL');assert.equal(r1.awaitingSchool,true);assert.equal(mine.awaitingSchoolCount,1);
+  assert.deepEqual(r1.messages.map(m=>[m.from,m.author,m.note]),[['SCHOOL','Synthetic gamma',ask.message],['HON','HON support','Billing is in Settings > HON subscription.']]);
+  assert(!JSON.stringify(mine).includes('Internal only')&&!JSON.stringify(mine).includes('Secret HQ Agent'),'HQ notes and names stay hidden');
+  // The school writes back: the case is open again and needs an HQ reply.
+  ok(await reply(c,r1.requestId,'Found it, but the card is wrong.'));
+  mine=await list(c);assert.equal(mine.requests[0].awaitingSchool,false);assert.equal(mine.awaitingSchoolCount,0);assert.equal(mine.requests[0].status,'OPEN');
+  detail=await hq('read_hq_support_case($1,$2)',[hqSubject,id]);assert.equal(detail.case.needsReply,true);
+  assert.deepEqual(detail.events.map(e=>e.kind),['OPENED','NOTE','REPLY','CHANGED','NOTE','CHANGED']);
+  alerts=await hq('read_hq_support_alerts($1)',[hqSubject]);assert.equal(alerts.needsReply,before);assert.equal(alerts.latest[0].caseId,id,'the newest school message comes first');
+  const listed=(await hq('read_hq_support_cases($1,$2,$3,$4,$5,$6)',[hqSubject,'ACTIVE',null,null,null,100])).cases.find(x=>x.caseId===id);assert.equal(listed.fromSchool,true);assert.equal(listed.needsReply,true);
+  // A reply without waiting keeps it OPEN and clears needsReply; an HQ-opened case and a closed case take no reply.
+  const kept=await hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,{expectedVersion:await version(),message:'Sending a new card link now.',waitForSchool:false},K()]);
+  assert.equal(kept.case.status,'OPEN');assert.equal(kept.case.needsReply,false);
+  const own=await hq('open_hq_support_case($1,$2::jsonb,$3)',[hqSubject,{organizationId:c.org,schoolId:c.school,subject:'HQ follow-up',category:'OTHER',priority:'LOW',note:'Internal'},K()]);
+  assert.equal(own.case.fromSchool,false);assert.equal(own.case.needsReply,false);
+  await assert.rejects(hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,own.case.caseId,{expectedVersion:1,message:'Hi',waitForSchool:false},K()]),/SUPPORT_NOT_FROM_SCHOOL/);
+  await hq('change_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,{expectedVersion:await version(),status:'CLOSED'},K()]);
+  await assert.rejects(hq('reply_to_hq_support_case($1,$2,$3::jsonb,$4)',[hqSubject,id,{expectedVersion:await version(),message:'Late',waitForSchool:false},K()]),/SUPPORT_CASE_CLOSED/);
+  assert.equal((await list(c)).requests[0].awaitingSchool,false,'a closed request never waits on the school');
+  for(const t of ['UPDATE hon.hq_support_case_events SET note=$2 WHERE case_id=$1','DELETE FROM hon.hq_support_case_events WHERE case_id=$1 AND $2::text IS NOT NULL'])
+   await assert.rejects(q(t,[id,'changed']));
+  const acl=await q("SELECT p.proname,has_function_privilege($1,p.oid,'EXECUTE') ok FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('reply_to_hq_support_case','read_hq_support_alerts','hq_support_last_school_message_at','hq_support_last_reply_at','hq_support_last_message_from','hq_support_needs_reply','hq_support_case_json','school_support_request_json')",[runtime.username]);
+  assert.equal(acl.length,8);for(const f of acl)assert.equal(f.ok,['reply_to_hq_support_case','read_hq_support_alerts'].includes(f.proname),f.proname);
+  pass('0713: an HQ reply reaches the school as HON support (never a name or internal note), can make it wait on the school, is idempotent and versioned; a school answer reopens it and HQ sees Needs reply and the alert; HQ-opened and closed cases take no reply; school owners cannot reply or read alerts; history immutable; runtime executes exactly the two new entry points');
+ }
  console.log('PASS: school support requests (0335), '+groups+' groups');
 }finally{await q("UPDATE hon.hon_os_signup_program SET status='CLOSED',recorded_at=clock_timestamp() WHERE program_id=1").catch(()=>{});await app?.close();await Promise.allSettled([admin.end(),restricted.end()]);}
