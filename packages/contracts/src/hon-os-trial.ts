@@ -73,10 +73,10 @@ export interface TrialOffer {
   campaignId: string; name: string; durationDays: number; automaticCharge: false; paymentMethodRequired: false;
   aiIncluded: boolean; aiCredits: TrialOfferAiCredits | null;
 }
-export interface TrialStatus { trialStatus: 'CLOSED' | 'TEST_MODE'; schoolId: string | null; available: TrialOffer | null; trial: HonOsTrial | null }
+export interface TrialStatus { trialStatus: 'CLOSED' | 'TEST_MODE' | 'OPEN'; schoolId: string | null; available: TrialOffer | null; trial: HonOsTrial | null }
 export function validateTrialStatus(v: unknown): TrialStatus {
   const o = accountClosed(v, ['trialStatus', 'schoolId', 'available', 'trial']);
-  if (!['CLOSED', 'TEST_MODE'].includes(String(o.trialStatus))) throw new Error('ACCOUNT_RESPONSE_INVALID');
+  if (!['CLOSED', 'TEST_MODE', 'OPEN'].includes(String(o.trialStatus))) throw new Error('ACCOUNT_RESPONSE_INVALID');
   const schoolId = o.schoolId === null ? null : accountUuid(o.schoolId);
   let available: TrialOffer | null = null;
   if (o.available !== null) {
@@ -95,7 +95,7 @@ export function validateTrialStatus(v: unknown): TrialStatus {
   const trial = o.trial === null ? null : validateHonOsTrial(o.trial);
   // An offer is shown only to a registered school with no trial, and only while the trial program is open.
   if ((available || trial) && schoolId === null) throw new Error('ACCOUNT_RESPONSE_INVALID');
-  if (available && (trial || o.trialStatus !== 'TEST_MODE')) throw new Error('ACCOUNT_RESPONSE_INVALID');
+  if (available && (trial || o.trialStatus === 'CLOSED')) throw new Error('ACCOUNT_RESPONSE_INVALID');
   if (trial && trial.schoolId !== schoolId) throw new Error('ACCOUNT_RESPONSE_INVALID');
   return Object.freeze({ trialStatus: o.trialStatus as TrialStatus['trialStatus'], schoolId, available, trial });
 }

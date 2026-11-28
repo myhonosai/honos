@@ -1,5 +1,6 @@
 import {
-  ADMISSION_LIMITS_COMMAND, accountUuid, validateAdmissionLimitsInput, validateAdmissionLimitsReceipt, validateAdmissionStatus,
+  ADMISSION_LIMITS_COMMAND, SIGNUP_PROGRAMS_COMMAND, validateSignupProgramsInput, validateSignupProgramsReceipt, validateSignupProgramsStatus,
+  type SignupProgramsInput, type SignupProgramsReceipt, type SignupProgramsStatus, accountUuid, validateAdmissionLimitsInput, validateAdmissionLimitsReceipt, validateAdmissionStatus,
   type AdmissionLimitsInput, type AdmissionLimitsReceipt, type AdmissionStatus,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
@@ -78,6 +79,49 @@ export const admissionApi = {
   },
 };
 export type AdmissionApi = typeof admissionApi;
+
+const PROGRAMS_PATH = '/api/v1/hq/signup-programs';
+/** 0710: read and switch the sign-up and trial programs. The switch has its own command header; HQ owner only. */
+export const programsApi = {
+  async status(signal: AbortSignal, owned: Owned): Promise<SignupProgramsStatus> {
+    let r: Response;
+    try {
+      r = await fetch(PROGRAMS_PATH, { method: 'GET', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+        headers: { Accept: 'application/json' } });
+    } catch (error) { if (signal.aborted) throw error; throw new AdmissionError('UNKNOWN'); }
+    signal.throwIfAborted();
+    if (r.status === 401) { if (owned()) reportConfirmedSessionInvalidation(); throw new AdmissionError('SESSION'); }
+    if (r.status === 403) throw new AdmissionError('DENIED');
+    if (r.status !== 200 || r.redirected || !JSON_TYPE.test(r.headers.get('content-type') ?? '')) throw new AdmissionError('UNKNOWN');
+    const text = await r.text();
+    if (text.length > RESPONSE_MAX) throw new AdmissionError('UNKNOWN');
+    try { return validateSignupProgramsStatus(unwrap(JSON.parse(text))); } catch { throw new AdmissionError('UNKNOWN'); }
+  },
+  /** The receipt must be exactly the next version with the chosen statuses. */
+  async set(input: SignupProgramsInput, key: string, signal: AbortSignal, owned: Owned): Promise<SignupProgramsReceipt> {
+    let body: SignupProgramsInput;
+    try { body = validateSignupProgramsInput(input); accountUuid(key); } catch { throw new AdmissionError('INVALID'); }
+    let r: Response;
+    try {
+      r = await fetch(PROGRAMS_PATH, { method: 'POST', credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', signal,
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-HON-Human-Command': SIGNUP_PROGRAMS_COMMAND, 'Idempotency-Key': key },
+        body: JSON.stringify(body) });
+    } catch { throw new AdmissionError('UNKNOWN'); }
+    if (r.status === 401) { if (owned()) reportConfirmedSessionInvalidation(); throw new AdmissionError('SESSION'); }
+    let value: unknown = null;
+    if (!r.redirected && JSON_TYPE.test(r.headers.get('content-type') ?? '')) {
+      try { const text = await r.text(); if (text.length <= RESPONSE_MAX) value = JSON.parse(text) as unknown; } catch { value = null; }
+    }
+    if (r.status !== 200) throw admissionErrorFor(r.status, codeOf(value));
+    try {
+      const receipt = validateSignupProgramsReceipt(unwrap(value));
+      const p = receipt.programs;
+      if (p.version !== body.expectedVersion + 1 || p.signup !== body.signup || p.trial !== body.trial || p.reason !== body.reason) throw new Error('mismatch');
+      return receipt;
+    } catch { throw new AdmissionError('UNKNOWN'); }
+  },
+};
+export type ProgramsApi = typeof programsApi;
 
 /** Whether a failed change may be sent again with the same key: only when its outcome is not known. */
 export const keepForRetry = (error: unknown) => !(error instanceof AdmissionError) || error.kind === 'UNKNOWN';

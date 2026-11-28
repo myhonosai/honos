@@ -244,3 +244,25 @@ it('0392: no account can be created without a valid address; a US school must pi
   field('city')!.props.onChange({ currentTarget: { value: '<script>' } });
   expect(find('Create my school account')!.props.disabled).toBe(true);
 });
+
+it('0710: FINAL approved terms drop every draft notice, link the full text and keep the plain agreement', async () => {
+  const { SIGNUP_TERMS_V2_DIGEST, SIGNUP_TERMS_V2_TEXT } = await import('../src/components/hon-os-start/terms-text');
+  const { createHash } = await import('node:crypto');
+  expect(createHash('sha256').update(SIGNUP_TERMS_V2_TEXT, 'utf8').digest('hex')).toBe(SIGNUP_TERMS_V2_DIGEST);
+  expect(SIGNUP_TERMS_V2_TEXT).toContain('The trial is free for 14 days.'); expect(SIGNUP_TERMS_V2_TEXT).toContain('30 days');
+  const final = { termsVersionId: uuid(10), version: 2, status: 'FINAL', title: 'HON OS sign-up and free trial terms', documentDigest: SIGNUP_TERMS_V2_DIGEST };
+  const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(me()).mockResolvedValueOnce(ok({ signupStatus: 'OPEN', terms: final, eligibility: 'ELIGIBLE', registration: null }));
+  click('Check my account'); await settle();
+  let all = nodes(render());
+  expect(all.some(e => e.props['data-start-legal-pending'])).toBe(false); expect(all.some(e => e.props['data-start-closed'])).toBe(false);
+  const details = all.find(e => e.props['data-start-terms']); expect(details).toBeTruthy(); expect(text(details)).toContain('Read the sign-up and free trial terms');
+  expect(nodes(details).some(e => e.props.children === SIGNUP_TERMS_V2_TEXT)).toBe(true);
+  expect(text(render())).toContain('I agree to HON OS sign-up and free trial terms (version 2) and confirm'); expect(text(render())).not.toContain('test-only draft');
+  // A FINAL row whose digest is not the approved text never shows that text.
+  hooks.values = []; f.mockResolvedValueOnce(me()).mockResolvedValueOnce(ok({ signupStatus: 'OPEN', terms: { ...final, documentDigest: 'b'.repeat(64) }, eligibility: 'ELIGIBLE', registration: null }));
+  click('Check my account'); await settle(); expect(nodes(render()).some(e => e.props['data-start-terms'])).toBe(false);
+  // The trial offer under OPEN has no draft notice either.
+  hooks.values = []; f.mockResolvedValueOnce(me()).mockResolvedValueOnce(ok({ signupStatus: 'OPEN', terms: final, eligibility: 'ALREADY_REGISTERED', registration })).mockResolvedValueOnce(ok({ trialStatus: 'OPEN', schoolId: uuid(3), available: offer, trial: null }));
+  click('Check my account'); await settle(); all = nodes(render());
+  expect(all.some(e => e.props['data-start-offer'])).toBe(true); expect(all.some(e => e.props['data-start-trial-terms-pending'])).toBe(false);
+});

@@ -1,5 +1,12 @@
 /** HQ sign-up and trial limits wording (en / ko / es). Labels only; the database decides authority and the limit in force. */
 const en = {
+  p_OPEN: 'Open to everyone',
+  switchTitle: 'Open or close sign-up and trials', switchNote: 'Only the HQ owner can do this. Opening lets any school owner sign up and start a free trial straight away, within the limits on this page. Publish the trial offer in HQ › Trials first, or new schools can sign up but will see no trial.',
+  openBoth: 'Open sign-up and trials', closeBoth: 'Close sign-up and trials',
+  confirmOpen: 'Open sign-up and trials for everyone now? New schools can sign up straight away.', confirmClose: 'Close sign-up and trials now? New schools are turned away. Schools already signed up keep their account and trial.',
+  confirmYes: 'Yes, do it', termsLine: 'Sign-up terms: {title}, version {version} ({state})', t_FINAL: 'final', t_TEST_ONLY_DRAFT: 'test-only draft', noTerms: 'No sign-up terms are recorded.',
+  switched: 'Done. Sign-up is {signup} and trials are {trial} (version {version}).', switchedAgain: 'Already done as version {version}.', switchHistory: 'Open and close history',
+  progRow: 'Sign-up {signup}, trials {trial}', sw_DENIED: 'Only the HQ owner can open or close sign-up. Nothing changed.', sw_CHANGED: 'Someone changed this since the page was read. Nothing changed; read again first.',
   title: 'Sign-up Limits',
   intro: 'How many new schools can sign up, and how many trials can start, across all of HON OS in any hour and any day. When a limit is reached, new requests are turned away until the hour or day rolls on.',
   scope: 'HQ billing staff can read this page. Only the HQ owner can change a limit. Changing a limit never opens sign-up or trials.',
@@ -28,6 +35,13 @@ const en = {
 };
 export type AdmissionCopyKey = keyof typeof en;
 const ko: Record<AdmissionCopyKey, string> = {
+  p_OPEN: '모두에게 열림',
+  switchTitle: '가입과 체험 열기 또는 닫기', switchNote: 'HQ 소유자만 할 수 있습니다. 열면 어떤 도장 소유자든 이 페이지의 한도 안에서 바로 가입하고 무료 체험을 시작할 수 있습니다. 먼저 HQ › 체험에서 체험 제안을 게시하세요. 그렇지 않으면 새 도장은 가입할 수 있지만 체험은 보이지 않습니다.',
+  openBoth: '가입과 체험 열기', closeBoth: '가입과 체험 닫기',
+  confirmOpen: '지금 모두에게 가입과 체험을 열까요? 새 도장이 바로 가입할 수 있습니다.', confirmClose: '지금 가입과 체험을 닫을까요? 새 도장은 거절됩니다. 이미 가입한 도장은 계정과 체험을 유지합니다.',
+  confirmYes: '네, 진행합니다', termsLine: '가입 약관: {title}, 버전 {version} ({state})', t_FINAL: '최종', t_TEST_ONLY_DRAFT: '테스트 전용 초안', noTerms: '기록된 가입 약관이 없습니다.',
+  switched: '완료했습니다. 가입은 {signup}, 체험은 {trial} 상태입니다 (버전 {version}).', switchedAgain: '이미 버전 {version}(으)로 완료되었습니다.', switchHistory: '열기 및 닫기 기록',
+  progRow: '가입 {signup}, 체험 {trial}', sw_DENIED: 'HQ 소유자만 가입을 열거나 닫을 수 있습니다. 바뀐 것은 없습니다.', sw_CHANGED: '이 페이지를 읽은 뒤 누군가 이것을 바꿨습니다. 바뀐 것은 없습니다. 먼저 다시 읽으세요.',
   title: '가입 한도',
   intro: 'HON OS 전체에서 한 시간과 하루 동안 가입할 수 있는 새 도장 수와 시작할 수 있는 체험 수입니다. 한도에 도달하면 그 시간이나 그날이 지날 때까지 새 요청은 받지 않습니다.',
   scope: 'HQ 결제 담당자는 이 페이지를 볼 수 있습니다. 한도는 HQ 소유자만 바꿀 수 있습니다. 한도를 바꿔도 가입이나 체험이 열리지는 않습니다.',
@@ -55,6 +69,13 @@ const ko: Record<AdmissionCopyKey, string> = {
   tryAgain: '다시 시도', stop: '중단하고 다시 읽기',
 };
 const es: Record<AdmissionCopyKey, string> = {
+  p_OPEN: 'Abierto para todos',
+  switchTitle: 'Abrir o cerrar el registro y las pruebas', switchNote: 'Solo el propietario de HQ puede hacerlo. Al abrir, cualquier dueño de escuela puede registrarse y empezar una prueba gratuita enseguida, dentro de los límites de esta página. Publica primero la oferta de prueba en HQ › Pruebas, o las escuelas nuevas podrán registrarse pero no verán ninguna prueba.',
+  openBoth: 'Abrir registro y pruebas', closeBoth: 'Cerrar registro y pruebas',
+  confirmOpen: '¿Abrir ahora el registro y las pruebas para todos? Las escuelas nuevas podrán registrarse enseguida.', confirmClose: '¿Cerrar ahora el registro y las pruebas? Las escuelas nuevas serán rechazadas. Las escuelas ya registradas conservan su cuenta y su prueba.',
+  confirmYes: 'Sí, hacerlo', termsLine: 'Términos de registro: {title}, versión {version} ({state})', t_FINAL: 'definitivos', t_TEST_ONLY_DRAFT: 'borrador solo de prueba', noTerms: 'No hay términos de registro guardados.',
+  switched: 'Hecho. El registro está {signup} y las pruebas {trial} (versión {version}).', switchedAgain: 'Ya estaba hecho como versión {version}.', switchHistory: 'Historial de apertura y cierre',
+  progRow: 'Registro {signup}, pruebas {trial}', sw_DENIED: 'Solo el propietario de HQ puede abrir o cerrar el registro. No cambió nada.', sw_CHANGED: 'Alguien cambió esto desde que se leyó la página. No cambió nada; vuelve a leer primero.',
   title: 'Límites de registro',
   intro: 'Cuántas escuelas nuevas pueden registrarse y cuántas pruebas pueden empezar en todo HON OS en cualquier hora y en cualquier día. Al llegar a un límite, las solicitudes nuevas se rechazan hasta que pase la hora o el día.',
   scope: 'El personal de facturación de HQ puede ver esta página. Solo el propietario de HQ puede cambiar un límite. Cambiar un límite nunca abre el registro ni las pruebas.',
