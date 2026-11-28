@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { saasUuid, validateHqBlastCancelInput, validateHqBlastSaveInput, validateHqBlastSendInput, verifyHqBlastAudience, verifyHqBlastDetail,
-  verifyHqBlastList, verifyHqBlastOptions, verifyHqBlastReceipt } from '@hon/contracts';
+  verifyHqBlastList, verifyHqBlastOptions, verifyHqBlastReceipt, validateHqBlastTemplateSaveInput, verifyHqBlastTemplateList, verifyHqBlastTemplateReceipt } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
 function parse<T>(f: () => T): T { try { return f(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); } }
@@ -52,5 +52,11 @@ export class HqBlastsService {
     const [input, k] = parse(() => [validateHqBlastCancelInput({ ...exactBody(body, ['expectedVersion']), blastId: saasUuid(blastId) }), saasUuid(key)] as const);
     return this.billing.call('cancelHqBlast', [subject, JSON.stringify(input), k, randomUUID(), randomUUID()],
       (v) => verifyHqBlastReceipt(v, { operation: 'CANCEL', blastId: input.blastId, status: 'CANCELLED' }));
+  }
+  async templates(subject: string) { return this.billing.call('readHqBlastTemplates', [subject], verifyHqBlastTemplateList); }
+  async saveTemplate(subject: string, body: unknown, key: unknown) {
+    const [input, k] = parse(() => [validateHqBlastTemplateSaveInput(body), saasUuid(key)] as const);
+    return this.billing.call('saveHqBlastTemplate', [subject, JSON.stringify(input), k, randomUUID(), randomUUID()],
+      (v) => verifyHqBlastTemplateReceipt(v, { templateId: input.templateId, archived: input.archived }));
   }
 }

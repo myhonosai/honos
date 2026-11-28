@@ -7735,14 +7735,14 @@ BEGIN
     ('hon.guard_hq_blast()','7c8045d42f90ae062e09a9734971eb44','v',false,'search_path=pg_catalog, hon',false,false),
     ('hon.guard_hq_blast_template()','32b5e9039da7f0b18050be4d7454a876','v',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_args_ok(uuid,uuid,uuid)','172c34bf00025f62d012fda59ca3835e','i',false,'search_path=pg_catalog',false,false),
-    ('hon.hq_blast_audience_ok(jsonb)','88a6f02be789d62c633ddd790e905963','i',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_audience_ok(jsonb)','8d22c08dbaa5bf8e84ff7606842d2d62','i',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_claim(uuid,uuid,text,text)','b69bf7be7a01762cc2174239de4e753c','v',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_day_ok(jsonb)','a45aa83ecec700df377621eb8492b766','i',false,'search_path=pg_catalog',false,false),
     ('hon.hq_blast_fill(text,text,text)','c275d232114ba7bb3f3f0673193a7e00','i',false,'search_path=pg_catalog',false,false),
     ('hon.hq_blast_json(hon.hq_blasts)','450c5f67c05beb594aa43da36b4e49ec','s',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_line_ok(jsonb,integer)','2b9beb7ba2da4156877940e71bf9240d','i',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_record(uuid,uuid,uuid,uuid,text,text,text,hon.hq_blasts,jsonb,timestamp with time zone)','f6a2e4d971d691117cc61ed8c8e5aa1e','v',false,'search_path=pg_catalog, hon',false,false),
-    ('hon.hq_blast_resolve(jsonb,text)','5849afa830ff7f6625da62363f39ce21','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_resolve(jsonb,text)','a7232b1e6e9455b6d83672dd82aeea92','s',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_results_json(uuid)','6b95bb8412577f584d1f895d677f16d9','s',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_strings_ok(jsonb,integer,text)','bf888b8b1a137cd6f34307d84fd3c807','i',false,'search_path=pg_catalog',false,false),
     ('hon.hq_blast_template_json(hon.hq_blast_templates)','8f06007c28927f742cde8ca2146efcf5','s',false,'search_path=pg_catalog, hon',false,false),
@@ -7752,12 +7752,12 @@ BEGIN
     ('hon.hq_message_json(hon.hq_messages)','55434ef378f2525095e5d16337c9cbba','s',false,'search_path=pg_catalog, hon',false,false),
     ('hon.read_hq_blast(text,uuid)','c34c3ba924b4cf37594616516bb47728','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.read_hq_blast_audience(text,uuid)','690c0b6ce4aac23cc6d1d1c9ba99eaad','v',true,'search_path=pg_catalog, hon',true,false),
-    ('hon.read_hq_blast_options(text,text)','7228c00d6389015d2b61d82055a67ed5','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.read_hq_blast_options(text,text)','016b8519a86772701cecdef080b07468','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.read_hq_blast_templates(text)','1134f72cee3343953abbc7e76b47267f','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.read_hq_blasts(text)','b6e91a131c0bd844325ebe587e72003e','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.save_hq_blast(text,jsonb,uuid,uuid,uuid)','b27b25f73629618f88dba04fb7f0e113','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.save_hq_blast_template(text,jsonb,uuid,uuid,uuid)','5182071c253d4f843c6a15a1421c2ce7','v',true,'search_path=pg_catalog, hon',true,false),
-    ('hon.send_hq_blast(text,jsonb,uuid,uuid,uuid)','d4e81affc8cfe3f226c6d10adf20c5de','v',true,'search_path=pg_catalog, hon',true,false)) x(f,t,c,d,s,r,w) LOOP
+    ('hon.send_hq_blast(text,jsonb,uuid,uuid,uuid)','8223b8584ee36c8ce07e495a949bfb02','v',true,'search_path=pg_catalog, hon',true,false)) x(f,t,c,d,s,r,w) LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
         AND p.proconfig IS NOT DISTINCT FROM ARRAY[s])
       OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')<>r

@@ -31,7 +31,7 @@ const saveIn = (patch = {}) => ({ blastId: null, expectedVersion: 0, name: 'Dece
 
 test('contracts: blast command values match the SaaS command table', () => {
   assert.deepEqual(contracts.HQ_BLAST_COMMANDS, { save: contracts.SAAS_COMMANDS.saveHqBlast, send: contracts.SAAS_COMMANDS.sendHqBlast,
-    cancel: contracts.SAAS_COMMANDS.cancelHqBlast });
+    cancel: contracts.SAAS_COMMANDS.cancelHqBlast, saveTemplate: contracts.SAAS_COMMANDS.saveHqBlastTemplate });
 });
 
 test('contracts: save input is closed; blasts never use BILLING or ACCOUNT; texts have no subject; unknown tags are refused', () => {
@@ -41,8 +41,12 @@ test('contracts: save input is closed; blasts never use BILLING or ACCOUNT; text
     saveIn({ channel: 'SMS', subject: null, body: 'x'.repeat(1401) }), saveIn({ body: 'x'.repeat(3501) }), saveIn({ body: 'Hi {{last_name}}' }),
     saveIn({ expectedVersion: 1 }), saveIn({ blastId: U(), expectedVersion: 0 }), saveIn({ audience: { statuses: ['ARCHIVED'] } }),
     saveIn({ audience: { joinedWithinDays: 30, joinedFrom: '2026-01-01' } }), saveIn({ audience: { joinedFrom: '2026-02-30' } }),
-    saveIn({ audience: { anything: true } }), saveIn({ name: ' padded' }), { ...saveIn(), extra: 1 }])
+    saveIn({ audience: { anything: true } }), saveIn({ name: ' padded' }), { ...saveIn(), extra: 1 },
+    saveIn({ audience: { picksOnly: true } }), saveIn({ audience: { picksOnly: true, schools: [U()], statuses: ['ACTIVE'] } }),
+    saveIn({ audience: { picksOnly: false, schools: [U()] } })])
     assert.throws(() => contracts.validateHqBlastSaveInput(bad), JSON.stringify(bad).slice(0, 120));
+  const only = saveIn({ audience: { picksOnly: true, schools: [U()] } });
+  assert.deepEqual(contracts.validateHqBlastSaveInput(only), only, 'only the picked schools');
   assert.deepEqual(contracts.hqBlastTagsIn('Hi {{first_name}} at {{school_name}}, {{first_name}}'), ['first_name', 'school_name']);
 });
 
@@ -54,6 +58,29 @@ test('contracts: responses are closed and consistent with their status', () => {
     assert.throws(() => contracts.verifyHqBlastList({ blasts: [{ ...bad, results: res() }], sentToday: 0, dailyLimit: 10, asOf: T2 }), JSON.stringify(bad).slice(0, 80));
   assert.throws(() => contracts.verifyHqBlastReceipt({ operation: 'SEND', blast: q, results: res(), replayed: false }, { operation: 'SEND', blastId: U(), status: 'QUEUED' }), 'another blast');
   assert.throws(() => contracts.verifyHqBlastList({ blasts: [], sentToday: 0, dailyLimit: 11, asOf: T2 }), 'the daily limit is fixed');
+});
+
+const tpl = (patch = {}) => ({ templateId: U(), name: 'Welcome', channel: 'EMAIL', subject: 'Welcome to HON OS', body: 'Hi {{first_name}}!',
+  status: 'ACTIVE', createdBy: person(), updatedAt: T, version: 1, ...patch });
+const tplIn = (patch = {}) => ({ templateId: null, expectedVersion: 0, name: 'Welcome', channel: 'EMAIL', subject: 'Welcome to HON OS', body: 'Hi {{first_name}}!',
+  archived: false, ...patch });
+
+test('contracts: template input and responses are closed; a new template never starts archived; lists hold active ones only', () => {
+  assert.deepEqual(contracts.validateHqBlastTemplateSaveInput(tplIn()), tplIn());
+  const id = U();
+  assert.equal(contracts.validateHqBlastTemplateSaveInput(tplIn({ templateId: id, expectedVersion: 2, archived: true })).archived, true);
+  for (const bad of [tplIn({ archived: true }), tplIn({ expectedVersion: 1 }), tplIn({ templateId: U() }), tplIn({ channel: 'SMS' }),
+    tplIn({ subject: null }), tplIn({ body: '' }), tplIn({ body: 'x'.repeat(3501) }), tplIn({ channel: 'SMS', subject: null, body: 'x'.repeat(1401) }),
+    tplIn({ body: 'Hi {{last_name}}' }), tplIn({ name: 'a\nb' }), tplIn({ archived: 'no' }), { ...tplIn(), purpose: 'ANNOUNCEMENT' }])
+    assert.throws(() => contracts.validateHqBlastTemplateSaveInput(bad), JSON.stringify(bad).slice(0, 120));
+  assert.equal(contracts.verifyHqBlastTemplateList({ templates: [tpl(), tpl({ channel: 'SMS', subject: null })], asOf: T2 }).templates.length, 2);
+  for (const bad of [tpl({ status: 'ARCHIVED' }), tpl({ channel: 'SMS' }), tpl({ subject: null }), tpl({ version: 0 }), { ...tpl(), createdAt: T }])
+    assert.throws(() => contracts.verifyHqBlastTemplateList({ templates: [bad], asOf: T2 }), JSON.stringify(bad).slice(0, 80));
+  const t = tpl({ templateId: id, status: 'ARCHIVED', version: 3 });
+  assert.equal(contracts.verifyHqBlastTemplateReceipt({ operation: 'TEMPLATE_SAVE', template: t, replayed: true }, { templateId: id, archived: true }).replayed, true);
+  assert.throws(() => contracts.verifyHqBlastTemplateReceipt({ operation: 'TEMPLATE_SAVE', template: t, replayed: false }, { templateId: id, archived: false }), 'not archived as asked');
+  assert.throws(() => contracts.verifyHqBlastTemplateReceipt({ operation: 'TEMPLATE_SAVE', template: t, replayed: false }, { templateId: U(), archived: true }), 'another template');
+  assert.throws(() => contracts.verifyHqBlastTemplateReceipt({ operation: 'SAVE', template: tpl(), replayed: false }, { templateId: null, archived: false }));
 });
 
 const send = (url, { method = 'GET', headers = {}, body } = {}) => new Promise((resolve, reject) => {
@@ -80,7 +107,7 @@ test('HTTP: blast reads and commands forward only the verified subject, the path
     const list = await send(`${base}/hq/communications/blasts`);
     assert.equal(list.status, 200, list.body); assert.equal(list.headers['cache-control'], 'private, no-store');
     assert.deepEqual(calls.at(-1), ['readHqBlasts', ['verified-human']]);
-    reply = () => ({ planNames: ['Core'], features: [], countries: ['US'], regions: [{ country: 'US', region: 'CA' }], schools: [], asOf: T2 });
+    reply = () => ({ planNames: ['Core'], features: [], countries: ['US'], regions: [{ country: 'US', region: 'CA' }], schoolCounts: { active: 4, paused: 1 }, schools: [], asOf: T2 });
     assert.equal((await send(`${base}/hq/communications/blasts/options`)).status, 200);
     assert.deepEqual(calls.at(-1), ['readHqBlastOptions', ['verified-human', null]]);
     assert.equal((await send(`${base}/hq/communications/blasts/options?search=Dojo`)).status, 200);
@@ -127,6 +154,21 @@ test('HTTP: blast reads and commands forward only the verified subject, the path
     reply = () => ({ operation: 'CANCEL', blast: c, results: res(), replayed: false });
     assert.equal((await send(`${base}/hq/communications/blasts/${b.blastId}/cancel`, { method: 'POST', headers: command('hq-blast-cancel', key), body: JSON.stringify({ expectedVersion: 2 }) })).status, 200);
     assert.equal(calls.at(-1)[0], 'cancelHqBlast');
+
+    reply = () => ({ templates: [tpl()], asOf: T2 });
+    assert.equal((await send(`${base}/hq/communications/blasts/templates`)).status, 200, 'templates is never read as a blast id');
+    assert.deepEqual(calls.at(-1), ['readHqBlastTemplates', ['verified-human']]);
+    assert.equal((await send(`${base}/hq/communications/blasts/templates?all=1`)).status, 400);
+    const made = tpl(); reply = () => ({ operation: 'TEMPLATE_SAVE', template: made, replayed: false });
+    const ts = await send(`${base}/hq/communications/blasts/templates`, { method: 'POST', headers: command('hq-blast-template-save', key), body: JSON.stringify(tplIn()) });
+    assert.equal(ts.status, 200, ts.body);
+    assert.deepEqual([calls.at(-1)[0], calls.at(-1)[1].slice(0, 3)], ['saveHqBlastTemplate', ['verified-human', JSON.stringify(tplIn()), key]]);
+    const j = calls.length;
+    assert.equal((await send(`${base}/hq/communications/blasts/templates`, { method: 'POST', headers: command('hq-blast-save'), body: JSON.stringify(tplIn()) })).status, 403, 'wrong marker');
+    assert.equal((await send(`${base}/hq/communications/blasts/templates`, { method: 'POST', headers: command('hq-blast-template-save'), body: JSON.stringify(tplIn({ archived: true })) })).status, 400);
+    assert.equal(calls.length, j);
+    reply = () => ({ operation: 'TEMPLATE_SAVE', template: tpl({ status: 'ARCHIVED' }), replayed: false });
+    assert.equal((await send(`${base}/hq/communications/blasts/templates`, { method: 'POST', headers: command('hq-blast-template-save'), body: JSON.stringify(tplIn()) })).status, 503, 'an archive that was not asked for is never shown');
 
     for (const [code, message, status, answer] of [['42501', 'SAAS_FORBIDDEN', 403, 'SAAS_FORBIDDEN'], ['40001', 'SAAS_VERSION_CONFLICT', 409, 'SAAS_VERSION_CONFLICT'],
       ['23514', 'HQ_BLAST_NOT_DRAFT', 422, 'HQ_BLAST_NOT_DRAFT'], ['23514', 'HQ_BLAST_NO_RECIPIENTS', 422, 'HQ_BLAST_NO_RECIPIENTS'],
@@ -179,6 +221,9 @@ test('SendGrid: a blast email has HQ\'s subject, the footer with the mailing add
   assert.equal(sg.requestBody({ ...base, hqPurpose: 'BILLING' }).mail_settings.bypass_unsubscribe_management.enable, true, 'a one-off BILLING notice still does');
   assert.equal(sg.requestBody({ ...base, hqPurpose: 'SUPPORT' }).subject, 'A message from HON OS', 'a one-off HQ message keeps the standard subject');
   assert.equal(sg.requestBody({ ...base, hqPurpose: 'SUPPORT', hqBlast: true, subject: 'bad\nline' }).subject, 'A message from HON OS');
+  assert.equal(sg.requestBody({ ...base, hqPurpose: 'ANNOUNCEMENT', hqBlast: true, subject: 'x'.repeat(300) }).subject, 'x'.repeat(300), 'a filled blast subject up to 300');
+  assert.equal(sg.requestBody({ ...base, hqPurpose: 'ANNOUNCEMENT', hqBlast: true, subject: 'x'.repeat(301) }).subject, 'A message from HON OS');
+  assert.equal(sg.requestBody({ ...base, hqPurpose: 'SUPPORT', subject: 'Custom' }).subject, 'A message from HON OS', 'a one-off HQ message never takes a subject');
   for (const address of [undefined, '', '   ', 'short', 'line\nbreak address here'] ) {
     const p = new SendGridEmailProvider(() => ({ HON_MAILING_ADDRESS: address }));
     assert.throws(() => p.requestBody({ ...base, hqPurpose: 'ANNOUNCEMENT', hqBlast: true, subject: 'x' }),

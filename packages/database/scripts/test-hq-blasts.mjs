@@ -255,6 +255,11 @@ try {
   eq(await countFor({ statuses: ['PAUSED'], schools: [sch.A, sch.D] }), { A: 'QUEUED', B: 'QUEUED' }, 'picked schools join the matches; archived pick dropped');
   eq(await countFor({ excludeSchools: [sch.A] }), { B: 'QUEUED', C: 'NOT_REACHABLE', E: 'NO_OWNERS' }, 'left-out schools removed');
   eq(await countFor({ schools: [sch.A], excludeSchools: [sch.A] }, 'EMAIL'), { B: 'QUEUED', C: 'NOT_REACHABLE', E: 'NO_OWNERS' }, 'leave-out wins over a pick');
+  eq(await countFor({ picksOnly: true, schools: [sch.A, sch.C] }), { A: 'QUEUED', C: 'NOT_REACHABLE' }, 'only the picked schools');
+  eq(await countFor({ picksOnly: true, schools: [sch.D] }), {}, 'an archived pick is still dropped');
+  for (const bad of [{ picksOnly: true }, { picksOnly: true, schools: [sch.A], countries: ['US'] }, { picksOnly: true, schools: [sch.A], excludeSchools: [sch.B] },
+    { picksOnly: false, schools: [sch.A] }])
+    await refuse('22023', () => save('hqOwner', draft({ audience: bad })), `picksOnly shape refused: ${JSON.stringify(bad).slice(0, 60)}`);
 
   // ---------- 4. preview ----------
   const b1 = await save('hqOwner', draft({ audience: { countries: ['US'] } }));
@@ -272,6 +277,14 @@ try {
   eq((await save('hqOwner', edit, key)).replayed, true, 'same key, same edit replays');
   await refuse('23505', () => save('hqOwner', { ...edit, name: 'Other' }, key), 'same key, other edit refused');
   await refuse('40001', () => save('hqOwner', { ...edit, name: 'Stale' }), 'stale version refused');
+
+  // ---------- 6b. room for the longest names and the STOP line ----------
+  const longSms = await save('hqOwner', draft({ name: 'Long text', channel: 'SMS', subject: null, body: '{{first_name}}'.repeat(100), audience: { schools: [sch.B], picksOnly: true } }));
+  await refuse('23514', () => send('hqOwner', { blastId: longSms.blast.blastId, expectedVersion: 1, sendAt: null }), 'a text that could pass 1,600 with names and STOP',
+    'HQ_BLAST_TEXT_TOO_LONG');
+  const longSubject = await save('hqOwner', draft({ name: 'Long subject', subject: '{{first_name}}'.repeat(10), audience: { schools: [sch.A], picksOnly: true } }));
+  await refuse('23514', () => send('hqOwner', { blastId: longSubject.blast.blastId, expectedVersion: 1, sendAt: null }), 'a subject that could pass 300 with names',
+    'HQ_BLAST_TEXT_TOO_LONG');
 
   // ---------- 6. send ----------
   const sendAt = new Date(Date.now() + 2 * 3_600_000); sendAt.setMilliseconds(0);
@@ -352,6 +365,8 @@ try {
   eq(opts.schools.map((s) => [s.schoolDisplayName, s.status]), [['Bravo Martial Arts', 'PAUSED']], 'school search');
   ok(opts.planNames.includes('Gold Custom') && opts.planNames.includes('Free Partner') && opts.countries.includes('CA'), 'plan and country choices');
   ok(!JSON.stringify(opts).includes('example.test'), 'no address in options');
+  ok(Number.isInteger(opts.schoolCounts.active) && opts.schoolCounts.active >= 3 && opts.schoolCounts.paused >= 1
+    && Object.keys(opts.schoolCounts).sort().join() === 'active,paused', 'school counts for the audience buttons');
   await refuse('22023', () => call('read_hq_blast_options', [H('hqOwner'), 'b'], ['', '::text']), 'search needs 2+ characters');
 
   // ---------- 9b. templates ----------

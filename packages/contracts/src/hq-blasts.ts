@@ -25,7 +25,8 @@ export const HQ_BLAST_PICK_MAX = 200;
 export const HQ_BLAST_SCHOOL_LIMIT = 2000;
 export const HQ_BLAST_DAILY_LIMIT = 10;
 /** Human-command header values, one per HQ blast command route. */
-export const HQ_BLAST_COMMANDS = { save: 'hq-blast-save', send: 'hq-blast-send', cancel: 'hq-blast-cancel' } as const;
+export const HQ_BLAST_COMMANDS = { save: 'hq-blast-save', send: 'hq-blast-send', cancel: 'hq-blast-cancel', saveTemplate: 'hq-blast-template-save' } as const;
+export const HQ_BLAST_TEMPLATE_LIMIT = 200;
 
 export type HqBlastChannel = typeof HQ_BLAST_CHANNELS[number];
 export type HqBlastPurpose = typeof HQ_BLAST_PURPOSES[number];
@@ -44,10 +45,12 @@ export interface HqBlastAudience {
   schools?: string[];
   /** Left-out schools, removed last. */
   excludeSchools?: string[];
+  /** Only the picked schools: no filter may be set with it. */
+  picksOnly?: true;
 }
 export const HQ_BLAST_AUDIENCE_KEYS = ['statuses', 'planNames', 'noPlan', 'founder', 'billingIntervals', 'freePlan', 'trial', 'trialEndsWithinDays',
   'joinedWithinDays', 'joinedFrom', 'joinedTo', 'countries', 'regions', 'cities', 'featuresIncluded', 'featuresMissing', 'canGetTexts',
-  'schools', 'excludeSchools'] as const;
+  'schools', 'excludeSchools', 'picksOnly'] as const;
 
 export interface HqBlastSaveInput {
   blastId: string | null; expectedVersion: number; name: string; channel: HqBlastChannel; purpose: HqBlastPurpose;
@@ -108,7 +111,8 @@ export function hqBlastAudienceOk(value: unknown): value is HqBlastAudience {
     && (!('featuresMissing' in a) || features(a.featuresMissing))
     && (!('canGetTexts' in a) || a.canGetTexts === true)
     && (!('schools' in a) || ids(a.schools))
-    && (!('excludeSchools' in a) || ids(a.excludeSchools));
+    && (!('excludeSchools' in a) || ids(a.excludeSchools))
+    && (!('picksOnly' in a) || (a.picksOnly === true && 'schools' in a && Object.keys(a).every((k) => k === 'picksOnly' || k === 'schools')));
 }
 
 const uuid = (v: unknown): string => (typeof v === 'string' && DB_UUID.test(v.toLowerCase()) ? v.toLowerCase() : invalid());
@@ -158,6 +162,8 @@ export interface HqBlastAudiencePreview {
 }
 export interface HqBlastOptions {
   planNames: string[]; features: string[]; countries: string[]; regions: Array<{ country: string; region: string }>;
+  /** Schools that can get a blast now: active, and paused (shown as inactive). */
+  schoolCounts: { active: number; paused: number };
   schools: Array<{ schoolId: string; schoolDisplayName: string; organizationDisplayName: string; status: 'ACTIVE' | 'PAUSED' }>; asOf: string;
 }
 export interface HqBlastReceipt { operation: 'SAVE' | 'SEND' | 'CANCEL'; blast: HqBlast; results?: HqBlastResults; replayed: boolean }
@@ -240,7 +246,8 @@ export function verifyHqBlastAudience(value: unknown, expected: { blastId: strin
   return r as unknown as HqBlastAudiencePreview;
 }
 export function verifyHqBlastOptions(value: unknown): HqBlastOptions {
-  const r = record(value, drift); exactKeys(r, ['planNames', 'features', 'countries', 'regions', 'schools', 'asOf'], drift);
+  const r = record(value, drift); exactKeys(r, ['planNames', 'features', 'countries', 'regions', 'schoolCounts', 'schools', 'asOf'], drift);
+  counts(r.schoolCounts, ['active', 'paused']);
   if (!Array.isArray(r.planNames) || r.planNames.length > 500 || r.planNames.some((p) => !label(p, 80))
     || !Array.isArray(r.features) || r.features.some((f) => !HON_OS_PLAN_CAPABILITIES.includes(f as string))
     || !Array.isArray(r.countries) || r.countries.some((c) => typeof c !== 'string' || !/^[A-Z]{2}$/.test(c))
@@ -262,6 +269,54 @@ export function verifyHqBlastReceipt(value: unknown, expected: { operation: 'SAV
   const b = blast(r.blast);
   if (b.status !== expected.status || (expected.blastId && b.blastId !== expected.blastId.toLowerCase())) drift();
   return { operation: expected.operation, blast: b, ...(r.results !== undefined ? { results: results(r.results) } : {}), replayed: r.replayed as boolean };
+}
+
+// ---------- templates ----------
+export interface HqBlastTemplateSaveInput {
+  templateId: string | null; expectedVersion: number; name: string; channel: HqBlastChannel; subject: string | null; body: string; archived: boolean;
+}
+export interface HqBlastTemplate {
+  templateId: string; name: string; channel: HqBlastChannel; subject: string | null; body: string; status: 'ACTIVE' | 'ARCHIVED';
+  createdBy: HqBlastPerson; updatedAt: string; version: number;
+}
+export interface HqBlastTemplateList { templates: HqBlastTemplate[]; asOf: string }
+export interface HqBlastTemplateReceipt { operation: 'TEMPLATE_SAVE'; template: HqBlastTemplate; replayed: boolean }
+
+export function validateHqBlastTemplateSaveInput(value: unknown): HqBlastTemplateSaveInput {
+  const r = record(value, invalid); exactKeys(r, ['templateId', 'expectedVersion', 'name', 'channel', 'subject', 'body', 'archived'], invalid);
+  const templateId = r.templateId === null ? null : uuid(r.templateId);
+  if (!isInt(r.expectedVersion, 0, 999_999_999) || (r.expectedVersion === 0) !== (templateId === null)) invalid();
+  if (typeof r.archived !== 'boolean' || (templateId === null && r.archived)) invalid();
+  if (!has(HQ_BLAST_CHANNELS, r.channel) || !hqBlastLineOk(r.name, HQ_BLAST_NAME_MAX)) invalid();
+  const channel = r.channel as HqBlastChannel;
+  if (channel === 'EMAIL' ? !hqBlastLineOk(r.subject, HQ_BLAST_SUBJECT_MAX) : r.subject !== null) invalid();
+  if (!hqBlastTextOk(r.body, 1, hqBlastBodyMax(channel))) invalid();
+  return { templateId, expectedVersion: r.expectedVersion as number, name: r.name as string, channel, subject: r.subject as string | null,
+    body: r.body as string, archived: r.archived as boolean };
+}
+function template(value: unknown): HqBlastTemplate {
+  const t = record(value, drift);
+  exactKeys(t, ['templateId', 'name', 'channel', 'subject', 'body', 'status', 'createdBy', 'updatedAt', 'version'], drift);
+  if (!isUuid(t.templateId) || !hqBlastLineOk(t.name, HQ_BLAST_NAME_MAX) || !has(HQ_BLAST_CHANNELS, t.channel)
+    || (t.channel === 'EMAIL' ? !hqBlastLineOk(t.subject, HQ_BLAST_SUBJECT_MAX) : t.subject !== null)
+    || !hqBlastTextOk(t.body, 1, hqBlastBodyMax(t.channel as HqBlastChannel)) || (t.status !== 'ACTIVE' && t.status !== 'ARCHIVED')
+    || !isTimestamp(t.updatedAt) || !isInt(t.version, 1, 999_999_999)) drift();
+  person(t.createdBy);
+  return t as unknown as HqBlastTemplate;
+}
+export function verifyHqBlastTemplateList(value: unknown): HqBlastTemplateList {
+  const r = record(value, drift); exactKeys(r, ['templates', 'asOf'], drift);
+  if (!Array.isArray(r.templates) || r.templates.length > HQ_BLAST_TEMPLATE_LIMIT || !isTimestamp(r.asOf)) drift();
+  const templates = (r.templates as unknown[]).map(template);
+  if (templates.some((t) => t.status !== 'ACTIVE')) drift();
+  return { templates, asOf: r.asOf as string };
+}
+export function verifyHqBlastTemplateReceipt(value: unknown, expected: { templateId: string | null; archived: boolean }): HqBlastTemplateReceipt {
+  const r = record(value, drift); exactKeys(r, ['operation', 'template', 'replayed'], drift);
+  if (r.operation !== 'TEMPLATE_SAVE' || typeof r.replayed !== 'boolean') drift();
+  const t = template(r.template);
+  if ((expected.templateId && t.templateId !== expected.templateId.toLowerCase()) || (t.status === 'ARCHIVED') !== expected.archived) drift();
+  return { operation: 'TEMPLATE_SAVE', template: t, replayed: r.replayed as boolean };
 }
 
 /** The merge tags written in a text, in order of first use. */

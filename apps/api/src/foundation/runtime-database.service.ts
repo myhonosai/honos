@@ -299,6 +299,8 @@ const SAAS_BILLING_CALLS = {
   saveHqBlast: { sql: 'SELECT hon.save_hq_blast($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   sendHqBlast: { sql: 'SELECT hon.send_hq_blast($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
   cancelHqBlast: { sql: 'SELECT hon.cancel_hq_blast($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  saveHqBlastTemplate: { sql: 'SELECT hon.save_hq_blast_template($1,$2::jsonb,$3::uuid,$4::uuid,$5::uuid) AS data', arity: 5, readOnly: false },
+  readHqBlastTemplates: { sql: 'SELECT hon.read_hq_blast_templates($1) AS data', arity: 1, readOnly: true },
   queueHqMessage: { sql: 'SELECT hon.queue_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   cancelHqMessage: { sql: 'SELECT hon.cancel_hq_message($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   readMyHqContact: { sql: 'SELECT hon.read_my_hq_contact($1) AS data', arity: 1, readOnly: true },

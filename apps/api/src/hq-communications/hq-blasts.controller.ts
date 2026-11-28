@@ -17,9 +17,15 @@ export class HqBlastsController {
   constructor(private readonly blasts: HqBlastsService) {}
   @Get() @UseGuards(SaasReadGuard)
   async list(@Req() req: HonRequest) { return { data: await this.blasts.list(subject(req)) }; }
-  // Declared before ':blastId' so "options" is never read as an id.
+  // Declared before ':blastId' so "options" and "templates" are never read as an id.
   @Get('options') @UseGuards(SaasReadGuard) @SaasReadQuery(['search'])
   async options(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { return { data: await this.blasts.options(subject(req), query) }; }
+  @Get('templates') @UseGuards(SaasReadGuard)
+  async templates(@Req() req: HonRequest) { return { data: await this.blasts.templates(subject(req)) }; }
+  @Post('templates') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.saveHqBlastTemplate)
+  async saveTemplate(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.blasts.saveTemplate(subject(req), body, key) };
+  }
   @Get(':blastId') @UseGuards(SaasReadGuard)
   async read(@Req() req: HonRequest, @Param('blastId') id: string) { return { data: await this.blasts.read(subject(req), id) }; }
   @Get(':blastId/audience') @UseGuards(SaasReadGuard)

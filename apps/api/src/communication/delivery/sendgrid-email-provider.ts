@@ -13,6 +13,8 @@ const ADDRESS = /^[^\s@<>()",;:]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}$/;
 const PROVIDER_ID = /^[A-Za-z0-9._:@<>+=-]{1,200}$/;
 /** 0423 email_subject shape: one trimmed line of 1-150 characters with no control characters. */
 const SUBJECT = /^(?=\S)[^\u0000-\u001f\u007f]{1,150}(?<=\S)$/;
+// 0712: a blast subject is HQ's 150 characters with school and owner names filled in, at most 300 (checked at send).
+const BLAST_SUBJECT = /^(?=\S)[^\u0000-\u001f\u007f]{1,300}(?<=\S)$/;
 /** 0712 HON_MAILING_ADDRESS: one line of 10-200 characters with no control characters. */
 const MAILING_ADDRESS = /^(?=\S)[^\u0000-\u001f\u007f<>]{10,200}(?<=\S)$/;
 /** 0712: why a school owner gets an HQ blast; followed by HON's mailing address and SendGrid's unsubscribe link. */
@@ -75,8 +77,8 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
       } }],
       from: { email: from, name: hq ? name : `${name} via HON` },
       // 0424: a school email carries its author's subject when there is one (one line, 150 characters, checked in 0423).
-      // 0712: an HQ blast email carries the subject HQ wrote (checked in 0712: one line, 150 characters).
-      subject: (!hq || blast) && request.subject && SUBJECT.test(request.subject) ? request.subject : `A message from ${name}`,
+      // 0712: an HQ blast email carries the subject HQ wrote, names filled in (one line, at most 300 characters, checked at send).
+      subject: request.subject && (blast ? BLAST_SUBJECT : !hq ? SUBJECT : null)?.test(request.subject) ? request.subject : `A message from ${name}`,
       content,
       mail_settings: { sandbox_mode: { enable: this.sandbox() }, ...(requiredNotice ? { bypass_unsubscribe_management: { enable: true } } : {}) },
       tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } },

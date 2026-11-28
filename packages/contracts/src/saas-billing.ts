@@ -169,6 +169,7 @@ export const SAAS_COMMANDS = {
   saveHqBlast: 'hq-blast-save',
   sendHqBlast: 'hq-blast-send',
   cancelHqBlast: 'hq-blast-cancel',
+  saveHqBlastTemplate: 'hq-blast-template-save',
   startMyHqPhone: 'hq-contact-phone-start',
   setMyHqTexting: 'hq-contact-texting',
   removeMyHqPhone: 'hq-contact-phone-remove',

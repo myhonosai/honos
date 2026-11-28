@@ -98,7 +98,9 @@ LANGUAGE sql IMMUTABLE SET search_path = pg_catalog, hon AS $$
   SELECT coalesce(jsonb_typeof(a) = 'object'
     AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(a) k WHERE k NOT IN ('statuses','planNames','noPlan','founder','billingIntervals',
       'freePlan','trial','trialEndsWithinDays','joinedWithinDays','joinedFrom','joinedTo','countries','regions','cities',
-      'featuresIncluded','featuresMissing','canGetTexts','schools','excludeSchools'))
+      'featuresIncluded','featuresMissing','canGetTexts','schools','excludeSchools','picksOnly'))
+    AND (NOT a ? 'picksOnly' OR (a->'picksOnly' = 'true'::jsonb AND a ? 'schools'
+      AND NOT EXISTS (SELECT 1 FROM jsonb_object_keys(a) k WHERE k NOT IN ('picksOnly','schools'))))
     AND (NOT a ? 'statuses' OR hon.hq_blast_strings_ok(a->'statuses', 2, '^(ACTIVE|PAUSED)$'))
     AND (NOT a ? 'planNames' OR hon.hq_blast_strings_ok(a->'planNames', 20, '^\S(?:.{0,78}\S)?$'))
     AND (NOT a ? 'noPlan' OR a->'noPlan' = 'true'::jsonb)
@@ -278,7 +280,7 @@ BEGIN
     LEFT JOIN hon.hon_os_trial_enrollments t ON t.organization_id = l.organization_id AND t.school_id = l.id
     LEFT JOIN hon.school_locations loc ON loc.school_id = l.id AND loc.organization_id = l.organization_id),
   matched AS (
-    SELECT f.* FROM facts f WHERE f.status = ANY(statuses)
+    SELECT f.* FROM facts f WHERE NOT a ? 'picksOnly' AND f.status = ANY(statuses)
       AND (NOT (a ? 'planNames' OR a ? 'noPlan')
         OR (coalesce(f.has_plan, false) AND lower(f.plan_name) = ANY(plans)) OR (a ? 'noPlan' AND NOT coalesce(f.has_plan, false)))
       AND (NOT a ? 'founder' OR (coalesce(f.has_plan, false) AND f.founder = (a->'founder')::boolean))
@@ -503,7 +505,10 @@ BEGIN
     END IF;
     v_content := hon.hq_blast_fill(b.body, btrim(r.school_name), hq_name);
     v_subject := CASE WHEN b.subject IS NOT NULL THEN hon.hq_blast_fill(b.subject, btrim(r.school_name), hq_name) END;
-    IF length(v_content) > (CASE b.channel WHEN 'SMS' THEN 1600 ELSE 4000 END) OR (v_subject IS NOT NULL AND length(v_subject) > 300) THEN
+    -- Measured with the longest first name (40) the claim can put in, and for a text with room for the STOP line the sender
+    -- adds (39 with its blank line), so what goes out always fits: 1,600 per text, 300 per email subject.
+    IF length(replace(v_content, '{{first_name}}', repeat('x', 40))) > (CASE b.channel WHEN 'SMS' THEN 1561 ELSE 4000 END)
+      OR (v_subject IS NOT NULL AND length(replace(v_subject, '{{first_name}}', repeat('x', 40))) > 300) THEN
       RAISE EXCEPTION 'HQ_BLAST_TEXT_TOO_LONG' USING ERRCODE = '23514';
     END IF;
     INSERT INTO hon.hq_messages (organization_id, school_id, purpose, channel, content, subject, blast_id, status, recipient_count,
@@ -662,6 +667,8 @@ BEGIN
       JOIN hon.schools s ON s.id = l.school_id WHERE s.status IN ('ACTIVE','SUSPENDED')),
     'regions', (SELECT coalesce(jsonb_agg(DISTINCT jsonb_build_object('country', l.country_code, 'region', l.region_code)), '[]'::jsonb)
       FROM hon.school_locations l JOIN hon.schools s ON s.id = l.school_id WHERE s.status IN ('ACTIVE','SUSPENDED') AND l.region_code IS NOT NULL),
+    'schoolCounts', (SELECT jsonb_build_object('active', count(*) FILTER (WHERE s.status = 'ACTIVE'), 'paused', count(*) FILTER (WHERE s.status = 'SUSPENDED'))
+      FROM hon.schools s JOIN hon.organizations o ON o.id = s.organization_id WHERE s.status IN ('ACTIVE','SUSPENDED') AND o.status IN ('ACTIVE','SUSPENDED')),
     'schools', CASE WHEN pattern IS NULL THEN '[]'::jsonb ELSE (SELECT coalesce(jsonb_agg(jsonb_build_object('schoolId', x.id,
         'schoolDisplayName', left(x.name, 300), 'organizationDisplayName', left(x.org, 300),
         'status', CASE x.status WHEN 'SUSPENDED' THEN 'PAUSED' ELSE x.status END) ORDER BY x.name, x.id), '[]'::jsonb)
