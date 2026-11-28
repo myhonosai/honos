@@ -20,6 +20,9 @@ export class SchoolFamilyAccessInvitationController {
   revoke(@Req() r: HonRequest,@Body() b: unknown,@Headers('idempotency-key') k: string) { return this.invitations.command(r,'revoke',b,k).then(data=>({data})); }
   @Post('school/family-access-invitations/end') @HttpCode(200)
   end(@Req() r: HonRequest,@Body() b: unknown,@Headers('idempotency-key') k: string) { return this.invitations.command(r,'end',b,k).then(data=>({data})); }
+  /** 0714: HON emails the pending invitation's link to the invitation's own address. */
+  @Post('school/family-access-invitations/email') @HttpCode(200)
+  email(@Req() r: HonRequest,@Body() b: unknown,@Headers('idempotency-key') k: string) { return this.invitations.email(r,b,k).then(data=>({data})); }
   @Post('account/family-access-invitations/accept') @HttpCode(200)
   accept(@Req() r: HonRequest,@Body() b: unknown,@Headers('idempotency-key') k: string) { return this.invitations.command(r,'accept',b,k).then(data=>({data})); }
   @Get('school/schools/:schoolId/family-access-invitations')

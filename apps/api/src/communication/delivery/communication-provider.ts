@@ -31,7 +31,12 @@ export interface CommunicationSendRequest {
    * Who the mail is for. Omitted or SCHOOL: a 0243 school delivery. INTERNAL (staff notices such as the weekly
    * briefing) and HQ (HQ messages) are tagged so the school receipt webhooks acknowledge and ignore them.
    */
-  purpose?: 'SCHOOL' | 'INTERNAL' | 'HQ';
+  purpose?: 'SCHOOL' | 'INTERNAL' | 'HQ' | 'ACCOUNT';
+  /**
+   * 0714: a finished HTML part for an ACCOUNT email (the family app invitation and its button). `content` stays the
+   * text part. Used only with purpose ACCOUNT; the receipt webhooks acknowledge and ignore that purpose.
+   */
+  html?: string | undefined;
   /** SMS (0248): the school's ACTIVE sender number and Messaging Service. */
   senderAddress?: string | undefined;
   senderServiceId?: string | undefined;

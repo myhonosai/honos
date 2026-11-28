@@ -1,4 +1,4 @@
-/** S2 parent/guardian linking. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL. No provider, no email sending. */
+/** S2 parent/guardian linking. Real signed HON sessions -> Nest/guard -> fixed runtime SQL -> marked disposable PostgreSQL. No provider: the 0714 invitation email goes to an in-process fake adapter only. */
 import assert from 'node:assert/strict';
 import {randomUUID as K,randomBytes,createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
@@ -15,6 +15,9 @@ const {RuntimeDatabaseService}=require('./dist/foundation/runtime-database.servi
 const {HonIdentityService}=require('./dist/foundation/hon-identity.service.js');
 const {SchoolFamilyAccessInvitationService}=require('./dist/accounts/school-family-access-invitation.service.js');
 const {SchoolFamilyAccessInvitationController,SchoolFamilyAccountHumanGuard}=require('./dist/accounts/school-family-access-invitation.controller.js');
+const {COMMUNICATION_PROVIDER_ADAPTERS}=require('./dist/communication/delivery/communication-provider.js');
+const mail={ready:true,sends:[]};
+const fakeMail={provider:'FAKE',channel:'EMAIL',readiness:()=>mail.ready?'READY':'CONFIGURATION_REQUIRED',send:async r=>{mail.sends.push(r);return{providerMessageId:'fake-'+mail.sends.length,sentAs:'EMAIL'};}};
 const {FAMILY_ACCESS_INVITATION_CONFIRMATION,FAMILY_ACCESS_END_CONFIRMATION,FAMILY_ACCOUNT_HUMAN_COMMAND}=require('@hon/contracts');
 const admin=new pg.Client({connectionString:owner.toString(),ssl:false}),restricted=new pg.Client({connectionString:runtime.toString(),ssl:false}),blocker=new pg.Client({connectionString:owner.toString(),ssl:false});
 const database=new RuntimeDatabaseService();let app,groups=0,origin;
@@ -62,10 +65,10 @@ try{
   for(const p of ['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER'])assert.equal((await q('SELECT has_table_privilege($1,$2,$3) ok',[runtime.username,'hon.'+t,p]))[0].ok,false,t+':'+p);
  }
  const fns=await q("SELECT p.oid,p.proname,p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND (p.proname LIKE '%school_family%')");
- assert.equal(fns.length,11);
- for(const f of fns){const entry=['manage_school_family_access_invitation','accept_school_family_access_invitation','read_school_family_access_invitations'].includes(f.proname);
+ assert.equal(fns.length,12);
+ for(const f of fns){const entry=['manage_school_family_access_invitation','accept_school_family_access_invitation','read_school_family_access_invitations','record_school_family_invitation_email'].includes(f.proname);
   assert.equal(f.prosecdef,entry,f.proname);assert.equal((await q("SELECT has_function_privilege($1,$2,'EXECUTE') ok",[runtime.username,f.oid]))[0].ok,entry,f.proname);}
- pass('forced deny-all RLS on new custody tables; runtime executes exactly the three fixed entry points');
+ pass('forced deny-all RLS on new custody tables; runtime executes exactly the four fixed entry points (0714 adds the invitation email decision)');
 
  // Fixture: two HQ-provisioned schools, a family manager per school, front-desk staff without family authority, families.
  const hq={subject:'s2f-hq-'+K()};const hqPrincipal=await human({externalSubject:hq.subject,email:K()+'@example.invalid'},'S2F synthetic HQ');
@@ -78,14 +81,15 @@ try{
  const managerGrant=await grant(A,managerPrincipal,managerRole);
  // A second family manager at A keeps later groups under the process-local per-subject rate limit (30/min).
  const manager2=person('manager-2');await grant(A,await human(manager2,'S2F manager 2'),managerRole);
+ const manager3=person('manager-3');await grant(A,await human(manager3,'S2F manager 3'),managerRole);
  const desk=person('desk'),deskPrincipal=await human(desk,'S2F desk');
  const deskRole=await customRole(A,'CUSTOM_FRONT_DESK',['school.view','family.read']);await grant(A,deskPrincipal,deskRole);
  const managerB=person('manager-b'),managerBPrincipal=await human(managerB,'S2F manager B');
  await grant(B,managerBPrincipal,await customRole(B,'CUSTOM_FAMILY_MANAGER',['school.view','family.read','family.member.manage']));
  const outsider=person('outsider');await human(outsider,'S2F outsider');
  const family=async(o,name,status='ACTIVE')=>(await q("INSERT INTO hon.families(organization_id,school_id,display_name,status) VALUES($1,$2,$3,$4) RETURNING id",[o.organizationId,o.schoolId,name,status]))[0].id;
- const famA=await family(A,'S2F Rivera family'),famA2=await family(A,'S2F Okafor family'),famArchived=await family(A,'S2F archived family','ARCHIVED'),famB=await family(B,'S2F other school family');
- const module=await Test.createTestingModule({controllers:[SchoolFamilyAccessInvitationController],providers:[SchoolFamilyAccessInvitationService,SchoolFamilyAccountHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
+ const famA=await family(A,'S2F Rivera family'),famA2=await family(A,'S2F Okafor family'),famArchived=await family(A,'S2F archived family','ARCHIVED'),famB=await family(B,'S2F other school family'),famMail=await family(A,'S2F Mail family');
+ const module=await Test.createTestingModule({controllers:[SchoolFamilyAccessInvitationController],providers:[{provide:COMMUNICATION_PROVIDER_ADAPTERS,useValue:[fakeMail]},SchoolFamilyAccessInvitationService,SchoolFamilyAccountHumanGuard,HonIdentityService,{provide:RuntimeDatabaseService,useValue:database}]}).compile();
  app=module.createNestApplication({logger:false});app.setGlobalPrefix('v1');await app.listen(0,'127.0.0.1');origin=await app.getUrl();process.env.HON_PUBLIC_ORIGIN=origin;
  // organization_entitlements (9b) and families (7) are edited by this proof itself and checked field by field at the end.
  const excluded=new Set([...tables,'organization_entitlements','families']);
@@ -315,6 +319,55 @@ try{
   await assert.rejects(()=>admin.query(sql),e=>/ACCOUNT_EVIDENCE_IMMUTABLE/.test(e.message),sql);
  assert.equal((await q("SELECT count(*) n FROM hon.school_family_account_events WHERE execution_allowed"))[0].n,'0');
  pass('manager-only exact-school list (<=50, derived EXPIRED, ENDED); invitations and audit evidence are append-only and never dispatchable');
+
+ // 0714 invitation email: the database decides who may send, to which address, and how often; the code is never stored.
+ {
+  const parentM=person('parent-mail'),inputM=invite(A.schoolId,famMail,parentM.email),invM=receipt(await send('school/family-access-invitations',{identity:manager3,body:inputM}));
+  const body=(extra={})=>({schoolId:A.schoolId,invitationId:invM.invitationId,token:inputM.token,language:'en',...extra});
+  const events=async()=>Number((await q("SELECT count(*) n FROM hon.school_family_account_events WHERE invitation_id=$1 AND action='EMAIL'",[invM.invitationId]))[0].n);
+  for(const identity of [outsider,desk,managerB])await denied(()=>send('school/family-access-invitations/email',{identity,body:body()}),403);
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:body({schoolId:B.schoolId})}),403);
+  await denied(()=>send('school/family-access-invitations/email',{identity:managerB,body:body({schoolId:B.schoolId})}),404);
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:body({token:tokenOf()})}),404);
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:{...body(),email:'attacker-'+K()+'@example.invalid'}}),400);
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:body({language:'fr'})}),400);
+  mail.ready=false;const off=await send('school/family-access-invitations/email',{identity:manager3,body:body()});assert.equal(off.status,503);assert.equal(off.body.code,'ACCOUNT_EMAIL_OFF');mail.ready=true;
+  assert.equal(mail.sends.length,0);assert.equal(await events(),0);
+  const key=K(),first=receipt(await send('school/family-access-invitations/email',{identity:manager3,body:body(),key}));
+  assert.deepEqual(first,{invitationId:invM.invitationId,email:parentM.email,emailNumber:1,delivery:'SENT'});
+  assert.equal(mail.sends.length,1);assert.equal(await events(),1);
+  const sent=mail.sends[0];assert.equal(sent.recipientAddress,parentM.email);assert.equal(sent.purpose,'ACCOUNT');assert.equal(sent.schoolId,A.schoolId);assert.equal(sent.organizationId,A.organizationId);
+  assert(sent.content.includes(origin+'/family-invite#i='+invM.invitationId+'&c='+inputM.token)&&sent.html.includes(inputM.token)&&sent.subject.includes('S2F school'));
+  // The private code exists only in the outgoing mail: not in the request record, the event or any other stored text.
+  assert.equal((await q("SELECT count(*) n FROM hon.school_account_requests WHERE response::text LIKE '%'||$1||'%'",[inputM.token]))[0].n,'0');
+  assert.equal((await q("SELECT count(*) n FROM hon.school_family_account_events WHERE receipt::text LIKE '%'||$1||'%'",[inputM.token]))[0].n,'0');
+  const stored=(await q("SELECT receipt FROM hon.school_family_account_events WHERE invitation_id=$1 AND action='EMAIL'",[invM.invitationId]))[0].receipt;
+  assert.equal(stored.email,parentM.email);assert.equal(stored.emailNumber,1);assert.equal(stored.replayed,false);
+  // Exact replay sends nothing more; the same key with another body is refused.
+  assert.deepEqual(receipt(await send('school/family-access-invitations/email',{identity:manager3,body:body(),key})),{...first,delivery:'ALREADY_REQUESTED'});
+  assert.equal(mail.sends.length,1);assert.equal(await events(),1);
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:body({token:tokenOf()}),key}),409);
+  // "Send again" is a new request with its own key: a second and a third email, then the limit.
+  assert.equal(receipt(await send('school/family-access-invitations/email',{identity:manager3,body:body({language:'ko'})})).emailNumber,2);
+  assert.equal(mail.sends.length,2);assert.equal(mail.sends[1].recipientAddress,parentM.email);assert.equal(await events(),2);
+  assert.equal(receipt(await send('school/family-access-invitations/email',{identity:manager3,body:body({language:'es'})})).emailNumber,3);
+  const limit=await send('school/family-access-invitations/email',{identity:manager3,body:body()});assert.equal(limit.status,429);assert.equal(limit.body.code,'ACCOUNT_EMAIL_LIMIT');
+  assert.equal(mail.sends.length,3);assert.equal(await events(),3);
+  // Paid access lapsed, or the invitation no longer pending: no email.
+  const parentN=person('parent-mail-2'),inputN=invite(A.schoolId,famMail,parentN.email),invN=receipt(await send('school/family-access-invitations',{identity:manager3,body:inputN}));
+  const bodyN={schoolId:A.schoolId,invitationId:invN.invitationId,token:inputN.token,language:'en'};
+  await q("UPDATE hon.organization_entitlements SET status='SUSPENDED' WHERE organization_id=$1",[A.organizationId]);
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:bodyN}),403);
+  await q("UPDATE hon.organization_entitlements SET status='ACTIVE' WHERE organization_id=$1",[A.organizationId]);
+  receipt(await send('school/family-access-invitations/revoke',{identity:manager3,body:{schoolId:A.schoolId,invitationId:invN.invitationId}}));
+  await denied(()=>send('school/family-access-invitations/email',{identity:manager3,body:bodyN}),404);
+  assert.equal(mail.sends.length,3);
+  // The runtime role reaches the decision only through the fixed function, and malformed input is refused there too.
+  for(const bad of [{},{schoolId:A.schoolId,invitationId:invM.invitationId},{schoolId:A.schoolId,invitationId:invM.invitationId,tokenHash:'x'},{schoolId:A.schoolId,invitationId:invM.invitationId,tokenHash:hash(inputM.token),email:'x@example.invalid'}])
+   await assert.rejects(()=>restricted.query('SELECT hon.record_school_family_invitation_email($1,$2::jsonb,$3::uuid)',[manager3.externalSubject,JSON.stringify(bad),K()]),e=>e.code==='22023');
+  await assert.rejects(()=>restricted.query("INSERT INTO hon.school_family_account_events(invitation_id,subject,idempotency_key,action,occurred_at,receipt) VALUES($1,'x',$2,'EMAIL',now(),'{}')",[invM.invitationId,K()]),e=>e.code==='42501');
+  pass('0714 invitation email: family manager with paid access only, exact school, pending invitation and its own code; address from the invitation alone; three emails at most; exact replay sends nothing; code never stored; off switch records nothing');
+ }
 
  assert.deepEqual(await snapshot(),baseline);assert.deepEqual(await entitlementState(),entitlementBaseline);assert.deepEqual(await familyState(),familyBaseline);
  pass('no entitlement, billing, credit, AI, CRM, student or outbox table changed: identity, family grant and private evidence only');

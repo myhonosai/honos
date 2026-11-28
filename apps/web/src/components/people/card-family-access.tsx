@@ -1,10 +1,11 @@
 'use client';
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { FAMILY_ACCESS_LEVELS, type FamilyAccessInvitation, type FamilyAccessLevel } from '@hon/contracts';
+import { FAMILY_ACCESS_LEVELS, FAMILY_INVITATION_EMAIL_LANGUAGES, type FamilyAccessInvitation, type FamilyAccessLevel, type FamilyInvitationEmailLanguage } from '@hon/contracts';
 import { onShellPrivacyEvent } from '../school-shell/privacy';
 import { FamilyAccessController, type FamilySnapshot } from '../family-access/controller';
 import { familyText } from '../family-access/copy';
 import type { FamilyScope } from '../family-access/http';
+import { FamilyInviteError, familyInviteApi, type FamilyInviteApi } from '../family-invite/http';
 import { panelText } from './panel-copy';
 import styles from './people.module.css';
 
@@ -24,8 +25,18 @@ const CODES = new Set(['ACCOUNT_INPUT_INVALID', 'ACCOUNT_FORBIDDEN', 'VERIFIED_E
  */
 /** The fixed page where a parent accepts an invitation. It never carries the invitation ID or the private code. */
 export const FAMILY_INVITATION_PATH = '/account/family-invitation';
-export function CardFamilyAccess({ language, scope, sessionSubject, familyId, suggestedEmail = null }: {
-  language: string; scope: FamilyScope; sessionSubject: string; familyId: string;
+/** 0714: what happened to the invitation email. Anything but SENT keeps the ID and code open as the other way to share. */
+export type InviteMail = 'IDLE' | 'SENDING' | 'SENT' | 'NOT_SENT' | 'UNKNOWN' | 'OFF' | 'LIMIT' | 'DENIED' | 'WAIT';
+export function mailAfterError(error: unknown): InviteMail {
+  const kind = error instanceof FamilyInviteError ? error.kind : 'UNKNOWN';
+  return kind === 'OFF' ? 'OFF' : kind === 'LIMIT' ? 'LIMIT' : kind === 'DENIED' || kind === 'SESSION' ? 'DENIED' : kind === 'WAIT' ? 'WAIT' : kind === 'UNKNOWN' ? 'UNKNOWN' : 'NOT_SENT';
+}
+const MAIL_NOTE: Record<Exclude<InviteMail, 'IDLE'>, Parameters<typeof panelText>[1]> = { SENDING: 'accessMailSending', SENT: 'accessMailSent', NOT_SENT: 'accessMailNotSent',
+  UNKNOWN: 'accessMailUnknown', OFF: 'accessMailOff', LIMIT: 'accessMailLimit', DENIED: 'accessMailDenied', WAIT: 'accessMailWait' };
+const mailLanguage = (language: string): FamilyInvitationEmailLanguage =>
+  (FAMILY_INVITATION_EMAIL_LANGUAGES as readonly string[]).includes(language) ? language as FamilyInvitationEmailLanguage : 'en';
+export function CardFamilyAccess({ language, scope, sessionSubject, familyId, suggestedEmail = null, inviteApi = familyInviteApi, newKey = () => crypto.randomUUID() }: {
+  language: string; scope: FamilyScope; sessionSubject: string; familyId: string; inviteApi?: FamilyInviteApi; newKey?: () => string;
   /** The open contact's own email when they are a guardian of this family: staff may change it before inviting. */
   suggestedEmail?: string | null;
 }): React.ReactElement {
@@ -34,7 +45,17 @@ export function CardFamilyAccess({ language, scope, sessionSubject, familyId, su
   if (!holder.current) holder.current = new FamilyAccessController(sessionSubject, scope);
   const controller = holder.current;
   const [snap, setSnap] = useState<FamilySnapshot>(controller.snapshot());
-  const [email, setEmail] = useState(suggestedEmail ?? ''), [invited, setInvited] = useState<string | null>(null), [level, setLevel] = useState<FamilyAccessLevel>('PRIMARY_GUARDIAN'), [hours, setHours] = useState('24');
+  const [email, setEmail] = useState(suggestedEmail ?? ''), [invited, setInvited] = useState<string | null>(null), [level, setLevel] = useState<FamilyAccessLevel>('PRIMARY_GUARDIAN'), [hours, setHours] = useState('168');
+  // 0714: the invitation just made is emailed once, by itself; "Send again" is a new request (three emails at most).
+  const [mail, setMail] = useState<InviteMail>('IDLE');
+  const mailed = useRef<string | null>(null), mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const sendMail = (share: { invitationId: string; token: string }) => {
+    setMail('SENDING');
+    inviteApi.email({ schoolId: scope.schoolId.toLowerCase(), invitationId: share.invitationId, token: share.token, language: mailLanguage(language) }, newKey()).then(
+      receipt => { if (mounted.current) setMail(receipt.delivery === 'SENT' || receipt.delivery === 'ALREADY_REQUESTED' ? 'SENT' : receipt.delivery); },
+      error => { if (mounted.current) setMail(mailAfterError(error)); });
+  };
   const [confirmed, setConfirmed] = useState(false), [action, setAction] = useState<{ id: string; kind: 'revoke' | 'end' } | null>(null);
   const levelId = useId(), suggested = useRef(suggestedEmail ?? '');
   suggested.current = suggestedEmail ?? '';
@@ -44,6 +65,8 @@ export function CardFamilyAccess({ language, scope, sessionSubject, familyId, su
       // The family is chosen for the person as soon as the school's families are read; it never comes from a typed value.
       if (next.phase === 'READY' && next.selected !== familyId && !next.retained && !next.active) controller.choose(familyId, next.revision);
       if (!['READY', 'LIMITED'].includes(next.phase)) { setEmail(suggested.current); setInvited(null); setAction(null); }
+      if (!next.share) { mailed.current = null; setMail('IDLE'); }
+      else if (mailed.current !== next.share.invitationId) { mailed.current = next.share.invitationId; sendMail(next.share); }
       setConfirmed(false); setSnap(controller.snapshot());
     });
     const offPrivacy = onShellPrivacyEvent(() => controller.conceal());
@@ -78,17 +101,24 @@ export function CardFamilyAccess({ language, scope, sessionSubject, familyId, su
             <select id={levelId} value={level} onChange={e => edit(() => setLevel(e.target.value as FamilyAccessLevel))}>{FAMILY_ACCESS_LEVELS.map(v => <option key={v} value={v}>{t(v)}</option>)}</select>
             <label>{t('hours')}<input type="number" min={1} max={168} required value={hours} onChange={e => edit(() => setHours(e.target.value))}/></label>
             <label><input type="checkbox" checked={confirmed} onChange={e => edit(() => setConfirmed(e.target.checked))}/> {t('confirmInvite')}</label>
-            <div className={styles.actions}><button type="submit" className={styles.primary} disabled={!confirmed}>{t('invite')}</button></div>
+            <p className={styles.meta}>{panelText(language, 'accessMailHelp')}</p>
+            <div className={styles.actions}><button type="submit" className={styles.primary} disabled={!confirmed}>{panelText(language, 'accessMailInvite')}</button></div>
           </fieldset></form>}
       </>}
     {snap.active ? <p className={styles.meta} role="status">{t('pending')}</p> : null}
     {snap.code ? <p className={styles.notice} role="alert">{t((CODES.has(snap.code) ? snap.code : 'ACCOUNT_UNAVAILABLE') as FKey)}</p> : null}
     {snap.receipt ? <p className={styles.notice} role="status">{t('accountStatus' in snap.receipt ? 'accepted' : 'recorded')}</p> : null}
-    {snap.share ? <div className={styles.notice}><p><strong>{panelText(language, 'accessSteps')}</strong></p>
+    {snap.share && mail !== 'IDLE' ? <div className={styles.notice} data-testid="card-family-mail" data-mail={mail}>
+      <p role={mail === 'SENT' || mail === 'SENDING' ? 'status' : 'alert'}>{panelText(language, MAIL_NOTE[mail], { email: invited || panelText(language, 'accessThisEmail') })}</p>
+      {mail !== 'SENDING' && mail !== 'LIMIT' && mail !== 'DENIED' ? <div className={styles.actions}>
+        <button type="button" className={styles.secondary} onClick={() => { if (snap.share) sendMail(snap.share); }}>{panelText(language, 'accessMailAgain')}</button></div> : null}
+    </div> : null}
+    {snap.share ? <details className={styles.notice} open={mail !== 'SENT' && mail !== 'SENDING'}><summary>{panelText(language, 'accessOtherWay')}</summary>
+      <p><strong>{panelText(language, 'accessSteps')}</strong></p>
       <p>{panelText(language, 'accessStep1', { link: `${globalThis.location?.origin ?? ''}${FAMILY_INVITATION_PATH}`, email: invited || panelText(language, 'accessThisEmail') })}</p>
       <p>{panelText(language, 'accessStep2')}</p><p>{panelText(language, 'accessStep3')}</p><p>{t('manual')}</p>
       <label>{t('id')}<input readOnly autoComplete="off" value={snap.share.invitationId}/></label>
-      <label>{t('token')}<input readOnly autoComplete="off" value={snap.share.token}/></label><p>{t('once')}</p></div> : null}
+      <label>{t('token')}<input readOnly autoComplete="off" value={snap.share.token}/></label><p>{t('once')}</p></details> : null}
     {snap.needsRefresh ? <div className={styles.actions}><p className={styles.meta}>{t('refresh')}</p>
       <button type="button" className={styles.secondary} disabled={snap.active} onClick={() => run(() => controller.load())}>{t('read')}</button></div> : null}
     {snap.recovery ? <div className={styles.notice}><p role="alert">{t(snap.reviewRequired ? 'reviewRecovery' : snap.recovery === 'UNKNOWN' ? 'unknown' : 'notSubmitted')}</p>

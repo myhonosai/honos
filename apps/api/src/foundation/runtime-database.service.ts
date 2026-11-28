@@ -1710,13 +1710,15 @@ export class RuntimeDatabaseService implements OnModuleDestroy {
     return this.callFixedSubjectFunction({sql:call.sql,readOnly:call.readOnly},params,'ADMISSION_UNAVAILABLE');
   }
 
-  async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list', params: readonly (string|null)[]): Promise<unknown> {
+  async callSchoolFamilyAccount(operation: 'invite'|'revoke'|'end'|'accept'|'list'|'email', params: readonly (string|null)[]): Promise<unknown> {
     const calls = {
       invite: {sql: "SELECT hon.manage_school_family_access_invitation($1,'INVITE',$2::jsonb,$3::uuid) data",arity:3},
       revoke: {sql: "SELECT hon.manage_school_family_access_invitation($1,'REVOKE',$2::jsonb,$3::uuid) data",arity:3},
       end: {sql: "SELECT hon.manage_school_family_access_invitation($1,'END',$2::jsonb,$3::uuid) data",arity:3},
       accept: {sql: 'SELECT hon.accept_school_family_access_invitation($1,$2,$3::jsonb,$4::uuid) data',arity:4},
       list: {sql: 'SELECT hon.read_school_family_access_invitations($1,$2::uuid) data',arity:2},
+      // 0714: decides whether one invitation email may be sent and records it; returns the only address to send to.
+      email: {sql: 'SELECT hon.record_school_family_invitation_email($1,$2::jsonb,$3::uuid) data',arity:3},
     } as const;
     const call=calls[operation];
     if(!call||params.length!==call.arity) throw new Error('ACCOUNT_UNAVAILABLE');

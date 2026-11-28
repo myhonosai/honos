@@ -57,6 +57,8 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
       const parts = renderEmailWithPictures(request.content, request.pictures, origin);
       content = [{ type: 'text/plain', value: parts.text }, { type: 'text/html', value: parts.html }];
     }
+    // 0714: an account email (the family app invitation) brings its own HTML part with the button.
+    if (!hq && request.purpose === 'ACCOUNT' && request.html) content = [{ type: 'text/plain', value: request.content }, { type: 'text/html', value: request.html }];
     return {
       personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
         hon_delivery_id: request.deliveryId, ...(purpose ? { hon_purpose: purpose } : {}),

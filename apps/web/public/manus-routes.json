@@ -889,6 +889,10 @@
       "title": "HON OS | Family invitation"
     },
     {
+      "path": "/family-invite",
+      "title": "HON Family | Invitation"
+    },
+    {
       "path": "/staff/founder-setup",
       "title": "HON OS | Founder Setup"
     },
