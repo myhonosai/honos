@@ -172,7 +172,7 @@ export function HqCommunicationsListView(props: CommsListViewProps): React.React
     {!owner && <p className={styles.meta}>{t('senderOwnerOnly')}</p>}
     <div className={styles.list}>{HQ_MESSAGE_CHANNELS.map(c => <SenderCard key={c} language={language} channel={c} sender={v.senders[c]} owner={owner}
       locked={props.locked} onSet={props.onSetSender} onRetire={props.onRetireSender}/>)}</div>
-    {props.smsBuy}
+    {props.smsBuy && <div id="hq-buy-number">{props.smsBuy}</div>}
     <h2>{t('title')}</h2>
     {state.messages.length === 0 ? <p className={styles.notice}>{t('none')}</p> : <ul className={styles.list} aria-label={t('title')}>
       {state.messages.map(m => <li key={m.messageId} className={styles.card} data-comms-message={m.messageId}>

@@ -5,7 +5,8 @@ import { callsCopy } from './copy';
 export type HqCallsCopy = {
   title: string; intro: string; loading: string; hidden: string; show: string; refresh: string;
   deniedTitle: string; denied: string; sessionEnded: string; unavailable: string; unknownSave: string;
-  hqNumber: string; noNumber: string; setUpNumber: string; callingOn: string; callingOff: string; callingOffHint: string;
+  hqNumber: string; noNumber: string; setUpNumber: string; askOwnerNumber: string; statusOn: string; statusOff: string;
+  turnCallingOn: string; turnCallingOff: string; callingTurnedOn: string; callingTurnedOff: string; ringMeOnLabel: string; ringMeOffLabel: string; ringMeNeedsCalling: string; callingOn: string; callingOff: string; callingOffHint: string;
   missedToday: (n: number) => string; unheard: (n: number) => string;
   ringMe: string; ringMeHint: string; ringMeOn: string; ringMeOff: string; ringing: (names: string) => string; nobodyRings: string; voicemailNote: string;
   log: string; filters: Record<SchoolCallFilter, string>; empty: string; emptyFiltered: string; more: string;
@@ -25,7 +26,9 @@ const en: HqCallsCopy = {
   deniedTitle: 'Not available for your HQ access', denied: 'HQ calling needs HQ texting access (any purpose).', sessionEnded: 'Your session has ended. Sign in again.',
   unavailable: 'HQ calls are unavailable right now. Try again in a moment.',
   unknownSave: 'We could not confirm the change. It may have been saved. Refresh to see the current state.',
-  hqNumber: 'HQ number', noNumber: 'HQ has no active texting number yet. Calls use the same number.', setUpNumber: 'Set up the HQ sender',
+  hqNumber: 'HQ number', noNumber: 'HQ has no active texting number yet. Calls use the same number.', setUpNumber: 'Buy a number', askOwnerNumber: 'Ask the HQ owner to buy the HQ number.', statusOn: 'Calling on', statusOff: 'Calling off',
+  turnCallingOn: 'Turn calling on', turnCallingOff: 'Turn calling off', callingTurnedOn: 'HQ calling is on.', callingTurnedOff: 'HQ calling is off.',
+  ringMeOnLabel: 'On', ringMeOffLabel: 'Off', ringMeNeedsCalling: 'Turn HQ calling on first to use Ring me.',
   callingOn: 'HQ calling is on', callingOff: 'HQ calling is off', callingOffHint: 'Calls to the HQ number are turned away until the HQ owner switches calling on.',
   missedToday: n => (n === 1 ? '1 missed call today' : `${n} missed calls today`), unheard: n => (n === 1 ? '1 new voicemail' : `${n} new voicemails`),
   ringMe: 'Ring me', ringMeHint: 'When the HQ number is called, ring HON in this browser for you, along with everyone at HQ who has Ring me on.',
@@ -70,7 +73,9 @@ const ko: HqCallsCopy = {
   deniedTitle: 'HQ 권한으로 사용할 수 없습니다', denied: 'HQ 전화는 HQ 문자 권한(목적 무관)이 필요합니다.', sessionEnded: '세션이 끝났습니다. 다시 로그인하세요.',
   unavailable: '지금은 HQ 전화를 사용할 수 없습니다. 잠시 후 다시 시도하세요.',
   unknownSave: '변경을 확인할 수 없습니다. 저장되었을 수 있습니다. 새로고침해서 현재 상태를 확인하세요.',
-  hqNumber: 'HQ 번호', noNumber: 'HQ에 아직 활성 문자 번호가 없습니다. 전화도 같은 번호를 씁니다.', setUpNumber: 'HQ 발신자 설정',
+  hqNumber: 'HQ 번호', noNumber: 'HQ에 아직 활성 문자 번호가 없습니다. 전화도 같은 번호를 씁니다.', setUpNumber: '번호 구입', askOwnerNumber: 'HQ 소유자에게 HQ 번호 구입을 요청하세요.', statusOn: '전화 켜짐', statusOff: '전화 꺼짐',
+  turnCallingOn: '전화 켜기', turnCallingOff: '전화 끄기', callingTurnedOn: 'HQ 전화가 켜졌습니다.', callingTurnedOff: 'HQ 전화가 꺼졌습니다.',
+  ringMeOnLabel: '켜짐', ringMeOffLabel: '꺼짐', ringMeNeedsCalling: '"나에게 울리기"를 쓰려면 먼저 HQ 전화를 켜세요.',
   callingOn: 'HQ 전화 켜짐', callingOff: 'HQ 전화 꺼짐', callingOffHint: 'HQ 소유자가 전화를 켤 때까지 HQ 번호로 오는 전화는 받지 않습니다.',
   missedToday: n => `오늘 부재중 전화 ${n}통`, unheard: n => `새 음성 메시지 ${n}개`,
   ringMe: '나에게 울리기', ringMeHint: 'HQ 번호로 전화가 오면 이 브라우저의 HON에서 나와 "나에게 울리기"를 켠 HQ 사람 모두에게 울립니다.',
@@ -109,7 +114,9 @@ const es: HqCallsCopy = {
   deniedTitle: 'No disponible con tu acceso de HQ', denied: 'Las llamadas de HQ requieren acceso a textos de HQ (cualquier propósito).', sessionEnded: 'Tu sesión terminó. Inicia sesión de nuevo.',
   unavailable: 'Las llamadas de HQ no están disponibles ahora. Inténtalo en un momento.',
   unknownSave: 'No pudimos confirmar el cambio. Puede que se haya guardado. Actualiza para ver el estado actual.',
-  hqNumber: 'Número de HQ', noNumber: 'HQ todavía no tiene un número de texto activo. Las llamadas usan el mismo número.', setUpNumber: 'Configurar el remitente de HQ',
+  hqNumber: 'Número de HQ', noNumber: 'HQ todavía no tiene un número de texto activo. Las llamadas usan el mismo número.', setUpNumber: 'Comprar un número', askOwnerNumber: 'Pide al dueño de HQ que compre el número de HQ.', statusOn: 'Llamadas activadas', statusOff: 'Llamadas desactivadas',
+  turnCallingOn: 'Activar llamadas', turnCallingOff: 'Desactivar llamadas', callingTurnedOn: 'Las llamadas de HQ están activadas.', callingTurnedOff: 'Las llamadas de HQ están desactivadas.',
+  ringMeOnLabel: 'Activado', ringMeOffLabel: 'Desactivado', ringMeNeedsCalling: 'Activa primero las llamadas de HQ para usar Llamarme.',
   callingOn: 'Llamadas de HQ activadas', callingOff: 'Llamadas de HQ desactivadas', callingOffHint: 'Las llamadas al número de HQ se rechazan hasta que el dueño de HQ active las llamadas.',
   missedToday: n => (n === 1 ? '1 llamada perdida hoy' : `${n} llamadas perdidas hoy`), unheard: n => (n === 1 ? '1 buzón de voz nuevo' : `${n} buzones de voz nuevos`),
   ringMe: 'Llamarme', ringMeHint: 'Cuando llamen al número de HQ, HON sonará en este navegador para ti y para todos en HQ que tengan Llamarme activado.',

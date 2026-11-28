@@ -29,7 +29,7 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const prefix = '/api/v1/hq/calls';
 const report = { syntheticFixturesOnly: true, databaseAccess: false, providerCalls: false, checks: [], failures: [], screenshots: [], pageErrors: [], apiRequests: [], blocked: [] };
 const now = Date.parse('2026-11-19T18:00:00.000Z'), at = (minutes) => new Date(now - minutes * 60_000).toISOString();
-let tokenState = 'VOICE_NOT_APPROVED', ringMe = false;
+let tokenState = 'VOICE_NOT_APPROVED', ringMe = false, numberReady = true, callingOn = true, callingVersion = 2;
 const call = (n, patch) => ({ callId: id(900 - n), direction: 'IN', status: 'COMPLETED', remoteE164: '+15125550101', contactUserId: null, contactName: null, contactSchools: [],
   staffName: null, startedAt: at(n * 41), answeredAt: null, endedAt: at(n * 41 - 2), durationSeconds: null, voicemail: false, recordingAvailable: false, recordingSeconds: null,
   heard: false, outcome: null, note: null, doNotCall: false, version: 1, ...patch });
@@ -39,8 +39,8 @@ const calls = [
   call(3, { direction: 'OUT', status: 'NO_ANSWER', remoteE164: '+15125550123', contactName: 'Priya Shah', contactUserId: id(403), contactSchools: ['Lotus Jiu-Jitsu'], staffName: 'Dana Wu', outcome: 'FOLLOW_UP' }),
   call(4, { status: 'MISSED', remoteE164: null }),
 ];
-const overview = () => ({ callingOn: true, voicemailGreeting: 'Thanks for calling HON HQ. Leave a message and we will call you back today.', version: 2,
-  hqNumber: '+15125550100', numberReady: true, ringMe, canManage: true, unheardVoicemails: 1, missedToday: 1,
+const overview = () => ({ callingOn, voicemailGreeting: 'Thanks for calling HON HQ. Leave a message and we will call you back today.', version: callingVersion,
+  hqNumber: numberReady ? '+15125550100' : null, numberReady, ringMe, canManage: true, unheardVoicemails: 1, missedToday: 1,
   staff: [{ principalId: id(501), name: 'Dana Wu', ringMe: true }, { principalId: id(502), name: 'Sam Rivera', ringMe: false }] });
 const token = () => tokenState === 'READY'
   ? { ready: true, reason: 'READY', identity: `h${'0'.repeat(31)}1`, token: 'synthetic.phone.token', expiresAt: new Date(now + 3_600_000).toISOString(), incoming: false }
@@ -57,6 +57,12 @@ function api(route) {
     durableHqWork: { availability: 'UNAVAILABLE', state: 'NO_RECORDED_WORK', reason: 'No durable HQ executive work is recorded or active in HQ-1.' } } } });
   if (path === `${prefix}/overview`) return json(route, 200, { data: overview() });
   if (path === `${prefix}/phone-token`) return json(route, 200, { data: token() });
+  if (path === `${prefix}/settings` && method === 'POST') {
+    const body = JSON.parse(route.request().postData() ?? '{}');
+    if (body.expectedVersion !== callingVersion) return json(route, 422, { code: 'CALLING_VERSION_CONFLICT' });
+    callingOn = body.callingOn; callingVersion += 1;
+    return json(route, 200, { data: { callingOn, voicemailGreeting: body.voicemailGreeting, version: callingVersion } });
+  }
   if (path === `${prefix}/ring-me`) { ringMe = JSON.parse(route.request().postData() ?? '{}').ringMe; return json(route, 200, { data: { ringMe, version: 1 } }); }
   if (path === prefix) {
     const filter = url.searchParams.get('filter');
@@ -137,6 +143,30 @@ await check('HQ calls page phone width: no horizontal scroll', async () => {
   await page.getByRole('button', { name: 'Maria Lopez' }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false);
   await shot(page, 'hq-calls-page-phone', true);
+  await ctx.close();
+});
+
+await check('HQ calls page with no number: dark look, Buy a number link, clear calling and Ring me controls', async () => {
+  numberReady = false; callingOn = false; ringMe = false;
+  const { ctx, page } = await open(phone, '/hq/communications/calls');
+  await page.getByText('HQ number: —').waitFor();
+  const buy = page.getByRole('link', { name: 'Buy a number' });
+  assert.equal(await buy.getAttribute('href'), '/hq/communications#hq-buy-number');
+  assert.equal(await page.locator('[data-hq-calling]').innerText(), 'Calling off');
+  const ring = page.getByRole('switch', { name: /Ring me/ });
+  assert.equal(await ring.isDisabled(), true, 'Ring me waits for calling to be on');
+  await page.getByText('Turn HQ calling on first to use Ring me.').waitFor();
+  const bg = await page.locator('[data-hq-calls]').evaluate((el) => getComputedStyle(el).backgroundColor);
+  assert.equal(bg, 'rgb(8, 18, 31)', 'the page uses the dark HQ look');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1), false);
+  await shot(page, 'hq-calls-no-number-phone', true);
+  await page.getByRole('button', { name: 'Turn calling on' }).click();
+  await page.getByText('HQ calling is on.').waitFor();
+  assert.equal(await ring.isDisabled(), false);
+  await ring.click();
+  await page.waitForFunction(() => document.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'true');
+  await shot(page, 'hq-calls-calling-on-phone');
+  numberReady = true; callingOn = true; ringMe = false;
   await ctx.close();
 });
 

@@ -133,6 +133,13 @@ export function HqBuyNumber({ language, onChanged, api = numberApi }: { language
   const [refresh, setRefresh] = useState(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  // HQ calls links here ("Buy a number"); the card loads after the page, so bring it into view once it is ready.
+  const shown = useRef(false);
+  useEffect(() => {
+    if (shown.current || phase.kind === 'LOADING' || typeof document === 'undefined' || window.location?.hash !== '#hq-buy-number') return;
+    shown.current = true;
+    document.getElementById('hq-buy-number')?.scrollIntoView({ block: 'start' });
+  }, [phase.kind]);
   const owned = useCallback(() => mounted.current, []);
 
   useEffect(() => {
