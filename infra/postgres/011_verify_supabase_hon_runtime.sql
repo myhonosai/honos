@@ -7725,3 +7725,18 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+
+-- Family invitation email exact verification (0714)
+DO $$ BEGIN
+  IF to_regprocedure('hon.record_school_family_invitation_email(text,jsonb,uuid)') IS NULL
+    OR NOT has_function_privilege('hon_runtime','hon.record_school_family_invitation_email(text,jsonb,uuid)','EXECUTE')
+    OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE p.oid='hon.record_school_family_invitation_email(text,jsonb,uuid)'::regprocedure
+        AND a.grantee<>p.proowner AND a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')) THEN
+    RAISE EXCEPTION 'Unsafe family invitation email ACL'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.record_school_family_invitation_email(text,jsonb,uuid)'::regprocedure AND p.prosecdef
+      AND position('school_family_access_manager' IN p.prosrc)>0 AND position('token_hash IS DISTINCT FROM' IN p.prosrc)>0
+      AND position('ACCOUNT_EMAIL_LIMIT' IN p.prosrc)>0 AND position('school_family_account_record' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'Family invitation email decision drift'; END IF;
+END $$;
+-- End family invitation email exact verification.

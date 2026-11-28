@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "9dc4f7656d65fef97764f60a05d7972e51a1e2144d99d78b4ce7ad101a615e59",
+  "chainSha256": "9e2e1067d22a25c434197d7321513ccd98db638bd6e79d177df7cb36d91bb8ab",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -1085,6 +1085,10 @@
     {
       "file": "0702_hq_creative_no_monthly_limit.sql",
       "sha256": "9068b8679d2e68a74e306d8bf9c87abd4843316d543df45bae51967fe7204979"
+    },
+    {
+      "file": "0714_family_invitation_email.sql",
+      "sha256": "ed1a4a5de56591464f5e4adbb4ce075b8912c899ac94cc70de7b906de0f87310"
     }
   ]
 }

@@ -5892,3 +5892,15 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_plan_features(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0714 family invitation email: one fixed runtime entry point (decides and records one invitation email).
+DO $$ DECLARE r text;
+BEGIN
+  IF to_regprocedure('hon.record_school_family_invitation_email(text,jsonb,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0714 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.record_school_family_invitation_email(text,jsonb,uuid) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.record_school_family_invitation_email(text,jsonb,uuid) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.record_school_family_invitation_email(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;

@@ -1,0 +1,66 @@
+/** 0714: wording for the parent's side of the one-click family app invitation (en / ko / es). */
+const en = {
+  title: 'Family app invitation', opening: 'Opening your invitation…',
+  incomplete: 'This link is not complete. Open the email from your school again and press the button in it.',
+  storage: 'This browser could not keep your invitation. Turn off private browsing, then press the button in the email again.',
+  continue: 'Continue',
+  lead: 'Your school invited you to the HON Family app. Press the button to finish.',
+  signedIn: 'You are signed in as {email}.', activate: 'Activate my family access', activating: 'Activating…',
+  doneTitle: 'You are all set',
+  done: 'Your family access is active. Open the HON Family app on your phone and sign in with {email}.',
+  portal: 'Open the family page here', manual: 'Enter an invitation ID and code instead',
+  DENIED: 'This invitation could not be activated for {email}. It may have been sent to a different email address, or it may have expired. Sign in with the address that received the email, or ask your school to send a new invitation.',
+  VERIFY: 'Your email address is not verified yet. Verify it with your sign-in provider, then press the button again.',
+  REVIEW: 'This email is already used by a staff account, so your school has to review it. Please ask your school.',
+  GONE: 'This invitation is no longer available. Ask your school to send a new one.',
+  WAIT: 'Too many tries. Wait a minute and press the button again.',
+  SESSION: 'Your sign-in ended. Sign in again, then press the button.',
+  REJECTED: 'This invitation could not be activated. Ask your school to send a new one.',
+  UNKNOWN: 'We could not confirm it. Press the button again; it is safe to repeat.',
+  signIn: 'Sign in', signOut: 'Sign in with a different email',
+} as const;
+export type FamilyInviteKey = keyof typeof en;
+const ko: Record<FamilyInviteKey, string> = {
+  title: '가족 앱 초대', opening: '초대를 여는 중…',
+  incomplete: '링크가 완전하지 않습니다. 학교에서 보낸 이메일을 다시 열고 버튼을 눌러 주세요.',
+  storage: '이 브라우저에서 초대를 보관하지 못했습니다. 비공개 브라우징을 끄고 이메일의 버튼을 다시 눌러 주세요.',
+  continue: '계속',
+  lead: '학교에서 HON Family 앱에 초대했습니다. 버튼을 눌러 마무리하세요.',
+  signedIn: '{email}(으)로 로그인되어 있습니다.', activate: '가족 이용 활성화하기', activating: '활성화하는 중…',
+  doneTitle: '준비가 끝났습니다',
+  done: '가족 이용이 활성화되었습니다. 휴대폰에서 HON Family 앱을 열고 {email}(으)로 로그인하세요.',
+  portal: '여기에서 가족 페이지 열기', manual: '초대 ID와 코드를 직접 입력하기',
+  DENIED: '{email}(으)로는 이 초대를 활성화할 수 없습니다. 다른 이메일 주소로 보낸 초대이거나 만료되었을 수 있습니다. 이메일을 받은 주소로 로그인하거나 학교에 새 초대를 요청하세요.',
+  VERIFY: '이메일 주소가 아직 인증되지 않았습니다. 로그인 제공자에서 인증한 뒤 버튼을 다시 눌러 주세요.',
+  REVIEW: '이 이메일은 이미 직원 계정에서 사용 중이라 학교의 확인이 필요합니다. 학교에 문의해 주세요.',
+  GONE: '이 초대는 더 이상 사용할 수 없습니다. 학교에 새 초대를 요청하세요.',
+  WAIT: '시도가 너무 많습니다. 1분 뒤에 버튼을 다시 눌러 주세요.',
+  SESSION: '로그인이 종료되었습니다. 다시 로그인한 뒤 버튼을 눌러 주세요.',
+  REJECTED: '이 초대를 활성화할 수 없습니다. 학교에 새 초대를 요청하세요.',
+  UNKNOWN: '확인하지 못했습니다. 버튼을 다시 눌러 주세요. 반복해도 안전합니다.',
+  signIn: '로그인', signOut: '다른 이메일로 로그인',
+};
+const es: Record<FamilyInviteKey, string> = {
+  title: 'Invitación a la app familiar', opening: 'Abriendo tu invitación…',
+  incomplete: 'Este enlace no está completo. Abre de nuevo el correo de tu escuela y pulsa el botón.',
+  storage: 'Este navegador no pudo guardar tu invitación. Desactiva la navegación privada y pulsa de nuevo el botón del correo.',
+  continue: 'Continuar',
+  lead: 'Tu escuela te invitó a la app HON Family. Pulsa el botón para terminar.',
+  signedIn: 'Has iniciado sesión como {email}.', activate: 'Activar mi acceso familiar', activating: 'Activando…',
+  doneTitle: 'Todo listo',
+  done: 'Tu acceso familiar está activo. Abre la app HON Family en tu teléfono e inicia sesión con {email}.',
+  portal: 'Abrir la página familiar aquí', manual: 'Escribir un ID de invitación y un código',
+  DENIED: 'No se pudo activar esta invitación para {email}. Puede que se enviara a otro correo o que haya caducado. Inicia sesión con el correo que recibió el mensaje o pide a tu escuela una invitación nueva.',
+  VERIFY: 'Tu correo aún no está verificado. Verifícalo con tu proveedor de inicio de sesión y pulsa el botón de nuevo.',
+  REVIEW: 'Este correo ya lo usa una cuenta del personal, así que tu escuela debe revisarlo. Consulta con tu escuela.',
+  GONE: 'Esta invitación ya no está disponible. Pide a tu escuela que envíe una nueva.',
+  WAIT: 'Demasiados intentos. Espera un minuto y pulsa el botón de nuevo.',
+  SESSION: 'Tu sesión terminó. Inicia sesión de nuevo y pulsa el botón.',
+  REJECTED: 'No se pudo activar esta invitación. Pide a tu escuela que envíe una nueva.',
+  UNKNOWN: 'No pudimos confirmarlo. Pulsa el botón de nuevo; es seguro repetirlo.',
+  signIn: 'Iniciar sesión', signOut: 'Iniciar sesión con otro correo',
+};
+const COPY: Record<string, Record<FamilyInviteKey, string>> = { en, ko, es };
+export function familyInviteText(language: string, key: FamilyInviteKey, vars: Readonly<Record<string, string>> = {}): string {
+  return (COPY[language] ?? en)[key].replace(/\{(\w+)\}/g, (_, name: string) => vars[name] ?? '');
+}

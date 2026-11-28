@@ -48,3 +48,45 @@ export function validateFamilyAccountReceipt(v: unknown): FamilyAccountReceipt {
   return { invitationId: accountUuid(o.invitationId), schoolId: accountUuid(o.schoolId), familyId: accountUuid(o.familyId), accessLevel: level(o.accessLevel, 'ACCOUNT_RESPONSE_INVALID'),
     accountStatus: 'FAMILY_ACCESS_BOUND', accessGranted: false, billingActivated: false, aiCreditsGranted: false };
 }
+
+/**
+ * 0714 one-click invitation email. The staff browser hands the private code it just made to the API for one send; the
+ * recipient is always the invitation's own address, decided by the database, never a value from this body.
+ */
+export const FAMILY_INVITATION_EMAIL_LANGUAGES = ['en', 'ko', 'es'] as const;
+export type FamilyInvitationEmailLanguage = typeof FAMILY_INVITATION_EMAIL_LANGUAGES[number];
+export interface FamilyInvitationEmailInput { schoolId: string; invitationId: string; token: string; language: FamilyInvitationEmailLanguage }
+export function validateFamilyInvitationEmailInput(v: unknown): FamilyInvitationEmailInput {
+  const o = accountClosed(v, ['schoolId', 'invitationId', 'token', 'language']);
+  if (typeof o.language !== 'string' || !(FAMILY_INVITATION_EMAIL_LANGUAGES as readonly string[]).includes(o.language)) throw new Error('ACCOUNT_INPUT_INVALID');
+  return Object.freeze({ schoolId: accountUuid(o.schoolId), invitationId: accountUuid(o.invitationId), token: accountToken(o.token), language: o.language as FamilyInvitationEmailLanguage });
+}
+/** What the database allows to be sent (0714). `replayed` true means this exact request was already recorded: send nothing. */
+export interface FamilyInvitationEmailGrant { invitationId: string; organizationId: string; schoolId: string; email: string; schoolName: string; familyName: string; expiresAt: string; emailNumber: number; replayed: boolean }
+export function validateFamilyInvitationEmailGrant(v: unknown): FamilyInvitationEmailGrant {
+  const o = accountClosed(v, ['invitationId', 'organizationId', 'schoolId', 'email', 'schoolName', 'familyName', 'expiresAt', 'emailNumber', 'replayed']);
+  if (typeof o.schoolName !== 'string' || !o.schoolName || typeof o.familyName !== 'string' || typeof o.expiresAt !== 'string' || Number.isNaN(Date.parse(o.expiresAt))
+    || !Number.isInteger(o.emailNumber) || (o.emailNumber as number) < 1 || (o.emailNumber as number) > 3 || typeof o.replayed !== 'boolean') throw new Error('ACCOUNT_RESPONSE_INVALID');
+  return Object.freeze({ invitationId: accountUuid(o.invitationId), organizationId: accountUuid(o.organizationId), schoolId: accountUuid(o.schoolId), email: accountEmail(o.email),
+    schoolName: o.schoolName, familyName: o.familyName, expiresAt: o.expiresAt, emailNumber: o.emailNumber as number, replayed: o.replayed });
+}
+/** SENT: the provider accepted it. NOT_SENT: definitely not sent. UNKNOWN: it may have been. ALREADY_REQUESTED: a repeat of an earlier request, nothing sent now. */
+export const FAMILY_INVITATION_EMAIL_DELIVERIES = ['SENT', 'NOT_SENT', 'UNKNOWN', 'ALREADY_REQUESTED'] as const;
+export type FamilyInvitationEmailDelivery = typeof FAMILY_INVITATION_EMAIL_DELIVERIES[number];
+export interface FamilyInvitationEmailReceipt { invitationId: string; email: string; emailNumber: number; delivery: FamilyInvitationEmailDelivery }
+export function validateFamilyInvitationEmailReceipt(v: unknown): FamilyInvitationEmailReceipt {
+  const o = accountClosed(v, ['invitationId', 'email', 'emailNumber', 'delivery']);
+  if (!Number.isInteger(o.emailNumber) || (o.emailNumber as number) < 1 || (o.emailNumber as number) > 3
+    || typeof o.delivery !== 'string' || !(FAMILY_INVITATION_EMAIL_DELIVERIES as readonly string[]).includes(o.delivery)) throw new Error('ACCOUNT_RESPONSE_INVALID');
+  return Object.freeze({ invitationId: accountUuid(o.invitationId), email: accountEmail(o.email), emailNumber: o.emailNumber as number, delivery: o.delivery as FamilyInvitationEmailDelivery });
+}
+/** The public page the emailed button opens. The ID and code ride in the fragment, which browsers never send to a server. */
+export const FAMILY_INVITE_LINK_PATH = '/family-invite' as const;
+export function familyInviteLink(origin: string, invitationId: string, token: string): string {
+  return `${origin}${FAMILY_INVITE_LINK_PATH}#i=${accountUuid(invitationId)}&c=${accountToken(token)}`;
+}
+/** Reads `#i=<id>&c=<code>` exactly; anything else is no invitation. */
+export function parseFamilyInviteFragment(hash: string): { invitationId: string; token: string } | null {
+  const m = /^#?i=([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})&c=([A-Za-z0-9_-]{43})$/.exec(hash);
+  return m ? { invitationId: m[1]!, token: m[2]! } : null;
+}
