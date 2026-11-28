@@ -51,7 +51,7 @@ const list = (who, status = null, campaign = null, at = null, cid = null, limit 
   call('read_hq_prospects', [H(who), status, campaign, at, cid, limit], ['', '::text', '::uuid', '::timestamptz', '::uuid', '::integer']);
 const detail = (who, id) => call('read_hq_prospect', [H(who), id], ['', '::uuid']);
 
-const tables = ['hq_prospect_requests', 'hq_prospect_consents', 'hq_prospects'];
+const tables = ['hq_prospect_board_requests', 'hq_prospect_requests', 'hq_prospect_consents', 'hq_prospects'];
 async function cleanup() {
   await admin.query('BEGIN');
   try {

@@ -5892,3 +5892,17 @@ BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_school_plan_features(text,uuid) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0715 HQ prospects pipeline board: no table privileges; HQ marketing reads the board, moves prospects and saves stages.
+DO $$ DECLARE t text; r text; BEGIN
+  IF to_regprocedure('hon.read_hq_prospect_board(text)') IS NULL THEN RAISE EXCEPTION 'Apply HQ prospect pipeline migration 0715 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hq_prospect_pipeline','hq_prospect_stages','hq_prospect_board_requests'] LOOP
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY',t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY',t);
+    EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I',t,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_hq_prospect_board(text), hon.move_hq_prospect_stage(text,uuid,jsonb,uuid),
+      hon.save_hq_prospect_stages(text,jsonb,uuid) TO hon_runtime;
+  END IF;
+END $$;
