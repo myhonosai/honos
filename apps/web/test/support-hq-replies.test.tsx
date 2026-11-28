@@ -5,13 +5,15 @@ import { validateHqSupportCaseDetail, type SupportRequest, type SupportRequestLi
 import { SupportError, supportApi } from '../src/components/hq-support/http';
 import { HqSupportCaseView, type SupportCaseViewProps } from '../src/components/hq-support/case-view';
 import { supportText } from '../src/components/hq-support/copy';
-import { HqSupportAlertBar, HqSupportBadge, notifyIfNew, readSupportAlertsNow, resetSupportAlertsForTest } from '../src/components/hq-support/alerts';
+import { HqSupportAlertBar, HqSupportBadge, notifyIfNew, readSupportAlertsNow, resetSupportAlertsForTest, subscribeSupportAlerts } from '../src/components/hq-support/alerts';
+import { HON_SESSION_INVALIDATED_EVENT } from '../src/components/session-invalidation';
 import { EMPTY_DRAFT, SupportView, type SupportViewProps } from '../src/components/school-support/view';
 import { supportText as schoolText } from '../src/components/school-support/copy';
 
 // 0713: HQ answers a school's request inside it, HQ sees which requests wait for a reply, and the school sees the
 // answer as "HON support". All data here is synthetic.
 const yes = () => true;
+const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
 beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); resetSupportAlertsForTest(); });
 
@@ -111,6 +113,23 @@ it('shares one read for every badge, and stops for good once support access is r
   resetSupportAlertsForTest({ alerts: vi.fn().mockResolvedValue({ needsReply: 0, latest: [], asOf: T2 }) } as never);
   await readSupportAlertsNow();
   expect(renderToStaticMarkup(<HqSupportBadge/>)).toBe('');
+});
+
+it('a session end clears the count, and the first badge after signing in again reads afresh (review P3)', async () => {
+  const read = vi.fn().mockResolvedValue(alerts(alert(4)));
+  resetSupportAlertsForTest({ alerts: read } as never);
+  const seen: unknown[] = [];
+  const stop = subscribeSupportAlerts((a) => seen.push(a));
+  await settle();
+  expect(read).toHaveBeenCalledTimes(1);
+  window.dispatchEvent(new Event(HON_SESSION_INVALIDATED_EVENT));
+  expect(seen.at(-1)).toBeNull();
+  stop();
+  const again = subscribeSupportAlerts((a) => seen.push(a));
+  await settle();
+  expect(read).toHaveBeenCalledTimes(2);
+  expect(seen.at(-1)).toMatchObject({ needsReply: 1 });
+  again();
 });
 
 const sid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;

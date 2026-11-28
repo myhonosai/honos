@@ -7725,3 +7725,24 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+-- School help HQ replies and alerts exact verification (0713): two runtime entry points, SECURITY DEFINER, EXECUTE only
+-- for hon_runtime; the helpers stay private; the event kind and request operation checks include REPLY.
+DO $$ DECLARE f text;
+BEGIN
+  IF to_regprocedure('hon.reply_to_hq_support_case(text,uuid,jsonb,uuid)') IS NULL THEN RETURN; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.reply_to_hq_support_case(text,uuid,jsonb,uuid)','hon.read_hq_support_alerts(text)'] LOOP
+    IF NOT has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')
+      OR NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND p.prosecdef)
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure
+        AND a.grantee<>p.proowner AND a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')) THEN
+      RAISE EXCEPTION 'Unsafe 0713 support entry point: %',f; END IF;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.hq_support_needs_reply(hon.hq_support_cases)','hon.hq_support_last_school_message_at(uuid)',
+      'hon.hq_support_last_reply_at(uuid)','hon.hq_support_last_message_from(uuid)'] LOOP
+    IF to_regprocedure(f) IS NOT NULL AND has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE') THEN
+      RAISE EXCEPTION 'Unsafe 0713 support helper: %',f; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='hon.hq_support_case_events'::regclass AND contype='c' AND pg_get_constraintdef(oid) LIKE '%REPLY%') THEN
+    RAISE EXCEPTION '0713 REPLY event kind missing'; END IF;
+END $$;
+-- End school help HQ replies and alerts exact verification.

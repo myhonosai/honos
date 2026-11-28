@@ -60,9 +60,11 @@ export async function readSupportAlertsNow(): Promise<void> {
 function onVisible() { if (typeof document !== 'undefined' && document.visibilityState === 'visible') void readSupportAlertsNow(); }
 function onSessionEnd() { store.generation++; store.stopped = true; store.inFlight = false; if (store.timer) clearInterval(store.timer); store.timer = null; publish(null); }
 
-function subscribe(listener: Listener): () => void {
+export function subscribeSupportAlerts(listener: Listener): () => void {
   store.listeners.add(listener);
-  if (store.listeners.size === 1 && !store.stopped) {
+  if (store.listeners.size === 1) {
+    // A new first badge (after a session end, a new sign-in or a refusal) starts over with one fresh read.
+    store.stopped = false;
     void readSupportAlertsNow();
     store.timer = setInterval(() => { void readSupportAlertsNow(); }, ALERT_POLL_MS);
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
@@ -80,7 +82,7 @@ function subscribe(listener: Listener): () => void {
 
 export function useSupportAlerts(lang = 'en'): HqSupportAlerts | null {
   const [alerts, setAlerts] = useState<HqSupportAlerts | null>(store.current);
-  useEffect(() => { language = lang; return subscribe(setAlerts); }, [lang]);
+  useEffect(() => { language = lang; return subscribeSupportAlerts(setAlerts); }, [lang]);
   return alerts;
 }
 

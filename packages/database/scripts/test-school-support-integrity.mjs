@@ -183,6 +183,11 @@ try{
    await assert.rejects(q(t,[id,'changed']));
   const acl=await q("SELECT p.proname,has_function_privilege($1,p.oid,'EXECUTE') ok FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname IN ('reply_to_hq_support_case','read_hq_support_alerts','hq_support_last_school_message_at','hq_support_last_reply_at','hq_support_last_message_from','hq_support_needs_reply','hq_support_case_json','school_support_request_json')",[runtime.username]);
   assert.equal(acl.length,8);for(const f of acl)assert.equal(f.ok,['reply_to_hq_support_case','read_hq_support_alerts'].includes(f.proname),f.proname);
+  // The canonical 011 verifier block for 0713 passes on this fixture (runtime alias swapped in).
+  const canonical=await (await import('node:fs/promises')).readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
+  const block=canonical.split('-- School help HQ replies and alerts exact verification (0713)')[1]?.split('-- End school help HQ replies and alerts exact verification.')[0];
+  assert(block,'Missing canonical 0713 verifier.');
+  await admin.query(block.slice(block.indexOf('DO $$')).replaceAll('hon_runtime','hon_champions_runtime'));
   pass('0713: an HQ reply reaches the school as HON support (never a name or internal note), can make it wait on the school, is idempotent and versioned; a school answer reopens it and HQ sees Needs reply and the alert; HQ-opened and closed cases take no reply; school owners cannot reply or read alerts; history immutable; runtime executes exactly the two new entry points');
  }
  console.log('PASS: school support requests (0335), '+groups+' groups');
