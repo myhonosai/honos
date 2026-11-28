@@ -88,3 +88,26 @@ separate page.
 - Catalog test: Search, Family access, Conversations and Family messages are hidden routes still owned by Contacts.
 - Slice B: contract rejects a non-UUID `personId`; API passes it through; DB proof: filter returns only that person's
   conversations and still refuses a caller without `conversation.read`.
+
+## Student is the main contact (owner, 2026-11-28)
+
+Owner: "This should show student name as main. Parent/guardian name is good to collect but should be optional."
+Frontend only. No migration. The commands, the permissions and the list row shape do not change.
+
+- **Add contact, "A child student".** The student's first and last name come first and are required. The parent or guardian
+  section follows, marked optional. If all four of its boxes are left empty, no adult is added. If any box is typed,
+  the parent's first and last name are needed (`parentNameMissing`), so a half-typed parent is never guessed.
+- **Order of the existing commands:**
+  1. Create the student.
+  2. Create the parent, if one was typed.
+  3. Create the family `<student last name> family`.
+  4. Link the parent as GUARDIAN.
+  5. Link the student as STUDENT.
+
+  Each step keeps its own Idempotency-Key, so Try again replays the same steps. A refusal at the first step (the student)
+  saved nothing. A refusal after that is "partly saved".
+- **After saving,** the student's card opens (`mainId`). It opens on the Family tab when a parent was linked, so Family app
+  access is one click away.
+- **A parent or guardian's card** says "Parent or guardian of <student>". It uses the family section the card already
+  reads, and each name opens that student's card. A role without families sees nothing extra.
+- "One adult" is unchanged.

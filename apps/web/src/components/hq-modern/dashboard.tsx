@@ -7,6 +7,7 @@ import { HQ_EXECUTIVES, HQ_GROWTH, HQ_RESPONSIBILITIES } from './catalog';
 import { useHqModern, HonCore } from './shell';
 import { HonComposer } from './assistant';
 import { HqHonOrbAsk } from './hon-orb-ask';
+import { HqTeamChat } from '../hq-hon/hq-team-chat';
 import { CommercialStatus } from './commercial-status';
 import { HqIcon } from './icon';
 import styles from './hq-modern.module.css';
@@ -105,9 +106,12 @@ function PerformanceStrip(): React.ReactElement {
 
 export function HqModernDashboard(): React.ReactElement {
   const { t,text,number,money,date,formattingLocale } = useLocale();
+  const { art } = useHqModern();
   return <>
     <div className={styles.dashboard}>
       <CommandStage/>
+      {/* Owner 2026-11-28: talk to the whole HQ team from the dashboard, like the school dashboard's team chat. */}
+      <HqTeamChat art={art}/>
       <PerformanceStrip/>
       <CommercialStatus/>
       <div className={styles.managementGrid}>

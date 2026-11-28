@@ -2,7 +2,7 @@ import { accountUuid, validateSchoolContactArchiveInput, validateSchoolContactMe
   verifySchoolContactArchiveState, verifySchoolContactCard, verifySchoolContactList, verifySchoolContactMergePreview, verifySchoolContactMergeReceipt,
   SCHOOL_CONTACT_ARCHIVE_BLOCKERS, SCHOOL_CONTACT_MERGE_BLOCKERS, SCHOOL_CONTACT_RESTORE_BLOCKERS,
   type SchoolContactArchiveReceipt, type SchoolContactArchiveState, type SchoolContactCard, type SchoolContactList, type SchoolContactMergePreview,
-  type SchoolContactMergeReceipt, type SchoolContactMembershipFilter, type SchoolContactQuery, type SchoolContactSegment, type SchoolContactSort } from '@hon/contracts';
+  type SchoolContactMergeReceipt, type SchoolContactMembershipFilter, type SchoolContactQuery, type SchoolContactSegment, type SchoolContactSort, type SchoolContactType } from '@hon/contracts';
 import { PersonRecordError, codeOf, exchange, personErrorFor, type PeopleScope } from './http';
 
 /**
@@ -11,9 +11,11 @@ import { PersonRecordError, codeOf, exchange, personErrorFor, type PeopleScope }
  */
 export type ContactFilters = Readonly<{ segment: SchoolContactSegment; query: string; rankId: string; programId: string; planId: string; endsWithinDays: '' | '7' | '30' | '60' | '90';
   // C4 (0623): order and the added filters, as form strings ('' = not set). rankId 'NONE' means "no belt yet".
-  sort: SchoolContactSort; membership: '' | SchoolContactMembershipFilter; endsFrom: string; endsTo: string; ageMin: string; ageMax: string; tag: string }>;
+  sort: SchoolContactSort; membership: '' | SchoolContactMembershipFilter; endsFrom: string; endsTo: string; ageMin: string; ageMax: string; tag: string;
+  // C5 (0701): parents/guardians or children.
+  contactType: '' | SchoolContactType }>;
 export const NO_CONTACT_FILTERS: ContactFilters = { segment: 'ALL', query: '', rankId: '', programId: '', planId: '', endsWithinDays: '',
-  sort: 'NAME', membership: '', endsFrom: '', endsTo: '', ageMin: '', ageMax: '', tag: '' };
+  sort: 'NAME', membership: '', endsFrom: '', endsTo: '', ageMin: '', ageMax: '', tag: '', contactType: '' };
 export const CONTACT_QUERY_MAX = 100;
 export const NO_BELT = 'NONE';
 
@@ -28,6 +30,7 @@ export function contactQuery(filters: ContactFilters, options: boolean): SchoolC
     ...(f.sort !== 'NAME' ? { sort: f.sort } : {}), ...(f.membership ? { membership: f.membership } : {}),
     ...(f.endsFrom ? { endsFrom: f.endsFrom } : {}), ...(f.endsTo ? { endsTo: f.endsTo } : {}),
     ...(f.ageMin !== '' ? { ageMin: f.ageMin } : {}), ...(f.ageMax !== '' ? { ageMax: f.ageMax } : {}), ...(f.tag ? { tag: f.tag } : {}),
+    ...(f.contactType ? { contactType: f.contactType } : {}),
     ...(options ? { options: true } : {}),
   });
 }

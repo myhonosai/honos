@@ -20,6 +20,7 @@ import {
 } from './hon-suggestions';
 import styles from './hon-conversation.module.css';
 import { useLocale } from '../localization/provider';
+import { SendToHq } from '../school-support/send-to-hq';
 import { HonVoiceControls, useHonVoice } from './hon-voice-controls';
 import { honAgentVoice, honVoiceLang, honVoiceLine, honVoiceReplyText } from './hon-voice';
 import { useAgentVoices } from './hon-voice-picker';
@@ -284,6 +285,12 @@ function Turn({ turn, onContinue, locked, children }: { turn: HonConversationTur
   </li>;
 }
 
+/** The person's question this answer replies to: the nearest earlier human turn with text. */
+export function askedBefore(turns: readonly HonConversationTurn[], index: number): string | null {
+  for (let i = index - 1; i >= 0; i--) { const t = turns[i]; if (t && t.role === 'HUMAN' && t.text) return t.text; }
+  return null;
+}
+
 /** `dock`: the corner chat (owner 2026-11-22, like a docked chat): messages first, history folded away, composer pinned at the bottom. */
 export type HonConversationPresentation = 'panel' | 'full' | 'dock';
 
@@ -351,6 +358,10 @@ export function HonConversationView(props: HonConversationViewProps): React.Reac
               props.onDraft(question);
               if (typeof document !== 'undefined') document.getElementById(`${id}-text`)?.focus();
             }} /> : null}
+            {/* Owner 2026-11-28: HON answers what it can; anything it cannot settle goes to HON HQ by the person's own press. */}
+            {(turn.role === 'hon' || isHonAnalystAgent(turn.role)) && turn.status === 'COMPLETED' && turn.text !== null
+              ? <SendToHq question={askedBefore(thread.turns, index)} answer={turn.text}
+                classes={{ box: styles.sendToHq, button: styles.secondary, meta: styles.meta }} /> : null}
           </Turn>)}
         </ol> : null}
         {dock ? <div ref={lastTurn} aria-hidden="true" /> : null}

@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZE_CODES, blankCreativeDesignDocument, validateCreativeDesignDocument,
+  CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZES, CREATIVE_DESIGN_SIZE_CODES, blankCreativeDesignDocument, validateCreativeDesignDocument,
   type CreativeDesign, type CreativeDesignDocument, type CreativeDesignElement, type CreativeDesignReceipt,
 } from '@hon/contracts';
 
@@ -23,7 +23,8 @@ import { Properties, downloadName, layerLabel, saveStateText } from '../src/comp
 import { Designs, createInput, refusalKey } from '../src/components/design-editor/designs';
 import { exportScale, paintPage } from '../src/components/design-editor/paint';
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
-import { TEMPLATE_IDS, templateDocument } from '../src/components/design-editor/templates';
+import { STYLE_FONTS, TEMPLATE_IDS, estimateLines, templateDocument, templateName, templateParts } from '../src/components/design-editor/templates';
+import { galleryItems } from '../src/components/design-editor/gallery';
 import { PRINT_BLEED, PRINT_MARGIN, buildPrintPdf, printBoxes, trimMarks } from '../src/components/design-editor/pdf';
 import { shellText } from '../src/components/school-shell/copy';
 
@@ -400,19 +401,54 @@ describe('design D2: QR codes, templates, brand kit and print PDF', () => {
   });
 
   it('builds every template on every size in every language as a valid document, with the school color and contact line', () => {
+    expect(TEMPLATE_IDS).toHaveLength(40);
     for (const template of [null, ...TEMPLATE_IDS]) for (const code of CREATIVE_DESIGN_SIZE_CODES) for (const language of ['en', 'ko', 'es']) {
       const doc = templateDocument(template, code, language, { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
       expect(() => valid(doc, code), `${template} ${code} ${language}`).not.toThrow();
     }
-    const trial = templateDocument('trial', 'POSTCARD_4X6', 'en', { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
+    const trial = templateDocument('trial-clean', 'POSTCARD_4X6', 'en', { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
     expect(trial.pages).toHaveLength(2);
     expect(JSON.stringify(trial)).toContain('Sunrise Martial Arts');
-    expect(trial.pages[0]!.elements.find(e => e.id === 'band')).toMatchObject({ fill: '#1F4E9C' });
-    const plain = templateDocument('openHouse', 'SOCIAL_SQUARE', 'ko');
-    expect(JSON.stringify(plain)).toContain('오픈 하우스');
+    expect(trial.pages[0]!.elements.find(e => e.id === 'panel')).toMatchObject({ fill: '#1F4E9C' });
+    const plain = templateDocument('openHouse-bold', 'SOCIAL_SQUARE', 'ko');
+    expect(JSON.stringify(plain)).toContain('오픈\\n하우스');
     expect(JSON.stringify(plain)).toContain('#C8102E');
     expect(templateDocument(null, 'FLYER_HALF', 'en')).toEqual(blankCreativeDesignDocument('FLYER_HALF'));
-    expect(createInput('Trial', 'FLYER_LETTER', 'trial', 'es')?.document.pages[0]!.elements.length).toBeGreaterThan(3);
+    expect(templateDocument('nope' as never, 'FLYER_HALF', 'en')).toEqual(blankCreativeDesignDocument('FLYER_HALF'));
+    expect(createInput('Trial', 'FLYER_LETTER', 'trial-fun', 'es')?.document.pages[0]!.elements.length).toBeGreaterThan(5);
+  });
+
+  it('E2: 10 themes in 4 looks, designer fonts, the schedule as a table, names in every language', () => {
+    expect(new Set(TEMPLATE_IDS.map(id => templateParts(id).theme)).size).toBe(10);
+    for (const id of TEMPLATE_IDS) {
+      const doc = templateDocument(id, 'FLYER_LETTER', 'en');
+      const fonts = new Set(doc.pages[0]!.elements.flatMap(e => e.kind === 'text' ? [e.font] : []));
+      expect([...fonts].some(f => STYLE_FONTS[templateParts(id).style].includes(f)), id).toBe(true);
+      expect(fonts.has('MONO'), id).toBe(false);
+      for (const language of ['en', 'ko', 'es']) expect(templateName(language, id).length).toBeGreaterThan(1);
+    }
+    const sched = templateDocument('schedule-clean', 'FLYER_LETTER', 'en').pages[0]!.elements;
+    expect(sched.filter(e => e.id.startsWith('day-'))).toHaveLength(4);
+    expect(sched.find(e => e.id === 'time-0')).toMatchObject({ text: '4:30 PM' });
+    expect(sched.find(e => e.id === 'class-3')).toMatchObject({ text: 'Open mat', align: 'right' });
+    expect(templateName('ko', 'camp-fun')).toBe('여름 캠프');
+    expect(galleryItems('all')).toHaveLength(40);
+    expect(galleryItems('camp')).toEqual(['camp-bold', 'camp-clean', 'camp-fun', 'camp-elegant']);
+    // Starter words make offers (a free class, a price), so the gallery says to check them in every language.
+    expect(new Set(['en', 'ko', 'es'].map(l => designText(l, 'checkOffers'))).size).toBe(3);
+    expect(designText('en', 'checkOffers')).toBe('Check dates, prices and offers before you print or post.');
+  });
+
+  it('E2: headlines and wrapped text are kept inside their space, even in Korean on a square page', () => {
+    for (const code of CREATIVE_DESIGN_SIZE_CODES) for (const language of ['en', 'ko', 'es']) for (const id of TEMPLATE_IDS) {
+      const page = templateDocument(id, code, language).pages[0]!, H = CREATIVE_DESIGN_SIZES[code].height;
+      const head = page.elements.find(e => e.id === 'head') as Extract<CreativeDesignElement, { kind: 'text' }>;
+      expect(head.y + head.h, `${id} ${code} ${language}`).toBeLessThan(H * 0.9);
+      for (const e of page.elements) if (e.kind === 'text') expect(e.size, `${id} ${code} ${language} ${e.id}`).toBeGreaterThanOrEqual(4);
+    }
+    expect(estimateLines('one two three four', 10, 1000, 'SANS', false)).toBe(1);
+    expect(estimateLines('one two three four', 10, 60, 'SANS', false)).toBeGreaterThan(1);
+    expect(estimateLines('a\nb', 10, 1000, 'SANS', false)).toBe(2);
   });
 
   it('writes a print PDF with one page per side, bleed and trim boxes, trim marks outside the bleed, and a correct cross-reference table', () => {
@@ -493,5 +529,74 @@ describe('design review fixes', () => {
 
   it('refuses the C1 control characters in a name, as the database does', () => {
     expect(createInput('Open\u0085house', 'FLYER_LETTER')).toBeNull();
+  });
+});
+
+describe('design E1: designer fonts (0703)', () => {
+  it('every contract font has a name and a stack; shipped fonts point at files that exist with a licence row', async () => {
+    const { CREATIVE_DESIGN_FONTS } = await import('@hon/contracts');
+    const { DESIGN_FONTS, fontStack } = await import('../src/components/design-editor/fonts');
+    const { FONT_NAMES } = await import('../src/components/design-editor/copy');
+    const fs = await import('node:fs'), path = await import('node:path');
+    const dir = path.resolve(__dirname, '../public/fonts/design');
+    const licences = fs.readFileSync(path.join(dir, 'LICENSES.md'), 'utf8');
+    expect(CREATIVE_DESIGN_FONTS.length).toBe(22);
+    for (const f of CREATIVE_DESIGN_FONTS) {
+      expect(FONT_NAMES[f]).toBe(DESIGN_FONTS[f].name);
+      expect(fontStack(f).length).toBeGreaterThan(5);
+      for (const file of DESIGN_FONTS[f].files) {
+        expect(fs.existsSync(path.join(dir, file.file))).toBe(true);
+        expect(licences).toContain(file.file.replace(/-(400|700)\.woff2$/, ''));
+      }
+    }
+    expect(fontStack('BEBAS')).toBe('"HON Bebas Neue", Impact, "Arial Narrow", sans-serif');
+    expect(fontStack('SANS')).toBe('Arial, Helvetica, sans-serif');
+    expect(DESIGN_FONTS.SANS.files).toEqual([]);
+    const { shippedFont } = await import('../src/components/design-editor/fonts');
+    expect(shippedFont('SANS')).toBe(false); expect(shippedFont('LOBSTER')).toBe(true);
+  });
+
+  it('a document using a new font still validates, and an unknown font is refused', () => {
+    const doc = blankCreativeDesignDocument('FLYER_LETTER');
+    const text = { ...newElement('text', 'FLYER_LETTER', 'ta'), font: 'BEBAS' } as CreativeDesignElement;
+    expect(() => validateCreativeDesignDocument({ v: 1, pages: [{ ...doc.pages[0]!, elements: [text] }] }, 'FLYER_LETTER')).not.toThrow();
+    expect(() => validateCreativeDesignDocument({ v: 1, pages: [{ ...doc.pages[0]!, elements: [{ ...text, font: 'COMIC' }] }] }, 'FLYER_LETTER')).toThrow();
+  });
+
+  it('loads each shipped font once, skips system fonts, retries a font that failed', async () => {
+    const { loadDesignFonts, resetDesignFontsForTests, fontsInDocument } = await import('../src/components/design-editor/fonts');
+    resetDesignFontsForTests();
+    const created: string[] = [], added: string[] = [];
+    let fail = true;
+    const host = {
+      create: (family: string, source: string, weight: string) => {
+        created.push(`${family}|${source}|${weight}`);
+        return { load: () => family === 'HON Lobster' && fail ? Promise.reject(new Error('net')) : Promise.resolve(), family } as unknown as FontFace;
+      },
+      add: (face: FontFace) => { added.push(face.family); },
+    };
+    expect(await loadDesignFonts(['SANS', 'POPPINS', 'MONTSERRAT', 'POPPINS', 'LOBSTER'], host)).toEqual(['POPPINS', 'MONTSERRAT']);
+    expect(created).toEqual([
+      'HON Poppins|url(/fonts/design/poppins-400.woff2) format("woff2")|400',
+      'HON Poppins|url(/fonts/design/poppins-700.woff2) format("woff2")|700',
+      'HON Montserrat|url(/fonts/design/montserrat.woff2) format("woff2")|400 700',
+      'HON Lobster|url(/fonts/design/lobster-400.woff2) format("woff2")|400',
+    ]);
+    expect(added).toEqual(['HON Poppins', 'HON Poppins', 'HON Montserrat']);
+    fail = false;
+    expect(await loadDesignFonts(['POPPINS', 'LOBSTER'], host)).toEqual(['POPPINS', 'LOBSTER']);
+    expect(created.length).toBe(5);
+    expect(await loadDesignFonts(['POPPINS'], null)).toEqual([]);
+    const doc = blankCreativeDesignDocument('FLYER_LETTER');
+    const t1 = { ...newElement('text', 'FLYER_LETTER', 't1'), font: 'ANTON' } as CreativeDesignElement, t2 = { ...newElement('text', 'FLYER_LETTER', 't2'), font: 'ANTON' } as CreativeDesignElement;
+    expect(fontsInDocument({ v: 1, pages: [{ ...doc.pages[0]!, elements: [t1, newElement('rect', 'FLYER_LETTER', 'r1'), t2, newElement('text', 'FLYER_LETTER', 't3')] }] })).toEqual(['ANTON', 'SANS']);
+  });
+
+  it('the painter draws a shipped font by its family with the fallback stack', () => {
+    const doc = blankCreativeDesignDocument('FLYER_LETTER');
+    const fonts: string[] = [];
+    const ctx = new Proxy({}, { get: (_t, k) => k === 'measureText' ? () => ({ width: 10 }) : () => undefined, set: (_t, k, v) => { if (k === 'font') fonts.push(v); return true; } });
+    paintPage(ctx as CanvasRenderingContext2D, { ...doc.pages[0]!, elements: [{ ...newElement('text', 'FLYER_LETTER', 'ta'), font: 'PLAYFAIR' } as CreativeDesignElement] }, { width: 612, height: 792, sides: 1, medium: 'PRINT' } as never, 1, new Map());
+    expect(fonts[0]).toMatch(/700 \d+(\.\d+)?px "HON Playfair Display", Georgia/);
   });
 });

@@ -40,11 +40,13 @@ export type CardSlots = Readonly<{ membershipSlot?: MembershipSlot | undefined; 
   familySlot?: ((family: FamilyItem) => React.ReactNode) | undefined; messagesSlot?: ((card: SchoolContactCard) => React.ReactNode) | undefined;
   /** Send agreement in the membership tab (students only; the panel's own read decides access). */
   agreementSlot?: AgreementSlot | undefined }>;
-export function ContactCard({ language, card, initialTab = 'overview', tab: shownTab, onTab, onEditProfile, ...slots }: { language: string; card: CardState; initialTab?: CardTab;
+export function ContactCard({ language, card, initialTab = 'overview', tab: shownTab, onTab, onEditProfile, onOpenPerson, ...slots }: { language: string; card: CardState; initialTab?: CardTab;
   /** When given, the page owns the tab (it is kept in the address); otherwise the card keeps it. */
   tab?: CardTab | undefined; onTab?: ((tab: CardTab) => void) | undefined;
   /** Opens the Edit profile pop-up; absent while the person's record cannot be edited or read yet. */
-  onEditProfile?: (() => void) | undefined } & CardSlots): React.ReactElement | null {
+  onEditProfile?: (() => void) | undefined;
+  /** Opens another contact's card (the students a parent or guardian looks after). */
+  onOpenPerson?: ((personId: string) => void) | undefined } & CardSlots): React.ReactElement | null {
   const [ownTab, setOwnTab] = useState<CardTab>(initialTab);
   const tab = shownTab ?? ownTab;
   const setTab = (next: CardTab) => { setOwnTab(next); onTab?.(next); };
@@ -53,6 +55,7 @@ export function ContactCard({ language, card, initialTab = 'overview', tab: show
   if (card.state === 'LOADING') return <p className={styles.notice} role="status">{t('loading')}</p>;
   if (card.state === 'UNAVAILABLE') return <p className={styles.notice} role="status">{t('unavailable')}</p>;
   const c = card.card;
+  const students = guardianOf(c);
   const allowed = (k: CardTab) => k === 'overview' || k === 'timeline' || (c[k] as { allowed: boolean }).allowed;
   return <article className={styles.card} aria-label={`${c.person.givenName} ${c.person.familyName}`} data-testid="contact-card">
     <header className={styles.personHead}>
@@ -62,6 +65,10 @@ export function ContactCard({ language, card, initialTab = 'overview', tab: show
           <span aria-hidden="true">✎</span>{t('editProfile')}</button> : null}
       </span>
       <span className={styles.segment} data-segment={c.overview.segment}>{contactsText(language, `row${c.overview.segment}`)}</span>
+      {students.length ? <p className={`${styles.meta} ${styles.guardianOf}`} data-testid="contact-guardian-of">{t('guardianOf')}{' '}
+        {students.map((m, i) => <React.Fragment key={m.personId}>{i ? ', ' : ''}{onOpenPerson
+          ? <button type="button" className={styles.linkButton} data-testid="contact-guardian-of-student" onClick={() => onOpenPerson(m.personId)}>{m.givenName} {m.familyName}</button>
+          : <strong>{m.givenName} {m.familyName}</strong>}</React.Fragment>)}</p> : null}
     </header>
     <div className={styles.tabs} role="group" aria-label={t('tabsLabel')}>
       {CARD_TABS.map(k => <button key={k} type="button" className={styles.tab} aria-pressed={tab === k} data-tab={k} data-allowed={allowed(k) ? 'true' : 'false'}
@@ -69,6 +76,20 @@ export function ContactCard({ language, card, initialTab = 'overview', tab: show
     </div>
     <div className={styles.tabBody} data-testid={`contact-tab-${tab}`}><Body language={language} c={c} tab={tab} t={t} slots={slots}/></div>
   </article>;
+}
+
+/**
+ * Owner 2026-11-28: the student is the main contact. A parent or guardian's card names the students in their families,
+ * from the family section the card already read (empty when the viewer's role does not include families).
+ */
+export function guardianOf(c: SchoolContactCard): readonly { personId: string; givenName: string; familyName: string }[] {
+  if (!c.family.allowed) return [];
+  const self = c.person.personId, seen = new Set<string>(), out: { personId: string; givenName: string; familyName: string }[] = [];
+  for (const f of c.family.families) {
+    if (!f.members.some(m => m.personId === self && m.role === 'GUARDIAN')) continue;
+    for (const m of f.members) if (m.role === 'STUDENT' && m.personId !== self && !seen.has(m.personId)) { seen.add(m.personId); out.push(m); }
+  }
+  return out;
 }
 
 function Body({ language, c, tab, t, slots }: { language: string; c: SchoolContactCard; tab: CardTab; t: T; slots: CardSlots }): React.ReactElement {

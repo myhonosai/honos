@@ -95,11 +95,11 @@ it('builds closed requests from typed forms', () => {
 
 const props = (patch: Partial<CreativeViewProps> = {}): CreativeViewProps => ({ language: 'en', formattingLocale: 'en-US', concealed: false,
   state: { state: 'READY', view: validateHqCreativeStudio(studio()) }, campaigns: [], outcome: null, locked: false, canRetry: false, resolving: null,
-  onRefresh: () => {}, onReveal: () => {}, onRequest: () => {}, onBudget: () => {}, onResolveOpen: () => {}, onResolve: () => {}, onTryAgain: () => {}, ...patch });
+  onRefresh: () => {}, onReveal: () => {}, onRequest: () => {}, onResolveOpen: () => {}, onResolve: () => {}, onTryAgain: () => {}, ...patch });
 
 it('shows the separate HQ budget and turns requests off honestly when no provider is connected', () => {
   const html = renderToStaticMarkup(<HqCreativeView {...props()}/>);
-  expect(html).toContain('HQ’s own monthly limit, separate from schools');
+  expect(html).toContain('HQ’s own credits, separate from schools.');
   expect(html).toContain('href="/hq/marketing/creative/designs"'); expect(html).toContain('Free, no AI.');
   expect(html).toContain('data-creative-provider="NOT_CONNECTED"');
   expect(html).toContain("David approves the paid service");
@@ -111,14 +111,21 @@ it('shows the separate HQ budget and turns requests off honestly when no provide
   expect(on).not.toContain('data-creative-requests-off');
   const unset = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ provider: 'CONNECTED',
     budget: budget({ creditCap: null, usedCredits: 0, heldCredits: 0, availableCredits: 0, version: null, setBy: null, setAt: null }) })) } })}/>);
-  expect(unset).toContain('data-creative-budget="unset"'); expect(unset).toContain('data-creative-requests-off=""');
+  // 0702 (David 2026-11-28 "I don't want this"): no cap set means no monthly limit; requests stay on and nothing asks for a cap.
+  expect(unset).toContain('data-creative-budget="unlimited"'); expect(unset).toContain('No monthly limit. Each request still has its own size limit.');
+  expect(unset).not.toContain('data-creative-requests-off'); expect(unset).not.toContain('refused until');
+  const top = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ provider: 'CONNECTED',
+    budget: budget({ creditCap: 10_000_000, availableCredits: 10_000_000 - 30 }), budgetHistory: [] })) } })}/>);
+  expect(top).toContain('data-creative-budget="unlimited"'); expect(top).not.toContain('10,000,000');
+  const capped = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ provider: 'CONNECTED' })) } })}/>);
+  expect(capped).toContain('data-creative-budget="set"');
 });
 
-it('the HQ owner sees the cap form and Resolve on held requests; readers see no forms', () => {
+it('the HQ owner sees Resolve on held requests and no cap form; readers see no forms', () => {
   const held = gen({ status: 'UNDER_REVIEW', chargedCredits: null, assets: [], failureReason: 'UNVERIFIED_RESULT' });
   const owner = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ generations: [held],
     viewer: { ...person, canManage: true, isOwner: true } })) }, resolving: id(1) })}/>);
-  expect(owner).toContain('data-creative-budget-form=""');
+  expect(owner).not.toContain('data-creative-budget-form'); expect(owner).not.toContain('Set this month’s cap');
   expect(owner).toContain(`data-creative-resolve-form="${id(1)}"`);
   expect(owner).toContain('Held for HQ owner review');
   const reader = renderToStaticMarkup(<HqCreativeView {...props({ state: { state: 'READY', view: validateHqCreativeStudio(studio({ generations: [held],

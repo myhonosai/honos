@@ -71,7 +71,7 @@ it('shows the filter count, keeps filters open and offers Clear; an empty page s
   const filters = { ...NO_CONTACT_FILTERS, segment: 'STUDENT' as const, endsWithinDays: '30' as const, planId: id(5) };
   const options = { ranks: [{ rankId: id(6), curriculum: 'Karate', rank: 'White' }], programs: [], plans: [{ planId: id(5), name: 'Kids monthly' }], tags: [] };
   const html = view({ filters, options, list: { state: 'READY', filters, counts: { ...counts, STUDENT: 0 }, rows: [], nextCursor: null, more: 'IDLE' } });
-  expect(html).toContain('Filters (2)'); expect(html).toMatch(/<details[^>]*open=""/); expect(html).toContain('Clear filters');
+  expect(html).toContain('Filters (2)'); expect(html).not.toContain('<details'); expect(html).toContain('Clear filters');
   expect(html).toContain('Karate: White'); expect(html).toMatch(/<option value="[^"]+" selected="">Kids monthly<\/option>/);
   expect(html).toContain('No one matches'); expect(html).not.toContain('Show more');
   expect(view({ list: { ...base.list, more: 'FAILED' } as never })).toContain('More contacts could not be loaded.');
@@ -125,6 +125,21 @@ it('shows each tab, says when the role does not include one, and formats money i
   expect(formatMinor('en', 'JPY', 500)).toBe('¥500');
   expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'UNAVAILABLE' }}/>)).toContain('could not be loaded');
   expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'NONE' }}/>)).toBe('');
+});
+
+it('a parent or guardian card names their students, and each name opens that student card', async () => {
+  const { verifySchoolContactCard } = await import('@hon/contracts');
+  const members = [{ personId: person, givenName: 'Avery', familyName: 'Able', role: 'GUARDIAN', billingContact: true },
+    { personId: id(413), givenName: 'Mia', familyName: 'Able', role: 'STUDENT', billingContact: false },
+    { personId: id(414), givenName: 'Gale', familyName: 'Able', role: 'GUARDIAN', billingContact: false }];
+  const guardian = verifySchoolContactCard(cardBody({ overview: { ...cardBody().overview, segment: 'OTHER' }, family: { allowed: true, families: [{ familyId: id(411), name: 'Able family', members }] } }), person);
+  const { guardianOf } = await import('../src/components/people/contact-card');
+  expect(guardianOf(guardian).map(m => m.personId)).toEqual([id(413)]);
+  const html = renderToStaticMarkup(<ContactCard language="en" card={{ state: 'READY', card: guardian }} onOpenPerson={() => undefined}/>);
+  expect(html).toContain('Parent or guardian of'); expect(html).toMatch(/data-testid="contact-guardian-of-student"[^>]*>Mia Able</);
+  // A student's own card, or a role without families, names nobody.
+  expect(renderToStaticMarkup(<ContactCard language="en" card={{ state: 'READY', card: verifySchoolContactCard(cardBody(), person) }}/>)).not.toContain('contact-guardian-of');
+  expect(guardianOf(verifySchoolContactCard(cardBody({ family: { allowed: false } }), person))).toEqual([]);
 });
 
 it('a membership-only role sees memberships but a not-allowed billing tab and no family-thread count', async () => {
@@ -187,4 +202,29 @@ it('C4: the deep link takes exactly one person id', async () => {
   const { contactDeepLink } = await import('../src/components/people/people');
   expect(contactDeepLink(`?person=${id(9).toUpperCase()}`)).toBe(id(9));
   for (const search of ['', '?person=', '?person=abc', `?person=${id(9)}&person=${id(8)}`, `?other=${id(9)}`]) expect(contactDeepLink(search)).toBeNull();
+});
+
+// C5 (0701): filters always in view; program order, expired members and contact type.
+it('shows the filter bar open with no filter set, and offers the new choices', () => {
+  const html = view();
+  expect(html).toContain('data-testid="contact-filters"'); expect(html).not.toContain('<details'); expect(html).not.toContain('Clear filters');
+  expect(html).toContain('>Filters</h3>');
+  expect(html).toContain('<option value="PROGRAM">Program A–Z</option>');
+  expect(html).toContain('<option value="EXPIRED">Expired (no current membership)</option>');
+  expect(html).toContain('Contact type'); expect(html).toContain('<option value="GUARDIAN">Parents and guardians</option>'); expect(html).toContain('<option value="CHILD">Children</option>');
+  const set = { ...NO_CONTACT_FILTERS, contactType: 'CHILD' as const, membership: 'EXPIRED' as const };
+  const filtered = view({ filters: set, list: { ...base.list, filters: set } as never });
+  expect(filtered).toContain('Filters (2)'); expect(filtered).toContain('Clear filters');
+  expect(filtered).toMatch(/<option value="CHILD" selected="">Children<\/option>/);
+});
+
+it('sends program order, expired and contact type in the closed query', async () => {
+  expect(contactQuery({ ...NO_CONTACT_FILTERS, sort: 'PROGRAM', membership: 'EXPIRED', contactType: 'GUARDIAN' }, false))
+    .toEqual({ sort: 'PROGRAM', membership: 'EXPIRED', contactType: 'GUARDIAN' });
+  const fetch = stub(json({ data: page(), meta: {} }));
+  await contactsApi.list(scope, { ...NO_CONTACT_FILTERS, contactType: 'CHILD', sort: 'PROGRAM' }, null, false, signal());
+  expect((fetch.mock.calls[0] as unknown as [string])[0])
+    .toBe(`/api/v1/organizations/${scope.organizationId}/schools/${scope.schoolId}/contacts?sort=PROGRAM&contactType=CHILD`);
+  expect(activeFilterCount({ ...NO_CONTACT_FILTERS, contactType: 'GUARDIAN', sort: 'PROGRAM' })).toBe(1);
+  expect(() => contactQuery({ ...NO_CONTACT_FILTERS, contactType: 'PARENT' as never }, false)).toThrow();
 });

@@ -24,3 +24,6 @@
 .pick { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px; border: 1px solid #35506d; border-radius: 10px; background: transparent; color: #eaf4fb; font: inherit; font-size: 13px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .pick:disabled { opacity: .55; cursor: not-allowed; }
 .pick:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.embedded { display: grid; gap: 14px; }
+.stack { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+.small[aria-pressed="true"] { border-color: var(--hon-accent, #8de3d8); background: #123047; }

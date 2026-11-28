@@ -38,9 +38,9 @@ test('network target policy accepts only canonical loopback PostgreSQL, includin
   for (const args of [[443, 'example.test'], [5432, 'database.internal'], [{ port: 5432, host: '127.0.0.2' }], [{ path: '/tmp/other.sock' }], [{ port: 3000, host: 'localhost' }]]) assert(!postgresTarget(args));
 });
 test('entire reviewed migration chain and every 0181–0704 checksum are pinned', async () => {
-  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 268); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0704');
-  assert.equal(actual.entries.length, 440);
-  assert.deepEqual(actual.targets.slice(-5).map(t => t.file.slice(0, 4)), ['0695', '0696', '0697', '0698', '0704']);
+  const actual = await readMigrationEvidence(); assert.equal(actual.targets.length, 273); assert.equal(actual.entries.at(-1).file.slice(0, 4), '0704');
+  assert.equal(actual.entries.length, 445);
+  assert.deepEqual(actual.targets.slice(-5).map(t => t.file.slice(0, 4)), ['0700', '0701', '0702', '0703', '0704']);
   const changed = structuredClone(actual.entries); changed[0].sha256 = '0'.repeat(64);
   assert.throws(() => validateMigrationEvidence(changed, actual));
   assert.throws(() => validateMigrationEvidence([...actual.entries, { file: '0705_unreviewed.sql', sha256: 'x' }], actual));

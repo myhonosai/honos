@@ -12,7 +12,8 @@ import {
 } from './http';
 import { DesignEditor, type EditorApi } from './editor';
 import { DesignCommands } from './commands';
-import { NO_BRAND, TEMPLATE_IDS, TEMPLATE_NAMES, templateDocument, type Brand, type TemplateId } from './templates';
+import { NO_BRAND, templateDocument, templateName, type Brand, type TemplateId } from './templates';
+import { TemplateGallery } from './gallery';
 import { brandingApi } from '../school-branding/http';
 import { designText, sizeMeasure, sizeName, type DesignKey } from './copy';
 import { useDesignWords } from './words';
@@ -130,7 +131,7 @@ export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
 
   const create = async () => {
     const template = newTemplate || null;
-    const input = createInput(newName || (template ? t(TEMPLATE_NAMES[template]) : t('newNameDefault')), newSize, template, language, brand);
+    const input = createInput(newName || (template ? templateName(language, template) : t('newNameDefault')), newSize, template, language, brand);
     if (!scope || !input || busy) return;
     setBusy(true); setNotice(null);
     const outcome = await commands.create(scope, input);
@@ -188,12 +189,11 @@ export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
                 {CREATIVE_DESIGN_SIZE_CODES.map(code => <option key={code} value={code}>{sizeName(language, code)} ({sizeMeasure(code)})</option>)}
               </select>
             </label>
-            <label className={s.field}>{t('startFrom')}
-              <select name="newDesignTemplate" value={newTemplate} onChange={event => setNewTemplate(event.target.value as TemplateId | '')}>
-                <option value="">{t('blank')}</option>
-                {TEMPLATE_IDS.map(id => <option key={id} value={id}>{t(TEMPLATE_NAMES[id])}</option>)}
-              </select>
-            </label>
+            <fieldset className={s.galleryField}>
+              <legend>{t('startFrom')}</legend>
+              <TemplateGallery code={newSize} language={language} brand={brand} value={newTemplate} onChange={setNewTemplate} blankLabel={t('blank')} />
+              <p className={s.meta}>{t('checkOffers')}</p>
+            </fieldset>
             <button type="submit" className={s.button} disabled={busy}>{t('newCreate')}</button>
           </form>
         </section>

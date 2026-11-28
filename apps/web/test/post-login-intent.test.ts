@@ -6,7 +6,7 @@ import { HON_SESSION_COOKIE, issueSession, sessionConfig } from '@hon/auth';
 vi.mock('server-only', () => ({}));
 import { GET as login } from '../src/app/auth/login/route';
 import { GET as continueRoute } from '../src/app/auth/continue/route';
-import { POST_LOGIN_INTENTS, POST_LOGIN_INTENT_COOKIE, postLoginIntent, postLoginIntentFromQuery } from '../src/server/post-login-intent';
+import { POST_LOGIN_INTENTS, POST_LOGIN_INTENT_COOKIE, postLoginIntent, postLoginIntentFromQuery, START_SIGN_IN } from '../src/server/post-login-intent';
 
 const testEnv = { NODE_ENV: 'production', HON_AUTH_MODE: 'OIDC', HON_SESSION_JWT_SECRET: 'TEST_ONLY_HON_KEY_123456789012345678901234', HON_SESSION_AUDIENCE: 'hon-web-test', HON_PUBLIC_ORIGIN: 'https://hon.example', HON_OIDC_ISSUER: 'https://provider.example/issuer', HON_OIDC_AUTHORIZATION_ENDPOINT: 'https://provider.example/authorize', HON_OIDC_TOKEN_ENDPOINT: 'https://provider.example/token', HON_OIDC_JWKS_URI: 'https://provider.example/jwks', HON_OIDC_CLIENT_ID: 'hon-web-client', HON_OIDC_SCOPES: 'openid profile email', HON_OIDC_REDIRECT_URI: 'https://hon.example/auth/callback', HON_OIDC_TOKEN_ENDPOINT_AUTH_METHOD: 'none' };
 let saved: NodeJS.ProcessEnv;
@@ -25,7 +25,8 @@ describe('post-login intent names', () => {
     expect(postLoginIntent('family-invitation')).toBe('family-invitation');
     expect(postLoginIntent('mobile')).toBe('mobile');
     // Exact set: adding an intent must be a reviewed change to this list.
-    expect(POST_LOGIN_INTENTS).toEqual({ parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish', 'staff-mobile': '/auth/staff-mobile/finish' });
+    expect(POST_LOGIN_INTENTS).toEqual({ parent: '/parent', 'family-invitation': '/account/family-invitation', mobile: '/auth/mobile/finish', 'staff-mobile': '/auth/staff-mobile/finish', start: '/account/start' });
+    expect(postLoginIntent('start')).toBe('start');
     for (const bad of ['', 'Parent', '/parent', 'https://evil.example', 'toString', '__proto__', 'staff', 'hq']) expect(postLoginIntent(bad)).toBeNull();
     expect(postLoginIntentFromQuery(new URLSearchParams('for=parent'))).toBe('parent');
     for (const bad of ['for=parent&for=parent', 'for=parent&next=/hq', 'next=parent', 'for=/parent', '']) expect(postLoginIntentFromQuery(new URLSearchParams(bad))).toBeNull();
@@ -50,7 +51,7 @@ describe('sign-in from the parent portal returns there', () => {
     expect(cleared.cookies.get(POST_LOGIN_INTENT_COOKIE)?.value).toBe('');
   });
 
-  it.each([['parent', '/parent'], ['family-invitation', '/account/family-invitation'], ['mobile', '/auth/mobile/finish'], ['staff-mobile', '/auth/staff-mobile/finish']])('continue sends a signed-in %s intent to its fixed page, without probing roles, and clears it', async (intent, path) => {
+  it.each([['parent', '/parent'], ['family-invitation', '/account/family-invitation'], ['mobile', '/auth/mobile/finish'], ['staff-mobile', '/auth/staff-mobile/finish'], ['start', '/account/start']])('continue sends a signed-in %s intent to its fixed page, without probing roles, and clears it', async (intent, path) => {
     const fetcher = vi.spyOn(globalThis, 'fetch');
     const response = await continueRoute(at('/auth/continue', `${HON_SESSION_COOKIE}=${session()}; ${POST_LOGIN_INTENT_COOKIE}=${intent}`));
     expect(response.status).toBe(303);
@@ -83,5 +84,12 @@ describe('sign-in from the parent portal returns there', () => {
       if (source.includes('/auth/login')) expect(source, page).not.toMatch(/\/auth\/login(?!\?for=parent)/);
     }
     expect(readFileSync(new URL('../src/app/account/family-invitation/page.tsx', import.meta.url), 'utf8')).toContain("redirect('/auth/login?for=family-invitation')");
+  });
+
+  it('the Start a new school page signs in with the start intent, so a new owner comes back to it', async () => {
+    const response = await login(at('/auth/login?for=start'));
+    expect(response.cookies.get(POST_LOGIN_INTENT_COOKIE)?.value).toBe('start');
+    expect(START_SIGN_IN).toBe('/auth/login?for=start');
+    expect(readFileSync(new URL('../src/app/account/start/page.tsx', import.meta.url), 'utf8')).toContain('requireVerifiedWebSession(START_SIGN_IN)');
   });
 });

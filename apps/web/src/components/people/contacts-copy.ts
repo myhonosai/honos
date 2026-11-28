@@ -2,8 +2,9 @@
 const en = {
   // C4 (0623): sort and the added filters.
   sortLabel: 'Sort by', sortNAME: 'Name A–Z', sortENDS_SOONEST: 'Membership ending soonest', sortBELT_HIGH: 'Highest belt first', sortBELT_LOW: 'Lowest belt first',
-  sortAGE_YOUNGEST: 'Youngest first', sortAGE_OLDEST: 'Oldest first', sortNEWEST: 'Newest added',
-  membership: 'Membership', memHAS: 'Has a membership', memNONE: 'No membership', memACTIVE: 'Active', memPAUSED: 'Paused', memCANCELLING: 'Cancelling',
+  sortAGE_YOUNGEST: 'Youngest first', sortAGE_OLDEST: 'Oldest first', sortNEWEST: 'Newest added', sortPROGRAM: 'Program A–Z',
+  membership: 'Membership', memHAS: 'Has a membership', memNONE: 'No membership', memACTIVE: 'Active', memPAUSED: 'Paused', memCANCELLING: 'Cancelling', memEXPIRED: 'Expired (no current membership)',
+  contactType: 'Contact type', typeGUARDIAN: 'Parents and guardians', typeCHILD: 'Children',
   noBelt: 'No belt yet', age: 'Age', ageBand: '{min} to {max}', ageAdults: '18 and over', ageCustom: 'Choose ages…', ageFrom: 'Age from', ageTo: 'Age to',
   endsBetween: 'Between dates…', endsFrom: 'Ends on or after', endsTo: 'Ends on or before', tag: 'Tag', rowAge: 'Age {n}',
   statePAUSED: 'Paused', stateCANCELLING: 'Cancelling', badRange: 'Check the range: the first value must not be after the second.',
@@ -18,8 +19,9 @@ const en = {
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
   sortLabel: '정렬', sortNAME: '이름순', sortENDS_SOONEST: '회원권 종료 임박순', sortBELT_HIGH: '높은 띠 먼저', sortBELT_LOW: '낮은 띠 먼저',
-  sortAGE_YOUNGEST: '어린 순', sortAGE_OLDEST: '나이 많은 순', sortNEWEST: '최근 추가순',
-  membership: '회원권', memHAS: '회원권 있음', memNONE: '회원권 없음', memACTIVE: '이용 중', memPAUSED: '일시 정지', memCANCELLING: '해지 예정',
+  sortAGE_YOUNGEST: '어린 순', sortAGE_OLDEST: '나이 많은 순', sortNEWEST: '최근 추가순', sortPROGRAM: '프로그램 이름순',
+  membership: '회원권', memHAS: '회원권 있음', memNONE: '회원권 없음', memACTIVE: '이용 중', memPAUSED: '일시 정지', memCANCELLING: '해지 예정', memEXPIRED: '만료됨 (현재 회원권 없음)',
+  contactType: '연락처 유형', typeGUARDIAN: '부모 및 보호자', typeCHILD: '자녀',
   noBelt: '띠 없음', age: '나이', ageBand: '{min}~{max}세', ageAdults: '18세 이상', ageCustom: '나이 직접 선택…', ageFrom: '최소 나이', ageTo: '최대 나이',
   endsBetween: '날짜 범위…', endsFrom: '이 날짜 이후 종료', endsTo: '이 날짜 이전 종료', tag: '태그', rowAge: '{n}세',
   statePAUSED: '일시 정지', stateCANCELLING: '해지 예정', badRange: '범위를 확인하세요. 앞의 값이 뒤의 값보다 클 수 없습니다.',
@@ -33,8 +35,9 @@ const ko: Record<Key, string> = {
 };
 const es: Record<Key, string> = {
   sortLabel: 'Ordenar por', sortNAME: 'Nombre A–Z', sortENDS_SOONEST: 'Membresía que termina antes', sortBELT_HIGH: 'Cinturón más alto primero', sortBELT_LOW: 'Cinturón más bajo primero',
-  sortAGE_YOUNGEST: 'Más jóvenes primero', sortAGE_OLDEST: 'Mayores primero', sortNEWEST: 'Añadidos recientemente',
-  membership: 'Membresía', memHAS: 'Con membresía', memNONE: 'Sin membresía', memACTIVE: 'Activa', memPAUSED: 'En pausa', memCANCELLING: 'Por cancelar',
+  sortAGE_YOUNGEST: 'Más jóvenes primero', sortAGE_OLDEST: 'Mayores primero', sortNEWEST: 'Añadidos recientemente', sortPROGRAM: 'Programa A–Z',
+  membership: 'Membresía', memHAS: 'Con membresía', memNONE: 'Sin membresía', memACTIVE: 'Activa', memPAUSED: 'En pausa', memCANCELLING: 'Por cancelar', memEXPIRED: 'Vencida (sin membresía actual)',
+  contactType: 'Tipo de contacto', typeGUARDIAN: 'Padres y tutores', typeCHILD: 'Hijos',
   noBelt: 'Sin cinturón aún', age: 'Edad', ageBand: '{min} a {max}', ageAdults: '18 o más', ageCustom: 'Elegir edades…', ageFrom: 'Edad desde', ageTo: 'Edad hasta',
   endsBetween: 'Entre fechas…', endsFrom: 'Termina el o después de', endsTo: 'Termina el o antes de', tag: 'Etiqueta', rowAge: '{n} años',
   statePAUSED: 'En pausa', stateCANCELLING: 'Por cancelar', badRange: 'Revise el rango: el primer valor no puede ser mayor que el segundo.',

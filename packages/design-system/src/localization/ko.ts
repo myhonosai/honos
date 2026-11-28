@@ -3,11 +3,13 @@ import { pricingOperationsKo } from './pricing-operations.js';
 import type { TranslationCatalog } from './index.js';
 import { pricingKo } from './pricing-offers.js';
 import { honOsPricesKo } from './hon-os-prices.js';
+import { onePlanSubscriptionKo } from './one-plan-subscription.js';
 import { zernioKo } from './zernio.js';
 export const ko = {
   ...zernioKo,
   ...pricingKo,
   ...honOsPricesKo,
+  ...onePlanSubscriptionKo,
   ...pricingOperationsKo,
   ...planBuilderKo,
   " · Deterministic simulator, not Stripe sandbox": " · 결정적 시뮬레이터이며 Stripe 샌드박스가 아닙니다",

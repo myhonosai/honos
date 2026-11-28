@@ -182,3 +182,7 @@
 /* Add contact (2026-11-27): the parent-and-child or one-adult choice. */
 .addKind { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 0; border: 0; }
 .addKind legend { padding: 0; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--hon-muted, #9fb4c8); }
+/* Owner 2026-11-28: a parent or guardian's card names their students; each name opens that student's card. */
+.guardianOf { flex-basis: 100%; }
+.linkButton { padding: 0; border: 0; background: none; color: var(--hon-accent, #8fd3ff); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.linkButton:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

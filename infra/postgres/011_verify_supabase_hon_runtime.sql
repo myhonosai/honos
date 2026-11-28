@@ -3845,7 +3845,7 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   FOR f IN SELECT * FROM (VALUES
 ('hon.require_school_contacts_actor(text)',true,false,'search_path=pg_catalog, hon','da51077efd0d9cf23610403472c6551e6f51d935b672b762b633974e5a300be0'),
 ('hon.school_contact_facts(uuid,uuid,timestamp with time zone)',true,false,'search_path=pg_catalog, hon','f481befbcea6c9e50078c3e0cddd8d26561814a339a7a8617152c109f0cd48dd'),
-('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','7ff8305d24fe486002a589ed74c51dc025a99ff496dccad39d7e29b9824554a9')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
+('hon.read_school_contact_list(text,jsonb)',true,true,'search_path=pg_catalog, hon','931e224a24fe99c033ef083a6046647d2f90b333957dfa81e9e20f52d0a354fe')) e(signature,definer,runtime_allowed,config,body_hash) LOOP
     SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config] AND p.provolatile='s'
       AND (owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
       AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
@@ -6179,7 +6179,8 @@ BEGIN
     ('hon.creative_design_color_ok(jsonb,boolean)','25562d81844c7b71eeb8ae2c8f5ff25b','i',false,'search_path=pg_catalog'),
     ('hon.creative_design_command_begin(text,text,jsonb,text,uuid,uuid)','02101624f41d5a8b7d5ee847311f1969','v',true,'search_path=pg_catalog, hon'),
     ('hon.creative_design_command_finish(uuid,text,text,uuid,integer,jsonb,jsonb,text,uuid,uuid,jsonb)','8865de247715009e8a7f5256c47c303b','v',true,'search_path=pg_catalog, hon'),
-    ('hon.creative_design_document_ok(jsonb,text)','be4157913744ee08dfb7585dc38433e0','i',false,'search_path=pg_catalog, hon'),
+    ('hon.creative_design_document_ok(jsonb,text)','2b26cb0c414b2cad8b47bd0d104827d5', -- 0703 designer fonts widen the font list
+    'i',false,'search_path=pg_catalog, hon'),
     ('hon.creative_design_name_ok(text)','ffebbe46ce672527f3c5c739cf0ff358','i',false,'search_path=pg_catalog'),
     ('hon.creative_design_num_ok(jsonb,numeric,numeric)','69805e649e72a08c1b5ecf39fdc38d3f','i',false,'search_path=pg_catalog'),
     ('hon.creative_design_room_check(uuid,uuid,text,uuid,boolean)','189b08c18cb7903e8177f617ab98a80e','v',true,'search_path=pg_catalog, hon'),
@@ -7265,7 +7266,7 @@ BEGIN
 END $$;
 -- End HQ school lifecycle exact verification.
 
--- HQ school plan assignments exact verification (0676): three runtime entry points, eleven private helpers, two forced-RLS tables.
+-- HQ school plan assignments exact verification (0676; 0700 start date replaced assign + json bodies): three runtime entry points, eleven private helpers, two forced-RLS tables.
 DO $$ DECLARE f text; t text; c text; d boolean; s text;
 BEGIN
   FOREACH f IN ARRAY ARRAY['hon.read_hq_school_plan(text,uuid)','hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','hon.remove_hq_school_plan(text,uuid,jsonb,uuid)'] LOOP
@@ -7295,12 +7296,12 @@ BEGIN
   IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname LIKE '%hq_school_plan%')<>14 THEN
     RAISE EXCEPTION 'Unexpected HQ school plan overload'; END IF;
   FOR f,t,c,d,s IN SELECT * FROM (VALUES
-    ('hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','8d5bdf65bd58cf2ca8df26abbcdd8ed5','v',true),
+    ('hon.assign_hq_school_plan(text,uuid,jsonb,uuid)','c443425ca5d999c6d72d3cf998d33df5','v',true),
     ('hon.guard_hq_school_plan_evidence()','038a3ad60cf851ce84ba3330bd4f322f','v',false),
     ('hon.hq_school_plan_claim(uuid,uuid,text,text)','0a52e5a8f7173cab4dea868e50576ecc','v',false),
     ('hon.hq_school_plan_current(uuid)','48f22d7aa8b47ced2aa0919af9fe9321','s',false),
     ('hon.hq_school_plan_expected(jsonb)','6005bd5c38be258c8367427e3a30e3c9','i',false),
-    ('hon.hq_school_plan_json(hon.hq_school_plan_assignments)','ecd31086f6b67be84a2bf9909a12b44f','s',false),
+    ('hon.hq_school_plan_json(hon.hq_school_plan_assignments)','c7bff4b414af640628afdc9ae004e812','s',false),
     ('hon.hq_school_plan_lock(uuid,integer,boolean)','a27fab280c617381ef01c69dcbd09c2b','v',false),
     ('hon.hq_school_plan_note(jsonb)','5b8a66141e4fbf795300b6fc4d7b432f','i',false),
     ('hon.hq_school_plan_offers()','180aff67b318b9fc3c25f7a0c5641179','s',false),
@@ -7740,3 +7741,19 @@ BEGIN
     RAISE EXCEPTION 'Unsafe HQ number order table'; END IF;
 END $$;
 -- End HQ number orders exact verification.
+-- School plan features exact verification (0699)
+DO $$ BEGIN
+  IF to_regprocedure('hon.read_school_plan_features(text,uuid)') IS NULL OR to_regprocedure('hon.school_plan_features(uuid,uuid)') IS NULL
+    OR NOT has_function_privilege('hon_runtime','hon.read_school_plan_features(text,uuid)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.school_plan_features(uuid,uuid)','EXECUTE')
+    OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE p.oid IN ('hon.read_school_plan_features(text,uuid)'::regprocedure,'hon.school_plan_features(uuid,uuid)'::regprocedure)
+        AND a.grantee<>p.proowner AND a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')) THEN
+    RAISE EXCEPTION 'Unsafe school plan features ACL'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.read_school_plan_features(text,uuid)'::regprocedure AND p.prosecdef
+      AND position('staff_member_eligible' IN p.prosrc)>0 AND position('family_access_grants' IN p.prosrc)>0)
+    OR NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.school_plan_features(uuid,uuid)'::regprocedure AND NOT p.prosecdef
+      AND position('hq_school_plan_current' IN p.prosrc)>0 AND position('cur.school_id = p_school' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'School plan features read drift'; END IF;
+END $$;
+-- End school plan features exact verification.

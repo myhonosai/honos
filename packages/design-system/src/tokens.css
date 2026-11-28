@@ -4,23 +4,24 @@
  */
 [data-hon-ui] {
   color-scheme: dark;
-  --hon-bg: #050a18;
-  --hon-bg-raised: #08112a;
-  --hon-rail: #060c1d;
-  --hon-surface: rgba(14, 27, 58, 0.72);
-  --hon-surface-solid: #0d1a38;
-  --hon-surface-2: rgba(22, 40, 82, 0.66);
-  --hon-border: rgba(96, 150, 255, 0.18);
-  --hon-border-strong: rgba(96, 165, 255, 0.42);
-  --hon-text: #eef3ff;
-  --hon-text-muted: #a9b8d6;
-  --hon-text-subtle: #7486aa;
-  --hon-text-inverse: #04102a;
+  /* Unslop 2026-11-28: ink surfaces and neutral hairlines; HON OS blue stays the accent. */
+  --hon-bg: #0b0d14;
+  --hon-bg-raised: #11141c;
+  --hon-rail: #08090e;
+  --hon-surface: #11141c;
+  --hon-surface-solid: #11141c;
+  --hon-surface-2: #1a1e28;
+  --hon-border: rgba(238, 240, 245, 0.08);
+  --hon-border-strong: rgba(238, 240, 245, 0.16);
+  --hon-text: #eef0f5;
+  --hon-text-muted: #a3a9b8;
+  --hon-text-subtle: #8a91a3;
+  --hon-text-inverse: #0b0d14;
   --hon-accent: #2f7bff;
   --hon-accent-strong: #1d63f0;
   --hon-accent-2: #34d6e8;
   --hon-accent-contrast: #ffffff;
-  --hon-glow: 0 0 0 1px rgba(80, 150, 255, 0.35), 0 8px 30px rgba(36, 110, 255, 0.28);
+  --hon-glow: 0 0 0 1px rgba(238, 240, 245, 0.12);
   --hon-success: #3ee08f;
   --hon-success-soft: rgba(62, 224, 143, 0.14);
   --hon-warning: #ffc34d;
@@ -51,8 +52,8 @@
   --hon-radius-sm: 8px;
   --hon-radius-md: 12px;
   --hon-radius-lg: 18px;
-  --hon-shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 10px 30px rgba(0, 4, 20, 0.35);
-  --hon-shadow-2: 0 20px 60px rgba(0, 4, 20, 0.55);
+  --hon-shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --hon-shadow-2: 0 16px 40px rgba(0, 0, 0, 0.4);
   --hon-rail-w: 248px;
   --hon-control-h: 40px;
   --hon-row-h: 44px;
