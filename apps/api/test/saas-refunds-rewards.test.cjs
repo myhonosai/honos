@@ -24,7 +24,7 @@ const entry = (patch = {}) => ({ rewardEntryId:U(), rewardKind:'REFERRER_CREDIT'
   applicationKind:'ACCOUNT_CREDIT', subscriptionId:U(), state:'READY', blocker:null, application:null, fulfilledNotice:'PREVIEW_IS_NOT_FULFILLMENT', ...patch });
 const fulfillment = (patch = {}) => ({ status:'INACTIVE', version:1, authorizationReference:null, changedAt:T, prizes:'NOT_ISSUED', cashPayouts:'DISABLED', ...patch });
 const alert = (patch = {}) => ({ alertId:U(), attributionId:U(), attributionState:'QUALIFIED', referredOrganizationId:U(), referredOrganizationName:'Referred Dojo',
-  referrerSchoolId:U(), source:'PAYMENT_EVIDENCE', paymentEvidenceId:U(), refundRequestId:null, evidenceKind:'CHARGEBACK', referredRecordedNetMinor:0,
+  referrerSchoolId:U(), source:'PAYMENT_EVIDENCE', paymentEvidenceId:U(), refundRequestId:null, scheduleEventId:null, evidenceKind:'CHARGEBACK', referredRecordedNetMinor:0,
   status:'OPEN', resolution:null, resolutionReference:null, version:1, raisedAt:T, resolvedAt:null, affectedApplications:[], automaticReversal:'NONE',
   debtCreated:false, ...patch });
 

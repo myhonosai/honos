@@ -92,8 +92,8 @@ export interface SaasRewardPreviewEntry {
 }
 export interface SaasReferralAlert {
   alertId: string; attributionId: string; attributionState: 'PENDING' | 'QUALIFIED' | 'REJECTED' | 'REFUNDED' | 'REVERSED';
-  referredOrganizationId: string; referredOrganizationName: string; referrerSchoolId: string; source: 'PAYMENT_EVIDENCE' | 'REFUND_REQUEST';
-  paymentEvidenceId: string | null; refundRequestId: string | null; evidenceKind: 'REFUND' | 'CHARGEBACK' | 'REFUND_APPROVED';
+  referredOrganizationId: string; referredOrganizationName: string; referrerSchoolId: string; source: 'PAYMENT_EVIDENCE' | 'REFUND_REQUEST' | 'SCHEDULE_EVENT';
+  paymentEvidenceId: string | null; refundRequestId: string | null; scheduleEventId: string | null; evidenceKind: 'REFUND' | 'CHARGEBACK' | 'REFUND_APPROVED';
   referredRecordedNetMinor: number; status: 'OPEN' | 'RESOLVED'; resolution: SaasAlertResolution | null; resolutionReference: string | null;
   version: number; raisedAt: string; resolvedAt: string | null; affectedApplications: string[]; automaticReversal: 'NONE'; debtCreated: false;
 }
@@ -241,12 +241,14 @@ function validateEntry(value: unknown): void {
 function validateAlert(value: unknown): void {
   const a = record(value, drift);
   exactKeys(a, ['alertId','attributionId','attributionState','referredOrganizationId','referredOrganizationName','referrerSchoolId','source','paymentEvidenceId',
-    'refundRequestId','evidenceKind','referredRecordedNetMinor','status','resolution','resolutionReference','version','raisedAt','resolvedAt',
+    'refundRequestId','scheduleEventId','evidenceKind','referredRecordedNetMinor','status','resolution','resolutionReference','version','raisedAt','resolvedAt',
     'affectedApplications','automaticReversal','debtCreated'], drift);
   if (!isUuid(a.alertId) || !isUuid(a.attributionId) || !has(['PENDING','QUALIFIED','REJECTED','REFUNDED','REVERSED'], a.attributionState)
     || !isUuid(a.referredOrganizationId) || typeof a.referredOrganizationName !== 'string' || !isUuid(a.referrerSchoolId)
-    || !has(['PAYMENT_EVIDENCE','REFUND_REQUEST'], a.source) || !nullable(a.paymentEvidenceId, isUuid) || !nullable(a.refundRequestId, isUuid)
+    || !has(['PAYMENT_EVIDENCE','REFUND_REQUEST','SCHEDULE_EVENT'], a.source) || !nullable(a.paymentEvidenceId, isUuid) || !nullable(a.refundRequestId, isUuid)
+    || !nullable(a.scheduleEventId, isUuid)
     || (a.source === 'PAYMENT_EVIDENCE') !== (a.paymentEvidenceId !== null) || (a.source === 'REFUND_REQUEST') !== (a.refundRequestId !== null)
+    || (a.source === 'SCHEDULE_EVENT') !== (a.scheduleEventId !== null)
     || !has(['REFUND','CHARGEBACK','REFUND_APPROVED'], a.evidenceKind) || !isInt(a.referredRecordedNetMinor, -999_999_999_999, 999_999_999_999)
     || !has(['OPEN','RESOLVED'], a.status) || !nullable(a.resolution, (v): v is string => has(['ATTRIBUTION_DECIDED','NO_QUALIFICATION_IMPACT'], v))
     || !nullable(a.resolutionReference, (v): v is string => text(v, 300)) || !isInt(a.version, 1, 2147483647) || !isTimestamp(a.raisedAt) || !nts(a.resolvedAt)
