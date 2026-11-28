@@ -72,6 +72,22 @@ export class SchoolBlastController {
     return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
   }
 
+  @Get(':blastId/recipients')
+  @Header('Cache-Control', 'private, no-store')
+  @UseGuards(SchoolBlastReadHumanUiGuard)
+  async recipients(
+    @Param('organizationId', new ParseUUIDPipe()) organizationId: string,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('blastId', new ParseUUIDPipe()) blastId: string,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @Req() request: HonRequest,
+  ) {
+    this.readOnly(request, idempotencyKey);
+    const context = await this.context(request, organizationId, schoolId, '', READ);
+    const data = await this.blasts.recipients(context, blastId);
+    return { data, meta: { requestId: context.requestId, correlationId: context.correlationId } };
+  }
+
   @Post()
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'private, no-store')

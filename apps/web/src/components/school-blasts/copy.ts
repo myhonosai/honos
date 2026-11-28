@@ -28,7 +28,8 @@ export interface BlastCopy {
   previewTitle: string; preview: string; matched: (n: number) => string; outcomes: Record<SchoolBlastOutcome, string>; sample: (name: string) => string; nobody: string;
   savedFirst: string; sendTitle: string; sendNow: string; schedule: string; scheduleAt: string; scheduleHint: string; scheduleBad: string;
   confirmSend: (n: number) => string; confirm: string; back: string; cancelBlast: string; cancelHint: string;
-  deliveryTitle: string; deliveries: Record<SchoolBlastDeliveryState, string>; workerNote: string;
+  deliveryTitle: string; recipientsTitle: string; viewRecipients: string; hideRecipients: string; recipientsEmpty: string;
+  recipientsUnavailable: string; recipientsDenied: string; openEmail: string; closeEmail: string; noName: string; recipientsCapped: string; deliveries: Record<SchoolBlastDeliveryState, string>; workerNote: string;
   outcomes2: Record<BlastOutcomeKind, string>;
   permissionsHint: string; limitsNote: string;
 }
@@ -85,6 +86,9 @@ const en: BlastCopy = {
   scheduleHint: 'Up to 60 days ahead. You can cancel until then.', scheduleBad: 'Pick a time more than a minute from now and within 60 days.',
   confirmSend: (n) => `Send to ${n.toLocaleString('en')} ${n === 1 ? 'person' : 'people'}? This can’t be undone once it goes out.`, confirm: 'Yes, send', back: 'Back',
   cancelBlast: 'Cancel this blast', cancelHint: 'Nothing has gone out yet.',
+  recipientsTitle: 'Who it went to', viewRecipients: 'View recipients', hideRecipients: 'Hide recipients', recipientsEmpty: 'Nobody was on this blast.',
+  recipientsUnavailable: 'The recipients could not be read. Try again.', recipientsDenied: 'Your role cannot see who blasts went to.', openEmail: 'Open email', closeEmail: 'Close email',
+  noName: 'Contact without a name', recipientsCapped: 'Showing the first 2,000 people.',
   deliveryTitle: 'Delivery',
   deliveries: { WAITING: 'Waiting', PENDING: 'Pending', SENDING: 'Sending', ACCEPTED: 'Accepted', DELIVERED: 'Delivered', BOUNCED: 'Bounced', FAILED: 'Failed',
     SUPPRESSED: 'Suppressed', UNKNOWN: 'Unknown', CANCELLED: 'Cancelled' },
@@ -154,6 +158,9 @@ const ko: BlastCopy = {
   scheduleHint: '최대 60일 후까지. 그때까지 취소할 수 있습니다.', scheduleBad: '1분 이후, 60일 이내의 시간을 고르세요.',
   confirmSend: (n) => `${n.toLocaleString('ko')}명에게 보낼까요? 발송되면 되돌릴 수 없습니다.`, confirm: '네, 보내기', back: '뒤로',
   cancelBlast: '이 발송 취소', cancelHint: '아직 아무것도 발송되지 않았습니다.',
+  recipientsTitle: '받은 사람', viewRecipients: '받는 사람 보기', hideRecipients: '받는 사람 숨기기', recipientsEmpty: '이 단체 메시지를 받은 사람이 없습니다.',
+  recipientsUnavailable: '받는 사람을 읽지 못했습니다. 다시 시도하세요.', recipientsDenied: '이 역할은 단체 메시지를 받은 사람을 볼 수 없습니다.', openEmail: '이메일 열기', closeEmail: '이메일 닫기',
+  noName: '이름 없는 연락처', recipientsCapped: '처음 2,000명을 보여 줍니다.',
   deliveryTitle: '전달 상태',
   deliveries: { WAITING: '대기', PENDING: '보류', SENDING: '보내는 중', ACCEPTED: '접수됨', DELIVERED: '전달됨', BOUNCED: '반송', FAILED: '실패',
     SUPPRESSED: '차단됨', UNKNOWN: '알 수 없음', CANCELLED: '취소됨' },
@@ -223,6 +230,9 @@ const es: BlastCopy = {
   scheduleHint: 'Hasta 60 días. Puedes cancelarlo hasta entonces.', scheduleBad: 'Elige una hora a más de un minuto de ahora y dentro de 60 días.',
   confirmSend: (n) => `¿Enviar a ${n.toLocaleString('es')} ${n === 1 ? 'persona' : 'personas'}? No se puede deshacer una vez enviado.`, confirm: 'Sí, enviar', back: 'Volver',
   cancelBlast: 'Cancelar este envío', cancelHint: 'Todavía no se envió nada.',
+  recipientsTitle: 'A quién llegó', viewRecipients: 'Ver destinatarios', hideRecipients: 'Ocultar destinatarios', recipientsEmpty: 'Nadie estaba en este envío.',
+  recipientsUnavailable: 'No se pudieron leer los destinatarios. Inténtalo de nuevo.', recipientsDenied: 'Tu rol no puede ver a quién llegaron los envíos.', openEmail: 'Abrir correo', closeEmail: 'Cerrar correo',
+  noName: 'Contacto sin nombre', recipientsCapped: 'Se muestran las primeras 2,000 personas.',
   deliveryTitle: 'Entrega',
   deliveries: { WAITING: 'En espera', PENDING: 'Pendiente', SENDING: 'Enviando', ACCEPTED: 'Aceptado', DELIVERED: 'Entregado', BOUNCED: 'Rebotado', FAILED: 'Falló',
     SUPPRESSED: 'Suprimido', UNKNOWN: 'Desconocido', CANCELLED: 'Cancelado' },

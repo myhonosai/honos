@@ -10,9 +10,17 @@ import { MediaError, mediaApi, videoPageLink, type MediaApi } from '../school-me
 import { CheckoutError, checkoutApi, type CheckoutApi } from '../school-checkout/http';
 import { NO_CONTACT_FILTERS, contactsApi, type ContactsApi } from '../people/contacts-http';
 import { PersonRecordError } from '../people/http';
-import type { BlastOutcomeKind } from './copy';
+import { blastCopy, type BlastOutcomeKind } from './copy';
+import { BlastRecipients } from './blast-recipients';
+import type { WhenFormat } from '../texts/message-history';
 import { NO_BLAST_FILTERS, pickPerson, unpickPerson, type BlastFilterForm, tagList, blastDraftOf, blastInput, blastProblems, checkoutPageLink, insertLink, liveCheckoutLinks, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
 import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type CheckoutsRead, type FilterOptionsRead, type PeopleSearchRead, type PersonMatch, type PicturesRead, type PreviewRead, type SendAsk } from './view';
+
+/** Dates for an opened email (delivery events, resends) in the reader's language. */
+function recipientWhen(language: string): WhenFormat {
+  const f = (opts: Intl.DateTimeFormatOptions) => (iso: string) => { try { return new Date(iso).toLocaleString(language, opts); } catch { return iso; } };
+  return { short: f({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }), full: f({ dateStyle: 'full', timeStyle: 'short' }) };
+}
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
 type Pending = Readonly<{ key: string; scope: BlastScope } & (
@@ -284,6 +292,8 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
       videoPickerOpen={videoPickerOpen} onToggleVideoPicker={onToggleVideoPicker} onInsertVideo={onInsertVideo} onInsertVideoLink={onInsertVideoLink} onRemoveVideo={onRemoveVideo}
       checkouts={checkouts} checkoutPickerOpen={checkoutPickerOpen} onToggleCheckoutPicker={onToggleCheckoutPicker} onInsertCheckoutLink={onInsertCheckoutLink}
       embedded={channel} onToggleTag={onToggleTag}
+      recipients={selected?.state === 'READY' && selected.blast.status !== 'DRAFT' && orgId && schoolId
+        ? <BlastRecipients key={selected.blast.blastId} scope={{ organizationId: orgId, schoolId }} blast={selected.blast} c={blastCopy(preferences.language)} when={recipientWhen(preferences.language)}/> : null}
       filterOptions={filterOptions} onFilters={onFilters} onClearFilters={onClearFilters}
       peopleQuery={peopleQuery} onPeopleQuery={(v) => { if (lock === 'NONE') setPeopleQuery(v); }} peopleSearch={peopleSearch} onPickPerson={onPickPerson} onUnpickPerson={onUnpickPerson}/>
   </div>;

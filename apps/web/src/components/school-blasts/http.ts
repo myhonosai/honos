@@ -1,7 +1,7 @@
 import {
   SCHOOL_BLAST_COMMANDS, validateCancelSchoolBlast, validateSaveSchoolBlast, validateSendSchoolBlast, verifySchoolBlast,
-  verifySchoolBlastAudience, verifySchoolBlastList, verifySchoolBlastReceipt, type CancelSchoolBlastInput, type SaveSchoolBlastInput, type SchoolBlast,
-  type SchoolBlastAudiencePreview, type SchoolBlastSummary, type SendSchoolBlastInput,
+  verifySchoolBlastAudience, verifySchoolBlastList, verifySchoolBlastReceipt, verifySchoolBlastRecipients, type CancelSchoolBlastInput, type SaveSchoolBlastInput, type SchoolBlast,
+  type SchoolBlastAudiencePreview, type SchoolBlastRecipients, type SchoolBlastSummary, type SendSchoolBlastInput,
 } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
 
@@ -99,6 +99,11 @@ export const blastApi = {
   audience(scope: BlastScope, blastId: string, signal: AbortSignal, owned: Owned): Promise<SchoolBlastAudiencePreview> {
     const wanted = id(blastId);
     return read(`${base(scope)}/${wanted}/audience`, signal, owned, (v) => verifySchoolBlastAudience(v, { blastId: wanted }));
+  },
+  /** 0716: who a sent blast went to (no addresses). */
+  recipients(scope: BlastScope, blastId: string, signal: AbortSignal, owned: Owned): Promise<SchoolBlastRecipients> {
+    const wanted = id(blastId);
+    return read(`${base(scope)}/${wanted}/recipients`, signal, owned, (v) => verifySchoolBlastRecipients(v, { blastId: wanted }));
   },
   async save(scope: BlastScope, input: SaveSchoolBlastInput, key: string, signal: AbortSignal, owned: Owned): Promise<SchoolBlast> {
     const body = checked(validateSaveSchoolBlast, input);

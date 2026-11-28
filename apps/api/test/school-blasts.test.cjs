@@ -13,7 +13,7 @@ const queued=(over={})=>blast({status:'QUEUED',version:2,queuedAt:'2026-11-18T08
 const saveInput=(over={})=>({blastId:null,expectedVersion:0,name:'Open house',channel:'EMAIL',subject:'Hi {{first_name}}',body:'Hello {{first_name}}',
  audience:{groups:['ACTIVE_STUDENTS'],tags:[]},...over});
 const ctx=(over={})=>({organizationId:randomUUID(),schoolId:randomUUID(),principalId:randomUUID(),principalType:'HUMAN_USER',source:'HUMAN_UI',requestId:randomUUID(),correlationId:randomUUID(),externalSubject:'oidc:owner',idempotencyKey:'',...over});
-function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_school_blasts?|read_school_blast_audience|save_school_blast|send_school_blast|cancel_school_blast)\(/.test(sql)?{rows}:{rows:[]};};
+function db(rows,calls=[]){const q=async(sql,args)=>{calls.push([sql,args]);return /hon\.(read_school_blasts?|read_school_blast_audience|read_school_blast_recipients|save_school_blast|send_school_blast|cancel_school_blast)\(/.test(sql)?{rows}:{rows:[]};};
  return {withTenantReadOnlyTransaction:async(_c,f)=>f({query:q}),withTenantTransaction:async(_c,f)=>f({query:q})};}
 const k=ctx({idempotencyKey:'k1'});
 const later=()=>new Date(Date.now()+3_600_000).toISOString();
@@ -91,6 +91,20 @@ test('only direct human commands; bad input never reaches the database; refusals
   const failing=new SchoolBlastService({withTenantTransaction:async()=>{throw Object.assign(new Error(message),{code});}});
   await assert.rejects(failing.cancel(k,{blastId,expectedVersion:1}),e=>e.status===status&&e.getResponse().code===closedCode&&!JSON.stringify(e.getResponse()).includes('SECRET'),`${code}/${message}`);
  }
+});
+
+test('0716: the recipients read calls only its function and refuses answers that drift',async()=>{
+ const calls=[],m1=randomUUID(),p1=randomUUID(),p2=randomUUID();
+ const list={blastId,channel:'EMAIL',status:'QUEUED',items:[{personId:p1,name:'Avery Kim',outcome:'QUEUED',messageId:m1,delivery:'DELIVERED',failureCode:null},
+  {personId:p2,name:'',outcome:'NO_CONSENT',messageId:null,delivery:null,failureCode:null}]};
+ const got=await new SchoolBlastService(db([{data:list}],calls)).recipients(ctx(),blastId);
+ assert.equal(got.items.length,2); assert.equal(got.items[0].messageId,m1);
+ assert(calls.some(([sql,args])=>sql.includes('hon.read_school_blast_recipients($1,$2::uuid)')&&args[0]==='oidc:owner'&&args[1]===blastId));
+ const bad=[{...list,blastId:randomUUID()},{...list,status:'DRAFT'},{...list,items:[{...list.items[0],messageId:null}]},
+  {...list,items:[{...list.items[1],messageId:m1}]},{...list,items:[{...list.items[0],address:'a@example.test'}]},
+  {...list,items:[list.items[0],{...list.items[0]}]},{...list,items:[{...list.items[1],failureCode:'X'}]},{...list,items:[{...list.items[0],delivery:'SENT'}]}];
+ for(const data of bad) await assert.rejects(new SchoolBlastService(db([{data}])).recipients(ctx(),blastId),e=>e.status===503,JSON.stringify(data).slice(0,80));
+ await assert.rejects(new SchoolBlastService(db([{data:list}])).recipients(ctx(),'not-a-uuid'),e=>e.status===400);
 });
 
 test('guards use their own command names; merge tags fill like the database',()=>{
