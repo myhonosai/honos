@@ -862,3 +862,7 @@
 .honOsPriceList h3 { font-size:18px; margin:0 0 6px; }
 @media(max-width:1100px) { .honOsPriceList { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .honOsPriceList { grid-template-columns:1fr; } }
+/* One HON OS plan: what is included, two columns on wide screens. */
+.included { list-style:none; padding:0; margin:16px 0; display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px 24px; font-size:14px; }
+.included li { display:flex; gap:11px; color:#dce8f6; min-width:0; }
+.included li>span { color:var(--cyan); }

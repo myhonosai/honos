@@ -101,7 +101,9 @@ describe('school subscription — merged B5/B3 integration boundaries', () => {
   it('keeps return selectors inert behind the session gate and preserves all modes', () => {
     const route=readFileSync('src/app/schools/[schoolId]/hon-plan/page.tsx','utf8');expect(route).toContain('await requireVerifiedWebSession()');expect(route).not.toMatch(/params|searchParams|result=|checkoutId|fetch\(/);
     const source=readFileSync('src/components/school-subscription/subscription.tsx','utf8');expect(source).toContain('HON_INTERFACE_THEMES.map');expect(source).toContain('AI conversation and voice are unavailable');expect(source).not.toMatch(/localStorage|sessionStorage|searchParams|window\.location/);
-    const html=renderToStaticMarkup(<SchoolSubscription/>);expect(html).toContain('Test-mode purchasing');expect(html).toContain('Informational comparison price');expect(html).toContain('Big Button');expect(html).not.toContain('SYNTHETIC');expect(html).not.toContain('value="FOUNDER_LIFETIME"');expect(readFileSync('src/components/school-subscription/subscription.tsx','utf8')).not.toMatch(/20 lifetime|lifetime {lifetime}/);
+    const html=renderToStaticMarkup(<SchoolSubscription/>);expect(html).toContain('data-one-plan');expect(html).toContain('One plan. Everything in it.');expect(html).toContain('HON OS PRICES');expect(html).toContain('Big Button');
+    // One HON OS plan: the old Core vs Complete cards, offer-type picker and comparison table are gone.
+    for (const old of ['HON Core','HON Complete','Offer type','Compare features','Informational comparison price']) expect(html).not.toContain(old);expect(html).not.toContain('SYNTHETIC');expect(html).not.toContain('value="FOUNDER_LIFETIME"');expect(readFileSync('src/components/school-subscription/subscription.tsx','utf8')).not.toMatch(/20 lifetime|lifetime {lifetime}/);
   });
 });
 
