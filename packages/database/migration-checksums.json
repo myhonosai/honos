@@ -445,6 +445,8 @@
     "0701_school_contact_type_program_expired.sql": "8ac263c23617af1e777e525e8bc0ef3cdaaa17171f15c851481323eceb2deadd",
     "0702_hq_creative_no_monthly_limit.sql": "9068b8679d2e68a74e306d8bf9c87abd4843316d543df45bae51967fe7204979",
     "0703_creative_design_fonts.sql": "dbfbb616d2457e8c88bf8e0bce7870c37c925a3cbb1d6840ae3b3c03e81f0aa8",
-    "0704_hq_number_orders.sql": "0cd39e641d5a68a51cb1c30ea420d5e31311a618050e60decc8be426d3bb2d9b"
+    "0704_hq_number_orders.sql": "0cd39e641d5a68a51cb1c30ea420d5e31311a618050e60decc8be426d3bb2d9b",
+    "0705_design_ai_draft.sql": "b989ecf9a00fa1eb31d7b32efcf67fc14050ab1b842fe548071782044b4c65dc",
+    "0706_design_ai_creative_credits.sql": "af41776c572a9e90248a23ebccca502bfdddcff7252bd3efdeed021e45a6184e"
   }
 }
