@@ -11,7 +11,7 @@ import { CheckoutError, checkoutApi, type CheckoutApi } from '../school-checkout
 import { NO_CONTACT_FILTERS, contactsApi, type ContactsApi } from '../people/contacts-http';
 import { PersonRecordError } from '../people/http';
 import type { BlastOutcomeKind } from './copy';
-import { NO_BLAST_FILTERS, pickPerson, unpickPerson, type BlastFilterForm, blastDraftOf, blastInput, blastProblems, checkoutPageLink, insertLink, liveCheckoutLinks, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
+import { NO_BLAST_FILTERS, pickPerson, unpickPerson, type BlastFilterForm, tagList, blastDraftOf, blastInput, blastProblems, checkoutPageLink, insertLink, liveCheckoutLinks, insertMergeTag, insertPicture, insertVideo, newBlastDraft, pictureIdsOf, removePicture, removeVideo, videoIdsOf, scheduleInstant, scheduleOk, type BlastDraft, type BlastField } from './format';
 import { SchoolBlastsView, type BlastOutcome, type BlastRead, type ListRead, type CheckoutsRead, type FilterOptionsRead, type PeopleSearchRead, type PersonMatch, type PicturesRead, type PreviewRead, type SendAsk } from './view';
 
 /** A command whose outcome is not known: the exact request and key, in memory only, so Try again replays it (the server returns the first receipt). */
@@ -26,7 +26,7 @@ const same = (a: BlastDraft | null, b: BlastDraft | null) => JSON.stringify(a) =
  * draft, check its audience and send it now or schedule it. The draft stays in memory until saved; a school change or
  * session end drops it. Every command answer is followed by a fresh list read.
  */
-export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = checkoutApi, contacts = contactsApi }: { api?: BlastApi; media?: Pick<MediaApi, 'library'>; checkout?: Pick<CheckoutApi, 'pages' | 'links'>; contacts?: Pick<ContactsApi, 'list'> }): React.ReactElement {
+export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = checkoutApi, contacts = contactsApi, channel }: { channel?: SchoolBlastChannel; api?: BlastApi; media?: Pick<MediaApi, 'library'>; checkout?: Pick<CheckoutApi, 'pages' | 'links'>; contacts?: Pick<ContactsApi, 'list'> }): React.ReactElement {
   const { preferences } = useLocale();
   const shell = useSchoolShell();
   const selection = shell.phase === 'READY' ? shell.selection : null;
@@ -228,12 +228,20 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
   const onClearFilters = useCallback(() => edit((d) => ({ ...d, filters: NO_BLAST_FILTERS })), [edit]);
   const onPickPerson = useCallback((m: PersonMatch) => edit((d) => ({ ...d, people: pickPerson(d.people, { personId: m.personId, name: m.name }) })), [edit]);
   const onUnpickPerson = useCallback((personId: string) => edit((d) => ({ ...d, people: unpickPerson(d.people, personId) })), [edit]);
+  const onToggleTag = useCallback((tag: string) => edit((d) => {
+    const tags = tagList(d.tags), on = tags.some(t => t.toLowerCase() === tag.toLowerCase());
+    return { ...d, tags: (on ? tags.filter(t => t.toLowerCase() !== tag.toLowerCase()) : [...tags, tag]).join(', ') };
+  }), [edit]);
   const onNew = useCallback((channel: SchoolBlastChannel) => {
     if (lock !== 'NONE') return;
     detail.current++; setSelected(null); setDraft(newBlastDraft(channel)); setSaved(null); setPreview(null); setAsk(null); setScheduleLocal(''); setOutcome(null);
   }, [lock]);
   const onOpen = useCallback((blastId: string) => { if (lock === 'NONE') { setOutcome(null); load(blastId); } }, [lock, load]);
   const onSave = useCallback(() => { if (draft && !problems.length && dirty) queue({ kind: 'save', input: blastInput(draft) }); }, [draft, problems, dirty, queue]);
+  // TE5: inside Texts > Send or Email > Send a new blast of that channel is open whenever nothing else is.
+  useEffect(() => {
+    if (channel && list.state === 'READY' && !draft && selected === null && lock === 'NONE') setDraft(newBlastDraft(channel));
+  }, [channel, list.state, draft, selected, lock]);
   const onPreview = useCallback(() => {
     if (!draft?.blastId || dirty || !orgId || !schoolId || lock !== 'NONE') return;
     const current = ++detail.current, shown = privacy.current, blastId = draft.blastId;
@@ -242,6 +250,10 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
     api.audience({ organizationId: orgId, schoolId }, blastId, AbortSignal.timeout(15000), owned).then((v) => { if (owned()) setPreview({ state: 'READY', preview: v }); },
       () => { if (owned()) setPreview({ state: 'UNAVAILABLE' }); });
   }, [api, draft, dirty, orgId, schoolId, lock]);
+  // After a save, the audience is counted at once, so the count shows without another press.
+  useEffect(() => {
+    if (outcome?.kind === 'SAVED' && draft?.blastId && !dirty && preview === null && lock === 'NONE') onPreview();
+  }, [outcome, draft, dirty, preview, lock, onPreview]);
   const instant = scheduleInstant(scheduleLocal);
   const scheduleValid = scheduleOk(instant);
   const onAsk = useCallback((mode: 'NOW' | 'AT') => {
@@ -271,6 +283,7 @@ export function SchoolBlasts({ api = blastApi, media = mediaApi, checkout = chec
       pictures={pictures} pickerOpen={pickerOpen} onTogglePicker={onTogglePicker} onInsertPicture={onInsertPicture} onRemovePicture={onRemovePicture}
       videoPickerOpen={videoPickerOpen} onToggleVideoPicker={onToggleVideoPicker} onInsertVideo={onInsertVideo} onInsertVideoLink={onInsertVideoLink} onRemoveVideo={onRemoveVideo}
       checkouts={checkouts} checkoutPickerOpen={checkoutPickerOpen} onToggleCheckoutPicker={onToggleCheckoutPicker} onInsertCheckoutLink={onInsertCheckoutLink}
+      embedded={channel} onToggleTag={onToggleTag}
       filterOptions={filterOptions} onFilters={onFilters} onClearFilters={onClearFilters}
       peopleQuery={peopleQuery} onPeopleQuery={(v) => { if (lock === 'NONE') setPeopleQuery(v); }} peopleSearch={peopleSearch} onPickPerson={onPickPerson} onUnpickPerson={onUnpickPerson}/>
   </div>;

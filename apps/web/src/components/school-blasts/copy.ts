@@ -14,7 +14,7 @@ export interface BlastCopy {
   characters: (used: number, max: number) => string; insertTag: string; mergeFields: Record<SchoolBlastMergeField, string>; mergeHint: string;
   audienceTitle: string; groups: Record<SchoolBlastAudienceGroup, string>; fieldTags: string; tagsHint: string;
   consentNote: string; smsNote: string;
-  filtersTitle: string; filtersHint: string; filtersSet: (n: number) => string; clearFilters: string; any: string; savedChoice: string;
+  byTag: string; filtersTitle: string; filtersHint: string; filtersSet: (n: number) => string; clearFilters: string; any: string; savedChoice: string;
   fieldBelt: string; noBelt: string; fieldProgram: string; fieldPlan: string; fieldMembership: string; membership: Record<SchoolBlastMembershipFilter, string>;
   fieldEnds: string; endsWithin: (days: number) => string; endsBetween: string; fieldEndsFrom: string; fieldEndsTo: string;
   fieldAgeMin: string; fieldAgeMax: string; optionsDenied: string; optionsUnavailable: string;
@@ -49,7 +49,7 @@ const en: BlastCopy = {
   groups: { ACTIVE_STUDENTS: 'Active students', PROSPECTS: 'Prospects (open leads)', TRIAL: 'Trial students', FORMER_STUDENTS: 'Former students', ALL_CONTACTS: 'Everyone' },
   fieldTags: 'Only people with these tags (optional)', tagsHint: 'Separate tags with commas. Up to 10.',
   consentNote: 'Only people who agreed to hear from you on this channel get it. A child’s message goes to their guardians, and each address gets it once.',
-  filtersTitle: 'Narrow it down (optional)', filtersHint: 'The same filters as the Contacts list. People must match the groups, the tags and every filter you set.',
+  byTag: 'By tag:', filtersTitle: 'Narrow it down (optional)', filtersHint: 'The same filters as the Contacts list. People must match the groups, the tags and every filter you set.',
   filtersSet: (n) => n === 1 ? '1 filter set' : `${n} filters set`, clearFilters: 'Clear filters', any: 'Any', savedChoice: 'Saved choice',
   fieldBelt: 'Belt', noBelt: 'No belt yet', fieldProgram: 'Program', fieldPlan: 'Membership plan', fieldMembership: 'Membership',
   membership: { HAS: 'Has a membership', NONE: 'No membership', ACTIVE: 'Active', PAUSED: 'Paused', CANCELLING: 'Cancelling' },
@@ -118,7 +118,7 @@ const ko: BlastCopy = {
   groups: { ACTIVE_STUDENTS: '재학생', PROSPECTS: '잠재 고객(진행 중 문의)', TRIAL: '체험 수업 학생', FORMER_STUDENTS: '이전 학생', ALL_CONTACTS: '모두' },
   fieldTags: '이 태그가 있는 사람만(선택)', tagsHint: '쉼표로 구분합니다. 최대 10개.',
   consentNote: '이 채널 수신에 동의한 사람만 받습니다. 어린이 메시지는 보호자에게 가고, 같은 주소로는 한 번만 갑니다.',
-  filtersTitle: '대상 좁히기(선택)', filtersHint: '연락처 목록과 같은 필터입니다. 그룹, 태그, 설정한 모든 필터에 맞는 사람만 받습니다.',
+  byTag: '태그:', filtersTitle: '대상 좁히기(선택)', filtersHint: '연락처 목록과 같은 필터입니다. 그룹, 태그, 설정한 모든 필터에 맞는 사람만 받습니다.',
   filtersSet: (n) => `필터 ${n}개 설정됨`, clearFilters: '필터 지우기', any: '전체', savedChoice: '저장된 선택',
   fieldBelt: '띠', noBelt: '아직 띠 없음', fieldProgram: '프로그램', fieldPlan: '회원권 플랜', fieldMembership: '회원권',
   membership: { HAS: '회원권 있음', NONE: '회원권 없음', ACTIVE: '활성', PAUSED: '일시 정지', CANCELLING: '해지 예정' },
@@ -187,7 +187,7 @@ const es: BlastCopy = {
   groups: { ACTIVE_STUDENTS: 'Alumnos activos', PROSPECTS: 'Prospectos (contactos abiertos)', TRIAL: 'Alumnos de prueba', FORMER_STUDENTS: 'Exalumnos', ALL_CONTACTS: 'Todos' },
   fieldTags: 'Solo personas con estas etiquetas (opcional)', tagsHint: 'Separa las etiquetas con comas. Hasta 10.',
   consentNote: 'Solo lo reciben quienes aceptaron este canal. El mensaje de un niño va a sus tutores, y cada dirección lo recibe una vez.',
-  filtersTitle: 'Afinar el público (opcional)', filtersHint: 'Los mismos filtros de la lista de contactos. Deben coincidir con los grupos, las etiquetas y cada filtro que pongas.',
+  byTag: 'Por etiqueta:', filtersTitle: 'Afinar el público (opcional)', filtersHint: 'Los mismos filtros de la lista de contactos. Deben coincidir con los grupos, las etiquetas y cada filtro que pongas.',
   filtersSet: (n) => n === 1 ? '1 filtro puesto' : `${n} filtros puestos`, clearFilters: 'Quitar filtros', any: 'Cualquiera', savedChoice: 'Opción guardada',
   fieldBelt: 'Cinturón', noBelt: 'Sin cinturón aún', fieldProgram: 'Programa', fieldPlan: 'Plan de membresía', fieldMembership: 'Membresía',
   membership: { HAS: 'Tiene membresía', NONE: 'Sin membresía', ACTIVE: 'Activa', PAUSED: 'En pausa', CANCELLING: 'Cancelándose' },
