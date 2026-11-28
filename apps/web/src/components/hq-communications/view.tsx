@@ -179,6 +179,7 @@ export function HqCommunicationsListView(props: CommsListViewProps): React.React
       {state.messages.map(m => <li key={m.messageId} className={styles.card} data-comms-message={m.messageId}>
         <div className={styles.cardHead}><h3><a href={`/hq/communications/${m.messageId}`}>{`${m.schoolDisplayName} · ${t(m.purpose)} · ${t(m.channel)}`}</a></h3>
           <span className={styles.status} data-tone={statusTone(m.status)}>{t(m.status)}</span></div>
+        {m.subject && <p className={styles.meta}><strong>{m.subject}</strong></p>}
         <p className={styles.meta}>{m.content.length > 160 ? `${m.content.slice(0, 160)}…` : m.content}</p>
         <MessageFacts t={t} m={m} formattingLocale={formattingLocale}/>
       </li>)}</ul>}
@@ -214,7 +215,8 @@ export function HqMessageView(props: CommsMessageViewProps): React.ReactElement 
     <div className={styles.cardHead}><h2>{`${m.schoolDisplayName} · ${t(m.purpose)} · ${t(m.channel)}`}</h2>
       <span className={styles.status} data-tone={statusTone(m.status)}>{t(m.status)}</span></div>
     <MessageFacts t={t} m={m} formattingLocale={formattingLocale}/>
-    <article className={styles.card} aria-label={t('content')}><p style={{ whiteSpace: 'pre-wrap' }}>{m.content}</p>
+    <article className={styles.card} aria-label={t('content')}>{m.subject && <p data-hq-message-subject="true"><strong>{m.subject}</strong></p>}
+      <p style={{ whiteSpace: 'pre-wrap' }}>{m.content}</p>
       {m.channel === 'SMS' && <PieceCounter language={language} channel="SMS" content={m.content}/>}</article>
     <CommsOutcomeView language={language} outcome={props.outcome} done={props.doneText} canRetry={props.canRetry} onTryAgain={props.onTryAgain}/>
     <div className={styles.actions}>

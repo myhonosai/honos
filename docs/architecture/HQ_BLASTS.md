@@ -98,6 +98,14 @@ which is David's call at deploy time.
 - At send, each school's message is measured with the longest first name the claim can put in (40) and, for a text, with room for
   the STOP line, so a text never passes 1,600 and a filled email subject never passes 300 (SendGrid accepts blast subjects up to 300).
 
+- Opens and clicks (owner, 2026-11-28: "Yes, track opens and clicks"): HQ blast emails only. SendGrid open and click tracking is on
+  for blast emails (other HQ and school email stays untracked), and blast emails get an HTML copy of the same text (escaped, web
+  links clickable) so opens can be seen. The signed event webhook passes HQ `open` / `click` events to
+  `record_hq_blast_engagement` (communication worker only), which keeps the first of each kind per sent blast email in
+  `hon.hq_blast_engagements` (append-only; no address, link or device). Blast results gain `engagement {opened, clicked}`.
+- History: every HQ email stays readable after sending: each blast (text, subject, per-school results) in Campaign history, and
+  each school's message (content, subject, each owner's delivery and time) in the HQ inbox and message page.
+
 ## 4. API
 
 `/v1/hq/communications/blasts`: `GET` list, `GET /:id`, `GET /:id/audience`, `GET /options?search=`, `POST` save (create or
@@ -110,7 +118,7 @@ passes `subject` and `blastId`; SendGrid uses the HQ subject when present and ad
 
 Laid out like the Manus CRM (owner, 2026-11-28): three tabs, **Compose**, **Templates** and **Campaign history**.
 Campaign history shows totals (sent, delivered, bounced, campaigns) and a table (campaign, audience, sent, delivered, bounced,
-status, when). Open and click rates are not shown: SendGrid open and click tracking is off unless the owner turns it on.
+status, when). Open and click rates (unique emails over emails accepted or delivered) show for emails; texts show "—".
 "Who gets it" starts with audience buttons with counts: All schools, Active schools, Inactive schools, Only schools I pick; the
 detailed filters sit under "More filters". Compose can start from a template and save the text as a template. Leads from the
 HQ prospects board (0715) are a later audience, keyed on stage ids.

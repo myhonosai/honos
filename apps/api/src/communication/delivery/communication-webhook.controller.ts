@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { raw, type NextFunction, type Request, type Response } from 'express';
 import { COMMUNICATION_WORKER_STORE, type CommunicationWorkerStore, type VerifiedProviderReceipt } from './communication-worker-database.js';
-import { SendGridEventWebhookVerifier, SendGridWebhookError } from './sendgrid-email-provider.js';
+import { SendGridEventWebhookVerifier, SendGridWebhookError, type HqEmailEngagement } from './sendgrid-email-provider.js';
 import {
   TWILIO_HQ_STATUS_PATH, TWILIO_INBOUND_PATH, TWILIO_STATUS_PATH, TWILIO_VOICE_PATH, TWILIO_VOICE_RESULT_PATH, TwilioWebhookError, TwilioWebhookVerifier, twilioPublicOrigin,
 } from './twilio-text-provider.js';
@@ -62,6 +62,26 @@ export function hqReceiptRecorder(store: HqMessageWorkerStore | undefined): Rece
     isConfigured: () => Boolean(record && store?.isConfigured()),
     recordReceipt: (receipt) => { if (!record) throw new Error('HQ_RECEIPTS_NOT_CONFIGURED'); return record(receipt); },
   };
+}
+
+/**
+ * 0712: blast email opens and clicks. Without an HQ store they are acknowledged and dropped (an open never makes SendGrid retry
+ * mail receipts); a database failure asks for redelivery, which replays harmlessly.
+ */
+export async function recordEngagements(store: HqMessageWorkerStore | undefined, engagements: HqEmailEngagement[]): Promise<Omit<WebhookIngestSummary, 'received'>> {
+  const out = { recorded: 0, replayed: 0, ignored: 0 };
+  if (!engagements.length) return out;
+  if (!store?.recordEngagement || !store.isConfigured()) { out.ignored = engagements.length; return out; }
+  for (const e of engagements) {
+    let outcome: 'RECORDED' | 'REPLAYED' | 'IGNORED';
+    try { outcome = await store.recordEngagement(e); }
+    catch (error) {
+      if ((error as { code?: string })?.code === '22023') { out.ignored += 1; continue; }
+      throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_RETRY' });
+    }
+    if (outcome === 'RECORDED') out.recorded += 1; else if (outcome === 'REPLAYED') out.replayed += 1; else out.ignored += 1;
+  }
+  return out;
 }
 
 /** Records verified receipts one by one. An UNMATCHED receipt (send result not committed yet) asks the provider to retry. */
@@ -305,9 +325,11 @@ export class CommunicationWebhookController {
   ): Promise<WebhookIngestSummary> {
     if (!Buffer.isBuffer(req.body)) throw new BadRequestException({ code: 'INVALID_WEBHOOK' });
     let receipts: VerifiedProviderReceipt[];
+    let engagements: HqEmailEngagement[] = [];
     let total = 0;
     try {
-      receipts = this.sendgrid.verify(req.body, signature, timestamp);
+      if (typeof this.sendgrid.verifyEvents === 'function') ({ receipts, engagements } = this.sendgrid.verifyEvents(req.body, signature, timestamp));
+      else receipts = this.sendgrid.verify(req.body, signature, timestamp);
       total = (JSON.parse(req.body.toString('utf8')) as unknown[]).length;
     } catch (error) {
       if (error instanceof SendGridWebhookError && error.reason === 'NOT_CONFIGURED') throw new ServiceUnavailableException({ code: 'COMMUNICATION_WEBHOOK_NOT_CONFIGURED' });
@@ -317,11 +339,13 @@ export class CommunicationWebhookController {
     // Both are idempotent, so a batch retried for one side replays harmlessly on the other.
     const hq = receipts.filter((receipt) => receipt.scope === 'HQ');
     const school = receipts.filter((receipt) => receipt.scope !== 'HQ');
-    const ignored = total - receipts.length;
-    const summary = school.length || !hq.length ? await ingestReceipts(this.store, school, ignored) : { received: true as const, recorded: 0, replayed: 0, ignored };
-    if (!hq.length) return summary;
-    const hqSummary = await ingestReceipts(hqReceiptRecorder(this.hqStore), hq, 0);
-    return { received: true, recorded: summary.recorded + hqSummary.recorded, replayed: summary.replayed + hqSummary.replayed, ignored: summary.ignored + hqSummary.ignored };
+    const ignored = total - receipts.length - engagements.length;
+    const summary = school.length || (!hq.length && !engagements.length) ? await ingestReceipts(this.store, school, ignored)
+      : { received: true as const, recorded: 0, replayed: 0, ignored };
+    const hqSummary = hq.length ? await ingestReceipts(hqReceiptRecorder(this.hqStore), hq, 0) : { received: true as const, recorded: 0, replayed: 0, ignored: 0 };
+    const seen = await recordEngagements(this.hqStore, engagements);
+    return { received: true, recorded: summary.recorded + hqSummary.recorded + seen.recorded, replayed: summary.replayed + hqSummary.replayed + seen.replayed,
+      ignored: summary.ignored + hqSummary.ignored + seen.ignored };
   }
 }
 

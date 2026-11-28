@@ -70,6 +70,15 @@ BEGIN
 END;
 $$;
 
+-- HQ blasts 0712: blast email opens and clicks from the signed SendGrid event webhook, when 0712 is applied.
+DO $$
+BEGIN
+  IF to_regprocedure('hon.record_hq_blast_engagement(text,text,text,uuid,text,timestamptz)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.record_hq_blast_engagement(text, text, text, uuid, text, timestamptz) TO hon_communication_worker;
+  END IF;
+END;
+$$;
+
 -- HQ-COMM 0282: inbound texts to the HQ number (confirmation codes, STOP / START / HELP), when 0282 is applied.
 DO $$
 BEGIN

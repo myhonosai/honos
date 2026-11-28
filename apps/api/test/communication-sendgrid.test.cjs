@@ -190,3 +190,47 @@ test('webhook transport accepts only a bare JSON POST to a known provider path',
     assert.equal((await call(req)).status, 400);
   }
 });
+
+test('0712 blast opens and clicks: only HQ opens and clicks come back, recorded through the HQ store; schools stay untracked', async () => {
+  const { CommunicationWebhookController } = require('../dist/communication/delivery/communication-webhook.controller.js');
+  const { TwilioWebhookVerifier } = require('../dist/communication/delivery/twilio-text-provider.js');
+  const batch = [event({ hon_purpose: 'HQ', event: 'open', sg_event_id: 'ho1' }), event({ hon_purpose: 'HQ', event: 'click', sg_event_id: 'hc1', url: 'https://x.example' }),
+    event({ event: 'open', sg_event_id: 'so1' }), event({ hon_purpose: 'HQ', sg_event_id: 'hd1' }), event({ hon_purpose: 'HQ', event: 'open', sg_event_id: 'ho2', hon_delivery_id: 'nope' })];
+  const { body, signature, timestamp } = signed(batch);
+  const out = verifier().verifyEvents(body, signature, timestamp);
+  assert.deepEqual(out.receipts.map((r) => r.providerEventId), ['hd1']);
+  assert.deepEqual(out.engagements, [
+    { provider: 'SENDGRID', providerEventId: 'ho1', providerMessageId: 'abcDEF123', honDeliveryId: delivery, kind: 'OPENED', occurredAt: new Date((Math.floor(now / 1000) - 5) * 1000).toISOString() },
+    { provider: 'SENDGRID', providerEventId: 'hc1', providerMessageId: 'abcDEF123', honDeliveryId: delivery, kind: 'CLICKED', occurredAt: new Date((Math.floor(now / 1000) - 5) * 1000).toISOString() }]);
+  assert.ok(!JSON.stringify(out.engagements).includes('x.example'), 'no clicked link is kept');
+  assert.deepEqual(verifier().verify(body, signature, timestamp).map((r) => r.providerEventId), ['hd1'], 'verify() still returns mail receipts only');
+  const seen = [], receipts = [];
+  const hq = { isConfigured: () => true, recordReceipt: async (r) => { receipts.push(r.providerEventId); return { outcome: 'RECORDED' }; },
+    recordEngagement: async (e) => { seen.push(e.kind); return seen.length === 1 ? 'RECORDED' : 'REPLAYED'; } };
+  const school = { isConfigured: () => true, recordReceipt: async () => { throw new Error('no school receipt expected'); } };
+  const summary = await new CommunicationWebhookController(school, verifier(), new TwilioWebhookVerifier(() => ({})), undefined, hq).sendgridEvents({ body }, signature, timestamp);
+  assert.deepEqual(summary, { received: true, recorded: 2, replayed: 1, ignored: 2 });
+  assert.deepEqual([seen, receipts], [['OPENED', 'CLICKED'], ['hd1']]);
+  // Opens without an HQ store are acknowledged and dropped; a database failure asks SendGrid to redeliver.
+  const opensOnly = signed([event({ hon_purpose: 'HQ', event: 'open', sg_event_id: 'ho3' })]);
+  assert.deepEqual(await new CommunicationWebhookController(school, verifier(), new TwilioWebhookVerifier(() => ({})), undefined, { isConfigured: () => true })
+    .sendgridEvents({ body: opensOnly.body }, opensOnly.signature, opensOnly.timestamp), { received: true, recorded: 0, replayed: 0, ignored: 1 });
+  await assert.rejects(new CommunicationWebhookController(school, verifier(), new TwilioWebhookVerifier(() => ({})), undefined,
+    { isConfigured: () => true, recordEngagement: async () => { throw new Error('db down'); } }).sendgridEvents({ body: opensOnly.body }, opensOnly.signature, opensOnly.timestamp),
+  (e) => e.getStatus() === 503);
+});
+
+test('0712 blast email: tracked, with an escaped HTML copy and clickable links; other HQ email stays untracked', () => {
+  const { hqBlastEmailHtml } = require('../dist/communication/delivery/sendgrid-email-provider.js');
+  const adapter = new SendGridEmailProvider(() => approved({ HON_MAILING_ADDRESS: '546 W. Las Tunas Dr. San Gabriel CA 91776' }));
+  const blast = adapter.requestBody(hqRequest({ hqPurpose: 'ANNOUNCEMENT', hqBlast: true, subject: 'News', content: 'Hi <b>Sam</b> & co.\nSee https://hon.example/x?a=1&b=2.' }));
+  assert.deepEqual(blast.tracking_settings, { subscription_tracking: { enable: true }, open_tracking: { enable: true }, click_tracking: { enable: true, enable_text: false } });
+  assert.deepEqual(blast.content.map((c) => c.type), ['text/plain', 'text/html']);
+  const html = blast.content[1].value;
+  assert.ok(html.includes('Hi &lt;b&gt;Sam&lt;/b&gt; &amp; co.<br>'), html);
+  assert.ok(html.includes('<a href="https://hon.example/x?a=1&amp;b=2">https://hon.example/x?a=1&amp;b=2</a>.'), html);
+  assert.ok(html.includes('546 W. Las Tunas Dr. San Gabriel CA 91776'), 'the footer is in the HTML copy too');
+  assert.ok(!hqBlastEmailHtml('javascript:alert(1) "x"').includes('<a '), 'only web links become links');
+  for (const r of [hqRequest(), hqRequest({ hqPurpose: 'BILLING' }), request()])
+    assert.deepEqual(adapter.requestBody(r).tracking_settings, { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } });
+});

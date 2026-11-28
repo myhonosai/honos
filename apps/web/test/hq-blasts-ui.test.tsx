@@ -15,7 +15,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const T = '2026-11-28T08:00:00.000Z';
 const results = () => ({ schools: { queued: 2, noOwners: 1, notReachable: 0, recentlySent: 0 },
-  deliveries: { waiting: 3, pending: 0, sending: 0, accepted: 0, delivered: 0, bounced: 0, failed: 0, suppressed: 1, unknown: 0 } });
+  deliveries: { waiting: 3, pending: 0, sending: 0, accepted: 0, delivered: 0, bounced: 0, failed: 0, suppressed: 1, unknown: 0 }, engagement: { opened: 0, clicked: 0 } });
 const blast = (patch: Partial<HqBlast> = {}): HqBlast => ({ blastId: id(1), name: 'December news', channel: 'EMAIL', purpose: 'ANNOUNCEMENT', subject: 'New in HON OS',
   body: 'Hi {{first_name}}, news for {{school_name}}.', audience: { statuses: ['ACTIVE'], trial: 'ON_TRIAL', schools: [id(7)] }, status: 'DRAFT', sendAt: null, queuedAt: null,
   cancelledAt: null, schoolCount: null, recipientCount: null, createdBy: { principalId: id(9), displayName: 'Synthetic Owner' }, createdAt: T, updatedAt: T, version: 1, ...patch });
@@ -167,14 +167,16 @@ describe('HQ blasts page', () => {
   it('has Compose, Templates and Campaign history tabs, with totals and a campaign table', () => {
     const sent = summary({ blastId: id(2), name: 'Sent one', status: 'QUEUED', sendAt: T, queuedAt: T, schoolCount: 2, recipientCount: 3, version: 2 });
     sent.results.deliveries = { ...sent.results.deliveries, waiting: 0, accepted: 1, delivered: 4, bounced: 1 };
+    sent.results.engagement = { opened: 3, clicked: 1 };
     const list: HqBlastList = { blasts: [summary(), sent], sentToday: 1, dailyLimit: 10, asOf: T };
-    expect(hqBlastTotals(list)).toEqual({ campaigns: 1, sent: 6, delivered: 4, bounced: 1 });
+    expect(hqBlastTotals(list)).toEqual({ campaigns: 1, sent: 6, delivered: 4, bounced: 1, openRate: 60, clickRate: 20 });
+    expect(hqBlastTotals({ ...list, blasts: [summary()] })).toMatchObject({ openRate: null, clickRate: null });
     const out = html(base({ list: { state: 'READY', list } }));
     for (const x of ['data-hq-blast-tab="COMPOSE"', 'data-hq-blast-tab="TEMPLATES"', 'data-hq-blast-tab="HISTORY"', 'Total sent', 'Delivered', 'Bounced', 'Total campaigns',
       '<th scope="col">Audience</th>', '3 owners at 2 schools', 'Sent one'])
       expect(out).toContain(x);
     expect(out).toMatch(/data-hq-blast-tab="HISTORY"[^>]*aria-current="page"|aria-current="page"[^>]*data-hq-blast-tab="HISTORY"/);
-    expect(out).not.toContain('Open rate');
+    for (const x of ['Open rate', '60%', 'Click rate', '20%', '3 (60%)', '1 (20%)']) expect(out).toContain(x);
   });
   it('lists templates with use and remove, asks before removing, and offers them in Compose', () => {
     const tpl = template();

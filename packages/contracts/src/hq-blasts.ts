@@ -145,7 +145,9 @@ export interface HqBlastSchoolCounts { queued: number; noOwners: number; notReac
 export interface HqBlastDeliveryCounts {
   waiting: number; pending: number; sending: number; accepted: number; delivered: number; bounced: number; failed: number; suppressed: number; unknown: number;
 }
-export interface HqBlastResults { schools: HqBlastSchoolCounts; deliveries: HqBlastDeliveryCounts }
+/** Unique blast emails opened and clicked at least once (owner, 2026-11-28). Always 0 for texts. */
+export interface HqBlastEngagement { opened: number; clicked: number }
+export interface HqBlastResults { schools: HqBlastSchoolCounts; deliveries: HqBlastDeliveryCounts; engagement: HqBlastEngagement }
 export interface HqBlast {
   blastId: string; name: string; channel: HqBlastChannel; purpose: HqBlastPurpose; subject: string | null; body: string; audience: HqBlastAudience;
   status: HqBlastStatus; sendAt: string | null; queuedAt: string | null; cancelledAt: string | null; schoolCount: number | null;
@@ -181,9 +183,10 @@ function counts<T>(value: unknown, keys: readonly string[]): T {
   return c as T;
 }
 function results(value: unknown): HqBlastResults {
-  const r = record(value, drift); exactKeys(r, ['schools', 'deliveries'], drift);
-  return { schools: counts(r.schools, ['queued', 'noOwners', 'notReachable', 'recentlySent']),
-    deliveries: counts(r.deliveries, ['waiting', 'pending', 'sending', 'accepted', 'delivered', 'bounced', 'failed', 'suppressed', 'unknown']) };
+  const r = record(value, drift); exactKeys(r, ['schools', 'deliveries', 'engagement'], drift);
+  const deliveries = counts<HqBlastDeliveryCounts>(r.deliveries, ['waiting', 'pending', 'sending', 'accepted', 'delivered', 'bounced', 'failed', 'suppressed', 'unknown']);
+  const engagement = counts<HqBlastEngagement>(r.engagement, ['opened', 'clicked']);
+  return { schools: counts(r.schools, ['queued', 'noOwners', 'notReachable', 'recentlySent']), deliveries, engagement };
 }
 function blast(value: unknown): HqBlast {
   const b = record(value, drift);

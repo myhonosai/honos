@@ -210,3 +210,12 @@ it('links Texts & Email from the HQ navigation, the school page and the support 
   // The page only points the form at a school from validated ids; the server confirms the school on save.
   expect(readFileSync('src/app/hq/communications/page.tsx', 'utf8')).toContain('saasUuid');
 });
+
+it('keeps each HQ email in history with its subject: a blast message shows the subject it was sent with', () => {
+  const m = msg({ purpose: 'ANNOUNCEMENT', channel: 'EMAIL', subject: 'News for Synthetic Main', blastId: id(77), status: 'QUEUED', version: 2, queuedAt: T2, recipientCount: 1,
+    deliverySummary: { ...summary, accepted: 1 } });
+  const html = renderToStaticMarkup(<HqMessageView {...detailProps(detailRaw({ message: m, deliveries: [delivery({ status: 'ACCEPTED', provider: 'SENDGRID', sentAs: 'EMAIL', attempt: 1, acceptedAt: T2 })] }))}/>);
+  expect(html).toContain('data-hq-message-subject="true"');
+  expect(html).toContain('News for Synthetic Main');
+  expect(renderToStaticMarkup(<HqMessageView {...detailProps(detailRaw())}/>)).not.toContain('data-hq-message-subject');
+});

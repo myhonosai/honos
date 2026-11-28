@@ -67,7 +67,7 @@ async function countFor(audienceJson, channel = 'EMAIL') {
   return Object.fromEntries(mine(view).map((s) => [Object.keys(sch).find((k) => sch[k] === s.schoolId), s.outcome]));
 }
 
-const tables = ['hq_blast_template_events', 'hq_blast_template_requests', 'hq_blast_templates', 'hq_blast_outbox', 'hq_blast_events', 'hq_blast_requests', 'hq_blast_schools', 'hq_inbound_replies', 'hq_inbound_texts',
+const tables = ['hq_blast_engagements', 'hq_blast_template_events', 'hq_blast_template_requests', 'hq_blast_templates', 'hq_blast_outbox', 'hq_blast_events', 'hq_blast_requests', 'hq_blast_schools', 'hq_inbound_replies', 'hq_inbound_texts',
   'hq_contact_requests', 'hq_contact_phones', 'hq_message_delivery_events', 'hq_message_deliveries', 'hq_messages', 'hq_blasts',
   'hq_communication_requests', 'hq_communication_senders', 'hq_contact_preferences'];
 async function cleanup() {
@@ -120,8 +120,10 @@ try {
   }
   eq(await has(worker, 'claim_hq_message_deliveries(text[],integer,integer)'), true, 'worker still claims after the claim is replaced');
   eq(await has(runtime, 'claim_hq_message_deliveries(text[],integer,integer)'), false, 'runtime cannot claim');
+  eq(await has(worker, 'record_hq_blast_engagement(text,text,text,uuid,text,timestamptz)'), true, 'worker records opens and clicks');
+  eq(await has(runtime, 'record_hq_blast_engagement(text,text,text,uuid,text,timestamptz)'), false, 'runtime cannot record opens and clicks');
   for (const t of ['hq_blasts', 'hq_blast_schools', 'hq_blast_requests', 'hq_blast_events', 'hq_blast_outbox', 'hq_blast_templates',
-    'hq_blast_template_requests', 'hq_blast_template_events']) {
+    'hq_blast_template_requests', 'hq_blast_template_events', 'hq_blast_engagements']) {
     for (const priv of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
       eq((await one(runtime, 'SELECT has_table_privilege(current_user,$1,$2) a', ['hon.' + t, priv])).a, false, `runtime ${t} ${priv}`);
     }
@@ -331,6 +333,26 @@ try {
   eq((await admin.query('SELECT content FROM hon.hq_messages WHERE blast_id=$1', [b2.blast.blastId])).rows[0].content.includes('{{first_name}}'), true,
     'the stored message keeps the tag (no name copied)');
   await refuse('23514', () => cancel('hqOwner', { blastId: b2.blast.blastId, expectedVersion: 2 }), 'a blast already handed over cannot be cancelled', 'HQ_BLAST_NOT_CANCELLABLE');
+
+  // ---------- 8b. opens and clicks (blast email only, first of each kind per delivery) ----------
+  const d2 = mineClaim[0];
+  await worker.query('SELECT * FROM hon.record_hq_message_send_result($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+    [d2.delivery_id, d2.lease_token, 'ACCEPTED', 'FAKE', 'fake-blast-1', 'EMAIL', null, null, null, null]);
+  const engage = (eventId, kind, extra = {}) => one(worker, 'SELECT * FROM hon.record_hq_blast_engagement($1,$2,$3,$4,$5,$6)',
+    [extra.provider ?? 'FAKE', eventId, extra.messageId ?? 'fake-blast-1', extra.delivery ?? d2.delivery_id, kind, extra.at ?? new Date().toISOString()]);
+  eq((await engage('ev-open-1', 'OPENED')).outcome, 'RECORDED', 'first open recorded');
+  eq((await engage('ev-open-2', 'OPENED')).outcome, 'REPLAYED', 'a second open of the same email counts once');
+  eq((await engage('ev-click-1', 'CLICKED')).outcome, 'RECORDED', 'first click recorded');
+  eq((await engage('ev-x', 'OPENED', { messageId: 'other-message' })).outcome, 'IGNORED', 'a provider message id that does not match is ignored');
+  eq((await engage('ev-y', 'OPENED', { delivery: K() })).outcome, 'IGNORED', 'an unknown delivery is ignored');
+  await refuse('22023', () => engage('ev-z', 'BOUNCED'), 'only opens and clicks');
+  await refuse('22023', () => engage('ev-z', 'OPENED', { provider: 'TWILIO' }), 'email providers only');
+  await refuse('22023', () => engage('ev-z', 'OPENED', { at: new Date(Date.now() + 3600_000).toISOString() }), 'future time refused');
+  await refuse('42501', () => call('record_hq_blast_engagement', [H('hqOwner'), 'e', 'm', K(), 'OPENED', new Date().toISOString()]), 'the runtime cannot record opens');
+  const engaged = await call('read_hq_blast', [H('hqOwner'), b2.blast.blastId], ['', '::uuid']);
+  eq(engaged.results.engagement, { opened: 1, clicked: 1 }, 'blast results count unique opens and clicks');
+  ok(!JSON.stringify(engaged).includes('ev-open-1'), 'no provider event id in the read');
+  await refuse('42501', () => admin.query("UPDATE hon.hq_blast_engagements SET kind = 'CLICKED' WHERE kind = 'OPENED'"), 'engagements are append-only');
   eq(await countFor({ countries: ['US'] }), { A: 'RECENTLY_SENT', B: 'QUEUED' }, 'Alpha just got an email blast');
   eq(await countFor({ countries: ['US'] }, 'SMS'), { A: 'NOT_REACHABLE', B: 'QUEUED' }, 'the 24-hour rule is per channel');
   // A one-off support email to an opted-out owner is still suppressed; BILLING keeps passing the opt-out only outside blasts.

@@ -282,6 +282,7 @@ function Thread(p: InboxViewProps & { open: OpenSchool; t: (k: InboxKey, v?: Rec
           <span className={s.bubbleMeta}><span>{`${item.reply.from.displayName} · ${t('reply')} · ${c(item.reply.purpose)}`}</span>
             <time dateTime={item.reply.receivedAt}>{p.when(item.reply.receivedAt)}</time></span></li>
         : <li key={item.id} className={s.bubble} data-from="out" data-hq-message={item.id}>
+          {item.message.subject && <p style={{ margin: 0, fontWeight: 700 }} data-hq-message-subject="true">{item.message.subject}</p>}
           <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{item.message.content}</p>
           <span className={s.bubbleMeta}><span>{`${item.message.createdBy.displayName} · ${c(item.message.channel)} · ${c(item.message.purpose)}`}</span>
             <time dateTime={item.message.createdAt}>{p.when(item.message.createdAt)}</time></span>

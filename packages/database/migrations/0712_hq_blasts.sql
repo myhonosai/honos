@@ -246,6 +246,23 @@ DO $$ DECLARE t text; BEGIN
   END LOOP;
 END $$;
 
+-- Opens and clicks of blast emails (recorded by the worker; see record_hq_blast_engagement below).
+CREATE TABLE hon.hq_blast_engagements (
+  delivery_id uuid NOT NULL REFERENCES hon.hq_message_deliveries(id),
+  blast_id uuid NOT NULL REFERENCES hon.hq_blasts(id),
+  kind text NOT NULL CHECK (kind IN ('OPENED','CLICKED')),
+  provider_event_id text NOT NULL CHECK (provider_event_id ~ '^[A-Za-z0-9._:@<>+=-]{1,200}$'),
+  first_at timestamptz NOT NULL,
+  recorded_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (delivery_id, kind)
+);
+CREATE INDEX hq_blast_engagements_blast_idx ON hon.hq_blast_engagements (blast_id, kind);
+CREATE TRIGGER immutable BEFORE UPDATE OR DELETE ON hon.hq_blast_engagements FOR EACH ROW EXECUTE FUNCTION hon.guard_hq_communication_evidence();
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON hon.hq_blast_engagements FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_hq_communication_evidence();
+ALTER TABLE hon.hq_blast_engagements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hon.hq_blast_engagements FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE hon.hq_blast_engagements FROM PUBLIC;
+
 -- ---------- audience ----------
 -- Every school the audience reaches, with its owners and how many can get this channel. Shared by the count and the send.
 CREATE FUNCTION hon.hq_blast_resolve(p_audience jsonb, p_channel text)
@@ -355,7 +372,10 @@ LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
       'delivered', count(*) FILTER (WHERE d.status = 'DELIVERED'), 'bounced', count(*) FILTER (WHERE d.status = 'BOUNCED'),
       'failed', count(*) FILTER (WHERE d.status = 'FAILED'), 'suppressed', count(*) FILTER (WHERE d.status = 'SUPPRESSED'),
       'unknown', count(*) FILTER (WHERE d.status = 'UNKNOWN'))
-      FROM hon.hq_message_deliveries d JOIN hon.hq_messages m ON m.id = d.message_id WHERE m.blast_id = p_blast))
+      FROM hon.hq_message_deliveries d JOIN hon.hq_messages m ON m.id = d.message_id WHERE m.blast_id = p_blast),
+    'engagement', jsonb_build_object(
+      'opened', (SELECT count(*) FROM hon.hq_blast_engagements e WHERE e.blast_id = p_blast AND e.kind = 'OPENED'),
+      'clicked', (SELECT count(*) FROM hon.hq_blast_engagements e WHERE e.blast_id = p_blast AND e.kind = 'CLICKED')))
 $$;
 
 -- The current HQ messages projection, plus subject and blastId (null for one-off messages).
@@ -820,6 +840,33 @@ BEGIN
   RETURN result;
 END $$;
 
+-- ---------- opens and clicks (owner, 2026-11-28: "Yes, track opens and clicks") ----------
+-- Blast emails only. SendGrid's signed event webhook reports an open or a click; the first of each kind per delivery is kept,
+-- with no address, link or device detail. Only the communication worker records them; HQ reads them as counts.
+
+-- RECORDED the first time, REPLAYED after; IGNORED when it is not a sent blast email (never retried by the provider).
+CREATE FUNCTION hon.record_hq_blast_engagement(p_provider text, p_provider_event_id text, p_provider_message_id text, p_hon_delivery_id uuid,
+  p_kind text, p_occurred_at timestamptz) RETURNS TABLE (outcome text)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+#variable_conflict use_column
+DECLARE v_delivery uuid; v_blast uuid;
+BEGIN
+  IF p_provider IS NULL OR p_provider NOT IN ('FAKE','SENDGRID') OR p_kind NOT IN ('OPENED','CLICKED') OR p_hon_delivery_id IS NULL
+    OR p_provider_event_id IS NULL OR p_provider_event_id !~ '^[A-Za-z0-9._:@<>+=-]{1,200}$'
+    OR p_provider_message_id IS NULL OR p_provider_message_id !~ '^[A-Za-z0-9._:@<>+=-]{1,200}$'
+    OR p_occurred_at IS NULL OR p_occurred_at > now() + interval '10 minutes' OR p_occurred_at < now() - interval '90 days' THEN
+    RAISE EXCEPTION 'HQ blast engagement is invalid.' USING ERRCODE = '22023';
+  END IF;
+  SELECT d.id, m.blast_id INTO v_delivery, v_blast FROM hon.hq_message_deliveries d JOIN hon.hq_messages m ON m.id = d.message_id
+  WHERE d.id = p_hon_delivery_id AND d.provider = p_provider AND d.provider_message_id = p_provider_message_id
+    AND d.channel = 'EMAIL' AND m.blast_id IS NOT NULL AND d.status IN ('ACCEPTED','DELIVERED');
+  IF v_delivery IS NULL THEN outcome := 'IGNORED'; RETURN NEXT; RETURN; END IF;
+  INSERT INTO hon.hq_blast_engagements (delivery_id, blast_id, kind, provider_event_id, first_at)
+  VALUES (v_delivery, v_blast, p_kind, p_provider_event_id, p_occurred_at) ON CONFLICT (delivery_id, kind) DO NOTHING;
+  outcome := CASE WHEN FOUND THEN 'RECORDED' ELSE 'REPLAYED' END;
+  RETURN NEXT;
+END $$;
+
 -- ---------- the claim also returns the subject and the blast, and fills {{first_name}} ----------
 -- Same claim as 0282. For a blast message only, {{first_name}} in the body and subject becomes the owner's first name
 -- (first word of their display name, at most 40 characters; "there" when empty), in memory for this send. Nothing stored.
@@ -923,7 +970,7 @@ END $$;
 DO $$ DECLARE r text; t text; f text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
     FOREACH t IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox',
-        'hq_blast_templates','hq_blast_template_requests','hq_blast_template_events'] LOOP
+        'hq_blast_templates','hq_blast_template_requests','hq_blast_template_events','hq_blast_engagements'] LOOP
       EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r);
     END LOOP;
   END LOOP;
@@ -936,7 +983,7 @@ DO $$ DECLARE r text; t text; f text; BEGIN
     'save_hq_blast(text,jsonb,uuid,uuid,uuid)','send_hq_blast(text,jsonb,uuid,uuid,uuid)','cancel_hq_blast(text,jsonb,uuid,uuid,uuid)',
     'read_hq_blasts(text)','read_hq_blast(text,uuid)','read_hq_blast_audience(text,uuid)','read_hq_blast_options(text,text)',
     'guard_hq_blast_template()','hq_blast_template_json(hon.hq_blast_templates)','save_hq_blast_template(text,jsonb,uuid,uuid,uuid)',
-    'read_hq_blast_templates(text)',
+    'read_hq_blast_templates(text)', 'record_hq_blast_engagement(text,text,text,uuid,text,timestamptz)',
     'claim_hq_message_deliveries(text[],integer,integer)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
@@ -950,7 +997,8 @@ DO $$ DECLARE r text; t text; f text; BEGIN
       hon.read_hq_blast_templates(text) TO hon_runtime;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN
-    GRANT EXECUTE ON FUNCTION hon.claim_hq_message_deliveries(text[],integer,integer) TO hon_communication_worker;
+    GRANT EXECUTE ON FUNCTION hon.claim_hq_message_deliveries(text[],integer,integer),
+      hon.record_hq_blast_engagement(text,text,text,uuid,text,timestamptz) TO hon_communication_worker;
   END IF;
 END $$;
 

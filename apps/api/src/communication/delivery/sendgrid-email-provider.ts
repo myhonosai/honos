@@ -22,6 +22,18 @@ export const HQ_BLAST_EMAIL_REASON = 'You get this because you run a school on H
 
 type Env = Record<string, string | undefined>;
 
+const ESCAPES: Readonly<Record<string, string>> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ESCAPES[c] as string);
+/** A blast email's plain text as simple HTML: escaped, line breaks kept, and web links made clickable. Exported for tests. */
+export function hqBlastEmailHtml(text: string): string {
+  const body = text.split(/(https?:\/\/[^\s<>"']{1,2000})/g).map((part, i) => {
+    if (i % 2 === 0) return escapeHtml(part);
+    const trimmed = part.replace(/[.,;:!?)\]]+$/, ''), tail = part.slice(trimmed.length), href = escapeHtml(trimmed);
+    return `<a href="${href}">${href}</a>${escapeHtml(tail)}`;
+  }).join('').replace(/\r?\n/g, '<br>\n');
+  return `<!doctype html><html><body><div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#111">${body}</div></body></html>`;
+}
+
 /**
  * Twilio SendGrid email adapter (v3 Mail Send). INACTIVE unless SENDGRID_API_KEY and HON_EMAIL_FROM are set
  * AND HON_EMAIL_SEND_APPROVED is exactly 'true'. Sandbox mode (SendGrid validates the request and sends
@@ -69,7 +81,9 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
       // Never sent without HON's mailing address: a missing or malformed setting waits and retries.
       const address = this.environment().HON_MAILING_ADDRESS?.trim() ?? '';
       if (!MAILING_ADDRESS.test(address)) throw new CommunicationProviderError('RETRYABLE', 'PROVIDER_FAILED', 900);
-      content = [{ type: 'text/plain', value: `${request.content}\n\n--\n${HQ_BLAST_EMAIL_REASON}\nHON OS, ${address}` }];
+      const text = `${request.content}\n\n--\n${HQ_BLAST_EMAIL_REASON}\nHON OS, ${address}`;
+      // The HTML part carries the same words; it is what lets SendGrid see opens and count link clicks (owner, 2026-11-28).
+      content = [{ type: 'text/plain', value: text }, { type: 'text/html', value: hqBlastEmailHtml(text) }];
     }
     return {
       personalizations: [{ to: [{ email: request.recipientAddress }], custom_args: {
@@ -81,7 +95,9 @@ export class SendGridEmailProvider implements CommunicationProviderAdapter {
       subject: request.subject && (blast ? BLAST_SUBJECT : !hq ? SUBJECT : null)?.test(request.subject) ? request.subject : `A message from ${name}`,
       content,
       mail_settings: { sandbox_mode: { enable: this.sandbox() }, ...(requiredNotice ? { bypass_unsubscribe_management: { enable: true } } : {}) },
-      tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: false }, click_tracking: { enable: false } },
+      // 0712: opens and clicks are tracked for HQ blasts only (owner, 2026-11-28); every other email stays untracked.
+      tracking_settings: { subscription_tracking: { enable: true }, open_tracking: { enable: blast },
+        click_tracking: blast ? { enable: true, enable_text: false } : { enable: false } },
     };
   }
 
@@ -134,6 +150,11 @@ const EVENT_MAP: Readonly<Record<string, VerifiedProviderReceipt['eventType']>> 
   processed: 'SENT', delivered: 'DELIVERED', deferred: 'DEFERRED', bounce: 'BOUNCED', blocked: 'BOUNCED', dropped: 'DROPPED',
   spamreport: 'SPAM_REPORT', unsubscribe: 'UNSUBSCRIBED', group_unsubscribe: 'UNSUBSCRIBED',
 };
+/** 0712: an open or click of an HQ email, as SendGrid's signed webhook reported it. Kept only for blast emails. */
+export interface HqEmailEngagement {
+  provider: 'SENDGRID'; providerEventId: string; providerMessageId: string; honDeliveryId: string; kind: 'OPENED' | 'CLICKED'; occurredAt: string;
+}
+const ENGAGEMENT_MAP: Readonly<Record<string, HqEmailEngagement['kind']>> = { open: 'OPENED', click: 'CLICKED' };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_EVENTS = 1000;
 const TOLERANCE_SECONDS = 600;
@@ -141,7 +162,8 @@ const TOLERANCE_SECONDS = 600;
 /**
  * SendGrid Signed Event Webhook: ECDSA P-256 / SHA-256 over timestamp header + exact raw body, verified with
  * SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY (base64 DER SPKI, as SendGrid shows it). Returns only HON-sent events
- * (those carrying hon_delivery_id) mapped to the closed receipt vocabulary; opens and clicks are dropped. Mail tagged
+ * (those carrying hon_delivery_id) mapped to the closed receipt vocabulary. Opens and clicks come back separately, and
+ * only for HQ mail (0712: the database keeps them for blast emails only); a school's opens and clicks are dropped. Mail tagged
  * hon_purpose HQ comes back with scope HQ (an 0281 HQ delivery). Any other purpose (internal staff notices, or one this
  * build does not know) is acknowledged and ignored here, so it never makes SendGrid retry the whole batch.
  */
@@ -163,6 +185,10 @@ export class SendGridEventWebhookVerifier {
   }
 
   verify(rawBody: Buffer, signature: string | undefined, timestamp: string | undefined): VerifiedProviderReceipt[] {
+    return this.verifyEvents(rawBody, signature, timestamp).receipts;
+  }
+
+  verifyEvents(rawBody: Buffer, signature: string | undefined, timestamp: string | undefined): { receipts: VerifiedProviderReceipt[]; engagements: HqEmailEngagement[] } {
     const key = this.publicKey();
     if (!signature || !timestamp || !/^\d{9,11}$/.test(timestamp) || !/^[A-Za-z0-9+/=]{16,200}$/.test(signature)) throw new SendGridWebhookError('SIGNATURE_INVALID');
     if (Math.abs(this.now() / 1000 - Number(timestamp)) > TOLERANCE_SECONDS) throw new SendGridWebhookError('TIMESTAMP_OUT_OF_RANGE');
@@ -171,21 +197,28 @@ export class SendGridEventWebhookVerifier {
     let parsed: unknown;
     try { parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(rawBody)); } catch { throw new SendGridWebhookError('MALFORMED'); }
     if (!Array.isArray(parsed) || parsed.length > MAX_EVENTS) throw new SendGridWebhookError('MALFORMED');
-    const receipts: VerifiedProviderReceipt[] = [];
+    const receipts: VerifiedProviderReceipt[] = [], engagements: HqEmailEngagement[] = [];
     for (const item of parsed) {
       if (!item || typeof item !== 'object') continue;
       const event = item as Record<string, unknown>;
       const hq = event.hon_purpose === 'HQ';
       if (event.hon_purpose !== undefined && event.hon_purpose !== 'SCHOOL' && !hq) continue;
-      const eventType = typeof event.event === 'string' ? EVENT_MAP[event.event] : undefined;
+      const eventType = typeof event.event === 'string' && Object.hasOwn(EVENT_MAP, event.event) ? EVENT_MAP[event.event] : undefined;
+      const kind = hq && typeof event.event === 'string' && Object.hasOwn(ENGAGEMENT_MAP, event.event) ? ENGAGEMENT_MAP[event.event] : undefined;
       const delivery = typeof event.hon_delivery_id === 'string' && UUID.test(event.hon_delivery_id) ? event.hon_delivery_id.toLowerCase() : undefined;
       const eventId = typeof event.sg_event_id === 'string' && PROVIDER_ID.test(event.sg_event_id) ? event.sg_event_id : undefined;
       const messageId = typeof event.sg_message_id === 'string' ? event.sg_message_id.split('.')[0] : undefined;
       const seconds = typeof event.timestamp === 'number' && Number.isSafeInteger(event.timestamp) ? event.timestamp : undefined;
-      if (!eventType || !delivery || !eventId || !messageId || !PROVIDER_ID.test(messageId) || seconds === undefined) continue;
+      if ((!eventType && !kind) || !delivery || !eventId || !messageId || !PROVIDER_ID.test(messageId) || seconds === undefined) continue;
+      if (kind) {
+        engagements.push({ provider: 'SENDGRID', providerEventId: eventId, providerMessageId: messageId, honDeliveryId: delivery, kind,
+          occurredAt: new Date(seconds * 1000).toISOString() });
+        continue;
+      }
+      if (!eventType) continue;
       receipts.push({ provider: 'SENDGRID', providerEventId: eventId, providerMessageId: messageId, honDeliveryId: delivery, eventType,
         occurredAt: new Date(seconds * 1000).toISOString(), ...(hq ? { scope: 'HQ' as const } : {}) });
     }
-    return receipts;
+    return { receipts, engagements };
   }
 }

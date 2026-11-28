@@ -62,7 +62,8 @@ const en = {
   startFrom: 'Start from a template', pickTemplate: 'Choose a template…',
   audience: 'Audience', a_ALL: 'All schools', a_ACTIVE: 'Active schools', a_INACTIVE: 'Inactive schools', a_PICKED: 'Only schools I pick',
   pickedHint: 'Only the schools you add below get it. Find each school by name.', pickSchools: 'Add schools', moreFilters: 'More filters: plan, trial, sign-up date, place, features',
-  leadsLater: 'Leads from the HQ prospects board come next.', p_noPicks: 'Add at least one school.',
+  leadsLater: 'Leads from the HQ prospects board come next.', openRate: 'Open rate', clickRate: 'Click rate', col_opened: 'Opened', col_clicked: 'Clicked',
+  d_opened: 'Opened (each email once)', d_clicked: 'Clicked a link (each email once)', p_noPicks: 'Add at least one school.',
 } as const;
 export type HqBlastKey = keyof typeof en;
 
@@ -122,7 +123,8 @@ const ko: Record<HqBlastKey, string> = {
   startFrom: '템플릿에서 시작', pickTemplate: '템플릿 선택…',
   audience: '대상', a_ALL: '모든 도장', a_ACTIVE: '활성 도장', a_INACTIVE: '비활성 도장', a_PICKED: '내가 고른 도장만',
   pickedHint: '아래에 추가한 도장만 받습니다. 이름으로 도장을 찾으세요.', pickSchools: '도장 추가', moreFilters: '추가 필터: 요금제, 체험, 가입일, 지역, 기능',
-  leadsLater: 'HQ 잠재 고객 보드의 리드는 다음에 추가됩니다.', p_noPicks: '도장을 하나 이상 추가하세요.',
+  leadsLater: 'HQ 잠재 고객 보드의 리드는 다음에 추가됩니다.', openRate: '열람률', clickRate: '클릭률', col_opened: '열람', col_clicked: '클릭',
+  d_opened: '열람 (이메일당 한 번)', d_clicked: '링크 클릭 (이메일당 한 번)', p_noPicks: '도장을 하나 이상 추가하세요.',
 };
 
 const es: Record<HqBlastKey, string> = {
@@ -181,7 +183,8 @@ const es: Record<HqBlastKey, string> = {
   startFrom: 'Empezar con una plantilla', pickTemplate: 'Elija una plantilla…',
   audience: 'Público', a_ALL: 'Todas las escuelas', a_ACTIVE: 'Escuelas activas', a_INACTIVE: 'Escuelas inactivas', a_PICKED: 'Solo las escuelas que elija',
   pickedHint: 'Solo lo reciben las escuelas que agregue abajo. Busque cada escuela por nombre.', pickSchools: 'Agregar escuelas', moreFilters: 'Más filtros: plan, prueba, fecha de alta, lugar, funciones',
-  leadsLater: 'Los prospectos del tablero de HQ vienen después.', p_noPicks: 'Agregue al menos una escuela.',
+  leadsLater: 'Los prospectos del tablero de HQ vienen después.', openRate: 'Tasa de apertura', clickRate: 'Tasa de clics', col_opened: 'Abiertos', col_clicked: 'Clics',
+  d_opened: 'Abiertos (cada correo una vez)', d_clicked: 'Hicieron clic en un enlace (cada correo una vez)', p_noPicks: 'Agregue al menos una escuela.',
 };
 
 const tables: Record<string, Record<HqBlastKey, string>> = { en, ko, es };

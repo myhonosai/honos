@@ -67,35 +67,45 @@ function Tabs({ t, tab, locked, onTab }: { t: T; tab: HqBlastTab; locked: boolea
       data-hq-blast-tab={x} disabled={locked} onClick={() => onTab(x)}>{t(`tab_${x}`)}</button>)}</nav>;
 }
 
-/** Totals over every blast handed over. Opens and clicks are not tracked, so they are not shown. */
-export function hqBlastTotals(list: HqBlastList): { campaigns: number; sent: number; delivered: number; bounced: number } {
-  let campaigns = 0, sent = 0, delivered = 0, bounced = 0;
+/** A whole-number percent, or null when nothing could have been opened yet. */
+export function hqBlastRate(part: number, of: number): number | null { return of > 0 ? Math.round((Math.min(part, of) / of) * 100) : null; }
+/** Emails that reached the provider, the base for open and click rates. */
+const emailsOut = (x: HqBlastSummary) => x.channel === 'EMAIL' ? x.results.deliveries.accepted + x.results.deliveries.delivered : 0;
+/** Totals over every blast handed over. Open and click rates count unique emails, over emails accepted or delivered. */
+export function hqBlastTotals(list: HqBlastList): { campaigns: number; sent: number; delivered: number; bounced: number; openRate: number | null; clickRate: number | null } {
+  let campaigns = 0, sent = 0, delivered = 0, bounced = 0, out = 0, opened = 0, clicked = 0;
   for (const x of list.blasts) {
     if (x.status === 'DRAFT') continue;
     campaigns += 1;
     const d = x.results.deliveries;
     sent += d.accepted + d.delivered + d.bounced + d.failed + d.unknown;
     delivered += d.delivered; bounced += d.bounced;
+    if (x.channel === 'EMAIL') { out += emailsOut(x); opened += x.results.engagement.opened; clicked += x.results.engagement.clicked; }
   }
-  return { campaigns, sent, delivered, bounced };
+  return { campaigns, sent, delivered, bounced, openRate: hqBlastRate(opened, out), clickRate: hqBlastRate(clicked, out) };
 }
+const pct = (n: number | null) => n === null ? '—' : `${n}%`;
 
 function History(p: HqBlastsViewProps & { t: T; history: HqBlastList }): React.ReactElement {
   const { t, history: list } = p, tot = hqBlastTotals(list);
-  const tiles: [HqBlastKey, number][] = [['totalSent', tot.sent], ['totalDelivered', tot.delivered], ['totalBounced', tot.bounced], ['totalCampaigns', tot.campaigns]];
+  const tiles: [HqBlastKey, string][] = [['totalSent', String(tot.sent)], ['totalDelivered', String(tot.delivered)], ['openRate', pct(tot.openRate)],
+    ['clickRate', pct(tot.clickRate)], ['totalBounced', String(tot.bounced)], ['totalCampaigns', String(tot.campaigns)]];
   return <section className={s.panel} aria-label={t('tab_HISTORY')} data-hq-blast-history="true">
     <dl className={b.counts} data-hq-blast-totals="true">{tiles.map(([k, n]) => <div key={k}><dt>{t(k)}</dt><dd>{n}</dd></div>)}</dl>
     <p className={s.muted}>{t('sentToday', { n: String(list.sentToday), max: String(HQ_BLAST_DAILY_LIMIT) })}</p>
     {list.blasts.length === 0 ? <p className={s.empty}>{t('empty')}</p> : <div className={b.tableWrap}><table className={b.table}>
       <thead><tr><th scope="col">{t('col_campaign')}</th><th scope="col">{t('col_audience')}</th><th scope="col">{t('col_sent')}</th>
-        <th scope="col">{t('col_delivered')}</th><th scope="col">{t('col_bounced')}</th><th scope="col">{t('col_status')}</th><th scope="col">{t('col_when')}</th></tr></thead>
+        <th scope="col">{t('col_delivered')}</th><th scope="col">{t('col_opened')}</th><th scope="col">{t('col_clicked')}</th><th scope="col">{t('col_bounced')}</th><th scope="col">{t('col_status')}</th><th scope="col">{t('col_when')}</th></tr></thead>
       <tbody>{list.blasts.map(x => {
         const d = x.results.deliveries, out = d.accepted + d.delivered + d.bounced + d.failed + d.unknown;
         return <tr key={x.blastId} data-hq-blast={x.blastId}>
           <td><button type="button" className={b.linkish} disabled={p.locked} onClick={() => p.onOpen(x)}>{x.name}</button>
             <span className={s.muted}> {t(x.channel)} · {x.subject ?? x.body.slice(0, 60)}</span></td>
           <td>{x.recipientCount !== null && x.schoolCount !== null ? t('sentTo', { owners: String(x.recipientCount), schools: String(x.schoolCount) }) : '—'}</td>
-          <td>{x.status === 'DRAFT' ? '—' : out}</td><td>{x.status === 'DRAFT' ? '—' : d.delivered}</td><td>{x.status === 'DRAFT' ? '—' : d.bounced}</td>
+          <td>{x.status === 'DRAFT' ? '—' : out}</td><td>{x.status === 'DRAFT' ? '—' : d.delivered}</td>
+          <td>{x.status === 'DRAFT' || x.channel !== 'EMAIL' ? '—' : `${x.results.engagement.opened} (${pct(hqBlastRate(x.results.engagement.opened, emailsOut(x)))})`}</td>
+          <td>{x.status === 'DRAFT' || x.channel !== 'EMAIL' ? '—' : `${x.results.engagement.clicked} (${pct(hqBlastRate(x.results.engagement.clicked, emailsOut(x)))})`}</td>
+          <td>{x.status === 'DRAFT' ? '—' : d.bounced}</td>
           <td><span className={s.badge} data-tone={x.status === 'QUEUED' ? 'ok' : x.status === 'CANCELLED' ? 'bad' : 'warn'}>{t(x.status)}</span></td>
           <td>{x.sendAt ? p.formatTime(x.sendAt) : p.formatTime(x.updatedAt)}</td></tr>;
       })}</tbody></table></div>}
@@ -292,13 +302,14 @@ function Detail(p: HqBlastsViewProps & { t: T }): React.ReactElement {
   const { blast, results, schools } = d.value, r = results.deliveries, sc = results.schools, mayCancel = hqBlastMayCancel(blast, r);
   const schoolCounts: [HqBlastKey, number][] = [['r_queued', sc.queued], ['r_noOwners', sc.noOwners], ['r_notReachable', sc.notReachable], ['r_recentlySent', sc.recentlySent]];
   const deliveryCounts = (Object.keys(r) as (keyof typeof r)[]).map(k => [`d_${k}` as HqBlastKey, r[k]] as const);
+  const engagementCounts: [HqBlastKey, number][] = blast.channel === 'EMAIL' ? [['d_opened', results.engagement.opened], ['d_clicked', results.engagement.clicked]] : [];
   return <section className={s.panel} data-hq-blast-detail={blast.status}>{back}
     <div className={b.rowHead}><h2>{blast.name}</h2><span className={s.badge} data-tone={blast.status === 'QUEUED' ? 'ok' : blast.status === 'CANCELLED' ? 'bad' : 'warn'}>{t(blast.status)}</span>
       <span className={s.badge}>{t(blast.channel)}</span><span className={s.badge}>{t(blast.purpose)}</span></div>
     {blast.sendAt && <p className={s.muted}>{t('sendsAt', { time: p.formatTime(blast.sendAt) })}</p>}
     <div className={b.sample}>{blast.subject && <strong>{blast.subject}</strong>}<span>{blast.body}</span></div>
     <h2>{t('results')}</h2>
-    <dl className={b.counts}>{[...schoolCounts, ...deliveryCounts].map(([k, n]) => <div key={k}><dt>{t(k)}</dt><dd>{n}</dd></div>)}</dl>
+    <dl className={b.counts}>{[...schoolCounts, ...deliveryCounts, ...engagementCounts].map(([k, n]) => <div key={k}><dt>{t(k)}</dt><dd>{n}</dd></div>)}</dl>
     {blast.status === 'QUEUED' && (mayCancel ? (p.ask?.kind === 'CANCEL'
       ? <div className={s.flash} role="alertdialog" data-hq-blast-ask="cancel"><p>{t('cancelAsk', { name: blast.name })}</p>
         <p className={s.actions}><button type="button" className={s.button} disabled={p.locked} onClick={p.onConfirm}>{t('cancelYes')}</button>

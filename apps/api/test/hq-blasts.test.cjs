@@ -22,7 +22,7 @@ const contracts = require('@hon/contracts');
 const U = () => randomUUID(), T = '2026-11-01T00:00:00.000Z', T2 = '2026-11-02T00:00:00.000Z';
 const person = (n = 'HQ Owner') => ({ principalId: U(), displayName: n });
 const res = () => ({ schools: { queued: 0, noOwners: 0, notReachable: 0, recentlySent: 0 },
-  deliveries: { waiting: 0, pending: 0, sending: 0, accepted: 0, delivered: 0, bounced: 0, failed: 0, suppressed: 0, unknown: 0 } });
+  deliveries: { waiting: 0, pending: 0, sending: 0, accepted: 0, delivered: 0, bounced: 0, failed: 0, suppressed: 0, unknown: 0 }, engagement: { opened: 0, clicked: 0 } });
 const blast = (patch = {}) => ({ blastId: U(), name: 'December news', channel: 'EMAIL', purpose: 'ANNOUNCEMENT', subject: 'New in HON OS',
   body: 'Hi {{first_name}}, here is what is new for {{school_name}}.', audience: { statuses: ['ACTIVE'], trial: 'ON_TRIAL' }, status: 'DRAFT',
   sendAt: null, queuedAt: null, cancelledAt: null, schoolCount: null, recipientCount: null, createdBy: person(), createdAt: T, updatedAt: T, version: 1, ...patch });
@@ -213,7 +213,8 @@ test('SendGrid: a blast email has HQ\'s subject, the footer with the mailing add
     schoolName: 'HON OS', attempt: 1, origin: 'HQ', senderEmail: 'hello@hon.example', senderName: 'HON OS' };
   const body = sg.requestBody({ ...base, hqPurpose: 'ANNOUNCEMENT', hqBlast: true, subject: 'New in HON OS' });
   assert.equal(body.subject, 'New in HON OS');
-  assert.deepEqual(body.content, [{ type: 'text/plain', value: `Hi Sam!\n\n--\n${HQ_BLAST_EMAIL_REASON}\nHON OS, 546 W. Las Tunas Dr. San Gabriel CA 91776` }]);
+  assert.deepEqual(body.content[0], { type: 'text/plain', value: `Hi Sam!\n\n--\n${HQ_BLAST_EMAIL_REASON}\nHON OS, 546 W. Las Tunas Dr. San Gabriel CA 91776` });
+  assert.equal(body.content[1].type, 'text/html');
   assert.equal(body.tracking_settings.subscription_tracking.enable, true);
   assert.equal(body.mail_settings.bypass_unsubscribe_management, undefined);
   for (const purpose of ['BILLING', 'ACCOUNT'])

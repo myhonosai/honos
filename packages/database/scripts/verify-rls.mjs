@@ -468,7 +468,7 @@ const expectedRlsTables = [
   'hq_blast_schools',
   'hq_blast_requests',
   'hq_blast_events',
-  'hq_blast_outbox', 'hq_blast_templates', 'hq_blast_template_requests', 'hq_blast_template_events',
+  'hq_blast_outbox', 'hq_blast_templates', 'hq_blast_template_requests', 'hq_blast_template_events', 'hq_blast_engagements',
   'hq_contact_requests',
   'hq_prospects',
   'hq_prospect_consents',

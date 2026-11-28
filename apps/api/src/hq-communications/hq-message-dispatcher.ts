@@ -12,6 +12,7 @@ import {
 } from '../communication/delivery/communication-provider.js';
 import type { CommunicationSendResult, VerifiedProviderReceipt } from '../communication/delivery/communication-worker-database.js';
 import type { DispatchSummary } from '../communication/delivery/communication-dispatcher.js';
+import type { HqEmailEngagement } from '../communication/delivery/sendgrid-email-provider.js';
 
 /** One leased HQ delivery: the address and body exist only in memory for this one send. */
 export type HqDeliveryPurpose = 'SUPPORT' | 'BILLING' | 'ONBOARDING' | 'ACCOUNT' | 'ANNOUNCEMENT';
@@ -55,6 +56,8 @@ export interface HqMessageWorkerStore {
   recordReceipt?(receipt: VerifiedProviderReceipt): Promise<{ outcome: 'RECORDED' | 'REPLAYED' | 'UNMATCHED'; deliveryStatus: string | null }>;
   /** 0282: one signed inbound text to a Messaging Service; NOT_HQ when it is not the active HQ sender. */
   recordInbound?(text: HqInboundText): Promise<HqInboundOutcome>;
+  /** 0712: the first open or click of a blast email; IGNORED for anything that is not a sent blast email. */
+  recordEngagement?(event: HqEmailEngagement): Promise<'RECORDED' | 'REPLAYED' | 'IGNORED'>;
 }
 
 /** One inbound text to the HQ number, as the webhook verified it. The body is classified in the database, never stored. */
@@ -136,6 +139,12 @@ export class HqMessageWorkerDatabase implements HqMessageWorkerStore, OnModuleDe
         receipt.occurredAt, receipt.providerCostMicrounits ?? null]))[0];
     if (!row) throw new Error('HQ_MESSAGE_RECEIPT_NOT_RECORDED');
     return { outcome: row.outcome, deliveryStatus: row.delivery_status };
+  }
+  async recordEngagement(event: HqEmailEngagement) {
+    const row = (await this.query<{ outcome: 'RECORDED' | 'REPLAYED' | 'IGNORED' }>('SELECT * FROM hon.record_hq_blast_engagement($1, $2, $3, $4, $5, $6)',
+      [event.provider, event.providerEventId, event.providerMessageId, event.honDeliveryId, event.kind, event.occurredAt]))[0];
+    if (!row || !['RECORDED', 'REPLAYED', 'IGNORED'].includes(row.outcome)) throw new Error('HQ_BLAST_ENGAGEMENT_NOT_RECORDED');
+    return row.outcome;
   }
 }
 

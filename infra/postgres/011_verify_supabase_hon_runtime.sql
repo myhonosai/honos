@@ -7743,7 +7743,7 @@ BEGIN
     ('hon.hq_blast_line_ok(jsonb,integer)','2b9beb7ba2da4156877940e71bf9240d','i',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_record(uuid,uuid,uuid,uuid,text,text,text,hon.hq_blasts,jsonb,timestamp with time zone)','f6a2e4d971d691117cc61ed8c8e5aa1e','v',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_resolve(jsonb,text)','a7232b1e6e9455b6d83672dd82aeea92','s',false,'search_path=pg_catalog, hon',false,false),
-    ('hon.hq_blast_results_json(uuid)','6b95bb8412577f584d1f895d677f16d9','s',false,'search_path=pg_catalog, hon',false,false),
+    ('hon.hq_blast_results_json(uuid)','1ba11fa1b2bcf86e2cc01ba66a637031','s',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_strings_ok(jsonb,integer,text)','bf888b8b1a137cd6f34307d84fd3c807','i',false,'search_path=pg_catalog',false,false),
     ('hon.hq_blast_template_json(hon.hq_blast_templates)','8f06007c28927f742cde8ca2146efcf5','s',false,'search_path=pg_catalog, hon',false,false),
     ('hon.hq_blast_text_ok(jsonb,integer,integer)','6d3729ab1cc4a3721763b3b8917486f2','i',false,'search_path=pg_catalog',false,false),
@@ -7755,6 +7755,7 @@ BEGIN
     ('hon.read_hq_blast_options(text,text)','016b8519a86772701cecdef080b07468','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.read_hq_blast_templates(text)','1134f72cee3343953abbc7e76b47267f','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.read_hq_blasts(text)','b6e91a131c0bd844325ebe587e72003e','v',true,'search_path=pg_catalog, hon',true,false),
+    ('hon.record_hq_blast_engagement(text,text,text,uuid,text,timestamp with time zone)','1b855c81e0230c066c55287042bc3594','v',true,'search_path=pg_catalog, hon',false,true),
     ('hon.save_hq_blast(text,jsonb,uuid,uuid,uuid)','b27b25f73629618f88dba04fb7f0e113','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.save_hq_blast_template(text,jsonb,uuid,uuid,uuid)','5182071c253d4f843c6a15a1421c2ce7','v',true,'search_path=pg_catalog, hon',true,false),
     ('hon.send_hq_blast(text,jsonb,uuid,uuid,uuid)','8223b8584ee36c8ce07e495a949bfb02','v',true,'search_path=pg_catalog, hon',true,false)) x(f,t,c,d,s,r,w) LOOP
@@ -7765,9 +7766,9 @@ BEGIN
       OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
       RAISE EXCEPTION 'HQ blast function body/posture drift: %',f; END IF;
   END LOOP;
-  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('cancel_hq_blast','claim_hq_message_deliveries','guard_hq_blast','guard_hq_blast_template','hq_blast_args_ok','hq_blast_audience_ok','hq_blast_claim','hq_blast_day_ok','hq_blast_fill','hq_blast_json','hq_blast_line_ok','hq_blast_record','hq_blast_resolve','hq_blast_results_json','hq_blast_strings_ok','hq_blast_template_json','hq_blast_text_ok','hq_communication_is_owner','hq_communication_purposes','hq_message_json','read_hq_blast','read_hq_blast_audience','read_hq_blast_options','read_hq_blast_templates','read_hq_blasts','save_hq_blast','save_hq_blast_template','send_hq_blast'))<>28 THEN
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('cancel_hq_blast','claim_hq_message_deliveries','guard_hq_blast','guard_hq_blast_template','hq_blast_args_ok','hq_blast_audience_ok','hq_blast_claim','hq_blast_day_ok','hq_blast_fill','hq_blast_json','hq_blast_line_ok','hq_blast_record','hq_blast_resolve','hq_blast_results_json','hq_blast_strings_ok','hq_blast_template_json','hq_blast_text_ok','hq_communication_is_owner','hq_communication_purposes','hq_message_json','read_hq_blast','read_hq_blast_audience','read_hq_blast_options','read_hq_blast_templates','read_hq_blasts','record_hq_blast_engagement','save_hq_blast','save_hq_blast_template','send_hq_blast'))<>29 THEN
     RAISE EXCEPTION 'Unexpected HQ blast overload'; END IF;
-  FOREACH tb IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox','hq_blast_templates','hq_blast_template_requests','hq_blast_template_events'] LOOP
+  FOREACH tb IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox','hq_blast_templates','hq_blast_template_requests','hq_blast_template_events','hq_blast_engagements'] LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||tb)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
       OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=tb)
       OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||tb)::regclass AND a.grantee<>c.relowner)
@@ -7778,8 +7779,8 @@ BEGIN
       AND tgname='immutable' AND tgfoid='hon.guard_hq_communication_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>4
     OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_blasts'::regclass AND tgname='guarded' AND tgfoid='hon.guard_hq_blast()'::regprocedure AND tgenabled='O') THEN
     RAISE EXCEPTION 'HQ blast evidence triggers missing'; END IF;
-  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.hq_blast_template_requests'::regclass,'hon.hq_blast_template_events'::regclass)
-      AND tgname='immutable' AND tgfoid='hon.guard_hq_communication_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>2
+  IF (SELECT count(*) FROM pg_trigger WHERE tgrelid IN ('hon.hq_blast_template_requests'::regclass,'hon.hq_blast_template_events'::regclass,'hon.hq_blast_engagements'::regclass)
+      AND tgname='immutable' AND tgfoid='hon.guard_hq_communication_evidence()'::regprocedure AND tgenabled='O' AND NOT tgisinternal)<>3
     OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_blast_templates'::regclass AND tgname='guarded' AND tgfoid='hon.guard_hq_blast_template()'::regprocedure AND tgenabled='O') THEN
     RAISE EXCEPTION 'HQ blast template triggers missing'; END IF;
   IF (SELECT count(*) FROM pg_constraint WHERE conrelid='hon.hq_messages'::regclass AND contype='c' AND convalidated AND (
