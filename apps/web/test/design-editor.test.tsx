@@ -434,6 +434,9 @@ describe('design D2: QR codes, templates, brand kit and print PDF', () => {
     expect(templateName('ko', 'camp-fun')).toBe('여름 캠프');
     expect(galleryItems('all')).toHaveLength(40);
     expect(galleryItems('camp')).toEqual(['camp-bold', 'camp-clean', 'camp-fun', 'camp-elegant']);
+    // Starter words make offers (a free class, a price), so the gallery says to check them in every language.
+    expect(new Set(['en', 'ko', 'es'].map(l => designText(l, 'checkOffers'))).size).toBe(3);
+    expect(designText('en', 'checkOffers')).toBe('Check dates, prices and offers before you print or post.');
   });
 
   it('E2: headlines and wrapped text are kept inside their space, even in Korean on a square page', () => {

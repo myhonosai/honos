@@ -192,6 +192,7 @@ export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
             <fieldset className={s.galleryField}>
               <legend>{t('startFrom')}</legend>
               <TemplateGallery code={newSize} language={language} brand={brand} value={newTemplate} onChange={setNewTemplate} blankLabel={t('blank')} />
+              <p className={s.meta}>{t('checkOffers')}</p>
             </fieldset>
             <button type="submit" className={s.button} disabled={busy}>{t('newCreate')}</button>
           </form>
