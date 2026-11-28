@@ -55,7 +55,7 @@
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .tile { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 14px; border: 1px solid var(--hon-line, #24405a); border-radius: 14px; background: #0f2235; }
 .tile h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
-.icon { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: #123047; color: var(--hon-accent, #8de3d8); font-size: 18px; font-weight: 800; }
+.icon { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--hon-surface-2, #1a1e28); color: var(--hon-text-muted, #a3a9b8); }
 .block { display: grid; gap: 10px; min-width: 0; padding: 12px; border: 1px solid #2a4560; border-radius: 12px; background: #0d1d2e; }
 .block h3, .block h4 { margin: 0; font-size: 15px; }
 .fieldRow { display: grid; grid-template-columns: minmax(140px, 2fr) minmax(130px, 1.4fr) auto; gap: 8px; align-items: end; padding: 8px 0; border-bottom: 1px solid #1c3349; }

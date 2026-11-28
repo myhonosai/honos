@@ -6,6 +6,7 @@ import {
   CHANNELS, DATE_KINDS, GROUPS, MAX_SENDS, MERGE_FIELDS, STOPS, TEMPLATE_KEYS, WHEN_DAYS, WHEN_KINDS, blankSend, problems,
   type Channel, type DelayUnit, type Problem, type Send, type SimpleAutomation, type TemplateKey, type WhenKind,
 } from './model';
+import { ShellIcon, type ShellIconName } from '../school-shell/icons';
 import styles from './automations.module.css';
 
 export type ListState = { state: 'LOADING' } | { state: 'READY'; list: AutomationWorkflowList } | { state: 'DENIED' } | { state: 'UNAVAILABLE' };
@@ -32,8 +33,9 @@ export type AutomationsViewProps = {
 
 type T = (key: AutomationsKey, vars?: Record<string, string>) => string;
 const noop = () => undefined;
-const CH_ICON: Record<Channel, string> = { TEXT: '💬', EMAIL: '✉️', TASK: '✅', NOTIFY: '🔔' };
-const ICON: Record<TemplateKey, string> = { NO_SHOW: '⏰', LEAD_NURTURE: '🌱', MIA: '👋', BIRTHDAY: '🎂', RENEWAL: '🔁', WELCOME: '🥋' };
+const CH_ICON_NAME: Record<Channel, ShellIconName> = { TEXT: 'messages', EMAIL: 'email', TASK: 'task', NOTIFY: 'bell' };
+const ChIcon = ({ c }: { c: Channel }) => <ShellIcon name={CH_ICON_NAME[c]} size={16}/>;
+const ICON: Record<TemplateKey, ShellIconName> = { NO_SHOW: 'clock', LEAD_NURTURE: 'sprout', MIA: 'wave', BIRTHDAY: 'cake', RENEWAL: 'repeat', WELCOME: 'ranks' };
 
 export function AutomationsView(props: AutomationsViewProps): React.ReactElement {
   const { language, waiting, concealed, scope, list, editor, picking, notice } = props;
@@ -95,7 +97,7 @@ function Recipes({ t, empty, onTemplate, onCancel }: { t: T; empty: boolean; onT
       </button></li>
       {TEMPLATE_KEYS.map(key => <li key={key}>
         <button type="button" className={styles.starter} data-template={key} onClick={() => onTemplate(key)}>
-          <span className={styles.starterIcon} aria-hidden="true">{ICON[key]}</span>
+          <span className={styles.starterIcon} aria-hidden="true"><ShellIcon name={ICON[key]} size={18}/></span>
           <strong>{t(`t${key}`)}</strong><span>{t(`t${key}Line`)}</span>
         </button>
       </li>)}
@@ -118,7 +120,7 @@ function WorkflowRow(props: AutomationsViewProps & { w: AutomationWorkflowSummar
   return <li className={styles.rowItem} data-status={w.status}>
     <div className={styles.rowMain}>
       <button type="button" className={styles.rowName} disabled={busy} onClick={() => (props.onEdit ?? noop)(w.workflowId)}>{w.name}</button>
-      <span className={styles.meta}>⚡ {whenText(t, w.triggerKind)} · {w.stepCount === 1 ? t('step1') : t('steps', { n: String(w.stepCount) })}</span>
+      <span className={styles.meta}>{whenText(t, w.triggerKind)} · {w.stepCount === 1 ? t('step1') : t('steps', { n: String(w.stepCount) })}</span>
       {w.status === 'PAUSED' && <span className={styles.warn}>{pausedText(t, w.pausedReason)}</span>}
     </div>
     <div className={styles.rowStatus}>
@@ -213,7 +215,7 @@ function Builder(props: AutomationsViewProps & { editor: NonNullable<EditorState
     {a.sends.length < MAX_SENDS && <>
       <button type="button" className={styles.plus} aria-label={t('addStep')} aria-expanded={adding === at} onClick={() => setAdding(adding === at ? null : at)}>＋</button>
       {adding === at && <div className={styles.addMenu} role="menu" aria-label={t('addStep')}>
-        {CHANNELS.map(c => <button key={c} type="button" role="menuitem" data-channel={c} onClick={() => insert(at, c)}><span aria-hidden="true">{CH_ICON[c]}</span>{t(`node${c}`)}</button>)}
+        {CHANNELS.map(c => <button key={c} type="button" role="menuitem" data-channel={c} onClick={() => insert(at, c)}><span aria-hidden="true"><ChIcon c={c}/></span>{t(`node${c}`)}</button>)}
       </div>}
     </>}
   </div>;
@@ -235,22 +237,22 @@ function Builder(props: AutomationsViewProps & { editor: NonNullable<EditorState
     <div className={styles.canvas}>
       <ol className={styles.flow} aria-label={t('flowLabel')}>
         <li><button type="button" className={styles.node} data-kind="trigger" aria-pressed={node === 'trigger'} data-problem={flagged.has('trigger') || undefined} onClick={() => setNode('trigger')}>
-          <span className={styles.nodeIcon} aria-hidden="true">⚡</span>
+          <span className={styles.nodeIcon} aria-hidden="true"><ShellIcon name="automation" size={16}/></span>
           <span className={styles.nodeText}><small>{t('nodeTrigger')}</small><strong>{whenText(t, a.when)}{WHEN_DAYS[a.when] ? ` · ${t(`daysShort${a.when as 'ABSENT_DAYS' | 'BIRTHDAY' | 'MEMBERSHIP_ENDS_IN_DAYS'}`, { n: String(a.days) })}` : ''}{a.when === 'TAG_ADDED' && a.tag ? ` · ${a.tag}` : ''}</strong></span>
         </button></li>
         <li className={styles.line} aria-hidden="true"/>
         <li><button type="button" className={styles.node} data-kind="who" aria-pressed={node === 'who'} data-problem={flagged.has('who') || undefined} onClick={() => setNode('who')}>
-          <span className={styles.nodeIcon} aria-hidden="true">👥</span>
+          <span className={styles.nodeIcon} aria-hidden="true"><ShellIcon name="students" size={16}/></span>
           <span className={styles.nodeText}><small>{t('nodeWho')}</small><strong>{whoText(t, a)}</strong>
             {a.stopWhen.length > 0 && <span>{t('stopsWhen', { list: a.stopWhen.map(x => t(`stop${x}`).toLowerCase()).join(', ') })}</span>}</span>
         </button></li>
         {a.sends.map((s, i) => <React.Fragment key={i}>
           <li>{plus(i)}</li>
-          {s.delayUnit !== 'NOW' && <><li><span className={styles.wait}>⏱ {waitText(t, s)}</span></li><li className={styles.line} aria-hidden="true"/></>}
+          {s.delayUnit !== 'NOW' && <><li><span className={styles.wait}><ShellIcon name="clock" size={16}/> {waitText(t, s)}</span></li><li className={styles.line} aria-hidden="true"/></>}
           <li><button type="button" className={styles.node} data-kind="send" data-channel={s.channel} aria-pressed={selectedSend === i} data-problem={flagged.has(`send${i}`) || undefined} onClick={() => setNode(`send${i}`)}>
-            <span className={styles.nodeIcon} aria-hidden="true">{CH_ICON[s.channel]}</span>
+            <span className={styles.nodeIcon} aria-hidden="true"><ChIcon c={s.channel}/></span>
             <span className={styles.nodeText}><small>{t('stepTitle', { n: String(i + 1) })} · {t(`node${s.channel}`)}</small><strong>{preview(t, s) || t('emptyMessage')}</strong>
-              {s.videoUrl.trim() && <span>🎬 {t('hasVideo')}</span>}</span>
+              {s.videoUrl.trim() && <span><ShellIcon name="video" size={16}/> {t('hasVideo')}</span>}</span>
           </button></li>
         </React.Fragment>)}
         <li>{plus(a.sends.length)}</li>
@@ -269,7 +271,7 @@ function Builder(props: AutomationsViewProps & { editor: NonNullable<EditorState
 function TriggerPanel({ a, t, has, set }: { a: SimpleAutomation; t: T; has: (p: Problem) => boolean; set: (p: Partial<SimpleAutomation>) => void }) {
   const range = WHEN_DAYS[a.when];
   return <section className={styles.panelBody}>
-    <h2>⚡ {t('q1')}</h2>
+    <h2>{t('q1')}</h2>
     <div className={styles.whenGrid} role="radiogroup" aria-label={t('q1')}>
       {WHEN_KINDS.map(k => <button key={k} type="button" role="radio" aria-checked={a.when === k}
         onClick={() => set({ when: k, days: WHEN_DAYS[k]?.fallback ?? a.days })}>{t(`w${k}`)}</button>)}
@@ -290,7 +292,7 @@ function TriggerPanel({ a, t, has, set }: { a: SimpleAutomation; t: T; has: (p: 
 
 function WhoPanel({ a, t, has, set }: { a: SimpleAutomation; t: T; has: (p: Problem) => boolean; set: (p: Partial<SimpleAutomation>) => void }) {
   return <section className={styles.panelBody}>
-    <h2>👥 {t('q2')}</h2>
+    <h2>{t('q2')}</h2>
     <div className={styles.segments} role="radiogroup" aria-label={t('q2')}>
       {GROUPS.map(g => <button key={g} type="button" role="radio" aria-checked={a.group === g} onClick={() => set({ group: g })}>
         <strong>{t(`group${g}`)}</strong><span>{t(`groupLine${g}`)}</span>
@@ -322,7 +324,7 @@ function SendPanel({ i, s, count, t, has, setSend, move, remove }: {
   const insert = (field: string) => setSend(i, { text: `${s.text}${s.text && !/\s$/.test(s.text) ? ' ' : ''}{{${field}}}` });
   return <section className={styles.panelBody}>
     <div className={styles.panelHead}>
-      <h2>{CH_ICON[s.channel]} {t('stepTitle', { n: String(i + 1) })}</h2>
+      <h2>{t('stepTitle', { n: String(i + 1) })}</h2>
       <div className={styles.sendTools}>
         <button type="button" className={styles.ghost} disabled={i === 0} aria-label={t('moveUp')} onClick={() => move(i, -1)}>↑</button>
         <button type="button" className={styles.ghost} disabled={i === count - 1} aria-label={t('moveDown')} onClick={() => move(i, 1)}>↓</button>
@@ -330,7 +332,7 @@ function SendPanel({ i, s, count, t, has, setSend, move, remove }: {
       </div>
     </div>
     <div className={styles.channelPick} role="radiogroup" aria-label={t('channelLabel')}>
-      {CHANNELS.map(c => <button key={c} type="button" role="radio" aria-checked={s.channel === c} onClick={() => setSend(i, { channel: c })}>{CH_ICON[c]} {t(`ch${c}`)}</button>)}
+      {CHANNELS.map(c => <button key={c} type="button" role="radio" aria-checked={s.channel === c} onClick={() => setSend(i, { channel: c })}><ChIcon c={c}/> {t(`ch${c}`)}</button>)}
     </div>
     {(s.channel === 'TASK' || s.channel === 'NOTIFY') && <p className={styles.meta}>{t(s.channel === 'TASK' ? 'chLineTASK' : 'chLineNOTIFY')}</p>}
     <div className={styles.row}>
@@ -363,7 +365,7 @@ function SendPanel({ i, s, count, t, has, setSend, move, remove }: {
       </div>
     </div>
     {message && <div className={styles.field}>
-      <label htmlFor={`send-${i}-video`}>🎬 {t('videoLabel')}</label>
+      <label htmlFor={`send-${i}-video`}>{t('videoLabel')}</label>
       <input id={`send-${i}-video`} type="url" inputMode="url" placeholder="https://" value={s.videoUrl} aria-invalid={has(`send${i}.video`) || undefined} onChange={e => setSend(i, { videoUrl: e.target.value })}/>
       <small className={styles.meta}>{t('videoHint')}</small>
     </div>}

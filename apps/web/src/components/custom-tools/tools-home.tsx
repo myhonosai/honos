@@ -6,10 +6,11 @@ import { customToolApi, type CustomToolApi } from './http';
 import { useRead, type ReadState } from './hooks';
 import { labelText } from './model';
 import type { T } from './copy';
+import { ShellIcon, type ShellIconName } from '../school-shell/icons';
 import styles from './custom-tools.module.css';
 
-const GLYPH: Record<CustomToolIcon, string> = { star: '★', trophy: '🏆', users: '👥', calendar: '📅', clipboard: '📋', chart: '📊', box: '📦', flag: '🚩', heart: '♥', shield: '🛡', bolt: '⚡', book: '📖' };
-export const ToolIcon = ({ icon }: { icon: CustomToolIcon }) => <span className={styles.icon} aria-hidden="true">{GLYPH[icon] ?? '★'}</span>;
+const GLYPH: Record<CustomToolIcon, ShellIconName> = { star: 'star', trophy: 'referrals', users: 'students', calendar: 'calendar', clipboard: 'clipboard', chart: 'analytics', box: 'box', flag: 'flag', heart: 'heart', shield: 'shield', bolt: 'automation', book: 'book' };
+export const ToolIcon = ({ icon }: { icon: CustomToolIcon }) => <span className={styles.icon} aria-hidden="true"><ShellIcon name={GLYPH[icon] ?? 'star'} size={18}/></span>;
 export const toolHref = (toolKey: string, params: Record<string, string> = {}) =>
   `/staff/tools/${encodeURIComponent(toolKey)}${Object.keys(params).length ? `?${new URLSearchParams(params)}` : ''}`;
 export const makerHref = (toolId?: string) => toolId ? `/staff/tool-maker?${new URLSearchParams({ tool: toolId })}` : '/staff/tool-maker';

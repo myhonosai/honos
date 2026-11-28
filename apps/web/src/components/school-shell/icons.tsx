@@ -40,6 +40,22 @@ const paths = {
   close: <path d="m5 5 14 14M19 5 5 19" />,
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></>,
   more: <><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></>,
+  bell: <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>,
+  clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>,
+  task: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>,
+  sprout: <><path d="M12 21v-9" /><path d="M12 12c0-4-3-6-7-6 0 4 3 6 7 6Zm0 0c0-3 2.5-5 6.5-5 0 3.5-2.5 5-6.5 5Z" /></>,
+  wave: <><path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V11m0-1V4.5a1.5 1.5 0 0 1 3 0V11m0-4.5a1.5 1.5 0 0 1 3 0V12m0-3a1.5 1.5 0 0 1 3 0v4a8 8 0 0 1-8 8h-.5a7 7 0 0 1-5.6-2.8L4 15.5a1.6 1.6 0 0 1 2.4-2.1L7 14" /></>,
+  cake: <><path d="M4 21V13a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8M3 21h18" /><path d="M4 16c1.5 1 3 1 4 0s2.5-1 4 0 2.5 1 4 0 2.5-1 4 0M12 11V7m0-4v.5" /></>,
+  repeat: <><path d="M17 2.5 20.5 6 17 9.5" /><path d="M3.5 12V10a4 4 0 0 1 4-4h13M7 21.5 3.5 18 7 14.5" /><path d="M20.5 12v2a4 4 0 0 1-4 4h-13" /></>,
+  video: <><rect x="2.5" y="6" width="13" height="12" rx="2" /><path d="m15.5 10.5 6-3.5v10l-6-3.5" /></>,
+  star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z" />,
+  calendar: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><path d="M3 9.5h18M8 2.5v4m8-4v4" /></>,
+  clipboard: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4V2.5h6V4M9 10h6M9 14h6M9 18h3" /></>,
+  box: <><path d="m12 2.5 8.5 4.5v10L12 21.5 3.5 17V7Z" /><path d="m3.5 7 8.5 4.5L20.5 7M12 11.5v10" /></>,
+  flag: <><path d="M5 21.5V3.5" /><path d="M5 4h12l-2.5 4.5L17 13H5" /></>,
+  heart: <path d="M12 20.5s-8-4.6-8-10.5A4.5 4.5 0 0 1 12 7.3 4.5 4.5 0 0 1 20 10c0 5.9-8 10.5-8 10.5Z" />,
+  shield: <path d="M12 2.5 20 6v6c0 5-3.6 8.4-8 9.5C7.6 20.4 4 17 4 12V6Z" />,
+  book: <><path d="M4 19.5V5a2 2 0 0 1 2-2h14v15H6a2 2 0 0 0-2 2Zm0 0A2 2 0 0 0 6 21.5h14" /></>,
 } as const;
 export type ShellIconName = keyof typeof paths;
 
