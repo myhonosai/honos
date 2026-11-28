@@ -441,6 +441,7 @@
     "0697_hon_os_plan_features.sql": "4b8afcfa294062fc3a3f31af72a476b109179c371d129ba81854e619c8b09ebc",
     "0698_hq_inbound_owner_replies.sql": "cbd99d366661f7f44a2ad05b12cf13766fc928384f142b2c41b5637b9436ccbc",
     "0699_school_plan_features.sql": "58ae0072195b790c2d9d7ef71e2c06db44df99d01f73f28257c5f9b17b7dbbc8",
-    "0700_hq_school_plan_start_date.sql": "2ce441c4506cc0c770fd49343acc78d41cb5672f65a1899de554d0435f51f56c"
+    "0700_hq_school_plan_start_date.sql": "2ce441c4506cc0c770fd49343acc78d41cb5672f65a1899de554d0435f51f56c",
+    "0708_hon_os_referral_welcome_credit.sql": "de0b7e30ba8007f0a2c97c0604ca88e2152c8db73f57d0368ea63cb3f61cec53"
   }
 }
