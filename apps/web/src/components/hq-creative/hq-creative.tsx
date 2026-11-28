@@ -5,7 +5,7 @@ import { useLocale } from '../localization/provider';
 import { MarketingError, marketingApi, type MarketingApi } from '../hq-marketing/http';
 import { useConcealment, useMarketingCommand } from '../hq-marketing/model';
 import { creativeApi, type CreativeApi } from './http';
-import { budgetInputFrom, requestInputFrom, resolveInputFrom, type BudgetDraft, type RequestDraft, type ResolveDraft } from './model';
+import { requestInputFrom, resolveInputFrom, type RequestDraft, type ResolveDraft } from './model';
 import { HqCreativeView, type CreativeDone, type CreativeOutcome, type CreativeState } from './view';
 
 /**
@@ -52,17 +52,11 @@ export function HqCreative({ api = creativeApi, campaignsApi = marketingApi }: {
   }, [api, campaignsApi, refresh, concealed]);
 
   const { start, local } = command;
-  const view = state.state === 'READY' ? state.view : null;
   const onRequest = useCallback((d: RequestDraft) => {
     const input = requestInputFrom(d);
     if (!input) { local(); return; }
     start(async (key, signal, owned) => ({ done: 'REQUEST', receipt: await api.create(input, key, signal, owned) }));
   }, [api, start, local]);
-  const onBudget = useCallback((d: BudgetDraft) => {
-    const input = view ? budgetInputFrom(d, view.budget) : null;
-    if (!input) { local(); return; }
-    start(async (key, signal, owned) => ({ done: 'BUDGET', receipt: await api.setBudget(input, key, signal, owned) }));
-  }, [api, start, local, view]);
   const onResolve = useCallback((g: HqCreativeGeneration, d: ResolveDraft) => {
     const input = resolveInputFrom(d, g);
     if (!input) { local(); return; }
@@ -73,5 +67,5 @@ export function HqCreative({ api = creativeApi, campaignsApi = marketingApi }: {
 
   return <HqCreativeView language={preferences.language} formattingLocale={formattingLocale} concealed={concealed} state={state} campaigns={campaigns}
     outcome={command.outcome} locked={command.locked} canRetry={command.canRetry} resolving={resolving} onRefresh={onRefresh} onReveal={reveal}
-    onRequest={onRequest} onBudget={onBudget} onResolveOpen={onResolveOpen} onResolve={onResolve} onTryAgain={command.tryAgain}/>;
+    onRequest={onRequest} onResolveOpen={onResolveOpen} onResolve={onResolve} onTryAgain={command.tryAgain}/>;
 }

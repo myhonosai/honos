@@ -1,8 +1,8 @@
 import React from 'react';
-import { CREATIVE_GENERATION_FORMATS, type HqCreativeGeneration, type HqCreativeStudio, type HqMarketingCampaign } from '@hon/contracts';
+import { CREATIVE_GENERATION_FORMATS, HQ_CREATIVE_LIMITS, type HqCreativeGeneration, type HqCreativeStudio, type HqMarketingCampaign } from '@hon/contracts';
 import { creativeText, isCreativeKey, type CreativeKey } from './copy';
 import type { HqCreativeReceipt } from './http';
-import { resolvable, type BudgetDraft, type RequestDraft, type ResolveDraft } from './model';
+import { resolvable, type RequestDraft, type ResolveDraft } from './model';
 import type { MarketingOutcome } from '../hq-marketing/model';
 import styles from '../hq-access/hq-access.module.css';
 
@@ -11,7 +11,7 @@ export type CreativeDone = 'REQUEST' | 'BUDGET' | 'RESOLVE';
 export type CreativeOutcome = MarketingOutcome<{ done: CreativeDone; receipt: HqCreativeReceipt }>;
 export type CreativeViewProps = Readonly<{ language: string; formattingLocale: string; concealed: boolean; state: CreativeState;
   campaigns: readonly HqMarketingCampaign[]; outcome: CreativeOutcome; locked: boolean; canRetry: boolean; resolving: string | null;
-  onRefresh: () => void; onReveal: () => void; onRequest: (d: RequestDraft) => void; onBudget: (d: BudgetDraft) => void;
+  onRefresh: () => void; onReveal: () => void; onRequest: (d: RequestDraft) => void;
   onResolveOpen: (generationId: string | null) => void; onResolve: (g: HqCreativeGeneration, d: ResolveDraft) => void; onTryAgain: () => void }>;
 
 const formatTime = (locale: string, iso: string) => new Intl.DateTimeFormat(locale, { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
@@ -40,27 +40,13 @@ function Outcome({ language, outcome, canRetry, onTryAgain }: { language: string
   return <p className={styles.outcome} data-tone="blocked" role="alert" data-creative-outcome={outcome.kind.toLowerCase()} data-creative-code={outcome.kind === 'REFUSED' ? outcome.code ?? '' : undefined}>{t(key)}</p>;
 }
 
-function BudgetForm({ language, locked, onBudget }: { language: string; locked: boolean; onBudget: (d: BudgetDraft) => void }): React.ReactElement {
-  const t = (key: CreativeKey) => creativeText(language, key);
-  const submit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget);
-    onBudget({ creditCap: String(f.get('creditCap') ?? ''), reason: String(f.get('reason') ?? '') }); };
-  return <form className={styles.form} onSubmit={submit} aria-labelledby="hq-cs-budget-form" data-creative-budget-form="">
-    <h3 id="hq-cs-budget-form">{t('setBudget')}</h3>
-    <fieldset className={styles.fields} disabled={locked}>
-      <label htmlFor="hq-cs-cap">{t('capLabel')}</label>
-      <input id="hq-cs-cap" name="creditCap" required inputMode="numeric" autoComplete="off" aria-describedby="hq-cs-cap-help"/>
-      <p id="hq-cs-cap-help" className={styles.meta}>{t('capHelp')}</p>
-      <label htmlFor="hq-cs-reason">{t('reason')}</label>
-      <input id="hq-cs-reason" name="reason" required minLength={3} maxLength={300} autoComplete="off"/>
-    </fieldset>
-    <div className={styles.actions}><button type="submit" className={styles.primary} disabled={locked}>{t('saveBudget')}</button></div>
-  </form>;
-}
+/** 0702 (owner, 2026-11-28): a month the HQ owner has not set has no monthly limit; the server records it at the top cap. */
+const unlimited = (cap: number | null) => cap === null || cap >= HQ_CREATIVE_LIMITS.maxCap;
 
 function RequestForm({ language, view, campaigns, locked, onRequest }: { language: string; view: HqCreativeStudio; campaigns: readonly HqMarketingCampaign[];
   locked: boolean; onRequest: (d: RequestDraft) => void }): React.ReactElement {
   const t = (key: CreativeKey, vars?: Record<string, string>) => creativeText(language, key, vars);
-  const off = view.provider !== 'CONNECTED' || view.budget.creditCap === null || mediaRates(view.rates).length === 0;
+  const off = view.provider !== 'CONNECTED' || mediaRates(view.rates).length === 0;
   const submit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget), v = (k: string) => String(f.get(k) ?? '');
     onRequest({ operationCode: v('operationCode'), units: v('units'), format: v('format'), prompt: v('prompt'), campaignId: v('campaignId') }); };
   return <form className={styles.form} onSubmit={submit} aria-labelledby="hq-cs-request" data-creative-request-form="">
@@ -127,13 +113,13 @@ export function HqCreativeView(props: CreativeViewProps): React.ReactElement {
     <p className={styles.notice} data-creative-provider={v.provider}>{t(v.provider === 'CONNECTED' ? 'providerOn' : 'providerOff')}</p>
     <h2>{t('budgetTitle', { month: formatMonth(loc, b.periodStart) })}</h2>
     <p className={styles.meta}>{t('budgetSeparate')}</p>
-    {b.creditCap === null ? <p className={styles.notice} data-creative-budget="unset">{t('noBudget')}</p> : <>
+    {unlimited(b.creditCap) ? <><p className={styles.notice} data-creative-budget="unlimited">{t('noBudget')}</p>
+      <Facts rows={[[t('used'), n(loc, b.usedCredits)], [t('held'), n(loc, b.heldCredits)], [t('inProgress'), String(b.inProgress)]]}/></> : b.creditCap !== null && <>
       <div data-creative-budget="set"><Facts rows={[[t('cap'), n(loc, b.creditCap)], [t('used'), n(loc, b.usedCredits)], [t('held'), n(loc, b.heldCredits)],
         [t('available'), n(loc, b.availableCredits)], [t('inProgress'), String(b.inProgress)], [t('setBy'), b.setBy?.displayName ?? '']]}/></div>
       <meter min={0} max={Math.max(b.creditCap, 1)} value={b.usedCredits + b.heldCredits} aria-label={t('used')} style={{ width: '100%' }}/></>}
     <Outcome language={language} outcome={props.outcome} canRetry={props.canRetry} onTryAgain={props.onTryAgain}/>
-    {v.viewer.isOwner && <BudgetForm language={language} locked={locked} onBudget={props.onBudget}/>}
-    {v.budgetHistory.length > 0 && <><h3>{t('history')}</h3><ul className={styles.list} data-creative-history="">
+    {!unlimited(b.creditCap) && v.budgetHistory.length > 0 && <><h3>{t('history')}</h3><ul className={styles.list} data-creative-history="">
       {v.budgetHistory.map(h => <li key={`${h.periodStart}-${h.version}`} className={styles.meta}>{t(h.previousCap === null ? 'historyFirst' : 'historyRow',
         { month: formatMonth(loc, h.periodStart), cap: n(loc, h.creditCap), prev: h.previousCap === null ? '' : n(loc, h.previousCap), name: h.actor.displayName, reason: h.reason })}</li>)}</ul></>}
     {v.rates.length === 0 && <p className={styles.meta}>{t('noRates')}</p>}
