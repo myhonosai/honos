@@ -114,3 +114,20 @@ test('the live module gives the draft its own runtime profile and no test fake; 
     assert(!/save_school_creative_design|set_school_creative_design_status/.test(s), 'a draft never saves a design by itself');
   }
 });
+
+test('0706: the price is closed, and someone who may not ask Marcus gets no price instead of an error', async () => {
+  const { verifyDesignDraftPrice, DESIGN_DRAFT_REASONS } = require('@hon/contracts');
+  assert.deepEqual(verifyDesignDraftPrice({ paidWith: 'CREATIVE_CREDITS', creditsPerDesign: 2, availableCredits: 0 }), { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: 2, availableCredits: 0 });
+  assert.deepEqual(verifyDesignDraftPrice({ paidWith: 'INCLUDED_AI', creditsPerDesign: null, availableCredits: null }), { paidWith: 'INCLUDED_AI', creditsPerDesign: null, availableCredits: null });
+  for (const bad of [{}, { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: 0, availableCredits: 1 }, { paidWith: 'INCLUDED_AI', creditsPerDesign: 2, availableCredits: null }, { paidWith: 'CARD', creditsPerDesign: null, availableCredits: null }])
+    assert.throws(() => verifyDesignDraftPrice(bad));
+  assert.ok(DESIGN_DRAFT_REASONS.includes('CREATIVE_CREDITS_EXHAUSTED'));
+  const blocked = { id, status: 'BLOCKED', reason: 'CREATIVE_CREDITS_EXHAUSTED', brief, mine: true, draft: null, problems: [], createdAt: '2026-11-28T00:00:00.000Z', updatedAt: '2026-11-28T00:00:00.000Z' };
+  assert.equal(verifyDesignDraftView(blocked).reason, 'CREATIVE_CREDITS_EXHAUSTED');
+  const forbidden = Object.assign(new Error('DESIGN_DRAFT_AI_FORBIDDEN'), { code: '42501' });
+  const db = { withTenantTransaction: async () => { throw forbidden; } };
+  const svc = new DesignDraftService(db, {}, { readiness: () => 'READY', generate: async () => { throw Error('no'); } });
+  assert.equal(await svc.price({ ...ctx, idempotencyKey: '' }), null);
+  const down = new DesignDraftService({ withTenantTransaction: async () => { throw Object.assign(new Error('x'), { code: '08006' }); } }, {}, {});
+  await assert.rejects(down.price({ ...ctx, idempotencyKey: '' }), e => e.getStatus?.() === 503);
+});

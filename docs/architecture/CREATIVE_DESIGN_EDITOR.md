@@ -155,3 +155,15 @@ Owner decisions 2026-11-28: "Upgrade ours now, Canva later" with AI; an AI desig
   `:id/close`), `X-Hon-Human-Command: design-draft`, UUID `Idempotency-Key` on POSTs.
 - **Proof.** `packages/database/scripts/test-design-ai-draft.mjs` (custody, ask, close, rejected shapes, unknown/failed/off,
   usage attribution, size budget, gates, isolation, 011 section).
+
+## E4b AI designs on creative credits (0706, 2026-11-28)
+
+- `hon.ai_text_creative_billing` gains `DESIGN_DRAFT -> design.generate`, so an AI design follows the 0690 path exactly: the
+  rate is the HQ owner's to publish (per REQUEST, one unit, provisional, in the WEBSITE text-request rate kind; owner decision
+  2 credits), one unit is reserved before the call and settled by the draft's status, an exhausted school is BLOCKED
+  (`CREATIVE_CREDITS_EXHAUSTED`) with nothing sent and no fallback, and one creative-paid AI request is in flight per school
+  (shared with website edits). Not priced, program off, or a school not eligible for creative credits: included AI as in 0705.
+- `hon.read_design_draft_price` (runtime) tells the box before asking: "Each design uses 2 creative credits. You have N." or
+  "Included in your plan's AI for now." Someone who may not ask Marcus gets no price (the request re-checks everything).
+- Proof: W17 in `test-website-ai-creative-credits.mjs` (paid school pays 2, blocked when out, unpaid stays included) and the
+  0706 section of 011.

@@ -24,7 +24,7 @@ export class DesignDraftController {
   async list(@Param('organizationId', new ParseUUIDPipe()) o: string, @Param('schoolId', new ParseUUIDPipe()) s: string, @Headers('idempotency-key') k: string | undefined, @Req() r: HonRequest) {
     if (k !== undefined) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_NOT_ACCEPTED' });
     const context = await this.context(r, o, s, '');
-    return { data: { aiAvailable: this.drafts.available(), requests: await this.drafts.list(context) }, meta: this.meta(context) };
+    return { data: { aiAvailable: this.drafts.available(), price: await this.drafts.price(context), requests: await this.drafts.list(context) }, meta: this.meta(context) };
   }
   @Post() @HttpCode(200) @Header('Cache-Control', 'private, no-store') @Header('Referrer-Policy', 'no-referrer')
   async request(@Param('organizationId', new ParseUUIDPipe()) o: string, @Param('schoolId', new ParseUUIDPipe()) s: string, @Headers('idempotency-key') k: string | undefined, @Body() input: unknown, @Req() r: HonRequest) {

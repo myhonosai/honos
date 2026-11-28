@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { DESIGN_DRAFT_LIMITS, normalizeDesignDraftAnswer, validateDesignDraft, validateDesignDraftBrief, verifyDesignDraftList, verifyDesignDraftView, type DesignDraftView } from '@hon/contracts';
+import { DESIGN_DRAFT_LIMITS, normalizeDesignDraftAnswer, validateDesignDraft, validateDesignDraftBrief, verifyDesignDraftList, verifyDesignDraftPrice, verifyDesignDraftView, type DesignDraftPrice, type DesignDraftView } from '@hon/contracts';
 import type { PoolClient } from 'pg';
 import { RuntimeDatabaseService } from '../foundation/runtime-database.service.js';
 import { AiInvocationPlanService } from '../ai/ai-invocation-plan.service.js';
@@ -53,6 +53,11 @@ export class DesignDraftService {
     return this.tx(context, false, async c => verifyDesignDraftList((await c.query<{ data: unknown }>('SELECT hon.read_design_drafts($1,NULL) data', [context.externalSubject])).rows[0]?.data));
   }
   async read(context: DesignDraftContext, id: string): Promise<DesignDraftView> { return this.view(context, id, false); }
+  /** 0706: what the next design is paid with, for someone who may ask Marcus; null for anyone else (the request re-checks it). */
+  async price(context: DesignDraftContext): Promise<DesignDraftPrice | null> {
+    try { return await this.tx(context, false, async c => verifyDesignDraftPrice((await c.query<{ data: unknown }>('SELECT hon.read_design_draft_price($1) data', [context.externalSubject])).rows[0]?.data)); }
+    catch (error) { if (error instanceof ForbiddenException) return null; throw error; }
+  }
   private async view(context: DesignDraftContext, id: string, command: boolean): Promise<DesignDraftView> {
     this.uuid(id);
     return this.tx(context, command, async c => verifyDesignDraftView((await c.query<{ data: unknown }>('SELECT hon.read_design_drafts($1,$2::uuid) data', [context.externalSubject, id])).rows[0]?.data));

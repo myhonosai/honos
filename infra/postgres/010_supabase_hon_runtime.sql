@@ -5922,3 +5922,12 @@ DO $$ DECLARE r text; f regprocedure; BEGIN
       hon.record_design_draft(text,uuid,jsonb), hon.read_design_drafts(text,uuid), hon.close_design_draft(text,uuid,text) TO hon_runtime;
   END IF;
 END $$;
+
+-- 0706 design AI creative credits: one runtime read (the price of the next AI design); the billing row is data in the 0690 registry.
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_design_draft_price(text)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0706 first'; END IF;
+  REVOKE ALL ON FUNCTION hon.read_design_draft_price(text) FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION hon.read_design_draft_price(text) FROM %I',r); END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN GRANT EXECUTE ON FUNCTION hon.read_design_draft_price(text) TO hon_runtime; END IF;
+END $$;

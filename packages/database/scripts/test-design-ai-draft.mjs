@@ -84,7 +84,7 @@ try {
 
   // 1. Custody: the DESIGN_DRAFT kind is fixed; the runtime executes exactly the seven entry points; nothing to PUBLIC.
   const entry = ['begin_design_draft', 'plan_design_draft', 'prepare_design_draft', 'fail_design_draft', 'record_design_draft', 'read_design_drafts', 'close_design_draft'];
-  const fns = await rows("SELECT p.oid, p.proname, p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%design_draft%'");
+  const fns = await rows("SELECT p.oid, p.proname, p.prosecdef FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='hon' AND p.proname LIKE '%design_draft%' AND p.proname <> 'read_design_draft_price'");
   assert.equal(fns.length, 13, fns.map((f) => f.proname).join(','));
   for (const f of fns) {
     assert.equal((await row("SELECT has_function_privilege($1,$2::oid,'EXECUTE') ok", [runtimeRole, f.oid])).ok, entry.includes(f.proname), f.proname);

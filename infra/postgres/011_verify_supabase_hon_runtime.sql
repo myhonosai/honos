@@ -7525,7 +7525,8 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
       RAISE EXCEPTION 'Unsafe website AI creative credit table: %',t;
     END IF;
   END LOOP;
-  IF (SELECT array_agg(kind||'='||operation_code ORDER BY kind) FROM hon.ai_text_creative_billing) IS DISTINCT FROM ARRAY['WEBSITE_EDIT=website.edit'] THEN
+  -- 0706 adds DESIGN_DRAFT -> design.generate (owner decision 2026-11-28: AI designs on creative credits).
+  IF (SELECT array_agg(kind||'='||operation_code ORDER BY kind) FROM hon.ai_text_creative_billing) IS DISTINCT FROM ARRAY['DESIGN_DRAFT=design.generate','WEBSITE_EDIT=website.edit'] THEN
     RAISE EXCEPTION 'Website AI creative billing registry changed';
   END IF;
   IF (SELECT count(*) FROM pg_trigger t WHERE t.tgenabled='O' AND (t.tgrelid, t.tgname, t.tgfoid) IN (
@@ -7792,3 +7793,17 @@ DO $$ DECLARE f record; safe boolean; BEGIN
   END IF;
 END $$;
 -- End design AI draft exact verification.
+
+-- Design AI creative credits exact verification (0706): the runtime read of the next AI design's price. The registry row
+-- (DESIGN_DRAFT -> design.generate) is checked in the 0690 section above.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)
+    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='14e208f0fcdaf966477465da35ada862cc17e516686af948fce96c0fe0139979'
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_design_draft_price(text)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe design AI price read'; END IF;
+END $$;
+-- End design AI creative credits exact verification.

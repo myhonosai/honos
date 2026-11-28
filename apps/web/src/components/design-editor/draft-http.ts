@@ -1,4 +1,4 @@
-import { DESIGN_DRAFT_COMMAND, validateDesignDraftBrief, verifyDesignDraftView, type CreativeDesignSizeCode, type DesignDraftBrief, type DesignDraftLanguage, type DesignDraftView } from '@hon/contracts';
+import { DESIGN_DRAFT_COMMAND, validateDesignDraftBrief, verifyDesignDraftPrice, verifyDesignDraftView, type CreativeDesignSizeCode, type DesignDraftBrief, type DesignDraftLanguage, type DesignDraftPrice, type DesignDraftView } from '@hon/contracts';
 import type { DesignsScope } from './http';
 
 /**
@@ -30,16 +30,23 @@ async function call(url: string, body?: object, key?: string): Promise<unknown> 
   return root.data;
 }
 
+/** Whether AI drafting is on for this server, and (0706) what the next design is paid with when the server says. */
+export type DesignDraftStatus = Readonly<{ available: boolean; price: DesignDraftPrice | null }>;
 export type DesignDraftApi = Readonly<{
-  available: (scope: DesignsScope) => Promise<boolean>;
+  status: (scope: DesignsScope) => Promise<DesignDraftStatus>;
   draft: (scope: DesignsScope, brief: string, size: CreativeDesignSizeCode, language: DesignDraftLanguage, key: string) => Promise<DesignDraftView>;
   close: (scope: DesignsScope, id: string, status: 'APPLIED' | 'DISMISSED', key: string) => Promise<void>;
 }>;
 
 export const designDraftApi: DesignDraftApi = {
-  /** Whether AI drafting is switched on for this server. Any failure reads as "not available": the box then explains and stays off. */
-  async available(scope) {
-    try { const data = await call(base(scope)) as { aiAvailable?: unknown } | null; return data?.aiAvailable === true; } catch { return false; }
+  /** Any failure reads as "not available": the box then explains and stays off. A price that does not verify is not shown. */
+  async status(scope) {
+    try {
+      const data = await call(base(scope)) as { aiAvailable?: unknown; price?: unknown } | null;
+      let price: DesignDraftPrice | null = null;
+      try { price = data?.price == null ? null : verifyDesignDraftPrice(data.price); } catch { price = null; }
+      return { available: data?.aiAvailable === true, price };
+    } catch { return { available: false, price: null }; }
   },
   async draft(scope, brief, size, language, key) {
     let input: DesignDraftBrief;

@@ -67,6 +67,10 @@ describe('E4a Describe your design', () => {
     expect(draftNoticeKey(view())).toBeNull();
     const cases: [DesignDraftView['status'], DesignKey][] = [['CONFIGURATION_REQUIRED', 'aiOff'], ['BLOCKED', 'aiStopped'], ['RESULT_REJECTED', 'aiRejected'], ['FAILED', 'aiFailed'], ['UNKNOWN', 'aiUnknown'], ['SENDING', 'aiUnknown']];
     for (const [status, key] of cases) expect(draftNoticeKey(view({ status, draft: null })), status).toBe(key);
+    // 0706: out of creative credits, or another paid AI request still running at this school; nothing was sent.
+    expect(draftNoticeKey(view({ status: 'BLOCKED', reason: 'CREATIVE_CREDITS_EXHAUSTED', draft: null }))).toBe('aiNoCredits');
+    expect(draftNoticeKey(view({ status: 'BLOCKED', reason: 'CREATIVE_EDIT_IN_PROGRESS', draft: null }))).toBe('aiBusy');
+    expect(designText('en', 'aiCost', { n: '2', left: '40' })).toBe('Each design uses 2 creative credits. You have 40.');
     const errors: [string, DesignKey][] = [['SESSION', 'session'], ['DESIGN_DRAFT_FORBIDDEN', 'aiForbidden'], ['DESIGN_DRAFT_SPEND_STOPPED', 'aiStopped'], ['DESIGN_DRAFT_INVALID', 'aiInvalid'],
       ['DESIGN_DRAFT_CONFLICT', 'aiBusy'], ['DESIGN_DRAFT_PERSISTENCE_UNKNOWN', 'aiUnknown'], ['DESIGN_DRAFT_UNAVAILABLE', 'aiFailed']];
     for (const [code, key] of errors) expect(draftNoticeKey(new DesignDraftError(code)), code).toBe(key);
@@ -77,8 +81,8 @@ describe('E4a Describe your design', () => {
   it('asks the same-origin school route with its own command and a key, and sends only the brief, size and language', async () => {
     const calls: [string, RequestInit][] = [];
     vi.stubGlobal('fetch', vi.fn(async (u: string, init: RequestInit) => { calls.push([u, init]);
-      return Response.json({ data: init.method === 'GET' ? { aiAvailable: true, requests: [] } : view(), meta: {} }, { status: 200 }); }));
-    expect(await designDraftApi.available(scope)).toBe(true);
+      return Response.json({ data: init.method === 'GET' ? { aiAvailable: true, price: { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: 2, availableCredits: 40 }, requests: [] } : view(), meta: {} }, { status: 200 }); }));
+    expect(await designDraftApi.status(scope)).toEqual({ available: true, price: { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: 2, availableCredits: 40 } });
     const got = await designDraftApi.draft(scope, brief.brief, 'FLYER_LETTER', 'en', id('c'));
     expect(got.draft?.options).toHaveLength(3);
     await designDraftApi.close(scope, id('a'), 'APPLIED', id('d'));
@@ -102,12 +106,15 @@ describe('E4a Describe your design', () => {
     await expect(designDraftApi.draft(scope, brief.brief, 'FLYER_LETTER', 'en', id('c'))).rejects.toMatchObject({ code: 'DESIGN_DRAFT_UNAVAILABLE' });
     // Any failure to read availability reads as off.
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline'); }));
-    expect(await designDraftApi.available(scope)).toBe(false);
+    expect(await designDraftApi.status(scope)).toEqual({ available: false, price: null });
+    // A price that does not verify is not shown; AI stays available.
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ data: { aiAvailable: true, price: { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: 0, availableCredits: 1 }, requests: [] } }, { status: 200 })));
+    expect(await designDraftApi.status(scope)).toEqual({ available: true, price: null });
     expect([draftLanguage('ko-KR'), draftLanguage('es'), draftLanguage('fr'), draftLanguage('en-US')]).toEqual(['ko', 'es', 'en', 'en']);
   });
 
   it('shows a waiting box until the server says AI is on; schools get it, HQ does not', () => {
-    const api = { available: vi.fn(() => new Promise<boolean>(() => {})), draft: vi.fn(), close: vi.fn() };
+    const api = { status: vi.fn(() => new Promise<never>(() => {})), draft: vi.fn(), close: vi.fn() };
     const html = renderToStaticMarkup(<DesignAiBox api={api} scope={scope} code="FLYER_LETTER" language="en" brand={{ accent: null, contactLine: null }} value={null} onPick={() => {}} t={t} />);
     expect(html).toContain('Describe your design');
     expect(html).toContain('maxLength="600"');

@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import { DESIGN_DRAFT_LIMITS, type CreativeDesignSizeCode, type DesignDraftView } from '@hon/contracts';
+import { DESIGN_DRAFT_LIMITS, type CreativeDesignSizeCode, type DesignDraftPrice, type DesignDraftView } from '@hon/contracts';
 import { ALL_STYLE_FONTS, Preview } from './gallery';
 import { loadDesignFonts } from './fonts';
 import { DesignDraftError, draftLanguage, type DesignDraftApi } from './draft-http';
@@ -38,7 +38,7 @@ export function draftNoticeKey(outcome: DesignDraftView | DesignDraftError | nul
   }
   if (outcome.status === 'RESULT_RECORDED' && outcome.draft?.options.length) return null;
   if (outcome.status === 'CONFIGURATION_REQUIRED') return 'aiOff';
-  if (outcome.status === 'BLOCKED') return 'aiStopped';
+  if (outcome.status === 'BLOCKED') return outcome.reason === 'CREATIVE_CREDITS_EXHAUSTED' ? 'aiNoCredits' : outcome.reason === 'CREATIVE_EDIT_IN_PROGRESS' ? 'aiBusy' : 'aiStopped';
   if (outcome.status === 'RESULT_REJECTED') return 'aiRejected';
   if (outcome.status === 'FAILED') return 'aiFailed';
   return 'aiUnknown';
@@ -51,6 +51,7 @@ export function DesignAiBox({ api, scope, code, language, brand, value, onPick, 
   onPick: (choice: AiChoice | null) => void; t: (key: DesignKey, vars?: Record<string, string>) => string;
 }>) {
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [price, setPrice] = useState<DesignDraftPrice | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<DesignDraftView | DesignDraftError | null>(null);
@@ -61,7 +62,7 @@ export function DesignAiBox({ api, scope, code, language, brand, value, onPick, 
   useEffect(() => {
     alive.current = true;
     setAvailable(null);
-    void api.available(scope).then(ok => { if (alive.current) setAvailable(ok); });
+    void api.status(scope).then(st => { if (alive.current) { setAvailable(st.available); setPrice(st.price); } });
     return () => { alive.current = false; };
   }, [api, scope.organizationId, scope.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -79,6 +80,8 @@ export function DesignAiBox({ api, scope, code, language, brand, value, onPick, 
     catch (error) { result = error instanceof DesignDraftError ? error : new DesignDraftError('DESIGN_DRAFT_UNAVAILABLE'); }
     if (!alive.current) return;
     setBusy(false); setOutcome(result);
+    // The balance moved (or the plan changed): read the price again. Best effort.
+    void api.status(scope).then(st => { if (alive.current) setPrice(st.price); });
     // A settled answer frees the key; an unknown one keeps it so a retry replays instead of paying twice.
     const settled = !(result instanceof DesignDraftError) ? result.status !== 'SENDING' && result.status !== 'UNKNOWN'
       : !['DESIGN_DRAFT_CONFLICT', 'DESIGN_DRAFT_PERSISTENCE_UNKNOWN', 'DESIGN_DRAFT_UNAVAILABLE'].includes(result.code);
@@ -100,6 +103,8 @@ export function DesignAiBox({ api, scope, code, language, brand, value, onPick, 
         <span className={s.meta}>{text.length}/{DESIGN_DRAFT_LIMITS.brief}</span>
       </div>
       {available === false ? <p className={s.meta} role="status">{t('aiOff')}</p> : null}
+      {available && price ? <p className={s.meta}>{price.paidWith === 'CREATIVE_CREDITS'
+        ? t('aiCost', { n: String(price.creditsPerDesign), left: String(price.availableCredits) }) : t('aiIncluded')}</p> : null}
       {notice ? <p className={s.notice} data-tone="warn" role="alert">{t(notice)}</p> : null}
       {choices.length ? (
         <div className={s.galleryGrid} role="listbox" aria-label={t('aiOptions')}>

@@ -25,8 +25,26 @@ export type DesignDraftRow = readonly [day: string, time: string, klass: string]
 export interface DesignDraftBrief { brief: string; size: CreativeDesignSizeCode; language: DesignDraftLanguage }
 export interface DesignDraftOption { theme: DesignDraftTheme; style: DesignDraftStyle; words: DesignDraftWords; schedule: DesignDraftRow[] | null }
 export interface DesignDraft { options: DesignDraftOption[] }
+/** 0706: a draft paid from creative credits that could not reserve them is BLOCKED with one of these (nothing was sent). */
+export const DESIGN_DRAFT_REASONS = [...MERCH_AI_REASONS, 'CREATIVE_CREDITS_EXHAUSTED', 'CREATIVE_NOT_PRICED', 'CREATIVE_NOT_ELIGIBLE', 'CREATIVE_EDIT_IN_PROGRESS'] as const;
+export type DesignDraftReason = MerchAiReason | (typeof DESIGN_DRAFT_REASONS)[number];
+/**
+ * 0706: what the next AI design is paid with. CREATIVE_CREDITS when the creative program is on, the school is eligible for
+ * creative credits and HQ published the design.generate rate (owner decision 2026-11-28: 2 credits); otherwise INCLUDED_AI.
+ */
+export type DesignDraftPrice =
+  | { paidWith: 'CREATIVE_CREDITS'; creditsPerDesign: number; availableCredits: number }
+  | { paidWith: 'INCLUDED_AI'; creditsPerDesign: null; availableCredits: null };
+export function verifyDesignDraftPrice(value: unknown): DesignDraftPrice {
+  if (!isObject(value) || !exactKeys(value, ['paidWith', 'creditsPerDesign', 'availableCredits'])) return fail('price');
+  const count = (n: unknown, min: number) => Number.isSafeInteger(n) && (n as number) >= min && (n as number) <= 1_000_000_000;
+  if (value.paidWith === 'INCLUDED_AI' && value.creditsPerDesign === null && value.availableCredits === null) return { paidWith: 'INCLUDED_AI', creditsPerDesign: null, availableCredits: null };
+  if (value.paidWith === 'CREATIVE_CREDITS' && count(value.creditsPerDesign, 1) && count(value.availableCredits, 0))
+    return { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: value.creditsPerDesign as number, availableCredits: value.availableCredits as number };
+  return fail('price');
+}
 export interface DesignDraftView {
-  id: string; status: MerchAiStatus; reason: MerchAiReason | null; brief: DesignDraftBrief; mine: boolean;
+  id: string; status: MerchAiStatus; reason: DesignDraftReason | null; brief: DesignDraftBrief; mine: boolean;
   draft: DesignDraft | null; problems: string[]; createdAt: string; updatedAt: string;
 }
 
@@ -106,13 +124,13 @@ export function verifyDesignDraftView(value: unknown): DesignDraftView {
   if (!isObject(value) || !exactKeys(value, ['id', 'status', 'reason', 'brief', 'mine', 'draft', 'problems', 'createdAt', 'updatedAt'])) return fail('view');
   const v = value;
   if (typeof v.id !== 'string' || !UUID.test(v.id) || typeof v.status !== 'string' || !(MERCH_AI_STATUSES as readonly string[]).includes(v.status)
-    || !(v.reason === null || (typeof v.reason === 'string' && (MERCH_AI_REASONS as readonly string[]).includes(v.reason))) || typeof v.mine !== 'boolean'
+    || !(v.reason === null || (typeof v.reason === 'string' && (DESIGN_DRAFT_REASONS as readonly string[]).includes(v.reason))) || typeof v.mine !== 'boolean'
     || typeof v.createdAt !== 'string' || !ISO.test(v.createdAt) || typeof v.updatedAt !== 'string' || !ISO.test(v.updatedAt)
     || !Array.isArray(v.problems) || v.problems.some(x => typeof x !== 'string' || x.length < 1 || x.length > 160)) return fail('view');
   const brief = validateDesignDraftBrief(v.brief);
   const open = v.status === 'RESULT_RECORDED' || v.status === 'APPLIED';
   if (!open && v.draft !== null) return fail('view');
-  return { id: v.id, status: v.status as MerchAiStatus, reason: v.reason as MerchAiReason | null, brief, mine: v.mine, draft: open ? validateDesignDraft(v.draft) : null,
+  return { id: v.id, status: v.status as MerchAiStatus, reason: v.reason as DesignDraftReason | null, brief, mine: v.mine, draft: open ? validateDesignDraft(v.draft) : null,
     problems: v.problems as string[], createdAt: v.createdAt, updatedAt: v.updatedAt };
 }
 export function verifyDesignDraftList(value: unknown): DesignDraftView[] {
