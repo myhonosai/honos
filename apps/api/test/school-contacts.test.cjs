@@ -127,3 +127,23 @@ test('school contacts C4 (0623): sort and the added filters pass the controller,
     assert.equal(await code(new SchoolContactsService(database(page())).list(context, bad, undefined)), 'VALIDATION_FAILED', JSON.stringify(bad));
   }
 });
+
+test('school contacts C5 (0701): contact type, program order and expired pass the controller, reach the database, and bind the cursor', async () => {
+  const db = scopeDatabase(), contacts = { calls: [], async list(ctx, filters, cursor) { this.calls.push([ctx, filters, cursor]); return { ok: true }; } };
+  const controller = new SchoolContactsController(db, contacts);
+  const query = { sort: 'PROGRAM', membership: 'EXPIRED', contactType: 'GUARDIAN' };
+  await controller.list(ORG, SCHOOL, undefined, query, request);
+  assert.deepEqual(contacts.calls[0][1], query);
+  const base = database(page());
+  const service = new SchoolContactsService(base);
+  const first = await service.list(context, query, undefined);
+  assert.deepEqual(base.inputs[0], query);
+  await service.list(context, query, first.nextCursor);
+  assert.equal(base.inputs[1].afterId, PERSON);
+  for (const changed of [{ ...query, contactType: 'CHILD' }, { sort: 'PROGRAM', membership: 'EXPIRED' }, { ...query, sort: 'NAME' }]) {
+    assert.equal(await code(service.list(context, changed, first.nextCursor)), 'INVALID_CURSOR', JSON.stringify(changed));
+  }
+  for (const bad of [{ contactType: 'PARENT' }, { contactType: 'guardian' }, { contactType: '' }, { sort: 'program' }, { membership: 'ENDED' }]) {
+    assert.equal(await code(new SchoolContactsService(database(page())).list(context, bad, undefined)), 'VALIDATION_FAILED', JSON.stringify(bad));
+  }
+});

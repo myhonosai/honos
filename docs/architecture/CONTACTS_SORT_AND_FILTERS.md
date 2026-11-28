@@ -60,3 +60,43 @@ age next to the name and a "Paused" / "Cancelling" badge. Copy in en / ko / es.
   "ended" filter needs the last end date in `school_contact_facts` and can follow.
 - Saving a filter set as a named group, and sending a blast to the current filter (blasts PR #489 has its own audience
   groups; reusing this list as a blast audience is a later step).
+
+# C5 (migration 0701): filters in plain sight, expired members, program order, parents and children
+
+Owner ask (David, 2026-11-27): "i need sort function of belt levels, expiration dates, program, active or inactive, or
+other contact type." C4 already had most of it, but the filters sat in a closed fold and David did not find them. He
+chose (decision card, 2026-11-27 08:23Z) "show filters + fill gaps".
+
+## What C5 adds
+
+One more `CREATE OR REPLACE` of `hon.read_school_contact_list` (same signature, owner, grants and actor check). No new
+table, no write, nothing sent or charged. **The response shape does not change** (rows, counts and options keep their
+exact keys), so HON Staff app builds already installed keep verifying the list.
+
+| Query key | New value | Meaning |
+|---|---|---|
+| `sort` | `PROGRAM` | Current membership's program name A to Z (case-insensitive). People without a program come last, then name order. |
+| `membership` | `EXPIRED` | No current membership, but the person had a started membership at this school before (the same "former" test the Inactive segment uses). Unlike the Inactive chip it also lists former members who now have an open lead. |
+| `contactType` (new key) | `GUARDIAN` | The person is a guardian (`family_members.member_role = 'GUARDIAN'`) in a family of this school. |
+| | `CHILD` | The person is a student or dependent in a family of this school that also has a guardian who is someone else (the blasts "children" test, 0695). |
+
+### Rules
+
+- **C5-1** Paging stays keyset on the last person id. `PROGRAM` adds a text key (lower-cased program name, empty when
+  there is none) after the numeric key; the anchor recomputes it from the same snapshot.
+- **C5-2** `contactType` and the new values are part of what the API signs the cursor to.
+- **C5-3** Closed input as before: unknown `contactType` values are refused (400 VALIDATION_FAILED) in the contract, the
+  API and the database.
+
+## Screen
+
+- The Filters panel is no longer a fold: Sort, the segment chips and every filter show at once in a filter bar, with
+  "Clear filters" when any is set.
+- Membership menu gains "Expired (no current membership)". Sort menu gains "Program A–Z". New "Contact type" menu: Any,
+  Parents and guardians, Children. Copy in en / ko / es.
+
+## Tests
+
+- DB proof `test-school-contacts-integrity.mjs`: PROGRAM order across both pages, EXPIRED, GUARDIAN, CHILD, refusals.
+- Contract tests for the validator; API test that the cursor is signed to `contactType`.
+- Web test: the bar renders open, the new choices send the right query.

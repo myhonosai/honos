@@ -1,5 +1,5 @@
 import React, { useId, useState } from 'react';
-import { SCHOOL_CONTACT_ENDS_WITHIN, SCHOOL_CONTACT_MEMBERSHIP_FILTERS, SCHOOL_CONTACT_SEGMENTS, SCHOOL_CONTACT_SORTS, type SchoolContactOptions,
+import { SCHOOL_CONTACT_ENDS_WITHIN, SCHOOL_CONTACT_MEMBERSHIP_FILTERS, SCHOOL_CONTACT_SEGMENTS, SCHOOL_CONTACT_SORTS, SCHOOL_CONTACT_TYPES, type SchoolContactOptions,
   type SchoolContactRow, type SchoolContactSort } from '@hon/contracts';
 import { CONTACT_QUERY_MAX, NO_BELT, NO_CONTACT_FILTERS, contactFiltersOk, type ContactFilters } from './contacts-http';
 import { contactsText, type ContactsKey } from './contacts-copy';
@@ -17,13 +17,13 @@ const DAY = 86_400_000;
 
 /** How many filters in the panel are set (search, segment and sort are shown on their own; a range counts once). */
 export function activeFilterCount(f: ContactFilters): number {
-  return [f.rankId, f.programId, f.planId, f.endsWithinDays || f.endsFrom || f.endsTo, f.membership, f.ageMin || f.ageMax, f.tag].filter(Boolean).length;
+  return [f.rankId, f.programId, f.planId, f.endsWithinDays || f.endsFrom || f.endsTo, f.membership, f.ageMin || f.ageMax, f.tag, f.contactType].filter(Boolean).length;
 }
 /** C4: age groups for a martial arts school, as [min, max] ('' = open). */
 export const CONTACT_AGE_BANDS: readonly (readonly [string, string])[] = [['3', '5'], ['6', '8'], ['9', '12'], ['13', '17'], ['18', '']];
 const bandKey = (min: string, max: string) => `${min}-${max}`;
 const CLEAR_PANEL: Partial<ContactFilters> = { rankId: NO_CONTACT_FILTERS.rankId, programId: '', planId: '', endsWithinDays: '', membership: '', endsFrom: '', endsTo: '',
-  ageMin: '', ageMax: '', tag: '' };
+  ageMin: '', ageMax: '', tag: '', contactType: '' };
 
 /** The end-date badge for a row: soon (within 30 days), later, or already ended. */
 export function endBadge(language: string, endsAt: string | null, now = Date.now()): Readonly<{ tone: 'soon' | 'later' | 'ended'; text: string }> | null {
@@ -76,12 +76,14 @@ export function ContactsList(props: ContactsListProps): React.ReactElement {
         {t(segment)}{counts ? <span className={styles.count}>{counts[segment]}</span> : null}
       </button>)}
     </div>
-    <details className={styles.filters} open={active > 0 ? true : undefined}>
-      <summary>{active ? t('filtersOn', { n: active }) : t('filters')}</summary>
-      <p className={styles.meta}>{t('filterHelp')}</p>
-      <div className={styles.filterGrid}>
+    {/* C5 (owner 2026-11-27): the filters are always in view, not folded away. */}
+    <section className={`${styles.filters} ${own.bar}`} aria-labelledby={`${base}-filters`} data-testid="contact-filters">
+      <h3 id={`${base}-filters`} className={own.barTitle}>{active ? t('filtersOn', { n: active }) : t('filters')}</h3>
+      <div className={own.barGrid}>
         <Select id={`${base}-rank`} label={t('belt')} value={filters.rankId} any={t('any')} disabled={busy} onChange={rankId => set({ rankId })}
           choices={[[NO_BELT, t('noBelt')], ...(options?.ranks ?? []).map(r => [r.rankId, `${r.curriculum}: ${r.rank}`] as const)]}/>
+        <Select id={`${base}-type`} label={t('contactType')} value={filters.contactType} any={t('any')} disabled={busy}
+          onChange={v => set({ contactType: v as ContactFilters['contactType'] })} choices={SCHOOL_CONTACT_TYPES.map(v => [v, t(`type${v}`)])}/>
         <Select id={`${base}-membership`} label={t('membership')} value={filters.membership} any={t('any')} disabled={busy}
           onChange={m => set({ membership: m as ContactFilters['membership'] })} choices={SCHOOL_CONTACT_MEMBERSHIP_FILTERS.map(m => [m, t(`mem${m}`)])}/>
         <Select id={`${base}-program`} label={t('program')} value={filters.programId} any={t('any')} disabled={busy} onChange={programId => set({ programId })}
@@ -109,7 +111,8 @@ export function ContactsList(props: ContactsListProps): React.ReactElement {
       {bad ? <p className={own.bad} role="alert">{t('badRange')}</p> : null}
       {active ? <button type="button" className={styles.secondary} disabled={busy}
         onClick={() => { setBad(false); setCustomAge(false); setRangeEnds(false); set(CLEAR_PANEL); }}>{t('clear')}</button> : null}
-    </details>
+      <p className={styles.meta}>{t('filterHelp')}</p>
+    </section>
     <Rows {...props} t={t}/>
   </>;
 }

@@ -14,7 +14,9 @@ export class SchoolContactsHumanUiGuard extends MembershipActivationHumanUiGuard
 
 const KEYS = new Set(['segment', 'query', 'rankId', 'programId', 'planId', 'endsWithinDays', 'options', 'cursor',
   // C4 (0623): sort and the added filters.
-  'sort', 'membership', 'noBelt', 'endsFrom', 'endsTo', 'ageMin', 'ageMax', 'tag']);
+  'sort', 'membership', 'noBelt', 'endsFrom', 'endsTo', 'ageMin', 'ageMax', 'tag',
+  // C5 (0701): parents/guardians or children.
+  'contactType']);
 
 /**
  * C1 (0521): contacts with segment counts and filters. Route identifiers are never authority: the scope is resolved from

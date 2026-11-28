@@ -1,5 +1,8 @@
 /** HQ school plan wording (en / ko / es). Labels only; nothing here is authority or an outcome. */
 const en = {
+  startLabel: 'Plan starts on', startHelp: 'The first day of this plan. Payments will be scheduled from it once billing is switched on.', starts: 'Starts {date}',
+  invalidStart: 'Pick a start date from one year ago to one year ahead.', REFUSED_HQ_SCHOOL_PLAN_START_INVALID: 'Pick a start date from one year ago to one year ahead.',
+  freeAfterStart: 'The free-until date must be after the start date.',
   title: 'Plan', menuPlan: 'Plan…', loading: 'Reading this school’s plan…', denied: 'Your HQ access does not include plans. Nothing is shown.',
   unavailable: 'The plan could not be read. Nothing is shown.', retry: 'Try again',
   chargingOff: 'Charging is off. This records the school’s plan; nothing is billed until payments are switched on.',
@@ -14,7 +17,7 @@ const en = {
   name: 'Plan name', price: 'Price (USD)', interval: 'Billing', MONTHLY: 'Monthly', ANNUAL: 'Yearly',
   freeUntilLabel: 'Free until (optional)', freeUntilHelp: 'Leave empty to keep it free with no end date.',
   note: 'Note for HQ (optional)', review: 'Review',
-  confirmTitle: 'Check before saving', confirmAssign: '{school} will be on “{plan}” at {price}.', save: 'Save plan', saving: 'Saving…',
+  confirmTitle: 'Check before saving', confirmAssign: '{school} will be on “{plan}” at {price}, starting {start}.', save: 'Save plan', saving: 'Saving…',
   confirmRemove: 'Remove the plan from {school}? Its history stays.', removing: 'Removing…',
   saved: 'Plan saved.', removed: 'Plan removed.',
   invalidName: 'Give the plan a name of 3 to 80 characters.', invalidPrice: 'Enter a price from $0 to $100,000, like 149 or 149.50.',
@@ -26,10 +29,13 @@ const en = {
   REFUSED_HQ_SCHOOL_PLAN_FREE_END_INVALID: 'Pick a free-until date after today, within three years.',
   REFUSED_HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE: 'Only a free plan can have an end date.',
   DENIED: 'Only the HQ owner can change a plan.', UNKNOWN: 'We could not confirm the change. Press the button again; it will not be saved twice.',
-  history: 'History ({n})', historyAssign: '{date}: {plan} at {price}, by {who}', historyRemove: '{date}: plan removed, by {who}',
+  history: 'History ({n})', historyAssign: '{date}: {plan} at {price}, starts {start}, by {who}', historyRemove: '{date}: plan removed, by {who}',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
+  startLabel: '요금제 시작일', startHelp: '이 요금제의 첫날입니다. 결제를 켜면 이 날짜부터 결제 일정이 잡힙니다.', starts: '{date} 시작',
+  invalidStart: '1년 전부터 1년 후 사이의 시작일을 고르세요.', REFUSED_HQ_SCHOOL_PLAN_START_INVALID: '1년 전부터 1년 후 사이의 시작일을 고르세요.',
+  freeAfterStart: '무료 종료일은 시작일 이후여야 합니다.',
   title: '요금제', menuPlan: '요금제…', loading: '이 도장의 요금제를 읽는 중…', denied: 'HQ 권한에 요금제가 포함되어 있지 않습니다. 표시할 내용이 없습니다.',
   unavailable: '요금제를 읽을 수 없습니다. 표시할 내용이 없습니다.', retry: '다시 시도',
   chargingOff: '결제가 꺼져 있습니다. 도장의 요금제만 기록하며, 결제를 켜기 전에는 청구되지 않습니다.',
@@ -44,7 +50,7 @@ const ko: Record<Key, string> = {
   name: '요금제 이름', price: '가격 (USD)', interval: '청구 주기', MONTHLY: '매월', ANNUAL: '매년',
   freeUntilLabel: '무료 종료일 (선택)', freeUntilHelp: '비워 두면 종료일 없이 무료로 유지됩니다.',
   note: 'HQ 메모 (선택)', review: '확인',
-  confirmTitle: '저장 전 확인', confirmAssign: '{school}은(는) “{plan}” 요금제, {price}로 지정됩니다.', save: '요금제 저장', saving: '저장 중…',
+  confirmTitle: '저장 전 확인', confirmAssign: '{school}은(는) “{plan}” 요금제, {price}로 {start}부터 지정됩니다.', save: '요금제 저장', saving: '저장 중…',
   confirmRemove: '{school}의 요금제를 삭제할까요? 기록은 남습니다.', removing: '삭제 중…',
   saved: '요금제가 저장되었습니다.', removed: '요금제가 삭제되었습니다.',
   invalidName: '요금제 이름은 3~80자로 입력하세요.', invalidPrice: '$0에서 $100,000 사이의 가격을 입력하세요 (예: 149 또는 149.50).',
@@ -56,9 +62,12 @@ const ko: Record<Key, string> = {
   REFUSED_HQ_SCHOOL_PLAN_FREE_END_INVALID: '오늘 이후 3년 이내의 무료 종료일을 고르세요.',
   REFUSED_HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE: '종료일은 무료 요금제에만 설정할 수 있습니다.',
   DENIED: 'HQ 소유자만 요금제를 변경할 수 있습니다.', UNKNOWN: '변경을 확인하지 못했습니다. 버튼을 다시 누르세요. 두 번 저장되지 않습니다.',
-  history: '기록 ({n})', historyAssign: '{date}: {plan}, {price}, {who}', historyRemove: '{date}: 요금제 삭제, {who}',
+  history: '기록 ({n})', historyAssign: '{date}: {plan}, {price}, {start} 시작, {who}', historyRemove: '{date}: 요금제 삭제, {who}',
 };
 const es: Record<Key, string> = {
+  startLabel: 'El plan empieza el', startHelp: 'El primer día de este plan. Los pagos se programarán desde esa fecha cuando se activen los cobros.', starts: 'Empieza el {date}',
+  invalidStart: 'Elige una fecha de inicio entre hace un año y dentro de un año.', REFUSED_HQ_SCHOOL_PLAN_START_INVALID: 'Elige una fecha de inicio entre hace un año y dentro de un año.',
+  freeAfterStart: 'La fecha de fin gratis debe ser posterior a la de inicio.',
   title: 'Plan', menuPlan: 'Plan…', loading: 'Leyendo el plan de esta escuela…', denied: 'Tu acceso de HQ no incluye planes. No se muestra nada.',
   unavailable: 'No se pudo leer el plan. No se muestra nada.', retry: 'Reintentar',
   chargingOff: 'Los cobros están apagados. Esto registra el plan de la escuela; no se cobra nada hasta activar los pagos.',
@@ -73,7 +82,7 @@ const es: Record<Key, string> = {
   name: 'Nombre del plan', price: 'Precio (USD)', interval: 'Cobro', MONTHLY: 'Mensual', ANNUAL: 'Anual',
   freeUntilLabel: 'Gratis hasta (opcional)', freeUntilHelp: 'Déjalo vacío para que siga gratis sin fecha de fin.',
   note: 'Nota para HQ (opcional)', review: 'Revisar',
-  confirmTitle: 'Revisa antes de guardar', confirmAssign: '{school} tendrá «{plan}» a {price}.', save: 'Guardar plan', saving: 'Guardando…',
+  confirmTitle: 'Revisa antes de guardar', confirmAssign: '{school} tendrá «{plan}» a {price}, desde el {start}.', save: 'Guardar plan', saving: 'Guardando…',
   confirmRemove: '¿Quitar el plan de {school}? Su historial se conserva.', removing: 'Quitando…',
   saved: 'Plan guardado.', removed: 'Plan quitado.',
   invalidName: 'Pon un nombre de 3 a 80 caracteres.', invalidPrice: 'Escribe un precio de $0 a $100,000, como 149 o 149.50.',
@@ -85,7 +94,7 @@ const es: Record<Key, string> = {
   REFUSED_HQ_SCHOOL_PLAN_FREE_END_INVALID: 'Elige una fecha de fin después de hoy, dentro de tres años.',
   REFUSED_HQ_SCHOOL_PLAN_END_DATE_ONLY_WHEN_FREE: 'Solo un plan gratis puede tener fecha de fin.',
   DENIED: 'Solo el dueño de HQ puede cambiar un plan.', UNKNOWN: 'No pudimos confirmar el cambio. Pulsa el botón otra vez; no se guardará dos veces.',
-  history: 'Historial ({n})', historyAssign: '{date}: {plan} a {price}, por {who}', historyRemove: '{date}: plan quitado, por {who}',
+  history: 'Historial ({n})', historyAssign: '{date}: {plan} a {price}, desde el {start}, por {who}', historyRemove: '{date}: plan quitado, por {who}',
 };
 export type SchoolPlanKey = Key;
 export function schoolPlanText(language: string, key: Key, vars: Record<string, string> = {}): string {

@@ -38,12 +38,57 @@ David chose "Let me pick features per plan" (2026-11-26). An offer set can now h
   marketing) with "Include everything" and "School system only"; the preview and Review list each plan's features.
 
 Not in this change (each a separate reviewed change):
-- **Enforcement.** Nothing locks a feature yet; every school can still use everything. Piece 3 stores the purchased or
-  assigned plan's capability snapshot on the school and checks it (owner question: locked + Upgrade, or hidden).
+- **Enforcement.** Piece 3 (below) shows left-out features locked with an Upgrade button.
 - **Per-plan checkout.** Purchase code is unchanged. Its price acceptance (0188/0279/0306) needs exactly one regular
   monthly price per set, so while two plans are published, recurring price acceptance would be refused
   (`SAAS_PRICE_TERMS_UNSUPPORTED`). Paid access is INACTIVE; HQ can assign any published offer (0676). Changing that touches
   founder billing and needs David's approval.
+
+## Piece 3: locked features in the school app (0699)
+Owner decision 2026-11-26: a feature the school's plan leaves out is shown **locked, with an Upgrade button** (not hidden).
+- **Which plan.** The school's plan is its current HQ plan assignment (0676). With a published offer assigned, the plan's
+  features are that offer's capability list (0697) and the rest are locked. No assignment, a removed one, or a custom
+  plan locks nothing, so no school loses a page it uses today. The entitlement tier is not consulted.
+- **Database.** Private `hon.school_plan_features(org, school)` and one runtime read `hon.read_school_plan_features(subject,
+  school)` for any eligible staff member of the exact school (`staff_member_eligible`, so HQ during a logged 0696 visit too;
+  family logins refused). Returns `source` (OFFER/CUSTOM/NONE), `planName`, `included`, `locked` in policy order.
+- **API.** `GET /api/v1/schools/:schoolId/plan-features`, validated by `validateSaasSchoolPlanFeatures`.
+- **School app.** The shell reads it once the school is verified. Menu pages mapped to a locked feature
+  (`PLAN_FEATURE_FOR_PAGE` in `school-shell/plan-features.tsx`) show a lock; opening one shows "X is not in your plan" with an
+  **Upgrade** button to `/staff/subscription`, and the page itself never loads. Dashboard, Staff, Texts, Email, Parent app,
+  Calls, Shopify, Reports and Settings never lock. If the read fails, nothing is locked.
+- **Mapping.** AI Team and Conversation AI = `ai.workforce`; Ask HON = `assistant.ordinary`; contacts, leads, automations =
+  CRM; calendar, attendance = classes; membership, checkout, POS, invoices = memberships and payments; ranks, tests,
+  promotions = testing and curriculum; marketing, website, social = manual marketing; ads = marketing connections; Creative
+  Studio = `ai.premium_metered`; Community = Champions Club.
+
+Server refusal came in piece 4 (below). Reconciling the accepted-offer `planCode` is still separate.
+
+## Piece 4: the server refuses locked features (no migration)
+Owner decision 2026-11-28 ("Those should be both true"): a locked feature is refused by the server too, and later the
+Upgrade button subscribes the school to the regular plan, which lifts the locks (piece 5).
+- **Where.** `SchoolPlanFeatureInterceptor` (`apps/api/src/saas-billing/school-plan-feature.interceptor.ts`) is registered
+  app-wide and runs after each route's own guards. It finds the route's template (controller path + handler path), looks up
+  its feature with `schoolPlanFeatureForRoute` (`SCHOOL_PLAN_FEATURE_API_AREAS` in `@hon/contracts`), reads the 0699 plan
+  features for the signed-in person and the route's `:schoolId`, and answers **403 `PLAN_FEATURE_LOCKED`** (with the
+  capability) before the handler runs when the plan leaves that feature out.
+- **Only ever refuses.** Anyone the plan read does not recognise as staff of that school (parent, other school, unknown
+  school, no session) passes to the route's own authorization unchanged. Any other failure of the plan read answers 503,
+  so a locked feature never slips through on an outage.
+- **Areas.** `ai.workforce`: AI team, agent voice settings and agent speech clips (HON's own clips count as HON), Alex, Chad (including the Action Center
+  Chad send), Claire, Jordan, Marcus, Maya, Conversation AI, Kai journal. `assistant.ordinary`: HON. Manual marketing: website, blasts, social posts. Marketing connections: social ads.
+  `ai.premium_metered`: Creative Studio, except a person's own likeness photos (always viewable and deletable). Champions
+  Club. Testing and curriculum: tests and curricula.
+- **Never refused.** People, CRM, schedule, billing, payments, reports, settings, staff, texts and email are shared by the
+  Dashboard, Calendar and Reports, so their locks stay display only. The HON OS purchase, subscription, plan-features and
+  promotion routes are never locked, so the Upgrade path always works. A route test inventories every controller in
+  `AppModule` to hold this.
+- **Not covered yet.** Staff routes that take the school from the body or query (`staff/leads/assistant` Chad lead
+  assistant, `staff/teaching-assistant` Kai, `staff/testing/certificates|scorecards|registrations`) and `staff/voice`, which
+  serves HON and the agents alike. The route test pins this list and every `:schoolId` route outside
+  `schools/:schoolId/`, so a new one fails until it is reviewed. Background work that is not an HTTP request, for example an
+  AI message staff approved before the lock, is not stopped either. Pages outside the menu
+  that call a locked area show their usual error.
 
 ## Creative credit program switch (`/hq/revenue/creative-credits`)
 `ProgramControls` adds HQ-owner buttons using the existing 0202 commands: "Publish credit prices" (the rates David
