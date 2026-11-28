@@ -67,7 +67,7 @@ async function countFor(audienceJson, channel = 'EMAIL') {
   return Object.fromEntries(mine(view).map((s) => [Object.keys(sch).find((k) => sch[k] === s.schoolId), s.outcome]));
 }
 
-const tables = ['hq_blast_outbox', 'hq_blast_events', 'hq_blast_requests', 'hq_blast_schools', 'hq_inbound_replies', 'hq_inbound_texts',
+const tables = ['hq_blast_template_events', 'hq_blast_template_requests', 'hq_blast_templates', 'hq_blast_outbox', 'hq_blast_events', 'hq_blast_requests', 'hq_blast_schools', 'hq_inbound_replies', 'hq_inbound_texts',
   'hq_contact_requests', 'hq_contact_phones', 'hq_message_delivery_events', 'hq_message_deliveries', 'hq_messages', 'hq_blasts',
   'hq_communication_requests', 'hq_communication_senders', 'hq_contact_preferences'];
 async function cleanup() {
@@ -107,19 +107,21 @@ try {
   // ---------- 0. posture ----------
   const has = async (client, sig) => (await one(client, "SELECT has_function_privilege(current_user,$1,'EXECUTE') a", ['hon.' + sig])).a;
   const entry = ['save_hq_blast(text,jsonb,uuid,uuid,uuid)', 'send_hq_blast(text,jsonb,uuid,uuid,uuid)', 'cancel_hq_blast(text,jsonb,uuid,uuid,uuid)',
-    'read_hq_blasts(text)', 'read_hq_blast(text,uuid)', 'read_hq_blast_audience(text,uuid)', 'read_hq_blast_options(text,text)'];
+    'read_hq_blasts(text)', 'read_hq_blast(text,uuid)', 'read_hq_blast_audience(text,uuid)', 'read_hq_blast_options(text,text)',
+    'save_hq_blast_template(text,jsonb,uuid,uuid,uuid)', 'read_hq_blast_templates(text)'];
   for (const sig of entry) {
     eq(await has(runtime, sig), true, `runtime runs ${sig}`);
     eq(await has(worker, sig), false, `worker cannot run ${sig}`);
     eq((await one(admin, "SELECT has_function_privilege('public',$1,'EXECUTE') a", ['hon.' + sig])).a, false, `PUBLIC cannot run ${sig}`);
   }
-  for (const sig of ['hq_blast_resolve(jsonb,text)', 'hq_blast_json(hon.hq_blasts)', 'hq_blast_results_json(uuid)', 'hq_communication_purposes(uuid)',
+  for (const sig of ['hq_blast_resolve(jsonb,text)', 'hq_blast_json(hon.hq_blasts)', 'hq_blast_results_json(uuid)', 'hq_communication_purposes(uuid)', 'hq_blast_template_json(hon.hq_blast_templates)',
     'hq_blast_record(uuid,uuid,uuid,uuid,text,text,text,hon.hq_blasts,jsonb,timestamptz)']) {
     eq(await has(runtime, sig), false, `runtime cannot run internal ${sig}`);
   }
   eq(await has(worker, 'claim_hq_message_deliveries(text[],integer,integer)'), true, 'worker still claims after the claim is replaced');
   eq(await has(runtime, 'claim_hq_message_deliveries(text[],integer,integer)'), false, 'runtime cannot claim');
-  for (const t of ['hq_blasts', 'hq_blast_schools', 'hq_blast_requests', 'hq_blast_events', 'hq_blast_outbox']) {
+  for (const t of ['hq_blasts', 'hq_blast_schools', 'hq_blast_requests', 'hq_blast_events', 'hq_blast_outbox', 'hq_blast_templates',
+    'hq_blast_template_requests', 'hq_blast_template_events']) {
     for (const priv of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
       eq((await one(runtime, 'SELECT has_table_privilege(current_user,$1,$2) a', ['hon.' + t, priv])).a, false, `runtime ${t} ${priv}`);
     }
@@ -351,6 +353,37 @@ try {
   ok(opts.planNames.includes('Gold Custom') && opts.planNames.includes('Free Partner') && opts.countries.includes('CA'), 'plan and country choices');
   ok(!JSON.stringify(opts).includes('example.test'), 'no address in options');
   await refuse('22023', () => call('read_hq_blast_options', [H('hqOwner'), 'b'], ['', '::text']), 'search needs 2+ characters');
+
+  // ---------- 9b. templates ----------
+  const tsave = (who, input, key = K()) => call('save_hq_blast_template', [H(who), JSON.stringify(input), key, K(), K()], CMD);
+  const tin = (over = {}) => ({ templateId: null, expectedVersion: 0, name: 'Monthly news', channel: 'EMAIL', subject: 'News for {{school_name}}',
+    body: 'Hi {{first_name}}, here is the news.', archived: false, ...over });
+  await refuse('42501', () => tsave('supportOp', tin()), 'operators cannot save templates');
+  await refuse('42501', () => call('read_hq_blast_templates', [H('marketingOp')]), 'operators cannot read templates');
+  for (const bad of [tin({ archived: true }), tin({ channel: 'SMS' }), tin({ body: 'Hi {{last_name}}' }), tin({ expectedVersion: 1 }), { ...tin(), purpose: 'ANNOUNCEMENT' }])
+    await refuse('22023', () => tsave('hqOwner', bad), `template refused: ${JSON.stringify(bad).slice(0, 60)}`);
+  const tKey = K();
+  const t1 = await tsave('hqOwner', tin(), tKey);
+  eq([t1.operation, t1.template.status, t1.template.version, t1.replayed], ['TEMPLATE_SAVE', 'ACTIVE', 1, false], 'template saved');
+  eq((await tsave('hqOwner', tin(), tKey)).replayed, true, 'same key replays');
+  await refuse('23505', () => tsave('hqOwner', tin({ name: 'Other' }), tKey), 'same key, other template refused');
+  const t2 = await tsave('hqOwner', tin({ templateId: t1.template.templateId, expectedVersion: 1, channel: 'SMS', subject: null, body: 'Hi {{first_name}}!' }));
+  eq([t2.template.channel, t2.template.subject, t2.template.version], ['SMS', null, 2], 'template edited');
+  await refuse('40001', () => tsave('hqOwner', tin({ templateId: t1.template.templateId, expectedVersion: 1 })), 'stale template version');
+  const t3 = await tsave('hqOwner', tin({ name: 'Second', channel: 'SMS', subject: null, body: 'Text news' }));
+  let tl = await call('read_hq_blast_templates', [H('hqOwner')]);
+  eq(tl.templates.map((t) => t.name), ['Second', 'Monthly news'], 'templates newest first');
+  await refuse('22023', () => tsave('hqOwner', { ...tin({ templateId: t3.template.templateId, expectedVersion: 1, channel: 'SMS', subject: null, body: 'Changed' }), archived: true }),
+    'archiving cannot change the text');
+  const ar = await tsave('hqOwner', { ...tin({ templateId: t3.template.templateId, expectedVersion: 1, name: 'Second', channel: 'SMS', subject: null, body: 'Text news' }), archived: true });
+  eq(ar.template.status, 'ARCHIVED', 'template archived');
+  tl = await call('read_hq_blast_templates', [H('hqOwner')]);
+  eq(tl.templates.map((t) => t.name), ['Monthly news'], 'archived templates are not listed');
+  await refuse('P0002', () => tsave('hqOwner', tin({ templateId: t3.template.templateId, expectedVersion: 2, name: 'Back' })), 'an archived template stays archived');
+  await refuse('42501', () => admin.query('DELETE FROM hon.hq_blast_templates WHERE id=$1', [t1.template.templateId]), 'templates cannot be deleted');
+  for (const t of ['hq_blast_template_requests', 'hq_blast_template_events'])
+    await refuse('42501', () => admin.query(`DELETE FROM hon.${t}`), `${t} cannot be deleted`);
+  eq(Number((await one(admin, 'SELECT count(*) n FROM hon.hq_blast_template_events')).n), 4, 'one event per template change');
 
   // ---------- 10. append-only ----------
   for (const t of ['hq_blast_schools', 'hq_blast_requests', 'hq_blast_events', 'hq_blast_outbox']) {

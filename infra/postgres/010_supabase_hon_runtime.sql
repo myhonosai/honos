@@ -3393,18 +3393,21 @@ DO $$ DECLARE t text; r text; BEGIN
     hon.remove_my_hq_phone(text,jsonb,uuid) TO hon_runtime;
 END $$;
 
--- HQ blasts 0712: no table privileges; three HQ-owner commands and four reads. The claim stays the worker's (013).
+-- HQ blasts 0712: no table privileges; four HQ-owner commands and five reads. The claim stays the worker's (013).
 DO $$ DECLARE t text; r text; BEGIN
   IF to_regprocedure('hon.send_hq_blast(text,jsonb,uuid,uuid,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply HQ blasts migration 0712 first'; END IF;
-  FOREACH t IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox'] LOOP
+  FOREACH t IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox',
+      'hq_blast_templates','hq_blast_template_requests','hq_blast_template_events'] LOOP
     EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY', t); EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY', t);
     EXECUTE format('REVOKE ALL ON hon.%I FROM PUBLIC', t);
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.%I FROM %I', t, r); END LOOP;
   END LOOP;
-  REVOKE ALL ON FUNCTION hon.hq_blast_resolve(jsonb,text), hon.hq_blast_json(hon.hq_blasts), hon.hq_blast_results_json(uuid) FROM PUBLIC, hon_runtime;
+  REVOKE ALL ON FUNCTION hon.hq_blast_resolve(jsonb,text), hon.hq_blast_json(hon.hq_blasts), hon.hq_blast_results_json(uuid),
+    hon.hq_blast_template_json(hon.hq_blast_templates) FROM PUBLIC, hon_runtime;
   GRANT EXECUTE ON FUNCTION hon.save_hq_blast(text,jsonb,uuid,uuid,uuid), hon.send_hq_blast(text,jsonb,uuid,uuid,uuid),
     hon.cancel_hq_blast(text,jsonb,uuid,uuid,uuid), hon.read_hq_blasts(text), hon.read_hq_blast(text,uuid),
-    hon.read_hq_blast_audience(text,uuid), hon.read_hq_blast_options(text,text) TO hon_runtime;
+    hon.read_hq_blast_audience(text,uuid), hon.read_hq_blast_options(text,text), hon.save_hq_blast_template(text,jsonb,uuid,uuid,uuid),
+    hon.read_hq_blast_templates(text) TO hon_runtime;
 END $$;
 
 -- HQ inbox 0698 owners' text replies: no table privileges; one read. The inbound function stays the worker's (013).

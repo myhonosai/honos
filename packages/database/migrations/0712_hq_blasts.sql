@@ -674,6 +674,145 @@ BEGIN
   RETURN result;
 END $$;
 
+-- ---------- templates (HQ owner only) ----------
+-- Saved blast texts to start from, like the Manus CRM's Templates tab. A template sends nothing and holds no audience.
+CREATE TABLE hon.hq_blast_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL CHECK (hon.hq_blast_line_ok(to_jsonb(name), 100)),
+  channel text NOT NULL CHECK (channel IN ('EMAIL','SMS')),
+  subject text CHECK (subject IS NULL OR hon.hq_blast_line_ok(to_jsonb(subject), 150)),
+  body text NOT NULL CHECK (hon.hq_blast_text_ok(to_jsonb(body), 1, CASE channel WHEN 'EMAIL' THEN 3500 ELSE 1400 END)),
+  status text NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE','ARCHIVED')),
+  version integer NOT NULL DEFAULT 1 CHECK (version BETWEEN 1 AND 999999999),
+  created_by uuid NOT NULL REFERENCES hon.principals(id),
+  updated_by uuid NOT NULL REFERENCES hon.principals(id),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CHECK ((channel = 'EMAIL') = (subject IS NOT NULL))
+);
+CREATE INDEX hq_blast_templates_updated_idx ON hon.hq_blast_templates (updated_at DESC, id DESC);
+CREATE TABLE hon.hq_blast_template_requests (
+  actor_principal_id uuid NOT NULL REFERENCES hon.principals(id),
+  idempotency_key uuid NOT NULL,
+  fingerprint text NOT NULL CHECK (fingerprint ~ '^[0-9a-f]{64}$'),
+  response jsonb NOT NULL,
+  recorded_at timestamptz NOT NULL,
+  PRIMARY KEY (actor_principal_id, idempotency_key)
+);
+CREATE TABLE hon.hq_blast_template_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  template_id uuid NOT NULL REFERENCES hon.hq_blast_templates(id),
+  action text NOT NULL CHECK (action IN ('CREATED','EDITED','ARCHIVED')),
+  actor_principal_id uuid NOT NULL REFERENCES hon.principals(id),
+  idempotency_key uuid NOT NULL,
+  request_id uuid NOT NULL,
+  correlation_id uuid NOT NULL,
+  version integer NOT NULL,
+  occurred_at timestamptz NOT NULL,
+  UNIQUE (actor_principal_id, idempotency_key)
+);
+-- A template changes only by version bump, is never deleted, and an archived one stays archived.
+CREATE FUNCTION hon.guard_hq_blast_template() RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog, hon AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.version <> 1 OR NEW.status <> 'ACTIVE' THEN RAISE EXCEPTION 'HQ_BLAST_IMMUTABLE' USING ERRCODE = '42501'; END IF;
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.version = OLD.version + 1 AND OLD.status = 'ACTIVE'
+    AND (NEW.id, NEW.created_by, NEW.created_at) = (OLD.id, OLD.created_by, OLD.created_at) THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'HQ_BLAST_IMMUTABLE' USING ERRCODE = '42501';
+END $$;
+CREATE TRIGGER guarded BEFORE INSERT OR UPDATE OR DELETE ON hon.hq_blast_templates FOR EACH ROW EXECUTE FUNCTION hon.guard_hq_blast_template();
+DO $$ DECLARE t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['hq_blast_template_requests','hq_blast_template_events'] LOOP
+    EXECUTE format('CREATE TRIGGER immutable BEFORE UPDATE OR DELETE ON hon.%I FOR EACH ROW EXECUTE FUNCTION hon.guard_hq_communication_evidence()', t);
+  END LOOP;
+  FOREACH t IN ARRAY ARRAY['hq_blast_templates','hq_blast_template_requests','hq_blast_template_events'] LOOP
+    EXECUTE format('CREATE TRIGGER no_truncate BEFORE TRUNCATE ON hon.%I FOR EACH STATEMENT EXECUTE FUNCTION hon.guard_hq_communication_evidence()', t);
+    EXECUTE format('ALTER TABLE hon.%I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('ALTER TABLE hon.%I FORCE ROW LEVEL SECURITY', t);
+    EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM PUBLIC', t);
+  END LOOP;
+END $$;
+
+CREATE FUNCTION hon.hq_blast_template_json(t hon.hq_blast_templates) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path = pg_catalog, hon AS $$
+  SELECT jsonb_build_object('templateId', t.id, 'name', t.name, 'channel', t.channel, 'subject', t.subject, 'body', t.body, 'status', t.status,
+    'createdBy', hon.hq_communication_person_json(t.created_by), 'updatedAt', hon.saas_ts(t.updated_at), 'version', t.version)
+$$;
+
+-- SAVE TEMPLATE: {templateId|null, expectedVersion (0 for new), name, channel, subject|null, body, archived}. archived true
+-- retires an existing template (its text must be sent unchanged); a new template cannot start archived.
+CREATE FUNCTION hon.save_hq_blast_template(p_subject text, p_input jsonb, p_key uuid, p_request uuid, p_correlation uuid) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE actor uuid; prior hon.hq_blast_template_requests%ROWTYPE; t hon.hq_blast_templates%ROWTYPE; fp text; at timestamptz := clock_timestamp();
+  result jsonb; v_id uuid; v_expected integer; v_archive boolean; v_action text;
+BEGIN
+  actor := hon.require_hq_communication_actor(p_subject, 'OWNER');
+  PERFORM hon.hq_blast_args_ok(p_key, p_request, p_correlation);
+  PERFORM hon.hq_communication_keys(p_input, ARRAY['archived','body','channel','expectedVersion','name','subject','templateId']);
+  v_id := hon.hq_communication_uuid(p_input, 'templateId', true);
+  IF jsonb_typeof(p_input->'expectedVersion') IS DISTINCT FROM 'number' OR (p_input->>'expectedVersion') !~ '^(0|[1-9][0-9]{0,8})$'
+    OR ((p_input->>'expectedVersion')::integer = 0) <> (v_id IS NULL)
+    OR jsonb_typeof(p_input->'archived') IS DISTINCT FROM 'boolean' OR (v_id IS NULL AND (p_input->>'archived')::boolean)
+    OR jsonb_typeof(p_input->'channel') IS DISTINCT FROM 'string' OR p_input->>'channel' NOT IN ('EMAIL','SMS')
+    OR NOT hon.hq_blast_line_ok(p_input->'name', 100)
+    OR (p_input->>'channel' = 'EMAIL' AND NOT hon.hq_blast_line_ok(p_input->'subject', 150))
+    OR (p_input->>'channel' = 'SMS' AND jsonb_typeof(p_input->'subject') IS DISTINCT FROM 'null')
+    OR NOT hon.hq_blast_text_ok(p_input->'body', 1, CASE p_input->>'channel' WHEN 'EMAIL' THEN 3500 ELSE 1400 END) THEN
+    RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
+  END IF;
+  v_expected := (p_input->>'expectedVersion')::integer; v_archive := (p_input->>'archived')::boolean;
+  fp := hon.saas_fingerprint(ARRAY['hq.blast.template.save', p_input::text]);
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('hq-blast-template:' || actor::text || ':' || p_key::text, 0)) THEN
+    RAISE EXCEPTION 'SAAS_REQUEST_IN_PROGRESS' USING ERRCODE = '55P03';
+  END IF;
+  SELECT * INTO prior FROM hon.hq_blast_template_requests WHERE actor_principal_id = actor AND idempotency_key = p_key;
+  IF FOUND THEN
+    IF prior.fingerprint <> fp THEN RAISE EXCEPTION 'SAAS_KEY_REUSED' USING ERRCODE = '23505'; END IF;
+    PERFORM hon.require_hq_communication_actor(p_subject, 'OWNER');
+    RETURN prior.response || jsonb_build_object('replayed', true);
+  END IF;
+  IF v_id IS NULL THEN
+    INSERT INTO hon.hq_blast_templates (name, channel, subject, body, created_by, updated_by, created_at, updated_at)
+    VALUES (p_input->>'name', p_input->>'channel', p_input->>'subject', p_input->>'body', actor, actor, at, at) RETURNING * INTO t;
+    v_action := 'CREATED';
+  ELSE
+    SELECT * INTO t FROM hon.hq_blast_templates WHERE id = v_id FOR UPDATE;
+    IF t.id IS NULL OR t.status <> 'ACTIVE' THEN RAISE EXCEPTION 'HQ_BLAST_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
+    IF t.version <> v_expected THEN RAISE EXCEPTION 'SAAS_VERSION_CONFLICT' USING ERRCODE = '40001'; END IF;
+    IF v_archive AND (t.name, t.channel, t.subject, t.body) IS DISTINCT FROM
+      (p_input->>'name', p_input->>'channel', p_input->>'subject', p_input->>'body') THEN
+      RAISE EXCEPTION 'INVALID_SAAS_INPUT' USING ERRCODE = '22023';
+    END IF;
+    UPDATE hon.hq_blast_templates SET name = p_input->>'name', channel = p_input->>'channel', subject = p_input->>'subject', body = p_input->>'body',
+      status = CASE WHEN v_archive THEN 'ARCHIVED' ELSE 'ACTIVE' END, updated_by = actor, updated_at = at, version = version + 1
+    WHERE id = t.id RETURNING * INTO t;
+    v_action := CASE WHEN v_archive THEN 'ARCHIVED' ELSE 'EDITED' END;
+  END IF;
+  result := jsonb_build_object('operation', 'TEMPLATE_SAVE', 'template', hon.hq_blast_template_json(t));
+  INSERT INTO hon.hq_blast_template_requests VALUES (actor, p_key, fp, result, at);
+  INSERT INTO hon.hq_blast_template_events (template_id, action, actor_principal_id, idempotency_key, request_id, correlation_id, version, occurred_at)
+  VALUES (t.id, v_action, actor, p_key, p_request, p_correlation, t.version, at);
+  PERFORM hon.require_hq_communication_actor(p_subject, 'OWNER');
+  RETURN result || jsonb_build_object('replayed', false);
+END $$;
+
+-- The active templates, newest first, at most 200.
+CREATE FUNCTION hon.read_hq_blast_templates(p_subject text) RETURNS jsonb
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, hon AS $$
+DECLARE result jsonb;
+BEGIN
+  PERFORM hon.require_hq_communication_actor(p_subject, 'OWNER');
+  SELECT jsonb_build_object('templates', coalesce(jsonb_agg(hon.hq_blast_template_json(x.t) ORDER BY (x.t).updated_at DESC, (x.t).id DESC), '[]'::jsonb),
+    'asOf', hon.saas_ts(clock_timestamp()))
+  INTO result FROM (SELECT y AS t FROM hon.hq_blast_templates y WHERE y.status = 'ACTIVE' ORDER BY y.updated_at DESC, y.id DESC LIMIT 200) x;
+  PERFORM hon.require_hq_communication_actor(p_subject, 'OWNER');
+  RETURN result;
+END $$;
+
 -- ---------- the claim also returns the subject and the blast, and fills {{first_name}} ----------
 -- Same claim as 0282. For a blast message only, {{first_name}} in the body and subject becomes the owner's first name
 -- (first word of their display name, at most 40 characters; "there" when empty), in memory for this send. Nothing stored.
@@ -776,7 +915,8 @@ END $$;
 -- ---------- privileges ----------
 DO $$ DECLARE r text; t text; f text; BEGIN
   FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
-    FOREACH t IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox'] LOOP
+    FOREACH t IN ARRAY ARRAY['hq_blasts','hq_blast_schools','hq_blast_requests','hq_blast_events','hq_blast_outbox',
+        'hq_blast_templates','hq_blast_template_requests','hq_blast_template_events'] LOOP
       EXECUTE format('REVOKE ALL ON TABLE hon.%I FROM %I', t, r);
     END LOOP;
   END LOOP;
@@ -788,6 +928,8 @@ DO $$ DECLARE r text; t text; f text; BEGIN
     'hq_blast_args_ok(uuid,uuid,uuid)',
     'save_hq_blast(text,jsonb,uuid,uuid,uuid)','send_hq_blast(text,jsonb,uuid,uuid,uuid)','cancel_hq_blast(text,jsonb,uuid,uuid,uuid)',
     'read_hq_blasts(text)','read_hq_blast(text,uuid)','read_hq_blast_audience(text,uuid)','read_hq_blast_options(text,text)',
+    'guard_hq_blast_template()','hq_blast_template_json(hon.hq_blast_templates)','save_hq_blast_template(text,jsonb,uuid,uuid,uuid)',
+    'read_hq_blast_templates(text)',
     'claim_hq_message_deliveries(text[],integer,integer)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION hon.'||f||' FROM PUBLIC';
     FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_communication_worker','hon_outbox_worker') LOOP
@@ -797,7 +939,8 @@ DO $$ DECLARE r text; t text; f text; BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') THEN
     GRANT EXECUTE ON FUNCTION hon.save_hq_blast(text,jsonb,uuid,uuid,uuid), hon.send_hq_blast(text,jsonb,uuid,uuid,uuid),
       hon.cancel_hq_blast(text,jsonb,uuid,uuid,uuid), hon.read_hq_blasts(text), hon.read_hq_blast(text,uuid),
-      hon.read_hq_blast_audience(text,uuid), hon.read_hq_blast_options(text,text) TO hon_runtime;
+      hon.read_hq_blast_audience(text,uuid), hon.read_hq_blast_options(text,text), hon.save_hq_blast_template(text,jsonb,uuid,uuid,uuid),
+      hon.read_hq_blast_templates(text) TO hon_runtime;
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_communication_worker') THEN
     GRANT EXECUTE ON FUNCTION hon.claim_hq_message_deliveries(text[],integer,integer) TO hon_communication_worker;
