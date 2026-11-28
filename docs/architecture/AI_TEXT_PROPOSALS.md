@@ -14,6 +14,7 @@ reader and a validator. It does not touch S4 again.
 | MERCH_IDEAS (0596) | marcus / DRAFT_MARKETING | 6,000 / 3,000, 80,000 micro-USD | HUMAN_UI | MERCH_IDEAS |
 | COMMERCE_REVIEW (0615) | marcus / DRAFT_MARKETING | 9,000 / 2,500, 80,000 micro-USD | HUMAN_UI | COMMERCE_REVIEW |
 | RANK_CHART (0636) | kai / DRAFT_TEACHING (KAI_TEACHING route) | 16,000 / 5,000, 150,000 micro-USD | HUMAN_UI | RANK_CHART |
+| DESIGN_DRAFT (0705) | marcus / DRAFT_MARKETING (MARCUS_MARKETING route) | 6,000 / 3,000, 40,000 micro-USD | HUMAN_UI | DESIGN_DRAFT |
 | Customizer CM-3 (0382), Conversation AI CA2b (0383), goal planner | later migrations | | | |
 
 Kind rows are immutable. The plan must match the kind's agent, task class and budgets.

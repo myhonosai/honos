@@ -130,3 +130,40 @@ design-editor-canva/SPEC.md.
 - `gallery.tsx` replaces the "Start from" list with picture previews at the chosen size, in the school color and contact
   line, filtered by theme. Picking only chooses; "Create design" still makes it as an ordinary design.
 - Templates are still built in the browser and nothing is stored for them; old five-template ids are gone (never saved).
+
+## E4a Describe your design (0705, 2026-11-28)
+
+Owner decisions 2026-11-28: "Upgrade ours now, Canva later" with AI; an AI design costs 2 creative credits (charged in E4b,
+0706; until then it is included AI like rank chart drafts).
+
+- **Screen.** New design shows a "Describe your design" box (schools only, never HQ). The person writes up to 600 characters
+  and presses Ask Marcus. Up to three options come back as live previews at the chosen size; picking one only chooses it.
+  The ordinary Create design button saves it (the 0617 save command), and the draft is then marked used. The box says
+  "Check dates, prices and offers before you print or post." When AI is off, not allowed or paused it says so and sends nothing.
+- **Kind.** `DESIGN_DRAFT` on the shared AI text proposals (0550): agent marcus, task class DRAFT_MARKETING, input 6,000,
+  output 3,000, at most 40,000 micro-USD a call, result at most 8,192 bytes, HUMAN_UI, usage agent DESIGN_DRAFT. One plan and
+  one counted call per request; S4 spend guard, school ceiling, HQ pause, unknown queue and idempotency as for every kind.
+- **Who.** A direct human with `creative.design.manage`, Marcus switched on for them (`ai.agent.marcus.use`),
+  `ai.invocation.plan`, and an active Complete plan. Anyone with `creative.design.manage` reads the newest five; only the
+  requester closes.
+- **Facts sent.** The brief, the size code, the editor language (en, ko, es) and the school's name (120 bytes). Nothing else.
+- **Answer.** `{options[1..3] of {theme, style, words {kicker ≤60, head ≤40 with one line break, sub ≤140, details ≤160 or
+  empty, cta ≤80}, schedule null or 1..6 rows of [day, time, class] ≤30 each (schedule theme only)}}`, checked by
+  `validateDesignDraft` and again by `hon.design_draft_ok`. The browser builds the design with `templateDocument(..., copy)`,
+  so an answer can never become a document the 0617 check refuses.
+- **API.** `organizations/:org/schools/:school/creative-studio/design-drafts` (GET list + `aiAvailable`, POST ask, POST
+  `:id/close`), `X-Hon-Human-Command: design-draft`, UUID `Idempotency-Key` on POSTs.
+- **Proof.** `packages/database/scripts/test-design-ai-draft.mjs` (custody, ask, close, rejected shapes, unknown/failed/off,
+  usage attribution, size budget, gates, isolation, 011 section).
+
+## E4b AI designs on creative credits (0706, 2026-11-28)
+
+- `hon.ai_text_creative_billing` gains `DESIGN_DRAFT -> design.generate`, so an AI design follows the 0690 path exactly: the
+  rate is the HQ owner's to publish (per REQUEST, one unit, provisional, in the WEBSITE text-request rate kind; owner decision
+  2 credits), one unit is reserved before the call and settled by the draft's status, an exhausted school is BLOCKED
+  (`CREATIVE_CREDITS_EXHAUSTED`) with nothing sent and no fallback, and one creative-paid AI request is in flight per school
+  (shared with website edits). Not priced, program off, or a school not eligible for creative credits: included AI as in 0705.
+- `hon.read_design_draft_price` (runtime) tells the box before asking: "Each design uses 2 creative credits. You have N." or
+  "Included in your plan's AI for now." Someone who may not ask Marcus gets no price (the request re-checks everything).
+- Proof: W17 in `test-website-ai-creative-credits.mjs` (paid school pays 2, blocked when out, unpaid stays included) and the
+  0706 section of 011.

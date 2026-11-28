@@ -12,8 +12,10 @@ import {
 } from './http';
 import { DesignEditor, type EditorApi } from './editor';
 import { DesignCommands } from './commands';
-import { NO_BRAND, templateDocument, templateName, type Brand, type TemplateId } from './templates';
+import { NO_BRAND, templateDocument, templateName, type Brand, type TemplateCopy, type TemplateId } from './templates';
 import { TemplateGallery } from './gallery';
+import { DesignAiBox, type AiChoice } from './ai-draft';
+import { designDraftApi, type DesignDraftApi } from './draft-http';
 import { brandingApi } from '../school-branding/http';
 import { designText, sizeMeasure, sizeName, type DesignKey } from './copy';
 import { useDesignWords } from './words';
@@ -24,6 +26,8 @@ export type DesignsApi = EditorApi & Readonly<{
   get: (scope: DesignsScope, designId: string, signal?: AbortSignal) => Promise<CreativeDesign>;
   /** The school's accent color and contact line, when this person may read branding; otherwise nothing (never an error). */
   brand?: (scope: DesignsScope, signal: AbortSignal, owned: () => boolean) => Promise<Brand>;
+  /** E4a "Describe your design" (schools only): without it the box is not shown. */
+  ai?: DesignDraftApi;
 }>;
 export const DESIGNS_API: DesignsApi = {
   list: loadDesigns, get: loadDesign, save: saveDesign, setStatus: setDesignStatus, addPhoto: addDesignPhoto, photo: loadDesignPhoto,
@@ -31,6 +35,7 @@ export const DESIGNS_API: DesignsApi = {
     const b = await brandingApi.read(scope, signal, owned);
     return { accent: b.accentColor ? b.accentColor.toUpperCase() : null, contactLine: b.contactLine };
   },
+  ai: designDraftApi,
 };
 
 type Load = 'LOADING' | 'READY' | 'DENIED' | 'SESSION' | 'UNAVAILABLE';
@@ -50,11 +55,11 @@ export function refusalKey(error: unknown): DesignKey {
 }
 
 /** The create command a new design sends: the trimmed name and a blank page per side. Null while the name is not usable. */
-export function createInput(name: string, sizeCode: CreativeDesignSizeCode, template: TemplateId | null = null, language = 'en', brand: Brand = NO_BRAND) {
+export function createInput(name: string, sizeCode: CreativeDesignSizeCode, template: TemplateId | null = null, language = 'en', brand: Brand = NO_BRAND, copy: TemplateCopy | null = null) {
   const trimmed = name.trim();
   if (!creativeDesignNameOk(trimmed)) return null;
   return { designId: null, expectedVersion: 0, name: trimmed, sizeCode,
-    document: template ? templateDocument(template, sizeCode, language, brand) : blankCreativeDesignDocument(sizeCode) };
+    document: template ? templateDocument(template, sizeCode, language, brand, copy) : blankCreativeDesignDocument(sizeCode) };
 }
 
 /**
@@ -82,6 +87,8 @@ export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
   const [newName, setNewName] = useState('');
   const [newSize, setNewSize] = useState<CreativeDesignSizeCode>('FLYER_LETTER');
   const [newTemplate, setNewTemplate] = useState<TemplateId | ''>('');
+  // A Marcus option, when one is picked instead of a gallery template.
+  const [aiChoice, setAiChoice] = useState<AiChoice | null>(null);
   const [brand, setBrand] = useState<Brand>(NO_BRAND);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<DesignKey | null>(null);
@@ -130,14 +137,19 @@ export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
   }, [api, scope?.organizationId, scope?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async () => {
-    const template = newTemplate || null;
-    const input = createInput(newName || (template ? templateName(language, template) : t('newNameDefault')), newSize, template, language, brand);
+    const template = aiChoice ? aiChoice.template : newTemplate || null;
+    const input = createInput(newName || (template ? templateName(language, template) : t('newNameDefault')), newSize, template, language, brand, aiChoice?.copy ?? null);
+    const usedDraft = aiChoice?.draftId ?? null;
     if (!scope || !input || busy) return;
     setBusy(true); setNotice(null);
     const outcome = await commands.create(scope, input);
     if (outcome.kind === 'stale') return;
     setBusy(false);
-    if (outcome.kind === 'saved') { setNewName(''); setNewTemplate(''); setOpen({ state: 'READY', design: outcome.design }); }
+    if (outcome.kind === 'saved') {
+      setNewName(''); setNewTemplate(''); setAiChoice(null); setOpen({ state: 'READY', design: outcome.design });
+      // Best effort: mark the Marcus draft used. The design is already saved either way.
+      if (usedDraft && api.ai) void api.ai.close(scope, usedDraft, 'APPLIED', crypto.randomUUID()).catch(() => {});
+    }
     else setNotice(refusalKey(outcome.error));
   };
 
@@ -189,9 +201,10 @@ export function Designs({ api = DESIGNS_API, fixedScope }: { api?: DesignsApi;
                 {CREATIVE_DESIGN_SIZE_CODES.map(code => <option key={code} value={code}>{sizeName(language, code)} ({sizeMeasure(code)})</option>)}
               </select>
             </label>
+            {api.ai ? <DesignAiBox api={api.ai} scope={scope} code={newSize} language={language} brand={brand} value={aiChoice?.key ?? null} onPick={setAiChoice} t={t} /> : null}
             <fieldset className={s.galleryField}>
               <legend>{t('startFrom')}</legend>
-              <TemplateGallery code={newSize} language={language} brand={brand} value={newTemplate} onChange={setNewTemplate} blankLabel={t('blank')} />
+              <TemplateGallery code={newSize} language={language} brand={brand} value={aiChoice ? null : newTemplate} onChange={choice => { setAiChoice(null); setNewTemplate(choice); }} blankLabel={t('blank')} />
               <p className={s.meta}>{t('checkOffers')}</p>
             </fieldset>
             <button type="submit" className={s.button} disabled={busy}>{t('newCreate')}</button>

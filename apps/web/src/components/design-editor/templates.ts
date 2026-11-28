@@ -255,8 +255,11 @@ function elegant({ f, w, rows, accent, contact }: Ctx): { background: string; el
 
 const STYLE_LAYOUT: Readonly<Record<TemplateStyle, (ctx: Ctx) => { background: string; elements: CreativeDesignElement[] }>> = { bold, clean, fun, elegant };
 
+/** Words that replace the template's starter words (E4: a Marcus draft). Schedule rows apply to the schedule theme only. */
+export type TemplateCopy = Readonly<{ words: Omit<ThemeWords, 'name'>; schedule: readonly ScheduleRow[] | null }>;
+
 /** A new document for the template at this size, or a blank one for null. Always a valid document for the size. */
-export function templateDocument(id: TemplateId | null, code: CreativeDesignSizeCode, language: string, brand: Brand = NO_BRAND): CreativeDesignDocument {
+export function templateDocument(id: TemplateId | null, code: CreativeDesignSizeCode, language: string, brand: Brand = NO_BRAND, copy: TemplateCopy | null = null): CreativeDesignDocument {
   const doc = blankCreativeDesignDocument(code);
   if (!id || !isTemplateId(id)) return doc;
   const size = CREATIVE_DESIGN_SIZES[code], { theme, style } = templateParts(id);
@@ -264,7 +267,8 @@ export function templateDocument(id: TemplateId | null, code: CreativeDesignSize
   const words = templateWords(language);
   const accent = brand.accent ?? DEFAULT_ACCENT;
   const contact = brand.contactLine && creativeDesignTextOk(brand.contactLine) ? brand.contactLine : words.contact;
-  const page = STYLE_LAYOUT[style]({ f, w: words.themes[theme], rows: theme === 'schedule' ? words.schedule : null, accent, contact });
+  const w: ThemeWords = copy ? { name: words.themes[theme].name, ...copy.words } : words.themes[theme];
+  const page = STYLE_LAYOUT[style]({ f, w, rows: theme === 'schedule' ? (copy?.schedule ?? words.schedule) : null, accent, contact });
   const pages = [page, ...doc.pages.slice(1)];
   if (size.sides === 2) {
     // A postcard back: the message on the left, a line, and the right half left clear for the address and postage.

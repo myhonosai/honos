@@ -23,6 +23,7 @@ const { StripeSimulator } = await import('../../../apps/api/dist/payments/stripe
 const { AiInvocationPlanService } = await import('../../../apps/api/dist/ai/ai-invocation-plan.service.js');
 const { SchoolWebsiteService } = await import('../../../apps/api/dist/website/school-website.service.js');
 const { WebsiteAiService } = await import('../../../apps/api/dist/website/website-ai.service.js');
+const { DesignDraftService } = await import('../../../apps/api/dist/creative-studio/design-draft.service.js');
 const { WebsiteProviderRuntimeError } = await import('../../../apps/api/dist/ai/website-provider-runtime.js');
 const contracts = await import('@hon/contracts');
 const { SaasTrialsService } = await import('../../../apps/api/dist/saas-trials/saas-trials.service.js');
@@ -43,6 +44,11 @@ const provider = {
   },
 };
 const plans = new AiInvocationPlanService(database), sites = new SchoolWebsiteService(database), ai = new WebsiteAiService(database, plans, provider);
+// 0706: AI designs (0705) on the same creative-credit path, with their own counted fake answer.
+const designFake = { calls: 0 };
+const designs = new DesignDraftService(database, plans, { readiness: () => 'READY', generate: async () => { designFake.calls += 1; fake.calls += 1;
+  return { proposal: { options: [{ theme: 'camp', style: 'bold', words: { kicker: 'AGES 5 TO 12', head: 'SUMMER\nCAMP', sub: 'Weekly sessions', details: '', cta: 'Sign up now' }, schedule: null }] }, inputTokens: 700, outputTokens: 300, providerCostMicrounits: 800 }; } });
+const askDesign = (k) => designs.request(ctx(k), { brief: 'Summer camp flyer for kids', size: 'FLYER_LETTER', language: 'en' });
 const admin = new pg.Client(targets.owner);
 const K = () => randomUUID(), iso = (d) => new Date(d).toISOString(), NOW = Date.now(), HOUR = 3600_000;
 const humans = Object.fromEntries(['owner', 'ownerA', 'ownerB', 'ownerU'].map((k) => [k, { id: K(), user: K(), subject: `w670-${k}-${K()}` }]));
@@ -53,7 +59,7 @@ const rows = async (sql, params) => (await admin.query(sql, params)).rows;
 const settle = (p) => p.then((value) => ({ value }), (error) => ({ error }));
 const goodAnswer = { summary: 'A warmer welcome.', edits: [{ op: 'setText', page: 'home', section: 'hero', prop: 'heading', value: 'Welcome to Synthetic Dojo' }] };
 const badAnswer = { summary: 'Off the list.', edits: [{ op: 'setImage', page: 'home', section: 'hero', prop: 'image', value: 'x' }] };
-const RATE = 5;
+const RATE = 5, DESIGN_RATE = 2;
 const ctx = (k, patch = {}) => ({ organizationId: S[`org${k}`], schoolId: S[k], principalId: humans[`owner${k}`].id, externalSubject: H(`owner${k}`), principalType: 'HUMAN_USER',
   source: 'HUMAN_UI', requestId: K(), correlationId: K(), idempotencyKey: K(), ...patch });
 const readCtx = (k) => ctx(k, { idempotencyKey: '' });
@@ -152,12 +158,14 @@ try {
     for (const [f, ok] of [['hon.read_school_website_ai_price(text)', true], ['hon.ai_text_creative_reserve(hon.ai_text_proposals,hon.ai_invocation_plans)', false],
       ['hon.ai_text_creative_applies(hon.ai_text_proposals,timestamptz)', false], ['hon.ai_text_creative_settle()', false]])
       assert.equal((await row("SELECT has_function_privilege($1,$2,'EXECUTE') ok", [CHAMPIONS_RUNTIME_ROLE, f])).ok, ok, f);
-    assert.deepEqual(await rows('SELECT kind, operation_code FROM hon.ai_text_creative_billing'), [{ kind: 'WEBSITE_EDIT', operation_code: 'website.edit' }]);
+    assert.deepEqual(await rows('SELECT kind, operation_code FROM hon.ai_text_creative_billing ORDER BY kind'), [{ kind: 'DESIGN_DRAFT', operation_code: 'design.generate' }, { kind: 'WEBSITE_EDIT', operation_code: 'website.edit' }]);
+    assert.equal((await row("SELECT has_function_privilege($1,'hon.read_design_draft_price(text)','EXECUTE') ok", [CHAMPIONS_RUNTIME_ROLE])).ok, true);
     await assert.rejects(admin.query("UPDATE hon.ai_text_creative_billing SET operation_code='image.generate'"));
   });
 
   await check('W2', 'not priced, program off: every school asks on included AI exactly as in 0550 (credits counted, no reservation), and the price says so', async () => {
     for (const k of ['A', 'U']) assert.deepEqual(await ai.price(readCtx(k)), { paidWith: 'INCLUDED_AI', creditsPerEdit: null, availableCredits: null });
+    for (const k of ['A', 'U']) assert.deepEqual(await designs.price(readCtx(k)), { paidWith: 'INCLUDED_AI', creditsPerDesign: null, availableCredits: null });
     const before = fake.calls;
     const v = await ask('A');
     assert.equal(v.status, 'RESULT_RECORDED'); assert.equal(fake.calls, before + 1);
@@ -173,7 +181,8 @@ try {
       assert.throws(() => contracts.validateSaasCreativeRatesInput({ termsReference: 'Fixture', rates: [bad] }));
     await assert.rejects(admin.query("SELECT hon.publish_saas_creative_rates($1,$2::jsonb,$3,$4,$5)", [H('owner'), JSON.stringify({ termsReference: 'Fixture', rates: [{ ...base, maxUnitsPerRequest: 2 }] }), K(), K(), K()]));
     await wallet.publishRates(H('owner'), { termsReference: 'Fixture provisional creative rates (not final prices)', rates: [
-      { operationCode: 'image.generate', mediaKind: 'IMAGE', displayName: 'AI image', billingUnit: 'IMAGE', creditsPerUnit: 10, maxUnitsPerRequest: 8, costEvidenceId: null }, base] }, K());
+      { operationCode: 'image.generate', mediaKind: 'IMAGE', displayName: 'AI image', billingUnit: 'IMAGE', creditsPerUnit: 10, maxUnitsPerRequest: 8, costEvidenceId: null }, base,
+      { ...base, operationCode: 'design.generate', displayName: 'AI design', creditsPerUnit: DESIGN_RATE }] }, K());
     await wallet.setProgram(H('owner'), { action: 'ACTIVATE', expectedVersion: 1, authorizationReference: 'Fixture owner creative authorization (disposable)' }, K());
     const schoolView = await wallet.readSchoolWallet(H('ownerA'), S.A);
     assert(schoolView.rates.rates.some((r) => r.operationCode === 'website.edit' && r.mediaKind === 'WEBSITE'));
@@ -284,6 +293,34 @@ try {
     assert.equal((await row('SELECT count(*)::int n FROM hon.saas_creative_reservations WHERE school_id=$1', [S.U])).n, 0);
   });
 
+  await check('W17', 'AI designs (0706): a paid school pays 2 creative credits a design on the same path (reserved before the call, finalized, included AI untouched), is blocked with nothing sent when out of credits, and an unpaid school stays on included AI', async () => {
+    const b0 = (await balance('A')).available;
+    assert(b0 >= DESIGN_RATE && b0 < 2 * DESIGN_RATE + DESIGN_RATE, `fixture balance ${b0}`);
+    assert.deepEqual(await designs.price(readCtx('A')), { paidWith: 'CREATIVE_CREDITS', creditsPerDesign: DESIGN_RATE, availableCredits: b0 });
+    const committed = async () => (await row('SELECT hon.ai_org_committed_credits($1, clock_timestamp())::int n', [S.orgA])).n;
+    const c0 = await committed(), before = designFake.calls;
+    const v = await askDesign('A');
+    assert.equal(v.status, 'RESULT_RECORDED', JSON.stringify(v)); assert.equal(designFake.calls, before + 1);
+    const r = await linkOf(v.id);
+    assert.deepEqual([r.status, r.final_credits, r.reserved_credits, r.media_kind, r.operation_code, Number(r.provider_cost_microunits)], ['FINALIZED', DESIGN_RATE, DESIGN_RATE, 'WEBSITE', 'design.generate', 800]);
+    assert.deepEqual(await usageOf(v.id), [{ c: 0, cost: '800', spend_class: 'AGENT_INFERENCE', modality: 'TEXT' }]);
+    assert.equal(await committed(), c0, 'included AI credits untouched');
+    assert.deepEqual(await balance('A'), { available: b0 - DESIGN_RATE, held: 0 });
+    // Spend down to below one design: the next one is blocked before any call, with no reservation and no fallback.
+    while ((await balance('A')).available >= DESIGN_RATE) assert.equal((await askDesign('A')).status, 'RESULT_RECORDED');
+    const calls = designFake.calls, left = await balance('A');
+    const blocked = await askDesign('A');
+    assert.deepEqual([blocked.status, blocked.reason], ['BLOCKED', 'CREATIVE_CREDITS_EXHAUSTED']); assert.equal(designFake.calls, calls);
+    assert.equal(await linkOf(blocked.id), undefined); assert.deepEqual(await usageOf(blocked.id), []);
+    assert.deepEqual(await balance('A'), left);
+    // The unpaid Complete school: included AI, no reservation.
+    assert.deepEqual(await designs.price(readCtx('U')), { paidWith: 'INCLUDED_AI', creditsPerDesign: null, availableCredits: null });
+    const u = await askDesign('U');
+    assert.equal(u.status, 'RESULT_RECORDED'); assert.equal(await linkOf(u.id), undefined);
+    assert.equal((await usageOf(u.id))[0].c > 0, true);
+    assert.equal((await row('SELECT count(*)::int n FROM hon.saas_creative_reservations WHERE school_id=$1', [S.U])).n, 0);
+  });
+
   await check('W16', 'a free-trial school (0683) pays AI website edits from its own 1,500-credit TRIAL lot at the website rate (owner decision 2026-11-24), never from included AI', async () => {
     // HQ owner approves a synthetic trial policy and publishes one public 14-day campaign; programs opened to TEST_MODE in this disposable database only.
     // The AI planner still checks its estimate (20 credits for a website edit) against the trial's agent-AI per-request cap,
@@ -322,11 +359,12 @@ try {
 
   await check('W11', 'exact-school isolation: school A\'s edits never touch school B\'s wallet; B pays its own edit; one school\'s owner cannot read another school\'s price', async () => {
     assert.equal((await row('SELECT count(*)::int n FROM hon.saas_creative_reservations WHERE school_id=$1', [S.B])).n, 0);
+    const a0 = await balance('A');
     const v = await ask('B');
     assert.equal(v.status, 'RESULT_RECORDED');
     assert.equal((await linkOf(v.id)).school_id, S.B);
     assert.deepEqual(await balance('B'), { available: 12000 - RATE, held: 0 });
-    assert.deepEqual(await balance('A'), { available: RATE - 1, held: 0 });
+    assert.deepEqual(await balance('A'), a0, 'B\'s edit never touches A\'s wallet (A spent its last credits on W9 and W17)');
     const cross = await settle(ai.price({ ...readCtx('B'), organizationId: S.orgA, schoolId: S.A }));
     assert(cross.error, 'B\'s owner has no access at A');
   });
@@ -395,7 +433,7 @@ try {
   await check('W13', 'the 011 exact verification for 0690 and the shared 0550 core passes on this database', async () => {
     const fs = await import('node:fs/promises');
     const sql = await fs.readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql', import.meta.url), 'utf8');
-    for (const marker of ['-- Shared AI text proposals exact verification (0550)', '-- AI website edits on creative credits exact verification (0690)']) {
+    for (const marker of ['-- Shared AI text proposals exact verification (0550)', '-- AI website edits on creative credits exact verification (0690)', '-- Design AI creative credits exact verification (0706)']) {
       const start = sql.indexOf(marker); assert(start >= 0, marker);
       const block = sql.slice(sql.indexOf('DO $$', start), sql.indexOf('END $$;', start) + 'END $$;'.length);
       await admin.query(block.replaceAll("'hon_runtime'", `'${CHAMPIONS_RUNTIME_ROLE}'`));

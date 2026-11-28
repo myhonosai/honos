@@ -7525,7 +7525,8 @@ DO $$ DECLARE f record; safe boolean; t text; BEGIN
       RAISE EXCEPTION 'Unsafe website AI creative credit table: %',t;
     END IF;
   END LOOP;
-  IF (SELECT array_agg(kind||'='||operation_code ORDER BY kind) FROM hon.ai_text_creative_billing) IS DISTINCT FROM ARRAY['WEBSITE_EDIT=website.edit'] THEN
+  -- 0706 adds DESIGN_DRAFT -> design.generate (owner decision 2026-11-28: AI designs on creative credits).
+  IF (SELECT array_agg(kind||'='||operation_code ORDER BY kind) FROM hon.ai_text_creative_billing) IS DISTINCT FROM ARRAY['DESIGN_DRAFT=design.generate','WEBSITE_EDIT=website.edit'] THEN
     RAISE EXCEPTION 'Website AI creative billing registry changed';
   END IF;
   IF (SELECT count(*) FROM pg_trigger t WHERE t.tgenabled='O' AND (t.tgrelid, t.tgname, t.tgfoid) IN (
@@ -7757,3 +7758,52 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+
+-- Design AI draft exact verification (0705): the DESIGN_DRAFT kind row on the shared AI text proposals (0550), the closed
+-- brief, word and draft shapes, the private actor, facts and view helpers, and the seven runtime entry points.
+DO $$ DECLARE f record; safe boolean; BEGIN
+  FOR f IN SELECT * FROM (VALUES
+('hon.begin_design_draft(text,jsonb,uuid)',true,true,'search_path=pg_catalog, hon','c4ae16b981a132960344fba072dd6e38987ef69d3a5643c8aaaac7c6277f4402'),
+('hon.close_design_draft(text,uuid,text)',true,true,'search_path=pg_catalog, hon','aa68d2d0be492b81683b47538d3b5a69da385d258de61ca98e5fc3a7809570e8'),
+('hon.design_draft_ai_actor(text)',true,false,'search_path=pg_catalog, hon','d609e9b3381bdd7e0e4799564d3ec2b6b31865528268219effa00ce2a3ba5b7b'),
+('hon.design_draft_brief_ok(jsonb)',false,false,'search_path=pg_catalog, hon','37776a7f6c1b2ffd4c6a123acd8dbf27db2e05c05c08eb74cd7e08b0802cad7c'),
+('hon.design_draft_facts(jsonb)',true,false,'search_path=pg_catalog, hon','7fb871cd60f901872e7e23faad6b2b954472a7a261dfa6a5bad257a1241b4ac6'),
+('hon.design_draft_ok(jsonb)',false,false,'search_path=pg_catalog, hon','a3ac8db0cc260bf596bce31df7d3f209481a8488d24b5e6d2da4189d9039b0a0'),
+('hon.design_draft_view(uuid,uuid)',true,false,'search_path=pg_catalog, hon','d0cc3c3e8129d3267b323fb094345b7b7957dfc5ae02402867c49dcd9fe69c79'),
+('hon.design_draft_word_ok(jsonb,integer,integer,boolean)',false,false,'search_path=pg_catalog, hon','f60c69967e1ce11214acac305319117187662ca3f7c4b542cc7c1c1948c060b3'),
+('hon.fail_design_draft(text,uuid,text,text)',true,true,'search_path=pg_catalog, hon','7fe6b1ceb01a7252429bd97be3525fc75f15377bd2e02ff38723cfcedac6bdda'),
+('hon.plan_design_draft(text,uuid)',true,true,'search_path=pg_catalog, hon','8e2ab95e5dd0f3538c4df532d554361ce5f3c1223c332422c39a10acc1acdb8c'),
+('hon.prepare_design_draft(text,uuid,uuid,boolean)',true,true,'search_path=pg_catalog, hon','7d1653ab20956c647848b6df880b45769eed47561c90a920170114a56f853861'),
+('hon.read_design_drafts(text,uuid)',true,true,'search_path=pg_catalog, hon','16a204cfbea9945b56586dba9969c4c40d7beeb25f8a3cb01d90519795069530'),
+('hon.record_design_draft(text,uuid,jsonb)',true,true,'search_path=pg_catalog, hon','558537449e7176bd1b4e486eb5917e0d2c1de21f9b39a0b186ff2fd2c13b0b82'))
+ e(signature,definer,runtime_allowed,config,body_hash) LOOP
+    SELECT p.prosecdef=f.definer AND p.proconfig=ARRAY[f.config]
+      AND (NOT f.definer OR owner.rolsuper OR owner.rolbypassrls) AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')=f.runtime_allowed
+      AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')=f.body_hash
+      AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+      AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+        WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR NOT f.runtime_allowed OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+    INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid=f.signature::regprocedure;
+    IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe design AI draft function: %',f.signature; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM hon.ai_text_kinds k WHERE k.kind='DESIGN_DRAFT' AND k.agent_key='marcus' AND k.task_class='DRAFT_MARKETING'
+      AND k.input_budget=6000 AND k.output_budget=3000 AND k.max_cost_microunits=40000 AND k.max_result_bytes=8192
+      AND k.caller='HUMAN_UI' AND k.subject_type='SCHOOL' AND k.usage_agent='DESIGN_DRAFT') THEN
+    RAISE EXCEPTION 'Design AI draft kind row missing or changed';
+  END IF;
+END $$;
+-- End design AI draft exact verification.
+
+-- Design AI creative credits exact verification (0706): the runtime read of the next AI design's price. The registry row
+-- (DESIGN_DRAFT -> design.generate) is checked in the 0690 section above.
+DO $$ DECLARE safe boolean; BEGIN
+  SELECT p.prosecdef AND p.proconfig=ARRAY['search_path=pg_catalog, hon'] AND (owner.rolsuper OR owner.rolbypassrls)
+    AND has_function_privilege('hon_runtime',p.oid,'EXECUTE')
+    AND encode(sha256(convert_to(p.prosrc,'UTF8')),'hex')='14e208f0fcdaf966477465da35ada862cc17e516686af948fce96c0fe0139979'
+    AND (SELECT count(*) FROM pg_proc x WHERE x.pronamespace=p.pronamespace AND x.proname=p.proname)=1
+    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE a.grantee<>p.proowner AND (a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime') OR a.is_grantable OR a.privilege_type<>'EXECUTE'))
+  INTO safe FROM pg_proc p JOIN pg_roles owner ON owner.oid=p.proowner WHERE p.oid='hon.read_design_draft_price(text)'::regprocedure;
+  IF safe IS DISTINCT FROM true THEN RAISE EXCEPTION 'Unsafe design AI price read'; END IF;
+END $$;
+-- End design AI creative credits exact verification.

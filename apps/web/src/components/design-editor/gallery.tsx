@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CREATIVE_DESIGN_SIZES, type CreativeDesignSizeCode } from '@hon/contracts';
 import { loadDesignFonts } from './fonts';
 import { paintPage } from './paint';
-import { STYLE_FONTS, TEMPLATE_IDS, TEMPLATE_STYLES, TEMPLATE_THEMES, templateDocument, templateParts, type Brand, type TemplateId, type TemplateTheme } from './templates';
+import { STYLE_FONTS, TEMPLATE_IDS, TEMPLATE_STYLES, TEMPLATE_THEMES, templateDocument, templateParts, type Brand, type TemplateCopy, type TemplateId, type TemplateTheme } from './templates';
 import { templateWords } from './template-copy';
 import s from './design-editor.module.css';
 
@@ -18,9 +18,10 @@ export function galleryItems(filter: TemplateTheme | 'all'): readonly TemplateId
   return filter === 'all' ? TEMPLATE_IDS : TEMPLATE_IDS.filter(id => templateParts(id).theme === filter);
 }
 
-const ALL_STYLE_FONTS = TEMPLATE_STYLES.flatMap(style => STYLE_FONTS[style]);
+export const ALL_STYLE_FONTS = TEMPLATE_STYLES.flatMap(style => STYLE_FONTS[style]);
 
-function Preview({ id, code, language, brand, fontsReady }: Readonly<{ id: TemplateId; code: CreativeDesignSizeCode; language: string; brand: Brand; fontsReady: number }>) {
+/** A live picture of a template at this size, with its starter words or the words given (a Marcus option). */
+export function Preview({ id, code, language, brand, fontsReady, copy = null }: Readonly<{ id: TemplateId; code: CreativeDesignSizeCode; language: string; brand: Brand; fontsReady: number; copy?: TemplateCopy | null }>) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const size = CREATIVE_DESIGN_SIZES[code];
   const width = 132, k = width / size.width;
@@ -29,13 +30,13 @@ function Preview({ id, code, language, brand, fontsReady }: Readonly<{ id: Templ
     if (!canvas || !ctx) return;
     const ratio = Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1);
     canvas.width = Math.round(size.width * k * ratio); canvas.height = Math.round(size.height * k * ratio);
-    paintPage(ctx, templateDocument(id, code, language, brand).pages[0]!, size, k * ratio, new Map());
-  }, [id, code, language, brand.accent, brand.contactLine, fontsReady]); // eslint-disable-line react-hooks/exhaustive-deps
+    paintPage(ctx, templateDocument(id, code, language, brand, copy).pages[0]!, size, k * ratio, new Map());
+  }, [id, code, language, brand.accent, brand.contactLine, fontsReady, copy]); // eslint-disable-line react-hooks/exhaustive-deps
   return <canvas ref={ref} aria-hidden="true" className={s.galleryCanvas} style={{ width, height: Math.round(size.height * k) }} />;
 }
 
 export function TemplateGallery({ code, language, brand, value, onChange, blankLabel }: Readonly<{
-  code: CreativeDesignSizeCode; language: string; brand: Brand; value: GalleryChoice; onChange: (choice: GalleryChoice) => void; blankLabel: string;
+  code: CreativeDesignSizeCode; language: string; brand: Brand; value: GalleryChoice | null; onChange: (choice: GalleryChoice) => void; blankLabel: string;
 }>) {
   const words = templateWords(language);
   const [filter, setFilter] = useState<TemplateTheme | 'all'>('all');
