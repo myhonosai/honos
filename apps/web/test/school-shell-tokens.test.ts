@@ -31,11 +31,11 @@ it('removes motion for reduced-motion users', () => {
 // Unslop pass (2026-11-28): the chrome stays quiet so the AI team portraits and the HON orb carry the colour.
 it('keeps surfaces solid ink with neutral hairlines and no coloured glow', () => {
   const base = block('[data-hon-ui]');
-  const value = (token: string) => new RegExp(`${token}:\\s*([^;]+);`).exec(base)![1].trim();
+  const value = (token: string) => (new RegExp(`${token}:\\s*([^;]+);`).exec(base)?.[1] ?? '').trim();
   for (const token of ['--hon-bg', '--hon-bg-raised', '--hon-rail', '--hon-surface', '--hon-surface-solid', '--hon-surface-2']) {
     const hex = value(token);
     expect(hex, token).toMatch(/^#[0-9a-f]{6}$/i);
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const [r = 0, , b = 0] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     // Ink, not navy: blue leads red by at most 24, so a surface never reads as a colour on its own.
     expect(b - r, token).toBeLessThanOrEqual(24);
   }
