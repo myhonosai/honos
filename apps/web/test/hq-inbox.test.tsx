@@ -13,7 +13,7 @@ const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')
 const agent = { principalId: id(50), displayName: 'Synthetic Agent' };
 const summary = { pending: 0, accepted: 0, delivered: 0, suppressed: 0, failed: 0, unknown: 0 };
 const msg = (patch: Partial<HqMessage> = {}): HqMessage => ({ messageId: id(1), organizationId: id(2), organizationDisplayName: 'Synthetic Dojo LLC', schoolId: id(3),
-  schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, status: 'QUEUED',
+  schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, subject: null, blastId: null, status: 'QUEUED',
   recipientCount: 2, createdBy: agent, createdAt: '2026-11-01T00:00:00.000Z', queuedAt: '2026-11-01T00:00:01.000Z', cancelledAt: null, updatedAt: '2026-11-01T00:00:01.000Z',
   version: 2, deliverySummary: { ...summary, delivered: 2 }, ...patch });
 const input: HqMessageCreateInput = { organizationId: id(2), schoolId: id(3), purpose: 'SUPPORT', channel: 'EMAIL', content: 'Hello owners', supportCaseId: null };

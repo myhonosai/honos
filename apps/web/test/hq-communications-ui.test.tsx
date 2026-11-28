@@ -20,7 +20,7 @@ const SID = 'MG' + '0123456789abcdef'.repeat(2);
 const agent = { principalId: id(50), displayName: 'Synthetic Agent' };
 const summary = { pending: 0, accepted: 0, delivered: 0, suppressed: 0, failed: 0, unknown: 0 };
 const msg = (patch: Record<string, unknown> = {}) => ({ messageId: id(1), organizationId: id(2), organizationDisplayName: 'Synthetic Dojo', schoolId: id(3),
-  schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, status: 'DRAFT',
+  schoolDisplayName: 'Synthetic Academy', purpose: 'SUPPORT', channel: 'EMAIL', content: 'Your sign-in link was reset.', supportCaseId: null, subject: null, blastId: null, status: 'DRAFT',
   recipientCount: 0, createdBy: agent, createdAt: T, queuedAt: null, cancelledAt: null, updatedAt: T, version: 1, deliverySummary: summary, ...patch });
 const sender = (patch: Record<string, unknown> = {}) => ({ senderId: id(20), channel: 'EMAIL', status: 'ACTIVE', emailFrom: 'hello@hon.example', emailDisplayName: 'HON OS',
   smsServiceSid: null, smsReplyNumber: null, a2pState: null, mmsConverterConfirmed: null, createdBy: agent, createdAt: T, version: 1, ...patch });
@@ -123,6 +123,7 @@ it('builds closed requests from the forms: only purposes held, content trimmed a
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'SMS', content: long + '안' }, target, ['SUPPORT'])).toBeNull();
   expect(createInputFrom({ purpose: 'BILLING', channel: 'EMAIL', content: 'Hi' }, target, ['SUPPORT'])).toBeNull();
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'EMAIL', content: '   ' }, target, ['SUPPORT'])).toBeNull();
+  expect(createInputFrom({ purpose: 'ANNOUNCEMENT', channel: 'EMAIL', content: 'Hi' }, target, ['ANNOUNCEMENT', 'SUPPORT'])).toBeNull(); // 0712: blasts only
   expect(createInputFrom({ purpose: 'SUPPORT', channel: 'EMAIL', content: 'Hi' }, null, ['SUPPORT'])).toBeNull();
   const sms = { channel: 'SMS' as const, emailFrom: '', emailDisplayName: '', smsServiceSid: SID.toUpperCase().replace(/^MG/, 'MG'), smsReplyNumber: '(555) 555-0123', a2pState: 'PENDING', mms: true };
   expect(senderInputFrom(sms)).toEqual({ channel: 'SMS', emailFrom: null, emailDisplayName: null, smsServiceSid: SID, smsReplyNumber: '+15555550123', a2pState: 'PENDING', mmsConverterConfirmed: true });
@@ -208,4 +209,13 @@ it('links Texts & Email from the HQ navigation, the school page and the support 
   expect(readFileSync('src/components/hq-support/case-view.tsx', 'utf8')).toContain('supportCaseId: c.caseId');
   // The page only points the form at a school from validated ids; the server confirms the school on save.
   expect(readFileSync('src/app/hq/communications/page.tsx', 'utf8')).toContain('saasUuid');
+});
+
+it('keeps each HQ email in history with its subject: a blast message shows the subject it was sent with', () => {
+  const m = msg({ purpose: 'ANNOUNCEMENT', channel: 'EMAIL', subject: 'News for Synthetic Main', blastId: id(77), status: 'QUEUED', version: 2, queuedAt: T2, recipientCount: 1,
+    deliverySummary: { ...summary, accepted: 1 } });
+  const html = renderToStaticMarkup(<HqMessageView {...detailProps(detailRaw({ message: m, deliveries: [delivery({ status: 'ACCEPTED', provider: 'SENDGRID', sentAs: 'EMAIL', attempt: 1, acceptedAt: T2 })] }))}/>);
+  expect(html).toContain('data-hq-message-subject="true"');
+  expect(html).toContain('News for Synthetic Main');
+  expect(renderToStaticMarkup(<HqMessageView {...detailProps(detailRaw())}/>)).not.toContain('data-hq-message-subject');
 });

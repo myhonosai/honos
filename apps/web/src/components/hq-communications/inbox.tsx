@@ -1,6 +1,6 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { HQ_MESSAGE_CHANNELS, hqMessageMaxLength, type HqInboundReply, type HqMessage, type HqMessageChannel, type HqMessagePurpose, type HqSchoolDirectoryEntry } from '@hon/contracts';
+import { HQ_MESSAGE_CHANNELS, HQ_ONE_OFF_PURPOSES, hqMessageMaxLength, type HqInboundReply, type HqMessage, type HqMessageChannel, type HqMessagePurpose, type HqOneOffPurpose, type HqSchoolDirectoryEntry } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { loadHqSchoolDirectory } from '../hq-school-directory-http';
 import { schoolDetailApi } from '../hq-school-detail/http';
@@ -13,6 +13,9 @@ import { commsText, type CommsKey } from './copy';
 import { PieceCounter } from './view';
 import { inboxText, inboxWhyKey, type InboxKey } from './inbox-copy';
 import { HqSendFlow, filterConversations, groupConversations, threadItems, type HqConversation, type SendState } from './inbox-model';
+
+/** Blasts (0712, ANNOUNCEMENT) go out from the Blasts tab only; the one-off composer offers the four one-off purposes. */
+const oneOffPurposes = (all: readonly HqMessagePurpose[]): HqMessagePurpose[] => all.filter(x => (HQ_ONE_OFF_PURPOSES as readonly string[]).includes(x));
 
 /** Which school's owners the open conversation is with. The ids only point the composer; the server confirms them on save. */
 export type InboxTarget = Readonly<{ organizationId: string; schoolId: string; supportCaseId: string | null }>;
@@ -75,7 +78,7 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
     Promise.all([api.list({ schoolId: null, cursor: null }, signal, owned), readReplies(api, null, signal, owned)]).then(([view, r]) => {
       if (!owned()) return;
       listCursor.current = view.nextCursor;
-      setList({ state: 'READY', messages: view.messages, purposes: view.viewer.purposes, next: view.nextCursor !== null, loadingMore: false, moreFailed: false, ...r });
+      setList({ state: 'READY', messages: view.messages, purposes: oneOffPurposes(view.viewer.purposes), next: view.nextCursor !== null, loadingMore: false, moreFailed: false, ...r });
     }, error => {
       if (!owned() || abort.signal.aborted) return;
       setList(error instanceof CommsError && error.kind === 'DENIED' ? { state: 'DENIED' } : { state: 'UNAVAILABLE' });
@@ -168,7 +171,7 @@ export function HqInbox({ target, deps = defaultDeps }: { target: InboxTarget | 
       if (!open || list.state !== 'READY') return false;
       const content = d.content.trim();
       if (!list.purposes.includes(d.purpose) || content.length < 1 || content.length > hqMessageMaxLength(d.channel)) return false;
-      return flow.send({ organizationId: open.organizationId, schoolId: open.schoolId, purpose: d.purpose, channel: d.channel, content, supportCaseId: open.supportCaseId });
+      return flow.send({ organizationId: open.organizationId, schoolId: open.schoolId, purpose: d.purpose as HqOneOffPurpose, channel: d.channel, content, supportCaseId: open.supportCaseId });
     }}
     onTryAgain={() => flow.tryAgain()} onDismiss={() => flow.reset()}/>;
 }
@@ -206,7 +209,7 @@ export function HqInboxView(p: InboxViewProps): React.ReactElement {
   const c = (k: CommsKey) => commsText(p.language, k);
   const when = (at: string) => shortWhen(at, p.timeZone ? { locale: p.formattingLocale, timeZone: p.timeZone } : { locale: p.formattingLocale });
   const head = <header className={s.head}><div><h1>{t('title')}</h1><p>{t('intro')}</p>
-    <p className={s.actions}><a className={s.ghost} href="/hq/communications/settings">{t('settings')}</a><a className={s.ghost} href="/hq/communications/numbers">{t('numbers')}</a></p></div>
+    <p className={s.actions}><a className={s.ghost} href="/hq/communications/blasts">{t('blasts')}</a><a className={s.ghost} href="/hq/communications/settings">{t('settings')}</a><a className={s.ghost} href="/hq/communications/numbers">{t('numbers')}</a></p></div>
     {!p.concealed && <p className={s.actions}><button type="button" className={s.ghost} onClick={p.onRefresh}>{t('refresh')}</button>
       {p.list.state === 'READY' && <button type="button" className={`${s.button} ${s.primary}`} disabled={p.locked} onClick={p.onNew}>{t('newMessage')}</button>}</p>}</header>;
   if (p.concealed) return <main className={s.page} data-hq-inbox="concealed">{head}
@@ -279,6 +282,7 @@ function Thread(p: InboxViewProps & { open: OpenSchool; t: (k: InboxKey, v?: Rec
           <span className={s.bubbleMeta}><span>{`${item.reply.from.displayName} · ${t('reply')} · ${c(item.reply.purpose)}`}</span>
             <time dateTime={item.reply.receivedAt}>{p.when(item.reply.receivedAt)}</time></span></li>
         : <li key={item.id} className={s.bubble} data-from="out" data-hq-message={item.id}>
+          {item.message.subject && <p style={{ margin: 0, fontWeight: 700 }} data-hq-message-subject="true">{item.message.subject}</p>}
           <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{item.message.content}</p>
           <span className={s.bubbleMeta}><span>{`${item.message.createdBy.displayName} · ${c(item.message.channel)} · ${c(item.message.purpose)}`}</span>
             <time dateTime={item.message.createdAt}>{p.when(item.message.createdAt)}</time></span>

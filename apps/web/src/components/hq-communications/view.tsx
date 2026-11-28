@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { HQ_MESSAGE_CHANNELS, HQ_SENDER_A2P_STATES, hqMessageMaxLength, hqTextPieces, normalizeHqPhone, type HqCommunicationSender, type HqCommunicationsView, type HqMessage,
-  type HqMessageChannel, type HqMessageCreateInput, type HqMessageDetail, type HqMessagePurpose, type HqSenderSetInput } from '@hon/contracts';
+import { HQ_MESSAGE_CHANNELS, HQ_ONE_OFF_PURPOSES, HQ_SENDER_A2P_STATES, hqMessageMaxLength, hqTextPieces, normalizeHqPhone, type HqCommunicationSender, type HqCommunicationsView, type HqMessage,
+  type HqMessageChannel, type HqMessageCreateInput, type HqMessageDetail, type HqMessagePurpose, type HqOneOffPurpose, type HqSenderSetInput } from '@hon/contracts';
 import { commsCodeKey, commsText, type CommsKey } from './copy';
 import type { CommsOutcome } from './model';
 import { Facts, formatTime } from '../hq-support/parts';
@@ -17,10 +17,11 @@ export type SenderDraft = Readonly<{ channel: HqMessageChannel; emailFrom: strin
 
 /** The person's message as a closed request, or null when it is not one. Content is trimmed, never shortened. */
 export function createInputFrom(draft: ComposeDraft, target: ComposeTarget | null, purposes: readonly HqMessagePurpose[]): HqMessageCreateInput | null {
-  if (!target || !(purposes as readonly string[]).includes(draft.purpose) || !(HQ_MESSAGE_CHANNELS as readonly string[]).includes(draft.channel)) return null;
+  // 0712: ANNOUNCEMENT is for blasts only; a one-off message never uses it.
+  if (!target || !(purposes as readonly string[]).includes(draft.purpose) || !(HQ_ONE_OFF_PURPOSES as readonly string[]).includes(draft.purpose) || !(HQ_MESSAGE_CHANNELS as readonly string[]).includes(draft.channel)) return null;
   const channel = draft.channel as HqMessageChannel, content = draft.content.trim();
   if (content.length < 1 || content.length > hqMessageMaxLength(channel)) return null;
-  return { organizationId: target.organizationId, schoolId: target.schoolId, purpose: draft.purpose as HqMessagePurpose, channel, content, supportCaseId: target.supportCaseId };
+  return { organizationId: target.organizationId, schoolId: target.schoolId, purpose: draft.purpose as HqOneOffPurpose, channel, content, supportCaseId: target.supportCaseId };
 }
 /** The sender form as a closed request, or null. Texts need the owner's MMS Converter confirmation. */
 export function senderInputFrom(d: SenderDraft): HqSenderSetInput | null {
@@ -161,12 +162,13 @@ export function HqCommunicationsListView(props: CommsListViewProps): React.React
   if (state.state !== 'READY') return <section className={styles.access} data-hq-comms={state.state.toLowerCase()} aria-busy={state.state === 'LOADING'}>{head}
     <p className={styles.notice} role="status">{t(state.state === 'LOADING' ? 'loading' : state.state === 'DENIED' ? 'denied' : 'unavailable')}</p></section>;
   const v = state.view, owner = v.viewer.canManageSenders;
+  const oneOff = v.viewer.purposes.filter(x => (HQ_ONE_OFF_PURPOSES as readonly string[]).includes(x));
   return <section className={styles.access} data-hq-comms="ready">{head}
     <p className={styles.meta}>{v.viewer.purposes.length ? t('viewer', { name: v.viewer.displayName, purposes: v.viewer.purposes.map(p => t(p)).join(', ') })
       : t('viewerNone', { name: v.viewer.displayName })}</p>
     <CommsOutcomeView language={language} outcome={props.outcome} done={props.doneText} canRetry={props.canRetry} onTryAgain={props.onTryAgain}>
       {props.doneMessageId && <a className={styles.secondary} href={`/hq/communications/${props.doneMessageId}`}>{t('reviewSend')}</a>}</CommsOutcomeView>
-    {props.target && v.viewer.purposes.length > 0 ? <ComposeForm key={props.formKey} language={language} purposes={v.viewer.purposes} target={props.target}
+    {props.target && oneOff.length > 0 ? <ComposeForm key={props.formKey} language={language} purposes={oneOff} target={props.target}
       locked={props.locked} onCompose={props.onCompose}/> : <p className={styles.notice}>{t('composeHint')}</p>}
     <h2>{t('senders')}</h2>
     {!owner && <p className={styles.meta}>{t('senderOwnerOnly')}</p>}
@@ -177,6 +179,7 @@ export function HqCommunicationsListView(props: CommsListViewProps): React.React
       {state.messages.map(m => <li key={m.messageId} className={styles.card} data-comms-message={m.messageId}>
         <div className={styles.cardHead}><h3><a href={`/hq/communications/${m.messageId}`}>{`${m.schoolDisplayName} · ${t(m.purpose)} · ${t(m.channel)}`}</a></h3>
           <span className={styles.status} data-tone={statusTone(m.status)}>{t(m.status)}</span></div>
+        {m.subject && <p className={styles.meta}><strong>{m.subject}</strong></p>}
         <p className={styles.meta}>{m.content.length > 160 ? `${m.content.slice(0, 160)}…` : m.content}</p>
         <MessageFacts t={t} m={m} formattingLocale={formattingLocale}/>
       </li>)}</ul>}
@@ -212,7 +215,8 @@ export function HqMessageView(props: CommsMessageViewProps): React.ReactElement 
     <div className={styles.cardHead}><h2>{`${m.schoolDisplayName} · ${t(m.purpose)} · ${t(m.channel)}`}</h2>
       <span className={styles.status} data-tone={statusTone(m.status)}>{t(m.status)}</span></div>
     <MessageFacts t={t} m={m} formattingLocale={formattingLocale}/>
-    <article className={styles.card} aria-label={t('content')}><p style={{ whiteSpace: 'pre-wrap' }}>{m.content}</p>
+    <article className={styles.card} aria-label={t('content')}>{m.subject && <p data-hq-message-subject="true"><strong>{m.subject}</strong></p>}
+      <p style={{ whiteSpace: 'pre-wrap' }}>{m.content}</p>
       {m.channel === 'SMS' && <PieceCounter language={language} channel="SMS" content={m.content}/>}</article>
     <CommsOutcomeView language={language} outcome={props.outcome} done={props.doneText} canRetry={props.canRetry} onTryAgain={props.onTryAgain}/>
     <div className={styles.actions}>
