@@ -47,6 +47,8 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
   const hon = honLine(sources.hon);
   const kpis = homeKpis(sources);
   const half = Math.ceil(team.length / 2);
+  const states = new Set(team.map(agent => agent.status));
+  const shared = team.length > 1 && states.size === 1 && !states.has('READY') ? team[0]!.status : null;
   const today = new Intl.DateTimeFormat(locale, { weekday: 'long', month: 'short', day: 'numeric', ...(timeZone ? { timeZone } : {}) }).format(now);
   const quick: readonly [string, HomeKey][] = [[scoped('/staff/crm/leads', selection), 'quickLeads'], ['/staff/schedule/sessions', 'quickClasses'],
     ['/staff/action-center/approvals', 'quickApprovals'], ['/staff/work', 'quickTasks'], [scoped('/staff/operations', selection), 'quickReport']];
@@ -58,8 +60,9 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
         <p className={styles.lead}>{t('heroLead')}</p>
         <p className={styles.today}><time dateTime={now.toISOString()}>{today}</time></p>
       </header>
+      {/* When every teammate shares one state that is not ready, say it once under the stage instead of eight times. */}
       <div className={styles.stage}>
-        <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(0, half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
+        <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(0, half).map(agent => <Agent key={agent.id} agent={agent} t={t} quiet={shared !== null} />)}</ul>
         <article className={styles.honCore} aria-labelledby="home-hon">
           <HonOrb className={styles.orb} />
           <h2 id="home-hon">{t('honTitle')}</h2>
@@ -68,10 +71,10 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
           {honAsk ?? <a className={styles.primary} href="/staff/hon"><ShellIcon name="hon" /><span>{t('askHon')}</span></a>}
           {teamChat ? <a className={styles.teamChatLink} href="#team-chat">{t('teamChat')}</a> : null}
         </article>
-        <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(half).map(agent => <Agent key={agent.id} agent={agent} t={t} />)}</ul>
+        <ul className={styles.agents} aria-label={t('teamTitle')}>{team.slice(half).map(agent => <Agent key={agent.id} agent={agent} t={t} quiet={shared !== null} />)}</ul>
       </div>
       <footer className={styles.teamFoot}>
-        <p>{t('teamLead')}</p>
+        {shared ? <p className={styles.teamStatus} data-status={shared}><i aria-hidden="true" />{t(`status${shared}` as HomeKey)}</p> : <p>{t('teamLead')}</p>}
         <div className={styles.artStyle} role="group" aria-label={t('artStyle')}>
           <span aria-hidden="true">{t('artStyle')}</span>
           {HON_ART_STYLES.map(value => <button type="button" key={value} aria-pressed={style === value} disabled={!onArtStyle} onClick={() => onArtStyle?.(value)}>{t(`art${value}` as HomeKey)}</button>)}
@@ -141,7 +144,7 @@ export function SchoolHomeView({ language, mode, schoolName, selection, sources,
   </main>;
 }
 
-function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }): React.ReactElement {
+function Agent({ agent, t, quiet = false }: { agent: AgentCard; t: (key: HomeKey) => string; quiet?: boolean }): React.ReactElement {
   // One rule with the AI team page: link only an agent that is ready to use now.
   const live = agent.href !== null && agent.status === 'READY';
   return <li className={styles.agent} data-agent={agent.id} data-status={agent.status} style={{ '--agent': agent.color } as React.CSSProperties}>
@@ -149,7 +152,7 @@ function Agent({ agent, t }: { agent: AgentCard; t: (key: HomeKey) => string }):
     <span className={styles.agentText}>
       <strong>{agent.name}</strong>
       <span className={styles.agentTitle} title={t(agent.title)}>{t(agent.purpose)}</span>
-      <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>
+      {quiet ? null : <span className={styles.agentStatus}><i aria-hidden="true" />{t(`status${agent.status}` as HomeKey)}</span>}
     </span>
     {live && <a className={styles.agentLink} href={agent.href!} aria-label={`${t('openWorkspace')}: ${agent.name}`}>{t('openWorkspace')}</a>}
   </li>;

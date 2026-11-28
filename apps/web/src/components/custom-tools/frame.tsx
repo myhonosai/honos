@@ -24,7 +24,7 @@ export function ToolFrame({ title, intro, children, testId }: { title: string; i
   const selection = shell.phase === 'READY' ? shell.selection : null;
   const school = selection ? `${selection.organizationId}:${selection.schoolId}`.toLowerCase() : 'none';
   const waiting = shell.phase === 'IDLE' || shell.phase === 'LOADING';
-  return <div className={styles.page} data-testid={testId}>
+  return <main className={styles.page} data-testid={testId}>
     <header className={styles.head}><div><h1>{title}</h1>{intro ? <p className={styles.intro}>{intro}</p> : null}</div></header>
     <div key={`${shell.phase}:${school}:${epoch}`} data-shell-private="" className={styles.stack}>
       {waiting ? <p className={styles.meta} role="status">{t('waiting')}</p>
@@ -32,7 +32,7 @@ export function ToolFrame({ title, intro, children, testId }: { title: string; i
         : !selection ? <p className={styles.notice} role="status">{t('noSchool')}</p>
         : children({ scope: { organizationId: selection.organizationId, schoolId: selection.schoolId }, language: preferences.language, t })}
     </div>
-  </div>;
+  </main>;
 }
 
 /** The title of a frame in the reader's language, for pages that need it before the frame renders. */

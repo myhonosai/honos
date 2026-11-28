@@ -6,7 +6,6 @@
  "More students on the <em class=\"s\">mat.</em>": "Más alumnos en el <em class=\"s\">tatami.</em>",
  "One plan. <em class=\"s\">Everything</em> in it.": "Un plan. <em class=\"s\">Todo</em> incluido.",
  "<b>Save up to 37%</b> on a yearly subscription": "<b>Ahorra hasta un 37%</b> con la suscripción anual",
- "<b>Founder 50 pricing:</b> the first 50 schools get 20% off HON OS for as long as they stay subscribed. If you cancel, you come back at the standard price.": "<b>Precio Founder 50:</b> las primeras 50 escuelas tienen un 20% de descuento en HON OS mientras sigan suscritas. Si cancelas, vuelves al precio estándar.",
  "Questions owners <em class=\"s\">ask.</em>": "Lo que preguntan los <em class=\"s\">dueños.</em>",
  "HON OS | The AI-powered OS for martial arts schools": "HON OS | El sistema operativo con IA para escuelas de artes marciales",
  "HON OS is one app for your whole martial arts school: leads, students, classes, belt testing, tuition and marketing, with an AI team included in your subscription.": "HON OS es una sola app para toda tu escuela de artes marciales: prospectos, alumnos, clases, exámenes de cinturón, matrículas y marketing, con un equipo de IA incluido en tu suscripción.",
@@ -197,7 +196,6 @@
  "per month": "al mes",
  "$1,494 billed once a year": "$1,494 facturados una vez al año",
  "billed monthly": "facturado cada mes",
- "or $1,494 a year, about 37% less than paying monthly": "o $1,494 al año, cerca de un 37% menos que pagar cada mes",
  "Leads, memberships and classes": "Prospectos, membresías y clases",
  "Belt testing and attendance": "Exámenes de cinturón y asistencia",
  "Payments and marketing tools": "Pagos y herramientas de marketing",
@@ -208,7 +206,6 @@
  "30-day money-back guarantee": "Garantía de devolución de 30 días",
  "The standard price once the 50 founder spots are taken.": "El precio estándar cuando se ocupen los 50 lugares de fundador.",
  "$2,097 billed once a year": "$2,097 facturados una vez al año",
- "or $2,097 a year, about 30% less than paying monthly": "o $2,097 al año, cerca de un 30% menos que pagar cada mes",
  "Need more studio credits? Top-ups are $30, $60 or $120.": "¿Necesitas más créditos de estudio? Las recargas son de $30, $60 o $120.",
  "If HON OS isn't right for you, ask within 30 days of your first payment, monthly or yearly, and we'll refund that payment in full. Your access ends when the refund is made, and a founder spot isn't returned.": "Si HON OS no es para ti, pídelo dentro de los 30 días posteriores a tu primer pago, mensual o anual, y te devolvemos ese pago completo. Tu acceso termina cuando se hace el reembolso y el lugar de fundador no se devuelve.",
  "Questions": "Preguntas",
@@ -273,5 +270,9 @@
  "Oct 2024": "oct. 2024",
  "Oct 2025": "oct. 2025",
  "Oct 2026": "oct. 2026",
- "Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, new members equalled 66% of show-ups, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.": "Una estimación, no una promesa. Los números reales son los registros mensuales de la propia escuela de septiembre de 2022 a octubre de 2026: 1266 citas de prueba, el 50 % asistió, las nuevas inscripciones equivalieron al 66 % de las asistencias y cerca del 3,7 % de los alumnos se fue cada mes. Para la estimación con HON OS repetimos los mismos meses con las mismas citas y suponemos que los recordatorios suben la asistencia al 60 % y que las alertas de ausencia bajan las bajas al 2,9 % al mes; la inscripción se queda en el 66 %. Así se llega a unos 275 alumnos en octubre de 2026 en lugar de 200. Las horas son nuestra estimación del trabajo de oficina semanal típico."
+ "Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, new members equalled 66% of show-ups, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.": "Una estimación, no una promesa. Los números reales son los registros mensuales de la propia escuela de septiembre de 2022 a octubre de 2026: 1266 citas de prueba, el 50 % asistió, las nuevas inscripciones equivalieron al 66 % de las asistencias y cerca del 3,7 % de los alumnos se fue cada mes. Para la estimación con HON OS repetimos los mismos meses con las mismas citas y suponemos que los recordatorios suben la asistencia al 60 % y que las alertas de ausencia bajan las bajas al 2,9 % al mes; la inscripción se queda en el 66 %. Así se llega a unos 275 alumnos en octubre de 2026 en lugar de 200. Las horas son nuestra estimación del trabajo de oficina semanal típico.",
+ "<b>Founder 50 pricing:</b> the first 50 schools pay $199.20 a month or $1,494 a year for as long as they stay subscribed. If you cancel, you come back at the standard price.": "<b>Precio Founder 50:</b> las primeras 50 escuelas pagan $199.20 al mes o $1,494 al año mientras sigan suscritas. Si cancelas, vuelves al precio estándar.",
+ "or $1,494 a year, 37% less than paying $199.20 monthly": "o $1,494 al año, un 37% menos que pagar $199.20 cada mes",
+ "or $2,097 a year, 29% less than paying $249 monthly": "o $2,097 al año, un 29% menos que pagar $249 cada mes",
+ "Badges compare with the standard $249 monthly price": "Los descuentos se comparan con el precio estándar de $249 al mes"
 }

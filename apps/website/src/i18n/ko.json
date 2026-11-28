@@ -6,7 +6,6 @@
  "More students on the <em class=\"s\">mat.</em>": "매트 위에 <em class=\"s\">더 많은</em> 수련생을.",
  "One plan. <em class=\"s\">Everything</em> in it.": "요금제는 하나. <em class=\"s\">모든 기능</em> 포함.",
  "<b>Save up to 37%</b> on a yearly subscription": "연간 구독 시 <b>최대 37% 절약</b>",
- "<b>Founder 50 pricing:</b> the first 50 schools get 20% off HON OS for as long as they stay subscribed. If you cancel, you come back at the standard price.": "<b>Founder 50 가격:</b> 첫 50개 도장은 구독을 유지하는 동안 HON OS를 20% 할인받습니다. 해지하면 표준 가격으로 돌아옵니다.",
  "Questions owners <em class=\"s\">ask.</em>": "관장님들이 자주 <em class=\"s\">묻는 질문.</em>",
  "HON OS | The AI-powered OS for martial arts schools": "HON OS | 무술 도장을 위한 AI 기반 운영 시스템",
  "HON OS is one app for your whole martial arts school: leads, students, classes, belt testing, tuition and marketing, with an AI team included in your subscription.": "HON OS는 상담, 수련생, 수업, 승급 심사, 수업료, 마케팅까지 도장 전체를 하나의 앱으로 운영하고, AI 팀이 구독에 포함되어 있습니다.",
@@ -197,7 +196,6 @@
  "per month": "월",
  "$1,494 billed once a year": "연 1회 $1,494 청구",
  "billed monthly": "매월 청구",
- "or $1,494 a year, about 37% less than paying monthly": "또는 연 $1,494, 월 결제보다 약 37% 저렴",
  "Leads, memberships and classes": "상담, 회원권, 수업",
  "Belt testing and attendance": "승급 심사와 출석",
  "Payments and marketing tools": "결제와 마케팅 도구",
@@ -208,7 +206,6 @@
  "30-day money-back guarantee": "30일 환불 보장",
  "The standard price once the 50 founder spots are taken.": "Founder 50자리가 모두 찬 뒤의 표준 가격입니다.",
  "$2,097 billed once a year": "연 1회 $2,097 청구",
- "or $2,097 a year, about 30% less than paying monthly": "또는 연 $2,097, 월 결제보다 약 30% 저렴",
  "Need more studio credits? Top-ups are $30, $60 or $120.": "스튜디오 크레딧이 더 필요하신가요? $30, $60, $120 충전이 가능합니다.",
  "If HON OS isn't right for you, ask within 30 days of your first payment, monthly or yearly, and we'll refund that payment in full. Your access ends when the refund is made, and a founder spot isn't returned.": "HON OS가 맞지 않으면 첫 결제(월간 또는 연간) 후 30일 이내에 요청하세요. 그 결제를 전액 환불해 드립니다. 환불되면 이용이 종료되며, Founder 자리는 반환되지 않습니다.",
  "Questions": "질문",
@@ -273,5 +270,9 @@
  "Oct 2024": "2024년 10월",
  "Oct 2025": "2025년 10월",
  "Oct 2026": "2026년 10월",
- "Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, new members equalled 66% of show-ups, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 실제 수치는 이 도장의 2022년 9월부터 2026년 10월까지의 월별 기록입니다. 체험 예약 1,266건, 그중 50%가 방문했고 신규 등록은 방문자 수의 66%였으며, 매달 수련생의 약 3.7%가 그만뒀습니다. HON OS 추정치는 같은 기간, 같은 예약 수를 그대로 다시 계산하되, 알림으로 방문율이 60%로 오르고 결석 알림으로 이탈이 매달 2.9%로 준다고 가정합니다. 등록률은 66% 그대로입니다. 그러면 2026년 10월에 200명이 아니라 약 275명이 됩니다. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다."
+ "Estimate, not a promise. The real numbers are the school's own monthly records from September 2022 to October 2026: 1,266 trial appointments, 50% showed up, new members equalled 66% of show-ups, and about 3.7% of students left each month. For the HON OS estimate we replay the same months with the same appointments and assume reminders lift show-ups to 60% and absence alerts cut leaving to 2.9% a month; joining stays at 66%. That gives about 275 students by October 2026 instead of 200. Hours are our estimate of typical weekly office work.": "약속이 아닌 추정치입니다. 실제 수치는 이 도장의 2022년 9월부터 2026년 10월까지의 월별 기록입니다. 체험 예약 1,266건, 그중 50%가 방문했고 신규 등록은 방문자 수의 66%였으며, 매달 수련생의 약 3.7%가 그만뒀습니다. HON OS 추정치는 같은 기간, 같은 예약 수를 그대로 다시 계산하되, 알림으로 방문율이 60%로 오르고 결석 알림으로 이탈이 매달 2.9%로 준다고 가정합니다. 등록률은 66% 그대로입니다. 그러면 2026년 10월에 200명이 아니라 약 275명이 됩니다. 시간은 일반적인 주간 사무 업무에 대한 저희의 추정치입니다.",
+ "<b>Founder 50 pricing:</b> the first 50 schools pay $199.20 a month or $1,494 a year for as long as they stay subscribed. If you cancel, you come back at the standard price.": "<b>Founder 50 가격:</b> 첫 50개 도장은 구독을 유지하는 동안 월 $199.20 또는 연 $1,494를 냅니다. 해지하면 표준 가격으로 돌아옵니다.",
+ "or $1,494 a year, 37% less than paying $199.20 monthly": "또는 연 $1,494, 월 $199.20 결제보다 37% 저렴",
+ "or $2,097 a year, 29% less than paying $249 monthly": "또는 연 $2,097, 월 $249 결제보다 29% 저렴",
+ "Badges compare with the standard $249 monthly price": "할인 표시는 표준 월 $249 가격 기준입니다"
 }

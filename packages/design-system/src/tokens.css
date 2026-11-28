@@ -19,7 +19,7 @@
   --hon-text-inverse: #0b0d14;
   --hon-accent: #2f7bff;
   --hon-accent-strong: #1d63f0;
-  --hon-accent-2: #34d6e8;
+  --hon-accent-2: #6fa5ff;
   --hon-accent-contrast: #ffffff;
   --hon-glow: 0 0 0 1px rgba(238, 240, 245, 0.12);
   --hon-success: #3ee08f;
@@ -30,7 +30,7 @@
   --hon-danger-soft: rgba(255, 107, 125, 0.14);
   --hon-info: #6fb2ff;
   --hon-info-soft: rgba(111, 178, 255, 0.14);
-  --hon-focus: 0 0 0 3px rgba(52, 214, 232, 0.65);
+  --hon-focus: 0 0 0 2px var(--hon-bg), 0 0 0 4px rgba(47, 123, 255, 0.9);
   --hon-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --hon-font-display: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --hon-font-mono: 'JetBrains Mono', ui-monospace, monospace;

@@ -2,7 +2,7 @@
 .head h3{font-size:22px;margin:0}.head p{font-size:13px;color:#bfd5e6;margin:6px 0 0}
 .steps{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
 .steps button{display:inline-flex!important;align-items:center;gap:8px;min-height:40px!important;padding:8px 12px!important;border-radius:999px!important;background:#0a2332!important;font-size:12px!important}
-.steps button span{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid #5aa3b6;font-size:11px}
+.steps button span{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1px solid #5aa3b6;font-size:12px}
 .steps button[aria-current=step]{border-color:#8ff5ff!important;background:#15485b!important;color:#eafcff!important}
 .steps button[data-done=true] span{background:#2c8ea3;border-color:#2c8ea3;color:#03141f}
 .counter{display:none;font-size:12px;color:#9fd8e2;margin:0}
@@ -32,9 +32,9 @@
 .actions,.nav{display:flex;flex-wrap:wrap;gap:12px}.nav{justify-content:space-between;border-top:1px solid #2c4f61;padding-top:16px}
 .primary{border-color:#8ff5ff!important;background:#16566a!important;color:#effcff!important}
 .preview{position:sticky;top:20px;display:grid;gap:12px;padding:20px;border:1px solid #4a7b90;border-radius:16px;background:#0b2434;min-width:0}
-.kicker{color:#8aeff2;font-size:11px;letter-spacing:.08em;font-weight:700;text-transform:uppercase}.preview h4{font-size:22px;margin:0}
+.kicker{color:#8aeff2;font-size:12px;letter-spacing:.08em;font-weight:700;text-transform:uppercase}.preview h4{font-size:22px;margin:0}
 .prices{list-style:none;margin:0;padding:0;display:grid;gap:8px}.prices li{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px}.prices strong{font-size:22px;color:#effcff}.prices span{font-size:12px;color:#9fc2d2}
-.prices em{font-style:normal;font-size:10px;padding:2px 7px;border-radius:999px;background:#2b5a3f;color:#c3ffd9}
+.prices em{font-style:normal;font-size:12px;padding:2px 7px;border-radius:999px;background:#2b5a3f;color:#c3ffd9}
 .perks{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:12px;color:#cfe6f0}
 @media(max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.preview{position:static;order:-1}}
 @media(max-width:650px){.builder{padding:16px}.steps{display:none}.counter{display:block}.choiceGrid,.features,.pair{grid-template-columns:minmax(0,1fr)}.priceRow{grid-template-columns:minmax(0,1fr)}.nav button,.actions button{flex:1}}

@@ -8,7 +8,7 @@
   background: var(--hon-bg);
 }
 .shell :focus-visible { outline: none; box-shadow: var(--hon-focus); border-radius: var(--hon-radius-sm); }
-.skip { position: absolute; left: 12px; top: -60px; z-index: 50; padding: 10px 14px; border-radius: var(--hon-radius-sm); background: var(--hon-accent); color: var(--hon-accent-contrast); text-decoration: none; }
+.skip { position: absolute; left: 12px; top: -60px; z-index: 50; padding: 10px 14px; border-radius: var(--hon-radius-sm); background: var(--hon-accent-strong); color: var(--hon-accent-contrast); text-decoration: none; }
 .skip:focus { top: 12px; }
 
 /* Rail */
@@ -35,7 +35,7 @@
 .schoolMark { grid-row: span 2; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: rgba(47, 123, 255, 0.18); color: var(--hon-accent-2); }
 .schoolText { min-width: 0; }
 .schoolText strong { display: block; font-size: var(--hon-text-sm); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.schoolText small { display: block; color: var(--hon-text-subtle); font-size: 11px; }
+.schoolText small { display: block; color: var(--hon-text-subtle); font-size: var(--hon-text-xs, 12px); }
 .school[data-phase='CHOICE'] .schoolText strong { white-space: normal; }
 .school[data-phase='DENIED'] .schoolText strong, .school[data-phase='UNAVAILABLE'] .schoolText strong { color: var(--hon-warning); white-space: normal; }
 .school[data-phase='SESSION'] .schoolText strong, .school[data-phase='IDENTITY'] .schoolText strong { color: var(--hon-danger); white-space: normal; }
@@ -54,7 +54,7 @@
 }
 .choices button:hover { border-color: var(--hon-accent); }
 .choices strong { display: block; font-size: var(--hon-text-sm); }
-.choices small { color: var(--hon-text-subtle); font-size: 11px; }
+.choices small { color: var(--hon-text-subtle); font-size: var(--hon-text-xs, 12px); }
 
 .nav { display: grid; gap: var(--hon-space-3); min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 /* Owner layout 2026-11-16: small headings with their pages under them, like the school's existing CRM. */
@@ -103,7 +103,7 @@
   background: transparent; color: var(--hon-text-muted); font: inherit; font-size: var(--hon-text-sm); font-weight: 600; white-space: nowrap;
 }
 .views button[aria-pressed='true'] { background: var(--hon-accent-strong); color: #fff; }
-.views small { position: absolute; top: 100%; right: 8px; margin-top: 4px; color: var(--hon-text-subtle); font-size: 10px; white-space: nowrap; }
+.views small { position: absolute; top: 100%; right: 8px; margin-top: 4px; color: var(--hon-text-subtle); font-size: var(--hon-text-xs, 12px); white-space: nowrap; }
 .askHon {
   display: inline-flex; align-items: center; gap: var(--hon-space-2); min-height: var(--hon-control-h); padding: 0 var(--hon-space-4) 0 6px;
   border-radius: 999px; color: #fff; text-decoration: none; font-weight: 600; white-space: nowrap;
@@ -133,7 +133,7 @@
   display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hon-border); font-size: 12px; font-weight: 600;
 }
 .steps a[aria-current='step'] { color: var(--hon-text); background: var(--hon-surface-2); }
-.steps a[aria-current='step'] [data-step-number] { background: var(--hon-accent); border-color: var(--hon-accent); color: var(--hon-accent-contrast); }
+.steps a[aria-current='step'] [data-step-number] { background: var(--hon-accent-strong); border-color: var(--hon-accent-strong); color: var(--hon-accent-contrast); }
 
 .demoBanner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: var(--hon-space-4, 12px) var(--hon-space-6, 20px) 0; padding: 10px 14px; border: 1px solid #8a6a2a; border-radius: 12px; background: #2a2210; color: #ffe4a8; font-size: 14px; font-weight: 600; }
 .demoBanner a { color: #fff3d1; font-weight: 800; text-decoration: underline; }
@@ -174,11 +174,11 @@
   .main { padding: var(--hon-space-4) var(--hon-space-4) 96px; }
   .mobileNav {
     position: fixed; inset: auto 0 0 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr);
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: rgba(6, 12, 29, 0.94); backdrop-filter: blur(12px); border-top: 1px solid var(--hon-border);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--hon-rail) 94%, transparent); backdrop-filter: blur(12px); border-top: 1px solid var(--hon-border);
   }
   .mobileNav a, .mobileNav button {
     display: grid; justify-items: center; gap: 2px; min-height: 52px; padding: 6px 2px; border: 0; border-radius: var(--hon-radius-sm);
-    background: transparent; color: var(--hon-text-subtle); font: inherit; font-size: 11px; text-decoration: none; cursor: pointer;
+    background: transparent; color: var(--hon-text-subtle); font: inherit; font-size: var(--hon-text-xs, 12px); text-decoration: none; cursor: pointer;
   }
   .mobileNav [aria-current='page'], .mobileNav [aria-current='true'] { color: var(--hon-text); background: rgba(47, 123, 255, 0.18); }
 }
@@ -191,7 +191,7 @@
 @media (max-width: 1099px) {
   .shell[data-hon-mode='big-button'] .mobileNav {
     position: fixed; inset: auto 0 0 0; z-index: 20; display: grid; grid-template-columns: repeat(5, 1fr);
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: rgba(6, 12, 29, 0.96); border-top: 1px solid var(--hon-border);
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--hon-rail) 96%, transparent); border-top: 1px solid var(--hon-border);
   }
   .shell[data-hon-mode='big-button'] .mobileNav a, .shell[data-hon-mode='big-button'] .mobileNav button {
     display: grid; justify-items: center; gap: 4px; min-height: 60px; border: 0; border-radius: var(--hon-radius-md);
@@ -396,7 +396,7 @@
 .searchTrigger:focus-visible { outline: 2px solid var(--hon-accent); outline-offset: 2px; }
 .searchTrigger svg { flex: none; }
 .searchTriggerText { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.searchTrigger kbd { flex: none; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hon-border); color: var(--hon-text-subtle); font: inherit; font-size: 11px; }
+.searchTrigger kbd { flex: none; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--hon-border); color: var(--hon-text-subtle); font: inherit; font-size: var(--hon-text-xs, 12px); }
 .searchLayer { position: fixed; inset: 0; z-index: 60; }
 .searchScrim { position: absolute; inset: 0; background: rgba(0, 3, 12, 0.6); backdrop-filter: blur(2px); }
 .searchPanel {
@@ -407,10 +407,11 @@
 .searchField { display: flex; align-items: center; gap: var(--hon-space-2); padding: var(--hon-space-3) var(--hon-space-4); border-bottom: 1px solid var(--hon-border); color: var(--hon-text-subtle); }
 .searchField input { flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--hon-text); font: inherit; font-size: var(--hon-text-md); }
 .searchPanel .searchField input:focus, .searchPanel .searchField input:focus-visible { outline: none; box-shadow: none; }
+.searchPanel .searchField:focus-within { box-shadow: var(--hon-focus); }
 .searchField:focus-within { color: var(--hon-accent); }
 .searchField input::placeholder { color: var(--hon-text-subtle); }
 .searchField input::-webkit-search-cancel-button { display: none; }
-.searchEsc { flex: none; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--hon-border); background: transparent; color: var(--hon-text-subtle); font: inherit; font-size: 11px; cursor: pointer; }
+.searchEsc { flex: none; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--hon-border); background: transparent; color: var(--hon-text-subtle); font: inherit; font-size: var(--hon-text-xs, 12px); cursor: pointer; }
 .searchResults { flex: 1 1 auto; overflow-y: auto; padding: var(--hon-space-2); }
 .searchResults section + section { margin-top: var(--hon-space-2); }
 .searchResults h2 { margin: var(--hon-space-2) var(--hon-space-2) 4px; color: var(--hon-text-subtle); font-size: 12px; font-weight: 500; }
@@ -421,7 +422,7 @@
 .searchResults a small { color: var(--hon-text-subtle); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .searchIcon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 8px; color: var(--hon-text-muted); background: var(--hon-surface-2); }
 .searchNote { margin: var(--hon-space-2); color: var(--hon-text-subtle); font-size: var(--hon-text-sm); }
-.searchFoot { display: flex; justify-content: space-between; gap: var(--hon-space-3); padding: 8px var(--hon-space-4); border-top: 1px solid var(--hon-border); color: var(--hon-text-subtle); font-size: 11px; }
+.searchFoot { display: flex; justify-content: space-between; gap: var(--hon-space-3); padding: 8px var(--hon-space-4); border-top: 1px solid var(--hon-border); color: var(--hon-text-subtle); font-size: var(--hon-text-xs, 12px); }
 @media (max-width: 760px) {
   .searchTrigger { flex: none; width: var(--hon-control-h); padding: 0; justify-content: center; }
   .searchTriggerText, .searchTrigger kbd { display: none; }
@@ -440,12 +441,12 @@
   .shell[data-hon-mode='big-button'] .mobileNav a span, .shell[data-hon-mode='big-button'] .mobileNav button span { font-size: 12px; font-weight: 600; }
 }
 /* 0699 plan features: locked menu pages and the Upgrade card that replaces a locked page. */
-.planLockMark { display: inline-flex; align-items: center; margin-inline-start: auto; padding-inline-start: 6px; color: var(--hon-color-text-muted, #9aa3b2); }
+.planLockMark { display: inline-flex; align-items: center; margin-inline-start: auto; padding-inline-start: 6px; color: var(--hon-text-muted); }
 .planLockText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.planLocked { max-width: 560px; margin: 48px auto; padding: 28px 24px; border: 1px solid var(--hon-color-border, #2d3442); border-radius: 16px; background: var(--hon-color-surface, #151a23); text-align: center; }
+.planLocked { max-width: 560px; margin: 48px auto; padding: 28px 24px; border: 1px solid var(--hon-border); border-radius: 16px; background: var(--hon-surface); text-align: center; }
 .planLocked h1 { margin: 8px 0 10px; font-size: 22px; line-height: 1.3; }
 .planLocked p { margin: 0 0 18px; line-height: 1.5; }
-.planLocked .planLockedBadge { display: inline-block; margin: 0 0 4px; padding: 4px 10px; border-radius: 999px; background: #2a2210; color: #ffe4a8; font-size: 13px; font-weight: 700; }
-.planUpgrade { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 22px; border-radius: 10px; background: var(--hon-color-accent, #e5483a); color: #fff; font-weight: 800; text-decoration: none; }
+.planLocked .planLockedBadge { display: inline-block; margin: 0 0 4px; padding: 4px 10px; border-radius: 999px; background: var(--hon-warning-soft); color: var(--hon-warning); font-size: 13px; font-weight: 600; }
+.planUpgrade { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 22px; border-radius: 10px; background: var(--hon-accent-strong); color: var(--hon-accent-contrast); font-weight: 600; text-decoration: none; }
 .planUpgrade:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .helpMark { font-weight: 800; font-size: 18px; line-height: 1; }

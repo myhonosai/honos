@@ -54,12 +54,14 @@ header{position:fixed;inset:0 0 auto;z-index:60;pointer-events:none}
 header .nav{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;max-width:none;padding-left:28px;padding-right:28px}
 header a,header nav{pointer-events:auto}
 .brand{display:flex;align-items:center;gap:12px;padding-top:12px}
+/* The wordmark is white; a quiet ink pill keeps it readable when the header passes over the light paper chapters */
+header .brand{padding:8px 14px 8px 8px;margin-top:4px;border-radius:999px;background:rgba(11,13,20,.6);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid rgba(238,241,248,.12)}
 .logo-mark{display:block;width:42px;height:42px;flex:none}
 .logo-mark svg{display:block;width:100%;height:100%}
 .brand-name{display:block;width:112px;height:auto;aspect-ratio:4272/700;mix-blend-mode:difference}
 .nav-right{display:flex;align-items:center;gap:10px;padding-top:14px}
 .lang{display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(6,13,31,.6);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);font-family:var(--mono);font-size:12px}
-.lang a{padding:6px 9px;border-radius:999px;color:var(--muted)}
+.lang a{padding:10px 12px;border-radius:999px;color:var(--muted)}
 .lang a:hover{color:#fff}
 .lang a[aria-current="page"]{background:rgba(255,255,255,.14);color:#fff}
 
@@ -67,8 +69,8 @@ header a,header nav{pointer-events:auto}
 footer{background:#02050d;color:#eef1f8;padding:40px 0 28px;overflow:hidden;position:relative;z-index:2}
 footer .big{font-weight:500;letter-spacing:-.06em;font-size:clamp(90px,21vw,300px);line-height:.85;display:flex;justify-content:space-between;color:#e8edf8}
 .foot{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:28px;margin-top:56px;font-size:14px}
-.foot h4{margin:0 0 12px;font-family:var(--mono);font-weight:400;font-size:12px;color:#7f8aa6}
-.foot h4::first-letter{text-transform:uppercase}
+.foot .foot-h{margin:0 0 12px;font-family:var(--mono);font-weight:400;font-size:12px;color:#7f8aa6}
+.foot .foot-h::first-letter{text-transform:uppercase}
 .foot a{display:block;color:#c9d3ea;padding:3px 0}
 .foot a:hover{color:#fff}
 .foot a[aria-current="page"]{color:var(--gold)}
