@@ -80,3 +80,13 @@ export class SchoolPlanFeaturesController {
     return { data: await this.billing.readSchoolPlanFeatures(subject(req), schoolId) };
   }
 }
+
+/** 0707: the current price schedule of each published offer, so the subscription page can preview and accept exact terms. */
+@Controller('schools/:schoolId/hon-os-price-schedules') @UseGuards(HonIdentityGuard)
+export class SchoolPriceSchedulesController {
+  constructor(private readonly billing: SaasBillingService) {}
+  @Get() @UseGuards(SaasReadGuard)
+  async schedules(@Req() req: HonRequest, @Param('schoolId') schoolId: string) {
+    return { data: await this.billing.readSchoolPriceSchedules(subject(req), schoolId) };
+  }
+}

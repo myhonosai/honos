@@ -7725,3 +7725,23 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+-- School plan upgrade exact verification (0707)
+DO $$ BEGIN
+  IF to_regprocedure('hon.read_saas_school_price_schedules(text,uuid)') IS NULL
+    OR NOT has_function_privilege('hon_runtime','hon.read_saas_school_price_schedules(text,uuid)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.saas_price_content(uuid,uuid)','EXECUTE')
+    OR has_function_privilege('hon_runtime','hon.school_plan_features(uuid,uuid)','EXECUTE')
+    OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
+      WHERE p.oid IN ('hon.read_saas_school_price_schedules(text,uuid)'::regprocedure,'hon.saas_price_content(uuid,uuid)'::regprocedure,
+        'hon.school_plan_features(uuid,uuid)'::regprocedure)
+        AND a.grantee<>p.proowner AND a.grantee<>(SELECT oid FROM pg_roles WHERE rolname='hon_runtime')) THEN
+    RAISE EXCEPTION 'Unsafe school plan upgrade ACL'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.read_saas_school_price_schedules(text,uuid)'::regprocedure AND p.prosecdef
+      AND position('require_saas_school_purchaser' IN p.prosrc)>0 AND position('''PUBLISHED''' IN p.prosrc)>0)
+    OR NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.school_plan_features(uuid,uuid)'::regprocedure AND NOT p.prosecdef
+      AND position('PAYMENT_ACTIVATED' IN p.prosrc)>0 AND position('hq_school_plan_current' IN p.prosrc)>0)
+    OR NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid='hon.saas_price_content(uuid,uuid)'::regprocedure AND NOT p.prosecdef
+      AND position('display_name=o.display_name' IN p.prosrc)>0) THEN
+    RAISE EXCEPTION 'School plan upgrade drift'; END IF;
+END $$;
+-- End school plan upgrade exact verification.

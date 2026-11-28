@@ -383,6 +383,8 @@ export const saasBillingFunctions = [
  ['hon.saas_access_overview_facts(uuid,timestamp with time zone)',false,false],
  ['hon.saas_access_overview_row(uuid,boolean,timestamp with time zone)',false,false],
  ['hon.read_saas_access_overview_from_hq(text,text,timestamp with time zone,uuid,integer)',true,true],
+ // 0707 school plan upgrade: the school purchaser reads the current price schedule per offer (read only).
+ ['hon.read_saas_school_price_schedules(text,uuid)',true,true],
 ];
 // Cross-milestone triggers 0157 adds to earlier tables: [table, trigger, tgtype, function].
 // Issue #100 (0201): functions that add calendar months to timestamptz run with TimeZone=UTC so billing

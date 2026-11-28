@@ -76,7 +76,7 @@ Upgrade button subscribes the school to the regular plan, which lifts the locks 
   school, no session) passes to the route's own authorization unchanged. Any other failure of the plan read answers 503,
   so a locked feature never slips through on an outage.
 - **Areas.** `ai.workforce`: AI team, agent voice settings and agent speech clips (HON's own clips count as HON), Alex, Chad (including the Action Center
-  Chad send), Claire, Jordan, Marcus, Maya, Conversation AI, Kai journal. `assistant.ordinary`: HON. Manual marketing: website, blasts, social posts. Marketing connections: social ads.
+  Chad send preview, `GET chad-send`), Claire, Jordan, Marcus, Maya, Conversation AI, Kai journal. `assistant.ordinary`: HON. Manual marketing: website, blasts, social posts. Marketing connections: social ads.
   `ai.premium_metered`: Creative Studio, except a person's own likeness photos (always viewable and deletable). Champions
   Club. Testing and curriculum: tests and curricula.
 - **Never refused.** People, CRM, schedule, billing, payments, reports, settings, staff, texts and email are shared by the
@@ -87,8 +87,28 @@ Upgrade button subscribes the school to the regular plan, which lifts the locks 
   assistant, `staff/teaching-assistant` Kai, `staff/testing/certificates|scorecards|registrations`) and `staff/voice`, which
   serves HON and the agents alike. The route test pins this list and every `:schoolId` route outside
   `schools/:schoolId/`, so a new one fails until it is reviewed. Background work that is not an HTTP request, for example an
-  AI message staff approved before the lock, is not stopped either. Pages outside the menu
+  AI message staff approved before the lock, is not stopped either. Approving an existing Chad draft in the Action Center
+  (`POST .../decision`) still sends it. Pages outside the menu
   that call a locked area show their usual error.
+
+## Piece 5a: subscribing lifts the locks (0707, test mode only)
+
+David, 2026-11-28: "It should be limited but opens up when they opt in to regular subscription." The purchase path is the
+0230 schedule binding (HQ records a price schedule, the school previews and accepts it, then starts the binding). In
+production the schedule provider is unconfigured, so starting a binding answers 503 until a payment adapter is approved.
+- **Paid plan first.** `hon.school_plan_features` now checks the organization's access first: when it is
+  `PAYMENT_ACTIVATED` (0235: a verified first payment on an ACTIVE schedule binding, or an IN_SERVICE 0182 checkout
+  subscription) the paid offer's capability list decides, with source `SUBSCRIPTION`. Otherwise the 0699 rule is unchanged
+  (HQ assignment; none, custom or removed locks nothing). Awaiting payment or a lapsed window falls back to it.
+- **Per-plan checkout terms.** `hon.saas_price_content` (0306 body) takes the regular monthly price, and a founder offer's
+  standard price, from the offer's own plan (offers sharing a display name, 0697) when that plan has one, else from the
+  whole set as before. Every set that worked before gives the same terms and digests, so recorded schedules and acceptances
+  are unchanged; a set with several plans (Core and Complete) now works per plan.
+- **School reads its terms.** `GET schools/:schoolId/hon-os-price-schedules` (`hon.read_saas_school_price_schedules`,
+  billing.hon.purchase of the exact school, open to a suspended school as billing recovery) lists the latest schedule of
+  each offer of the published set: offer id, schedule id and version only. The page then previews and accepts through the
+  existing 0230 endpoints.
+- Nothing here charges, starts a provider call, or turns on paid access; the paid-access program stays INACTIVE.
 
 ## Creative credit program switch (`/hq/revenue/creative-credits`)
 `ProgramControls` adds HQ-owner buttons using the existing 0202 commands: "Publish credit prices" (the rates David
