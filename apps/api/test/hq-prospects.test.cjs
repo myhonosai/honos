@@ -103,7 +103,7 @@ const card = (patch = {}) => ({ prospectId: PID, fullName: 'Synthetic Prospect',
   stageId: S1, status: 'ACTIVE', closedOutcome: null, textOptedOut: false, createdAt: T, version: 1, ...patch });
 const boardAnswer = (patch = {}) => ({ pipelineVersion: 1, stages: [stage(S1, 'Lead', 1, { openCount: 1 }), stage(S2, 'Contacted', 2)], prospects: [card()], truncated: false,
   closed: { won: 0, lost: 0 }, schools: [{ schoolId: SCHOOL, schoolName: 'Synthetic Dojo', organizationName: 'Synthetic Org', status: 'ACTIVE', tier: 'CORE', trialEndsAt: null, createdAt: T }],
-  asOf: T2, ...patch });
+  schoolsTruncated: false, asOf: T2, ...patch });
 
 test('contracts: pipeline board answers and inputs', () => {
   assert.equal(contracts.verifyHqProspectBoard(boardAnswer()).prospects[0].stageId, S1);

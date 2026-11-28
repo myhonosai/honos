@@ -65,7 +65,9 @@ CREATE FUNCTION hon.hq_prospect_stage_defaults() RETURNS trigger LANGUAGE plpgsq
 BEGIN
   IF NEW.status = 'ACTIVE' THEN
     NEW.closed_outcome := NULL;
-    IF NEW.stage_id IS NULL THEN
+    -- A restore (archived -> active) also leaves a stage that was hidden while the prospect was closed.
+    IF NEW.stage_id IS NULL OR (TG_OP = 'UPDATE' AND OLD.status <> 'ACTIVE'
+        AND EXISTS (SELECT 1 FROM hon.hq_prospect_stages WHERE id = NEW.stage_id AND hidden)) THEN
       SELECT id INTO NEW.stage_id FROM hon.hq_prospect_stages WHERE NOT hidden ORDER BY position LIMIT 1;
     END IF;
   END IF;
@@ -157,8 +159,8 @@ BEGIN
       'lost', (SELECT count(*) FROM hon.hq_prospects WHERE status = 'ARCHIVED' AND closed_outcome = 'LOST')),
     'schools', (SELECT coalesce(jsonb_agg(jsonb_build_object('schoolId', r.id, 'schoolName', r.name, 'organizationName', r.org_name,
         'status', r.status, 'tier', r.tier, 'trialEndsAt', CASE WHEN r.trial_ends IS NOT NULL THEN hon.saas_ts(r.trial_ends) END,
-        'createdAt', hon.saas_ts(r.created_at)) ORDER BY r.created_at DESC, r.id), '[]'::jsonb)
-      FROM (SELECT s.id, s.name, o.display_name AS org_name, s.created_at,
+        'createdAt', hon.saas_ts(r.created_at)) ORDER BY r.created_at DESC, r.id) FILTER (WHERE r.rn <= 5000), '[]'::jsonb)
+      FROM (SELECT s.id, s.name, o.display_name AS org_name, s.created_at, row_number() OVER (ORDER BY s.created_at DESC, s.id) AS rn,
           CASE WHEN 'ARCHIVED' IN (s.status::text, o.status::text) THEN 'ARCHIVED'
                WHEN 'SUSPENDED' IN (s.status::text, o.status::text) THEN 'SUSPENDED' ELSE 'ACTIVE' END AS status,
           (SELECT e.tier::text FROM hon.organization_entitlements e WHERE e.organization_id = o.id AND e.status = 'ACTIVE'
@@ -168,6 +170,8 @@ BEGIN
              AND t.ends_at > clock_timestamp() LIMIT 1) AS trial_ends
         FROM hon.schools s JOIN hon.organizations o ON o.id = s.organization_id
         WHERE s.status::text IN ('ACTIVE','SUSPENDED','ARCHIVED') AND o.status::text IN ('ACTIVE','SUSPENDED','ARCHIVED')) r),
+    'schoolsTruncated', (SELECT count(*) FROM hon.schools s JOIN hon.organizations o ON o.id = s.organization_id
+        WHERE s.status::text IN ('ACTIVE','SUSPENDED','ARCHIVED') AND o.status::text IN ('ACTIVE','SUSPENDED','ARCHIVED')) > 5000,
     'asOf', hon.saas_ts(clock_timestamp()));
   PERFORM hon.require_hq_marketing_actor(p_subject, true);
   RETURN result;

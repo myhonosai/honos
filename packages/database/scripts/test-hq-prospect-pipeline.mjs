@@ -146,7 +146,7 @@ try {
   const p1 = (await create('marketer', prospect(1))).prospect, p2 = (await create('hqOwner', prospect(2))).prospect;
   let b = await board('marketer');
   eq(b.prospects.map((p) => [p.prospectId, p.stageId]).sort(), [[p1.prospectId, lead], [p2.prospectId, lead]].sort(), 'both new prospects are in Lead');
-  eq([b.pipelineVersion, b.stages.length, b.stages[0].openCount, b.closed, b.truncated], [seedVersion, seedStages.length, 2, { won: 0, lost: 0 }, false], 'board totals');
+  eq([b.pipelineVersion, b.stages.length, b.stages[0].openCount, b.closed, b.truncated, b.schoolsTruncated], [seedVersion, seedStages.length, 2, { won: 0, lost: 0 }, false, false], 'board totals');
   const active = b.schools.find((s) => s.schoolId === S), paused = b.schools.find((s) => s.schoolId === S2);
   eq([active.status, active.schoolName, active.organizationName, active.trialEndsAt], ['ACTIVE', 'HQPIPE Active', 'HQPIPE Active Dojo', null], 'active school column');
   eq(paused.status, 'SUSPENDED', 'a paused organization puts its school in Inactive school');
@@ -228,6 +228,13 @@ try {
     stageId: contacted, outcome: null }), 'no move into a hidden stage', 'HQ_PROSPECT_STAGE_UNAVAILABLE');
   const p3 = (await create('marketer', prospect(3))).prospect;
   eq((await one(admin, 'SELECT stage_id FROM hon.hq_prospects WHERE id=$1', [p3.prospectId])).stage_id, demo, 'new prospects land in the first visible stage (Demo set now)');
+  // A restore from a stage that was hidden while the prospect was closed lands in the first visible stage.
+  await move('marketer', p3.prospectId, { expectedVersion: p3.version, stageId: null, outcome: 'LOST' });
+  await admin.query('UPDATE hon.hq_prospects SET stage_id=$2, version=version+1 WHERE id=$1', [p3.prospectId, contacted]);
+  const back = await update('marketer', p3.prospectId, { expectedVersion: (await one(admin, 'SELECT version FROM hon.hq_prospects WHERE id=$1', [p3.prospectId])).version,
+    fullName: 'Pipe Prospect 3', schoolName: 'Pipe Dojo 3', email: 'pipe3@example.test', phone: null, campaignId: null, status: 'ACTIVE' });
+  eq([back.prospect.status, (await one(admin, 'SELECT stage_id FROM hon.hq_prospects WHERE id=$1', [p3.prospectId])).stage_id], ['ACTIVE', demo],
+    'a restore out of a hidden stage lands in the first visible stage');
 
   // ---------- 6. schools: trial and archived ----------
   await admin.query("UPDATE hon.organizations SET status='ARCHIVED' WHERE id=$1", [ORG2]).catch(() => {});

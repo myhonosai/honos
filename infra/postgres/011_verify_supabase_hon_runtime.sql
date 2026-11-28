@@ -7734,10 +7734,10 @@ BEGIN
     ('hon.guard_hq_prospect_stage()','c936ce50e0f5eb674a59c4d727a92021','v',false,'search_path=pg_catalog, hon',false),
     ('hon.hq_prospect_board_claim(uuid,uuid,text,text)','b9f98e24c608928c6bc591571895019e','v',false,'search_path=pg_catalog, hon',false),
     ('hon.hq_prospect_card_json(hon.hq_prospects)','2a0c6ac2c01049e3d64a1892deb967f2','s',false,'search_path=pg_catalog, hon',false),
-    ('hon.hq_prospect_stage_defaults()','7171aeaa000b563d3734a13d21822c79','v',false,'search_path=pg_catalog, hon',false),
+    ('hon.hq_prospect_stage_defaults()','5637bdc783cdb6cb9552686e42a218aa','v',false,'search_path=pg_catalog, hon',false),
     ('hon.hq_prospect_stages_json()','6d7dc426a6f2da05d9cda12d8cbb7447','s',false,'search_path=pg_catalog, hon',false),
     ('hon.move_hq_prospect_stage(text,uuid,jsonb,uuid)','7539475336f01b70bb43c07051df45e0','v',true,'search_path=pg_catalog, hon',true),
-    ('hon.read_hq_prospect_board(text)','14bde2fca9f3568218cfa1c9cbb67d34','v',true,'search_path=pg_catalog, hon',true),
+    ('hon.read_hq_prospect_board(text)','c5c05ad2f9b0342fe108be6472e89023','v',true,'search_path=pg_catalog, hon',true),
     ('hon.save_hq_prospect_stages(text,jsonb,uuid)','df5bc5dc3c99f17536298f7697921f40','v',true,'search_path=pg_catalog, hon',true)) x(f,t,c,d,s,r) LOOP
     IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
         AND p.proconfig IS NOT DISTINCT FROM ARRAY[s])

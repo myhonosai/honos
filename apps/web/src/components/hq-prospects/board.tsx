@@ -246,6 +246,7 @@ function Board(props: Inner) {
       <div className={styles.drop} data-tone="lost" data-testid="hq-drop-lost" {...drop((id) => onMove?.(id, { outcome: 'LOST' }))}>{t('dropLost')}</div>
     </div>
     {ready.truncated ? <p className={styles.meta}>{t('truncated', { n: String(ready.prospects.length) })}</p> : null}
+    {ready.schoolsTruncated ? <p className={styles.meta}>{t('schoolsTruncated', { n: String(ready.schools.length) })}</p> : null}
   </>;
 }
 

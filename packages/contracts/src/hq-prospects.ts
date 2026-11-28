@@ -188,12 +188,14 @@ export interface HqBoardProspect {
   prospectId: string; fullName: string; schoolName: string | null; email: string | null; phone: string | null; source: HqProspectSource;
   stageId: string | null; status: HqProspectStatus; closedOutcome: HqProspectOutcome | null; textOptedOut: boolean; createdAt: string; version: number;
 }
+/** The board reads at most this many customer schools, newest first. */
+export const HQ_BOARD_SCHOOL_MAX = 5000;
 export interface HqBoardSchool {
   schoolId: string; schoolName: string; organizationName: string; status: HqBoardSchoolStatus; tier: string | null; trialEndsAt: string | null; createdAt: string;
 }
 export interface HqProspectBoard {
   pipelineVersion: number; stages: HqProspectStage[]; prospects: HqBoardProspect[]; truncated: boolean;
-  closed: { won: number; lost: number }; schools: HqBoardSchool[]; asOf: string;
+  closed: { won: number; lost: number }; schools: HqBoardSchool[]; schoolsTruncated: boolean; asOf: string;
 }
 export interface HqProspectMoveInput { expectedVersion: number; stageId: string | null; outcome: HqProspectOutcome | null }
 export interface HqProspectMoveReceipt { operation: 'MOVE'; prospect: HqBoardProspect; replayed: boolean }
@@ -241,9 +243,10 @@ function boardSchool(value: unknown): HqBoardSchool {
   return { ...(s as unknown as HqBoardSchool), schoolId: lower(s.schoolId as string) };
 }
 export function verifyHqProspectBoard(value: unknown): HqProspectBoard {
-  const r = record(value, drift); exactKeys(r, ['pipelineVersion', 'stages', 'prospects', 'truncated', 'closed', 'schools', 'asOf'], drift);
+  const r = record(value, drift); exactKeys(r, ['pipelineVersion', 'stages', 'prospects', 'truncated', 'closed', 'schools', 'schoolsTruncated', 'asOf'], drift);
   if (!isInt(r.pipelineVersion, 1, 999_999_999) || !Array.isArray(r.prospects) || r.prospects.length > HQ_BOARD_PROSPECT_MAX
-    || typeof r.truncated !== 'boolean' || !Array.isArray(r.schools) || r.schools.length > 10_000 || !isTimestamp(r.asOf)) drift();
+    || typeof r.truncated !== 'boolean' || !Array.isArray(r.schools) || r.schools.length > HQ_BOARD_SCHOOL_MAX
+    || typeof r.schoolsTruncated !== 'boolean' || !isTimestamp(r.asOf)) drift();
   const c = record(r.closed, drift); exactKeys(c, ['won', 'lost'], drift);
   if (!isInt(c.won, 0, 1_000_000_000) || !isInt(c.lost, 0, 1_000_000_000)) drift();
   const list = stages(r.stages), ids = new Set(list.map(s => s.stageId));
@@ -252,7 +255,7 @@ export function verifyHqProspectBoard(value: unknown): HqProspectBoard {
   const schools = (r.schools as unknown[]).map(boardSchool);
   if (new Set(schools.map(s => s.schoolId)).size !== schools.length) drift();
   return { pipelineVersion: r.pipelineVersion as number, stages: list, prospects, truncated: r.truncated as boolean,
-    closed: { won: c.won as number, lost: c.lost as number }, schools, asOf: r.asOf as string };
+    closed: { won: c.won as number, lost: c.lost as number }, schools, schoolsTruncated: r.schoolsTruncated as boolean, asOf: r.asOf as string };
 }
 export function validateHqProspectMoveInput(value: unknown): HqProspectMoveInput {
   const r = record(value, invalid); exactKeys(r, ['expectedVersion', 'stageId', 'outcome'], invalid);

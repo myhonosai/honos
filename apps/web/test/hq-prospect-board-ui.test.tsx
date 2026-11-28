@@ -26,7 +26,7 @@ const board = (patch: Partial<HqProspectBoard> = {}): HqProspectBoard => ({
   schools: [{ schoolId: id(201), schoolName: 'Live Dojo', organizationName: 'Live Org', status: 'ACTIVE', tier: 'CORE', trialEndsAt: null, createdAt: T },
     { schoolId: id(202), schoolName: 'Trial Dojo', organizationName: 'Trial Dojo', status: 'ACTIVE', tier: null, trialEndsAt: T2, createdAt: T },
     { schoolId: id(203), schoolName: 'Paused Dojo', organizationName: 'Paused Org', status: 'SUSPENDED', tier: 'CORE', trialEndsAt: null, createdAt: T }],
-  asOf: T2, ...patch });
+  schoolsTruncated: false, asOf: T2, ...patch });
 const props = (patch: Partial<HqProspectBoardViewProps> = {}): HqProspectBoardViewProps => ({ language: 'en', concealed: false, board: { state: 'READY', board: board() },
   filters: HQ_BOARD_FILTERS, notice: null, movingId: null, edit: null, ...patch });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -102,6 +102,8 @@ it('renders loading, denied, concealed and the stage editor', () => {
   expect(edit).toContain('Edit stages'); expect((edit.match(/data-testid="hq-stage-row"/g) ?? []).length).toBe(3);
   expect(edit).toContain('Automatic, from the school');
   expect(renderToStaticMarkup(<HqProspectBoardView {...props({ language: 'ko' })}/>)).toContain('활성 학교');
+  expect(renderToStaticMarkup(<HqProspectBoardView {...props()}/>)).not.toContain('School columns show');
+  expect(renderToStaticMarkup(<HqProspectBoardView {...props({ board: { state: 'READY', board: board({ schoolsTruncated: true }) } })}/>)).toContain('School columns show the newest 3 schools');
 });
 
 it('calls the board API: same-origin read, marked move and stage save with idempotency keys', async () => {
