@@ -13,7 +13,7 @@ it('gates the page on a signed session and passes identity continuity only, with
   expect(page.type).toBe(HonOsStart); expect(page.props).toEqual({ sessionSubject: 'oidc:new-owner-a' }); expect(String(page.key)).not.toContain(h.token); expect(f).not.toHaveBeenCalled();
   expect(metadata.robots).toEqual({ index: false, follow: false }); expect(metadata.referrer).toBe('no-referrer');
 });
-it('a missing or expired session goes to sign-in before anything renders', async () => { h.invalid = true; await expect(StartPage()).rejects.toThrow('REDIRECT /auth/login'); });
+it('a missing or expired session goes to sign-in before anything renders', async () => { h.invalid = true; await expect(StartPage()).rejects.toThrow('REDIRECT /auth/login?for=start'); });
 it('a new signed session gets a new private page lifetime', async () => {
   const a = await StartPage(); h.token = 'synthetic-b'; h.subject = 'oidc:new-owner-b'; const b = await StartPage() as React.ReactElement<{ sessionSubject: string }>;
   expect(b.key).not.toBe(a.key); expect(b.props.sessionSubject).toBe('oidc:new-owner-b');

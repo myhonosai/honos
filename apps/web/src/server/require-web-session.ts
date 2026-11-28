@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { HON_SESSION_COOKIE, sessionConfig, verifySession } from '@hon/auth';
+import type { START_SIGN_IN } from './post-login-intent';
 
 /** Identity continuity only: the verified subject and an opaque per-session React key. Never authority. */
 export type VerifiedWebIdentity = Readonly<{ externalSubject: string; viewKey: string }>;
@@ -10,8 +11,9 @@ export type VerifiedWebIdentity = Readonly<{ externalSubject: string; viewKey: s
 /**
  * Browser-route identity gate only. Domain APIs must still resolve their own
  * current principal, control-plane/school scope, permissions, and entitlements.
+ * `signIn` is a fixed sign-in link only (never caller input), so a page can come back to itself after sign-in.
  */
-export async function requireVerifiedWebSession(): Promise<VerifiedWebIdentity> {
+export async function requireVerifiedWebSession(signIn: '/auth/login' | typeof START_SIGN_IN = '/auth/login'): Promise<VerifiedWebIdentity> {
   let identity: VerifiedWebIdentity | null = null;
   try {
     const token = (await cookies()).get(HON_SESSION_COOKIE)?.value;
@@ -22,6 +24,6 @@ export async function requireVerifiedWebSession(): Promise<VerifiedWebIdentity> 
   } catch {
     // Fail closed: pages remain inaccessible when session verification is unavailable or invalid.
   }
-  if (!identity) redirect('/auth/login');
+  if (!identity) redirect(signIn);
   return identity;
 }
