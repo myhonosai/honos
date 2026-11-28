@@ -403,3 +403,47 @@ export function validateSaasSchoolPlanFeatures(value: unknown): SaasSchoolPlanFe
   return { schoolId: r.schoolId as string, source: r.source as SaasSchoolPlanFeatureSource, planName: r.planName as string | null,
     included: included as string[], locked: locked as string[], asOf: r.asOf as string };
 }
+
+// Server refusal of locked features (piece 4). The school API areas that belong to one feature, by the path after
+// .../schools/:schoolId/. Longest prefix wins; an area that maps to null is never locked (a shared inbox). Core records
+// (people, CRM, schedule, billing, reports) are shared by the Dashboard, Calendar and Reports, so their locks stay display
+// only; the HON OS purchase and subscription routes are never locked, so the Upgrade path always works.
+export const SCHOOL_PLAN_FEATURE_API_AREAS: Readonly<Record<string, string | null>> = {
+  'ai/team': 'ai.workforce', 'agent-voices': 'ai.workforce', agents: 'ai.workforce', alex: 'ai.workforce', chad: 'ai.workforce',
+  claire: 'ai.workforce', jordan: 'ai.workforce', marcus: 'ai.workforce', maya: 'ai.workforce', 'conversation-ai': 'ai.workforce',
+  'staff/kai': 'ai.workforce',
+  hon: 'assistant.ordinary',
+  website: 'marketing.campaigns_manual_assisted', 'marketing/blasts': 'marketing.campaigns_manual_assisted',
+  'marketing/social': 'marketing.campaigns_manual_assisted', 'marketing/social/inbox': null,
+  'marketing/social/ads': 'marketing.connections_reporting',
+  'creative-studio': 'ai.premium_metered',
+  // A staff member can always see and delete their own consented likeness photo (owner decision, A3 0684).
+  'creative-studio/avatar-photos': null,
+  champions: 'champions.participation',
+  testing: 'progression.testing_curriculum', curricula: 'progression.testing_curriculum',
+};
+/** The plan feature a school API route belongs to, from the route's template (for example
+ * 'organizations/:organizationId/schools/:schoolId/ai/team'), or null when the route is not a lockable feature area. */
+// Feature routes that carry the school as a path parameter outside .../schools/:schoolId/ (exact route templates).
+export const SCHOOL_PLAN_FEATURE_STAFF_ROUTES: Readonly<Record<string, string>> = {
+  'staff/action-center/approvals/:schoolId/:actionRequestId/chad-send': 'ai.workforce',
+};
+/** The route's params refine one area: an agent's own speech belongs to HON (`assistant.ordinary`) when the agent is HON. */
+export function schoolPlanFeatureForRoute(template: string, params?: Readonly<Record<string, unknown>>): string | null {
+  const capability = schoolPlanAreaForRoute(template);
+  if (capability === 'ai.workforce' && /\/agents\/:agentKey(\/|$)/i.test(template) && params?.agentKey === 'hon') return 'assistant.ordinary';
+  return capability;
+}
+function schoolPlanAreaForRoute(template: string): string | null {
+  const route = template.replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
+  const exact = Object.entries(SCHOOL_PLAN_FEATURE_STAFF_ROUTES).find(([t]) => t.toLowerCase() === route.toLowerCase());
+  if (exact) return exact[1];
+  const m = /(?:^|\/)schools\/:schoolId\/(.+)$/.exec(route);
+  if (!m) return null;
+  const rest = m[1]!.toLowerCase().split('/').filter(Boolean);
+  for (let n = Math.min(rest.length, 3); n >= 1; n--) {
+    const key = rest.slice(0, n).join('/');
+    if (Object.hasOwn(SCHOOL_PLAN_FEATURE_API_AREAS, key)) return SCHOOL_PLAN_FEATURE_API_AREAS[key] ?? null;
+  }
+  return null;
+}
