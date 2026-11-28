@@ -28,7 +28,7 @@ h1,h2{font-family:var(--serif);font-weight:400;letter-spacing:-.02em;line-height
 h3{font-weight:500;letter-spacing:-.01em}
 em.s{font-family:var(--serif);font-style:italic;font-weight:400}
 .wrap{max-width:1200px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.label{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase}
+.label{font-family:var(--mono);font-size:12px}
 .mono{font-family:var(--mono);font-size:13px;color:var(--muted)}
 .lede{font-size:18px;color:var(--muted)}
 .tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 12px;white-space:nowrap}
@@ -41,6 +41,9 @@ em.s{font-family:var(--serif);font-style:italic;font-weight:400}
 .btn.primary:hover{background:#3a64d6}
 .btn.light{background:#fff;color:var(--ink);border-color:rgba(13,21,48,.12)}
 .btn.dark{background:#1a2850;color:#fff;border-color:transparent}
+/* Sign in is a quiet dark secondary next to the one primary button; it stays readable over the light chapters */
+header .btn.light{background:rgba(11,13,20,.6);color:#eef1f8;border-color:rgba(238,241,248,.14);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+header .btn.light:hover{transform:none;background:rgba(11,13,20,.8)}
 .cta-row{display:flex;gap:10px;flex-wrap:wrap}
 a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
 .skip{position:absolute;left:12px;top:-60px;z-index:120;background:var(--accent-fill);color:var(--on-accent);padding:8px 14px;border-radius:999px;font-weight:500}
@@ -64,7 +67,8 @@ header a,header nav{pointer-events:auto}
 footer{background:#02050d;color:#eef1f8;padding:40px 0 28px;overflow:hidden;position:relative;z-index:2}
 footer .big{font-weight:500;letter-spacing:-.06em;font-size:clamp(90px,21vw,300px);line-height:.85;display:flex;justify-content:space-between;color:#e8edf8}
 .foot{display:grid;grid-template-columns:1.4fr repeat(4,1fr);gap:28px;margin-top:56px;font-size:14px}
-.foot h4{margin:0 0 12px;font-family:var(--mono);font-weight:400;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#7f8aa6}
+.foot h4{margin:0 0 12px;font-family:var(--mono);font-weight:400;font-size:12px;color:#7f8aa6}
+.foot h4::first-letter{text-transform:uppercase}
 .foot a{display:block;color:#c9d3ea;padding:3px 0}
 .foot a:hover{color:#fff}
 .foot a[aria-current="page"]{color:var(--gold)}
