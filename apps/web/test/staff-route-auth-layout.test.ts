@@ -10,7 +10,9 @@ describe('staff and HQ route session layouts', () => {
     expect(guard).toContain("HON_SESSION_COOKIE, sessionConfig, verifySession");
     expect(guard).toContain('await cookies()');
     expect(guard).toContain('verifySession(token, sessionConfig())');
-    expect(guard).toContain("redirect('/auth/login')");
+    // Plain sign-in by default; the only other value is the fixed Start-a-school link.
+    expect(guard).toContain("signIn: '/auth/login' | typeof START_SIGN_IN = '/auth/login'");
+    expect(guard).toContain('if (!identity) redirect(signIn);');
     expect(guard).toContain('Fail closed');
     for (const layout of [staffLayout, hqLayout]) {
       expect(layout).toContain("export const dynamic = 'force-dynamic'");
