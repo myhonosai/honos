@@ -70,7 +70,8 @@ function store({ canManage = true, isOwner = false, provider = 'CONNECTED', cap 
     command(kind, id, input) {
       if (kind === 'CREATE') {
         if (provider !== 'CONNECTED') return [503, { code: 'CREATIVE_PROVIDER_NOT_CONNECTED' }];
-        if (b.cap === null) return [422, { code: 'HQ_CREATIVE_BUDGET_NOT_SET' }];
+        // 0702: a month with no cap set has no monthly limit; the first request records the month at the top cap.
+        if (b.cap === null) { b.cap = 10_000_000; b.version = 1; b.setAt = now(); }
         const rate = RATES.find(r => r.operationCode === input.operationCode);
         if (rate.creditsPerUnit * input.units > budget().availableCredits) return [422, { code: 'HQ_CREATIVE_BUDGET_EXHAUSTED' }];
         const g = add(input, 'SUCCEEDED', { version: 2, completedAt: true });
@@ -202,19 +203,18 @@ try {
     assert(facts.includes('50') && facts.includes('140'), facts);
     await s.context.close();
   });
-  await check('a cap change whose outcome is unknown is retried with the same key and body and saved once', async () => {
-    const s = await open('creative-budget-unknown', { width: 1280, height: 900 }, f => { f.store = store({ isOwner: true }); f.unknownOnce = 'BUDGET'; }); await ready(s);
-    await s.page.getByLabel(t('capLabel'), { exact: true }).fill('300');
-    await s.page.getByLabel(t('reason'), { exact: true }).fill('More posters for March');
-    await s.page.getByRole('button', { name: t('saveBudget'), exact: true }).click();
-    await s.page.locator('[data-creative-outcome="unknown"]').waitFor();
-    assert(await s.page.getByRole('button', { name: t('saveBudget'), exact: true }).isDisabled(), 'locked while in doubt');
-    await s.page.getByRole('button', { name: t('tryAgain'), exact: true }).click();
+  await check('no monthly limit by default: the HQ owner is never asked for a cap and a request goes through (0702)', async () => {
+    const s = await open('creative-no-limit', { width: 390, height: 844 }, f => { f.store = store({ isOwner: true, cap: null }); }); await ready(s);
+    const text = await s.page.locator(ROOT).innerText();
+    assert(text.includes(t('noBudget')) && !text.includes('refused until') && !text.includes('Set this month'), text);
+    assert.equal(await s.page.locator('[data-creative-budget-form], [data-creative-requests-off]').count(), 0);
+    await s.page.getByLabel(t('prompt'), { exact: true }).fill('Founder 50 square post with no monthly limit.');
+    await s.page.getByRole('button', { name: t('submitRequest'), exact: true }).click();
     await s.page.locator('[data-creative-outcome="done"]').waitFor();
-    assert.equal(s.f.commands.length, 2); assert.deepEqual(s.f.commands[1], s.f.commands[0]);
-    assert.deepEqual(JSON.parse(s.f.commands[0].body), { periodStart: PERIOD, creditCap: 300, expectedVersion: 1, reason: 'More posters for March' });
-    await s.page.locator('[data-creative-history]').getByText('More posters for March', { exact: false }).waitFor();
-    await s.context.close();
+    assert.equal(s.f.commands.length, 1);
+    await s.page.locator('[data-creative-budget="unlimited"]').waitFor();
+    assert(!(await s.page.locator(ROOT).innerText()).includes('10,000,000'), 'the top cap is shown as no limit');
+    await capture(s, 'creative-no-limit-mobile', ROOT); await s.context.close();
   });
   await check('the HQ owner resolves a held request with evidence', async () => {
     const s = await open('creative-resolve', { width: 390, height: 844 }, f => { f.store = store({ isOwner: true }); }); await ready(s);

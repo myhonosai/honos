@@ -13,6 +13,7 @@ import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
 import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
 import { demoCopy } from '../school-demo-data/copy';
+import { PlanLockMark, PlanLockedPage } from './plan-features';
 import styles from './shell.module.css';
 
 export type ShellViewState = 'LOCAL' | 'SAVING' | 'SAVED' | 'ERROR';
@@ -33,6 +34,8 @@ export type SchoolShellFrameProps = {
   search?: ReactNode;
   /** Account switcher under the logo (HQ and multi-school people). Navigation only. */
   switcher?: ReactNode;
+  /** 0699: menu pages this school's plan leaves out (display only). They show a lock; opening one shows an Upgrade card. */
+  lockedPages?: ReadonlySet<SchoolShellItem['key']>; planName?: string | null;
 };
 /** Short labels for the phone bottom bar, so every slot fits on one line. */
 const MOBILE_BAR_LABEL: Partial<Record<string, ShellKey>> = { home: 'barHome', students: 'barStudents', crm: 'barCrm', classes: 'barClasses' };
@@ -47,6 +50,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
   const t = (key: ShellKey) => shellText(language, key);
   const verified = phase === 'READY' ? props.selection : null;
   const active = schoolShellActiveItem(path), activeRoute = schoolShellActiveRoute(path);
+  const lockedPages = verified ? props.lockedPages ?? new Set<SchoolShellItem['key']>() : new Set<SchoolShellItem['key']>();
+  const locked = (item: SchoolShellItem) => lockedPages.has(item.key);
   const ended = phase === 'SESSION' || phase === 'IDENTITY';
   // Two levels only (owner, 2026-11-16): the menu lists pages; the tab row shows the current page's tabs.
   const tabRoutes = active ? schoolShellListed(active) : [];
@@ -81,9 +86,11 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
 
   const navLink = (item: SchoolShellItem) => <a key={item.key} data-nav={item.key} data-everyday={SCHOOL_SHELL_EVERYDAY.includes(item.key) ? 'true' : 'false'}
     href={schoolShellHref(item.routes[0]!, verified)} aria-current={active?.key === item.key ? 'page' : undefined}
-    data-tour-current={tourArea !== null && tourArea === (item.section ?? 'settings') ? 'true' : undefined} onClick={() => onMenu(false)}><ShellIcon name={item.key} /><span>{t(item.titleKey)}</span></a>;
-  const menuCard = (item: SchoolShellItem) => <li key={item.key} data-menu={item.key} aria-current={active?.key === item.key ? 'true' : undefined}>
-    <a href={schoolShellHref(item.routes[0]!, verified)} onClick={() => onMenu(false)}><span className={styles.menuIcon} aria-hidden="true"><ShellIcon name={item.key} size={24} /></span><strong>{t(item.titleKey)}</strong></a>
+    data-tour-current={tourArea !== null && tourArea === (item.section ?? 'settings') ? 'true' : undefined} data-plan-locked={locked(item) ? 'true' : undefined} onClick={() => onMenu(false)}><ShellIcon name={item.key} /><span>{t(item.titleKey)}</span>
+    {locked(item) && <PlanLockMark language={language} />}</a>;
+  const menuCard = (item: SchoolShellItem) => <li key={item.key} data-menu={item.key} data-plan-locked={locked(item) ? 'true' : undefined} aria-current={active?.key === item.key ? 'true' : undefined}>
+    <a href={schoolShellHref(item.routes[0]!, verified)} onClick={() => onMenu(false)}><span className={styles.menuIcon} aria-hidden="true"><ShellIcon name={item.key} size={24} /></span><strong>{t(item.titleKey)}</strong>
+      {locked(item) && <PlanLockMark language={language} />}</a>
   </li>;
 
   const rail = <>
@@ -156,7 +163,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
       </nav>}
       {verified && props.demoLoaded ? <p className={styles.demoBanner} role="status" data-demo-banner="">
         <span>{demoCopy(language).banner}</span>{path === '/staff/settings/demo-data' ? null : <a href="/staff/settings/demo-data">{demoCopy(language).bannerLink}</a>}</p> : null}
-      <div id="hon-main" tabIndex={-1} className={styles.main}>{children}</div>
+      <div id="hon-main" tabIndex={-1} className={styles.main}>{active && locked(active)
+        ? <PlanLockedPage language={language} page={t(active.titleKey)} planName={props.planName ?? null} /> : children}</div>
     </div>
     {!honHere && <ShellHonCorner inert={modal} asleep={asleep} path={path} label={t('askHon')} title={t('honLauncher')} />}
     <nav className={styles.mobileNav} aria-label={t('mobileNav')} inert={modal}>

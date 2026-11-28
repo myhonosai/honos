@@ -1,6 +1,6 @@
 {
   "baseline": "e12a7fc4d71282037d196a5f3922c480ddd5164d",
-  "chainSha256": "24efe69f0220557b80714b86e08e93ad310407a043bee00cc0e5de5a69723a2a",
+  "chainSha256": "9b623f78c35d8b393232130f79d7ad65e99502f091874050a94707b0ae75d199",
   "targets": [
     {
       "file": "0181_hon_os_commercial_offers.sql",
@@ -1069,6 +1069,22 @@
     {
       "file": "0698_hq_inbound_owner_replies.sql",
       "sha256": "cbd99d366661f7f44a2ad05b12cf13766fc928384f142b2c41b5637b9436ccbc"
+    },
+    {
+      "file": "0699_school_plan_features.sql",
+      "sha256": "58ae0072195b790c2d9d7ef71e2c06db44df99d01f73f28257c5f9b17b7dbbc8"
+    },
+    {
+      "file": "0700_hq_school_plan_start_date.sql",
+      "sha256": "2ce441c4506cc0c770fd49343acc78d41cb5672f65a1899de554d0435f51f56c"
+    },
+    {
+      "file": "0701_school_contact_type_program_expired.sql",
+      "sha256": "8ac263c23617af1e777e525e8bc0ef3cdaaa17171f15c851481323eceb2deadd"
+    },
+    {
+      "file": "0702_hq_creative_no_monthly_limit.sql",
+      "sha256": "9068b8679d2e68a74e306d8bf9c87abd4843316d543df45bae51967fe7204979"
     },
     {
       "file": "0703_creative_design_fonts.sql",

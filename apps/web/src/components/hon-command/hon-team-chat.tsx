@@ -19,7 +19,7 @@ import {
   teamSpokenParts, teamTalkers, teamTurnRequest, type TeamAddress, type TeamChatMessage, type TeamMemberKey, type TeamTalker,
 } from './hon-team-chat-model';
 import { teamChatText, type TeamChatKey } from './hon-team-chat-copy';
-import { newTeamRound, runTeamRound, type TeamRound } from './hon-team-chat-round';
+import { newTeamRound, runTeamRound, type TeamBusy, type TeamRound } from './hon-team-chat-round';
 import styles from './hon-team-chat.module.css';
 
 export type TeamChatApi = Pick<HonConversationApi, 'readiness' | 'list' | 'thread' | 'create' | 'sendTurn'>;
@@ -38,7 +38,7 @@ const HIDDEN_REASONS = new Set(['RESULT_CONCEALED', 'SOURCE_ACCESS_LAPSED', 'ACC
 /** The view: pure, so every mode and state can be rendered in tests. */
 export type HonTeamChatViewProps = {
   language: string; mode: HonInterfaceTheme; artStyle: HonArtStyle; phase: Phase; talkers: readonly TeamTalker[]; messages: readonly TeamChatMessage[];
-  to: TeamAddress; draft: string; busy: TeamTalker | 'create' | null; stalled: Stalled | null; voice?: React.ReactNode; voicePicker?: React.ReactNode;
+  to: TeamAddress; draft: string; busy: TeamBusy; stalled: Stalled | null; voice?: React.ReactNode; voicePicker?: React.ReactNode;
   onTo(to: TeamAddress): void; onDraft(text: string): void; onSend(): void; onPlan(): void; onNew(): void; onRetry(): void; onDismiss(): void; onRefresh(): void;
 };
 
@@ -100,7 +100,8 @@ export function HonTeamChatView(props: HonTeamChatViewProps): React.ReactElement
               : <p className={styles.meta}>{t(m.reason && HIDDEN_REASONS.has(m.reason) ? 'hidden' : 'notAnswered', { name: TEAM_NAMES[m.key] })}</p>}
           </div>
         </li>)}
-      {props.busy && <li className={styles.typing} role="status">{props.busy === 'create' ? t('waiting') : t('asking', { name: TEAM_NAMES[props.busy] })}</li>}
+      {props.busy && (props.busy === 'create' || props.busy.length > 0) && <li className={styles.typing} role="status">{props.busy === 'create' ? t('waiting')
+        : t('asking', { name: props.busy.map((k) => TEAM_NAMES[k]).join(', ') })}</li>}
     </ol>}
 
     {props.stalled && <div className={styles.stalled} role="alert" data-stalled={props.stalled.state}>
@@ -148,7 +149,7 @@ export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVER
   const [thread, setThread] = useState<HonConversationThread | null>(null);
   const [to, setTo] = useState<TeamAddress>('everyone');
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState<TeamTalker | 'create' | null>(null);
+  const [busy, setBusy] = useState<TeamBusy>(null);
   const [stalled, setStalled] = useState<Stalled | null>(null);
   const generation = useRef(0), privacy = useRef(0), mounted = useRef(true), concealed = useRef(false), running = useRef(false);
   const conversationId = useRef<string | null>(null);
@@ -196,7 +197,7 @@ export function HonTeamChat({ school, mode, language, artStyle, api = HON_CONVER
   // Voice never keeps listening or speaking behind the screensaver; a person turns it on again.
   useEffect(() => onAppPutAway(voiceShutdown), [voiceShutdown]);
 
-  /** Runs (or resumes) a round. Stops at the first refusal or unknown outcome, keeping the exact command for Retry. */
+  /** Runs (or resumes) a round: every teammate at once. A refusal or unknown outcome keeps the exact commands for Retry. */
   const run = useCallback(async (round: TeamRound) => {
     if (running.current) return;
     running.current = true; setStalled(null);

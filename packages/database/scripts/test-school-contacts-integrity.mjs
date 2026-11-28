@@ -2,7 +2,8 @@
  * School contacts list proof (C1, 0521) over signed HTTP (HON session cookie -> HonIdentityGuard + human UI guard + global
  * ValidationPipe + HonExceptionFilter -> SchoolContactsController -> one protected definer function on the restricted runtime
  * role with forced RLS), on the guarded disposable CRM-close fixture only. C4 (0623): sort orders, membership state, no belt, age,
- * end-date range and tag filters. Synthetic names only; nothing is sent or charged.
+ * end-date range and tag filters. C5 (0701): program order, expired members, parents/guardians and children.
+ * Synthetic names only; nothing is sent or charged.
  */
 import pg from 'pg';
 import assert from 'node:assert/strict';
@@ -397,6 +398,47 @@ try {
     ok(await direct(READER, input) === '22023 VALIDATION_FAILED', `database refuses ${json(input)}`);
   }
   ok(await direct(READER, { sort: 'AGE_OLDEST', ageMin: 0, ageMax: 120, endsFrom: '2000-01-01', tag: 'Leadership', noBelt: true }) === 'ok', 'a full valid input runs');
+
+  // 3d. C5 (0701): program order, expired members, parents/guardians and children. The response shape is unchanged.
+  { const [{ id: blakeMembership }] = (await sql('SELECT id FROM hon.memberships WHERE participant_person_id=$1', [A.blake])).rows;
+    const program = randomUUID(), plan = randomUUID();
+    await sql("INSERT INTO hon.programs(id,organization_id,school_id,name) VALUES($1,$2,$3,'adult Karate')", [program, ids.organization, ids.schoolA]);
+    await raw('membership_plans', "INSERT INTO hon.membership_plans(id,organization_id,school_id,plan_code,current_version,created_by_principal_id) VALUES($1,$2,$3,'ADULT-MONTHLY',1,$4)", [plan, ids.organization, ids.schoolA, OWN.principal]);
+    await raw('membership_plan_versions', `INSERT INTO hon.membership_plan_versions(plan_id,version,organization_id,school_id,display_name,program_id,availability,currency,price_minor,billing_frequency,term_kind,actor_principal_id)
+      VALUES($1,1,$2,$3,'Adult monthly',$4,'AVAILABLE','USD',14900,'MONTHLY','OPEN_ENDED',$5)`, [plan, ids.organization, ids.schoolA, program, OWN.principal]);
+    await raw('membership_plan_selections', 'INSERT INTO hon.membership_plan_selections(membership_id,organization_id,school_id,plan_id,plan_version,actor_principal_id) VALUES($1,$2,$3,$4,1,$5)',
+      [blakeMembership, ids.organization, ids.schoolA, plan, OWN.principal]); }
+  ok(json(await first4('sort=PROGRAM')) === json(['Blake Brown', 'Avery Able', 'Casey Cole', 'Drew Dunn']), 'program A to Z ignoring case, no program last, then name');
+  { const p1 = await read('sort=PROGRAM', 'PROGRAM page 1'), p2 = await read(`sort=PROGRAM&cursor=${encodeURIComponent(p1.data.nextCursor)}`, 'PROGRAM page 2');
+    const all = [...names(p1), ...names(p2)];
+    ok(p1.data.rows.length === 50 && p2.data.rows.length === 12 && new Set(all).size === 62 && all.at(-1) === 'Pat54 Zulu', 'PROGRAM: two pages, no repeats, no gaps');
+    await refused(() => call(READER, `sort=NAME&cursor=${encodeURIComponent(p1.data.nextCursor)}`), 400, 'INVALID_CURSOR', 'PROGRAM cursor reused with another order'); }
+  ok(json(names(await read('membership=EXPIRED', 'expired'))) === json(['Finn Ford']), 'expired: a former member with no current membership; a draft never counts');
+  ok(json(names(await read('membership=EXPIRED&segment=STUDENT', 'expired students'))) === '[]', 'a current student is never expired');
+  { const family = async (members) => {
+      const id = randomUUID();
+      await raw('families', 'INSERT INTO hon.families(id,organization_id,school_id,display_name) VALUES($1,$2,$3,$4)', [id, ids.organization, ids.schoolA, 'Family']);
+      for (const [personId, role] of members) {
+        await raw('family_members', 'INSERT INTO hon.family_members(organization_id,school_id,family_id,person_id,member_role) VALUES($1,$2,$3,$4,$5)', [ids.organization, ids.schoolA, id, personId, role]);
+      }
+    };
+    await family([[A.gale, 'GUARDIAN'], [A.avery, 'STUDENT'], [A.casey, 'DEPENDENT']]);
+    await family([[A.drew, 'STUDENT'], [A.eli, 'OTHER']]); // no guardian: Drew is not a child
+  }
+  ok(json(names(await read('contactType=GUARDIAN', 'guardians'))) === json(['Gale Gray']), 'parents and guardians');
+  const kids = await read('contactType=CHILD', 'children');
+  ok(json(names(kids)) === json(['Avery Able', 'Casey Cole']) && json(kids.data.counts) === json({ ALL: 2, STUDENT: 1, TRIAL: 1, PROSPECT: 0, INACTIVE: 0, ARCHIVED: 0 }), 'children with a guardian; counts follow');
+  ok(json(names(await read('contactType=CHILD&sort=AGE_YOUNGEST', 'children youngest'))) === json(['Casey Cole', 'Avery Able']), 'contact type and sort combine');
+  ok(json(names((await success(() => call(OTHER_SCHOOL, 'contactType=GUARDIAN'), 'school B guardians')))) === '[]', 'school A families never show in school B');
+  { const g1 = await read('contactType=GUARDIAN', 'g'), keys = Object.keys(g1.data.rows[0]).sort();
+    ok(json(keys) === json(Object.keys(row(first, 'Gale')).sort()), 'rows keep the same keys (installed staff app builds keep verifying)'); }
+  for (const query of ['contactType=PARENT', 'contactType=guardian', 'contactType=', 'sort=program', 'membership=ENDED']) {
+    await refused(() => call(READER, query), 400, 'VALIDATION_FAILED', `C5 query ${query}`);
+  }
+  for (const input of [{ contactType: 'PARENT' }, { contactType: 1 }, { contactType: null }, { sort: 'program' }, { membership: 'expired' }]) {
+    ok(await direct(READER, input) === '22023 VALIDATION_FAILED', `database refuses ${json(input)}`);
+  }
+  ok(await direct(READER, { sort: 'PROGRAM', membership: 'EXPIRED', contactType: 'CHILD' }) === 'ok', 'a full C5 input runs');
 
   // 4. Isolation: school B sees its own people only, and no school A data appears anywhere.
   const b = await success(() => call(OTHER_SCHOOL), 'school B');

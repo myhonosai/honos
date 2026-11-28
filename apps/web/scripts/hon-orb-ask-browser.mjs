@@ -377,6 +377,55 @@ for (const [name, viewport] of [['phone', viewports.phone], ['tablet', viewports
   });
 }
 
+// Owner ask 2026-11-28: talk to the whole HQ team from the HQ dashboard (group chat, voice), like the school dashboard.
+const hqTeam = (page) => page.locator('#hq-team-chat');
+await check('HQ team chat: Everyone asks HON and each executive this person may ask, and every answer shows', async () => {
+  hqTurns.length = 0; hqAsks.length = 0;
+  const { ctx, page } = await openHq(viewports.desktop);
+  await hqTeam(page).locator('textarea').waitFor({ timeout: 20000 });
+  await hqTeam(page).scrollIntoViewIfNeeded();
+  await shot(page, 'hq-team-chat-empty');
+  await hqTeam(page).locator('textarea').fill('What should we focus on this week?');
+  await hqTeam(page).getByRole('button', { name: /^Send/ }).click();
+  await page.waitForFunction(() => document.querySelectorAll('#hq-team-chat [data-turn-status="ANSWERED"]').length >= 3, null, { timeout: 20000 });
+  assert.deepEqual(hqAsks.map((a) => a.body.agentKey).sort(), ['chase', 'hon', 'mia']);
+  assert(hqAsks.every((a) => a.marker === 'hq-hon-ask' && a.body.question === 'What should we focus on this week?'));
+  assert.equal(new Set(hqAsks.map((a) => a.key)).size, 3, 'one key per agent');
+  assert.equal(await hqTeam(page).locator('[data-message="you"]').count(), 1, 'one question bubble for everyone');
+  await noOverflow(page);
+  await hqTeam(page).screenshot({ path: join(results, 'hq-team-chat-answered.png') }); report.screenshots.push('hq-team-chat-answered.png');
+  await ctx.close();
+});
+await check('HQ team chat: a name picks one executive; voice asks the team and reads each answer', async () => {
+  hqTurns.length = 0; hqAsks.length = 0;
+  const { ctx, page } = await openHq(viewports.desktop);
+  await hqTeam(page).locator('textarea').waitFor({ timeout: 20000 });
+  await hqTeam(page).locator('textarea').fill('Mia, how is onboarding going?');
+  await hqTeam(page).getByRole('button', { name: /^Send/ }).click();
+  await page.waitForFunction(() => document.querySelectorAll('#hq-team-chat [data-turn-status="ANSWERED"]').length >= 1, null, { timeout: 20000 });
+  assert.deepEqual(hqAsks.map((a) => [a.body.agentKey, a.body.question]), [['mia', 'how is onboarding going?']]);
+  await page.evaluate(() => { window.__say = 'Everyone, any risks this month?'; window.__spoken = []; });
+  const enable = hqTeam(page).getByRole('button', { name: /Turn on voice|Use voice/i });
+  if (await enable.count()) await enable.first().click();
+  await hqTeam(page).getByRole('button', { name: 'Talk to the team' }).click();
+  await page.waitForFunction(() => window.__spoken.length >= 3, null, { timeout: 20000 });
+  assert.deepEqual(hqAsks.slice(1).map((a) => a.body.agentKey).sort(), ['chase', 'hon', 'mia']);
+  const spoken = (await page.evaluate(() => window.__spoken)).map((x) => x.text).join(' ');
+  for (const who of ['HON says:', 'Chase says:', 'Mia says:']) assert(spoken.includes(who), `${who} in ${spoken}`);
+  await hqTeam(page).screenshot({ path: join(results, 'hq-team-chat-voice.png') }); report.screenshots.push('hq-team-chat-voice.png');
+  await ctx.close();
+});
+await check('HQ team chat fits a phone', async () => {
+  const { ctx, page } = await openHq(viewports.phone);
+  await hqTeam(page).locator('textarea').waitFor({ timeout: 20000 });
+  await hqTeam(page).scrollIntoViewIfNeeded();
+  await noOverflow(page);
+  const box = await hqTeam(page).boundingBox();
+  assert(box && box.x >= 0 && box.x + box.width <= viewports.phone.width + 1, `team chat inside the screen: ${JSON.stringify(box)}`);
+  await shot(page, 'hq-team-chat-phone');
+  await ctx.close();
+});
+
 await browser.close(); server.kill('SIGTERM');
 await writeFile(join(results, 'report.json'), JSON.stringify({ ...report, apiRequests: report.apiRequests.length }, null, 2));
 if (report.pageErrors.length) report.failures.push(...report.pageErrors.map((e) => `page error: ${e}`));

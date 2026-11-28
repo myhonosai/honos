@@ -42,7 +42,9 @@ export class SchoolContactsService {
     const filter = [query.segment ?? 'ALL', query.query ?? null, query.rankId ?? null, query.programId ?? null, query.planId ?? null, query.endsWithinDays ?? null,
       // C4 (0623): the order and the added filters are part of what the cursor is signed to.
       query.sort ?? 'NAME', query.membership ?? null, query.noBelt ?? null, query.endsFrom ?? null, query.endsTo ?? null, query.ageMin ?? null,
-      query.ageMax ?? null, query.tag?.toLowerCase() ?? null];
+      query.ageMax ?? null, query.tag?.toLowerCase() ?? null,
+      // C5 (0701): the contact type is part of what the cursor is signed to.
+      query.contactType ?? null];
     const after = decodeListCursor(cursor, 'people.contacts', context.schoolId, filter, CURSOR);
     const input = { ...query, ...(after ? { afterId: after[0] } : {}) };
     try {
