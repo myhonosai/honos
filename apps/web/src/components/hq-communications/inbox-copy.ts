@@ -2,7 +2,7 @@
 const en = {
   title: 'Texts and email',
   intro: 'Write to a school\'s owners and see every HQ text and email to that school, and the owners\' text replies, in one place. Addresses are never shown here.',
-  settings: 'Sender settings', numbers: 'School texting numbers', refresh: 'Refresh', newMessage: 'New message',
+  blasts: 'Blasts to school owners', settings: 'Sender settings', numbers: 'School texting numbers', refresh: 'Refresh', newMessage: 'New message',
   search: 'Search schools', conversations: 'Conversations', empty: 'No HQ messages yet. Choose New message to write to a school\'s owners.',
   emptySearch: 'No conversation matches this search.', more: 'Show older conversations', moreFailed: 'Older conversations could not be read. Try again.',
   loading: 'Reading HQ messages…', denied: 'Your HQ access does not include texting or email. Nothing is shown.',
@@ -30,7 +30,7 @@ type Key = keyof typeof en;
 const ko: Record<Key, string> = {
   title: '문자 및 이메일',
   intro: '도장 원장님께 메시지를 쓰고, 그 도장에 보낸 HQ 문자와 이메일, 원장님의 문자 답장을 한곳에서 봅니다. 주소는 표시되지 않습니다.',
-  settings: '발신자 설정', numbers: '도장 문자 번호', refresh: '새로 고침', newMessage: '새 메시지',
+  blasts: '도장 대표에게 단체 발송', settings: '발신자 설정', numbers: '도장 문자 번호', refresh: '새로 고침', newMessage: '새 메시지',
   search: '도장 검색', conversations: '대화', empty: '아직 HQ 메시지가 없습니다. 새 메시지를 눌러 원장님께 쓰세요.',
   emptySearch: '검색과 일치하는 대화가 없습니다.', more: '이전 대화 더 보기', moreFailed: '이전 대화를 읽지 못했습니다. 다시 시도하세요.',
   loading: 'HQ 메시지를 읽는 중…', denied: 'HQ 권한에 문자나 이메일이 없습니다. 표시할 내용이 없습니다.',
@@ -57,7 +57,7 @@ const ko: Record<Key, string> = {
 const es: Record<Key, string> = {
   title: 'Mensajes y correo',
   intro: 'Escriba a los dueños de una escuela y vea todos los mensajes y correos de HQ a esa escuela, y las respuestas de texto de los dueños, en un solo lugar. Nunca se muestran direcciones.',
-  settings: 'Ajustes del remitente', numbers: 'Números de texto de escuelas', refresh: 'Actualizar', newMessage: 'Nuevo mensaje',
+  blasts: 'Envíos masivos a dueños', settings: 'Ajustes del remitente', numbers: 'Números de texto de escuelas', refresh: 'Actualizar', newMessage: 'Nuevo mensaje',
   search: 'Buscar escuelas', conversations: 'Conversaciones', empty: 'Aún no hay mensajes de HQ. Elija Nuevo mensaje para escribir a los dueños de una escuela.',
   emptySearch: 'Ninguna conversación coincide.', more: 'Ver conversaciones anteriores', moreFailed: 'No se pudieron leer las conversaciones anteriores. Inténtelo de nuevo.',
   loading: 'Leyendo mensajes de HQ…', denied: 'Su acceso de HQ no incluye mensajes ni correo. No se muestra nada.',

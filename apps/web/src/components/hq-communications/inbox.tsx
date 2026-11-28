@@ -209,7 +209,7 @@ export function HqInboxView(p: InboxViewProps): React.ReactElement {
   const c = (k: CommsKey) => commsText(p.language, k);
   const when = (at: string) => shortWhen(at, p.timeZone ? { locale: p.formattingLocale, timeZone: p.timeZone } : { locale: p.formattingLocale });
   const head = <header className={s.head}><div><h1>{t('title')}</h1><p>{t('intro')}</p>
-    <p className={s.actions}><a className={s.ghost} href="/hq/communications/settings">{t('settings')}</a><a className={s.ghost} href="/hq/communications/numbers">{t('numbers')}</a></p></div>
+    <p className={s.actions}><a className={s.ghost} href="/hq/communications/blasts">{t('blasts')}</a><a className={s.ghost} href="/hq/communications/settings">{t('settings')}</a><a className={s.ghost} href="/hq/communications/numbers">{t('numbers')}</a></p></div>
     {!p.concealed && <p className={s.actions}><button type="button" className={s.ghost} onClick={p.onRefresh}>{t('refresh')}</button>
       {p.list.state === 'READY' && <button type="button" className={`${s.button} ${s.primary}`} disabled={p.locked} onClick={p.onNew}>{t('newMessage')}</button>}</p>}</header>;
   if (p.concealed) return <main className={s.page} data-hq-inbox="concealed">{head}

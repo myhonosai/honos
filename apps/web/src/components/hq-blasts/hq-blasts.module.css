@@ -1,0 +1,25 @@
+/* HB2 HQ blasts. Page chrome comes from comms-kit/comms.module.css. */
+.layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1200px) { .layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(280px, 0.9fr); align-items: start; } }
+.form { display: grid; gap: 12px; }
+.row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.group { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.group legend { padding: 0; margin-bottom: 6px; font-size: var(--hon-text-sm, 13px); font-weight: 700; color: var(--hon-text-muted, #a9b8d6); }
+.check { display: flex; gap: 8px; align-items: center; font-size: var(--hon-text-sm, 13px); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
+.small { min-height: 32px; padding: 2px 10px; border: 1px solid var(--hon-border, #24405a); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.small:disabled { opacity: .55; cursor: not-allowed; }
+.counter { margin: 0; color: var(--hon-text-muted, #a9b8d6); font-size: 12px; text-align: right; }
+.counter[data-over="true"] { color: #ffb3c1; font-weight: 800; }
+.problems { margin: 12px 0; padding-left: 18px; color: #ffe4a8; font-size: 13px; }
+.list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.rowHead { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rowHead h2, .rowHead strong { margin: 0; margin-right: 4px; }
+.results { display: grid; gap: 6px; margin: 8px 0; padding: 0; list-style: none; }
+.results li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--hon-border, #24405a); overflow-wrap: anywhere; }
+.counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 0 0 12px; }
+.counts div { padding: 8px; border: 1px solid var(--hon-border, #24405a); border-radius: 10px; }
+.counts dt { color: var(--hon-text-muted, #a9b8d6); font-size: 12px; }
+.counts dd { margin: 0; font-size: 18px; font-weight: 800; }
+.sample { display: grid; gap: 6px; margin: 0 0 12px; padding: 12px; border: 1px dashed var(--hon-border-strong, #35506d); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.sample strong { white-space: normal; }

@@ -709,6 +709,10 @@
       "title": "HON HQ | HQ message"
     },
     {
+      "path": "/hq/communications/blasts",
+      "title": "HON HQ | Blasts to school owners"
+    },
+    {
       "path": "/hq/communications/calls",
       "title": "HON HQ | Calls"
     },
