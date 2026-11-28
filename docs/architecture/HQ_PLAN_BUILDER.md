@@ -103,7 +103,7 @@ production the schedule provider is unconfigured, so starting a binding answers 
 - **Per-plan checkout terms.** `hon.saas_price_content` (0306 body) takes the regular monthly price, and a founder offer's
   standard price, from the offer's own plan (offers sharing a display name, 0697) when that plan has one, else from the
   whole set as before. Every set that worked before gives the same terms and digests, so recorded schedules and acceptances
-  are unchanged; a set with several plans (Core and Complete) now works per plan.
+  are unchanged; a set with several plans now works per plan (a capability only; the offer stays one HON OS plan at $249/mo or $2,097/yr).
 - **School reads its terms.** `GET schools/:schoolId/hon-os-price-schedules` (`hon.read_saas_school_price_schedules`,
   billing.hon.purchase of the exact school, open to a suspended school as billing recovery) lists the latest schedule of
   each offer of the published set: offer id, schedule id and version only. The page then previews and accepts through the
