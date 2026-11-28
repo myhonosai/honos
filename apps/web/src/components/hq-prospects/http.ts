@@ -1,4 +1,6 @@
-import { HQ_PROSPECT_COMMANDS, encodeHqProspectCursor, validateHqProspectConsentInput, validateHqProspectCreateInput, validateHqProspectDetail,
+import { HQ_PROSPECT_BOARD_COMMANDS, validateHqProspectMoveInput, validateHqProspectStagesInput, verifyHqProspectBoard, verifyHqProspectMoveReceipt,
+  verifyHqProspectStagesReceipt, type HqProspectBoard, type HqProspectMoveInput, type HqProspectMoveReceipt, type HqProspectStagesInput,
+  type HqProspectStagesReceipt, HQ_PROSPECT_COMMANDS, encodeHqProspectCursor, validateHqProspectConsentInput, validateHqProspectCreateInput, validateHqProspectDetail,
   validateHqProspectList, validateHqProspectReceipt, validateHqProspectUpdateInput, type HqProspectConsentInput, type HqProspectCreateInput,
   type HqProspectCursor, type HqProspectDetail, type HqProspectList, type HqProspectReceipt, type HqProspectStatus, type HqProspectUpdateInput } from '@hon/contracts';
 import { CommsError, commsCommand, commsId, commsRead, type Owned } from '../hq-communications/http';
@@ -9,7 +11,8 @@ import { CommsError, commsCommand, commsId, commsRead, type Owned } from '../hq-
  */
 const BASE = '/api/v1/hq/prospects';
 export const HQ_PROSPECT_REFUSALS: ReadonlySet<string> = new Set(['HQ_PROSPECT_EXISTS', 'HQ_PROSPECT_NO_CHANGE', 'HQ_PROSPECT_ARCHIVED',
-  'HQ_PROSPECT_NO_ADDRESS', 'HQ_CONSENT_NOT_ALLOWED', 'HQ_CONSENT_NO_CHANGE']);
+  'HQ_PROSPECT_NO_ADDRESS', 'HQ_CONSENT_NOT_ALLOWED', 'HQ_CONSENT_NO_CHANGE', 'HQ_PROSPECT_STAGE_UNAVAILABLE', 'HQ_PROSPECT_STAGES_INVALID',
+  'HQ_PROSPECT_STAGE_NAME_TAKEN', 'HQ_PROSPECT_STAGE_VISIBLE_REQUIRED', 'HQ_PROSPECT_STAGE_MOVE_INVALID', 'HQ_PROSPECT_STAGE_MOVE_REQUIRED']);
 export const PROSPECT_PAGE_SIZE = 25;
 const same = (a: string | null, b: string | null) => (a === null || b === null) ? a === b : a.toLowerCase() === b.toLowerCase();
 
@@ -51,6 +54,22 @@ export const prospectsApi = {
     try { if (!id) throw new Error('id'); body = validateHqProspectConsentInput(input); } catch { throw new CommsError('INVALID'); }
     const r = await commsCommand(`${BASE}/${id}/consents`, HQ_PROSPECT_COMMANDS.consent, body, key, signal, owned, validateHqProspectReceipt, HQ_PROSPECT_REFUSALS);
     if (r.operation !== 'CONSENT' || !same(r.prospect.prospectId, id) || r.prospect.version !== body.expectedVersion + 1) throw new CommsError('UNKNOWN');
+    return r;
+  },
+  /** 0715 pipeline board: stages, open prospects and customer schools by real status. */
+  board(signal: AbortSignal, owned: Owned): Promise<HqProspectBoard> { return commsRead(`${BASE}/board`, signal, owned, verifyHqProspectBoard); },
+  async move(prospectId: string, input: HqProspectMoveInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqProspectMoveReceipt> {
+    const id = commsId(prospectId);
+    let body: HqProspectMoveInput;
+    try { if (!id) throw new Error('id'); body = validateHqProspectMoveInput(input); } catch { throw new CommsError('INVALID'); }
+    return commsCommand(`${BASE}/${id}/stage`, HQ_PROSPECT_BOARD_COMMANDS.move, body, key, signal, owned,
+      (v) => verifyHqProspectMoveReceipt(v, { prospectId: id, input: body }), HQ_PROSPECT_REFUSALS);
+  },
+  async saveStages(input: HqProspectStagesInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqProspectStagesReceipt> {
+    let body: HqProspectStagesInput;
+    try { body = validateHqProspectStagesInput(input); } catch { throw new CommsError('INVALID'); }
+    const r = await commsCommand(`${BASE}/stages`, HQ_PROSPECT_BOARD_COMMANDS.stages, body, key, signal, owned, verifyHqProspectStagesReceipt, HQ_PROSPECT_REFUSALS);
+    if (r.stages.length !== body.stages.length || r.stages.some((s, i) => s.name !== body.stages[i]!.name)) throw new CommsError('UNKNOWN');
     return r;
   },
 };
