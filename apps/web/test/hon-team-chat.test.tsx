@@ -119,33 +119,46 @@ describe('team chat: one round', () => {
   };
   const round = () => newTeamRound({ create: { path: '/x', key: id(7), body: '{}' }, conversationId: null, text: Q, request: (k) => teamTurnRequest(k, Q), targets: ['hon', 'claire', 'jordan'], spoken: false });
 
-  it('creates the chat, then asks every teammate once, all at the same time', async () => {
+  it('creates the chat, asks HON first, then every other teammate at the same time, each once', async () => {
     const h = harness();
-    let inFlight = 0, most = 0; const send = h.deps.sendTurn;
-    h.deps.sendTurn = async (p) => { inFlight++; most = Math.max(most, inFlight); await new Promise((r) => setTimeout(r, 5)); try { return await send(p); } finally { inFlight--; } };
+    let inFlight = 0, most = 0; const starts: string[] = []; const send = h.deps.sendTurn;
+    h.deps.sendTurn = async (p) => {
+      starts.push(`${(JSON.parse(p.body) as { delegation: { agentKey: string } | null }).delegation?.agentKey ?? 'hon'}@${inFlight}`);
+      inFlight++; most = Math.max(most, inFlight); await new Promise((r) => setTimeout(r, 5)); try { return await send(p); } finally { inFlight--; }
+    };
     const out = await runTeamRound(round(), h.deps);
     expect(out).toEqual({ kind: 'DONE', answers: [{ key: 'hon', reply: 'hon answer' }, { key: 'claire', reply: 'claire answer' }, { key: 'jordan', reply: 'jordan answer' }] });
-    expect(most).toBe(3);
-    expect(new Set(h.sent.map((s) => (JSON.parse(s.body) as { delegation: { agentKey: string } | null }).delegation?.agentKey ?? 'hon'))).toEqual(new Set(['hon', 'claire', 'jordan']));
+    // HON starts alone (so its turn comes before the specialists' and its history holds the previous round), then the rest together.
+    expect(starts).toEqual(['hon@0', 'claire@0', 'jordan@1']);
+    expect(most).toBe(2);
     expect(new Set(h.sent.map((s) => s.key)).size).toBe(3);
     expect(h.busy[0]).toBe('create');
     expect(h.busy[1]).toEqual(['hon', 'claire', 'jordan']);
     expect(h.busy.at(-1)).toBeNull();
     expect(h.refreshes).toBe(3);
   });
-  it('shows each answer as it arrives: a slow teammate does not hold back a fast one', async () => {
+  it('shows each specialist answer as it arrives: a slow one does not hold back a fast one', async () => {
     const h = harness();
     const send = h.deps.sendTurn; const order: string[] = [];
     h.deps.sendTurn = async (p) => {
       const who = (JSON.parse(p.body) as { delegation: { agentKey: string } | null }).delegation?.agentKey ?? 'hon';
-      await new Promise((r) => setTimeout(r, who === 'hon' ? 30 : who === 'claire' ? 15 : 1));
+      await new Promise((r) => setTimeout(r, who === 'claire' ? 30 : 1));
       order.push(who); return send(p);
     };
     const out = await runTeamRound(round(), h.deps);
-    expect(order).toEqual(['jordan', 'claire', 'hon']);
-    expect(h.busy).toEqual(['create', ['hon', 'claire', 'jordan'], ['hon', 'claire'], ['hon'], null, null]);
+    expect(order).toEqual(['hon', 'jordan', 'claire']);
+    expect(h.busy).toEqual(['create', ['hon', 'claire', 'jordan'], ['claire', 'jordan'], ['claire'], null, null]);
     // Answers keep the team order for reading aloud.
     expect(out.kind === 'DONE' && out.answers.map((a) => a.key)).toEqual(['hon', 'claire', 'jordan']);
+  });
+  it('still asks the specialists when HON is refused, and a retry asks HON alone', async () => {
+    const h = harness((who, attempt) => who === 'hon' && attempt === 1 ? new HonConversationError('UNKNOWN') : null);
+    const r = round();
+    expect(await runTeamRound(r, h.deps)).toEqual({ kind: 'STALLED', state: 'UNKNOWN', who: 'hon' });
+    expect(h.sent).toHaveLength(3);
+    expect((await runTeamRound(r, h.deps)).kind).toBe('DONE');
+    expect(h.sent).toHaveLength(4);
+    expect(h.sent[3]!.key).toBe(h.sent[0]!.key);
   });
   it('stops at an unknown outcome and resumes with the exact same request, only to who has not answered', async () => {
     const h = harness((who, attempt) => who === 'claire' && attempt === 1 ? new HonConversationError('UNKNOWN') : null);

@@ -5,8 +5,11 @@
  * only to the teammates who have not answered yet.
  *
  * 2026-11-28 (owner live test): asking one teammate after another made an "Everyone" question take ~37 s (five model
- * calls in a row). The teammates answer independently of each other, so they are now asked in parallel and the round
- * takes about as long as the slowest answer. Each answer appears as soon as it arrives.
+ * calls in a row). HON is asked first; once HON's turn settles, the specialists (who answer independently and read no
+ * history) are asked in parallel, so a round takes about two answers' time. Each answer appears as soon as it arrives.
+ * HON goes first on purpose: prepare_hon_reply (0451) gives HON the six turns before its own, so if the specialists'
+ * turns of the same round were created first, HON's window would hold its own question four more times and lose the
+ * previous round (independent review of #683).
  */
 import type { HonConversationSummary, HonTurnReceipt, HonTurnRequest } from '@hon/contracts';
 import { HonConversationError, type HonConversationFailure, type PreparedHonCommand } from './hon-conversation-http';
@@ -67,7 +70,7 @@ export async function runTeamRound(round: TeamRound, deps: TeamRoundDeps): Promi
   let reads: Promise<void> = Promise.resolve();
   const failures = new Map<TeamTalker, HonConversationFailure>();
   let retired = false;
-  await Promise.all(pending.map(async (step) => {
+  const ask = async (step: TeamStep) => {
     try {
       const receipt = await deps.sendTurn(step.prepared);
       step.done = true; step.reply = receipt.reply;
@@ -78,7 +81,10 @@ export async function runTeamRound(round: TeamRound, deps: TeamRoundDeps): Promi
     if (!deps.live()) { retired = true; return; }
     deps.onBusy(waiting.size > 0 ? busyNow() : null);
     if (step.done) reads = reads.then(() => (deps.live() ? deps.refresh(conversationId).catch(() => undefined) : undefined));
-  }));
+  };
+  const first = pending.filter((step) => step.key === 'hon'), rest = pending.filter((step) => step.key !== 'hon');
+  await Promise.all(first.map(ask));
+  if (!retired && deps.live()) await Promise.all(rest.map(ask));
   await reads;
   if (retired || !deps.live()) return { kind: 'RETIRED' };
   deps.onBusy(null);
