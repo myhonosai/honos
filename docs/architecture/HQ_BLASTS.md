@@ -88,14 +88,32 @@ which is David's call at deploy time.
   `read_hq_blast_audience`, `read_hq_blast_audience_options` (plan names, features, countries/regions in use, and a school
   name search for the picker), `save_hq_blast`, `send_hq_blast`, `cancel_hq_blast`.
 
+- Templates (like the Manus CRM's Templates tab): `hon.hq_blast_templates` (name, channel, subject for email, body, ACTIVE /
+  ARCHIVED, version), with `hq_blast_template_requests` and `hq_blast_template_events` (append-only). `save_hq_blast_template`
+  creates, edits by version, or archives (text unchanged; archived stays archived); `read_hq_blast_templates` lists active ones,
+  newest first, at most 200. HQ owner only. A template holds no audience and sends nothing.
+- Audience `picksOnly: true` (only with `schools`, nothing else): only the picked schools, for the "Only schools I pick" button.
+  The options read also returns `schoolCounts {active, paused}` for the audience buttons (paused is shown as inactive; archived
+  schools never get a blast).
+- At send, each school's message is measured with the longest first name the claim can put in (40) and, for a text, with room for
+  the STOP line, so a text never passes 1,600 and a filled email subject never passes 300 (SendGrid accepts blast subjects up to 300).
+
 ## 4. API
 
 `/v1/hq/communications/blasts`: `GET` list, `GET /:id`, `GET /:id/audience`, `GET /options?search=`, `POST` save (create or
-edit by version), `POST /:id/send` {expectedVersion, sendAt|null}, `POST /:id/cancel` {expectedVersion}. SaaS read and command
-guards (same origin, `X-HON-Human-Command: hq-blast-save|hq-blast-send|hq-blast-cancel`, JSON, Idempotency-Key). The dispatcher
+edit by version), `POST /:id/send` {expectedVersion, sendAt|null}, `POST /:id/cancel` {expectedVersion}, `GET /templates`,
+`POST /templates` {templateId|null, expectedVersion, name, channel, subject|null, body, archived}. SaaS read and command
+guards (same origin, `X-HON-Human-Command: hq-blast-save|hq-blast-send|hq-blast-cancel|hq-blast-template-save`, JSON, Idempotency-Key). The dispatcher
 passes `subject` and `blastId`; SendGrid uses the HQ subject when present and adds the footer for blast mail.
 
 ## 5. Screens (piece 2, frontend only)
+
+Laid out like the Manus CRM (owner, 2026-11-28): three tabs, **Compose**, **Templates** and **Campaign history**.
+Campaign history shows totals (sent, delivered, bounced, campaigns) and a table (campaign, audience, sent, delivered, bounced,
+status, when). Open and click rates are not shown: SendGrid open and click tracking is off unless the owner turns it on.
+"Who gets it" starts with audience buttons with counts: All schools, Active schools, Inactive schools, Only schools I pick; the
+detailed filters sit under "More filters". Compose can start from a template and save the text as a template. Leads from the
+HQ prospects board (0715) are a later audience, keyed on stage ids.
 
 The Blasts tab: a list (name, channel, status, when, schools, delivered), New blast, and the composer in three steps on one page:
 Write (channel, purpose, subject, body, merge tag buttons, piece counter), Schools (the filters always visible as chips and

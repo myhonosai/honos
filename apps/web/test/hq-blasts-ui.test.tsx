@@ -2,12 +2,13 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { HqBlast, HqBlastAudiencePreview, HqBlastDetail, HqBlastSummary } from '@hon/contracts';
+import type { HqBlast, HqBlastAudiencePreview, HqBlastDetail, HqBlastList, HqBlastSummary, HqBlastTemplate } from '@hon/contracts';
 import { CommsError } from '../src/components/hq-communications/http';
 import { HQ_BLAST_REFUSALS, hqBlastApi } from '../src/components/hq-blasts/http';
 import { NO_HQ_BLAST_FILTERS, citiesOf, hqBlastAudienceOf, hqBlastDraftOf, hqBlastMayCancel, hqBlastProblems, hqBlastSameAsSaved, hqBlastSaveInput, hqBlastSendAt,
-  insertHqBlastTag, newHqBlastDraft, togglePick, type HqBlastDraft } from '../src/components/hq-blasts/format';
-import { HqBlastsView, type HqBlastsViewProps } from '../src/components/hq-blasts/view';
+  insertHqBlastTag, newHqBlastDraft, togglePick, type HqBlastDraft, hqBlastAudienceMode, withHqBlastAudienceMode, hqBlastDraftFromTemplate, hqBlastTemplateInputOf,
+  hqBlastTemplateArchiveOf } from '../src/components/hq-blasts/format';
+import { HqBlastsView, hqBlastTotals, type HqBlastsViewProps } from '../src/components/hq-blasts/view';
 import { hqBlastText } from '../src/components/hq-blasts/copy';
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -19,6 +20,54 @@ const blast = (patch: Partial<HqBlast> = {}): HqBlast => ({ blastId: id(1), name
   body: 'Hi {{first_name}}, news for {{school_name}}.', audience: { statuses: ['ACTIVE'], trial: 'ON_TRIAL', schools: [id(7)] }, status: 'DRAFT', sendAt: null, queuedAt: null,
   cancelledAt: null, schoolCount: null, recipientCount: null, createdBy: { principalId: id(9), displayName: 'Synthetic Owner' }, createdAt: T, updatedAt: T, version: 1, ...patch });
 const draft = (patch: Partial<HqBlastDraft> = {}): HqBlastDraft => ({ ...newHqBlastDraft(), name: 'News', subject: 'Hello', body: 'Hi {{first_name}}', ...patch });
+
+const template = (patch: Partial<HqBlastTemplate> = {}): HqBlastTemplate => ({ templateId: id(30), name: 'Welcome', channel: 'EMAIL', subject: 'Welcome to HON OS',
+  body: 'Hi {{first_name}}, welcome.', status: 'ACTIVE', createdBy: { principalId: id(9), displayName: 'Synthetic Owner' }, updatedAt: T, version: 2, ...patch });
+
+describe('HQ blast audience buttons and templates', () => {
+  it('maps the audience buttons to the closed audience and back', () => {
+    const d = draft({ picked: [{ schoolId: id(7), name: 'Main' }], leftOut: [{ schoolId: id(8), name: null }],
+      filters: { ...NO_HQ_BLAST_FILTERS, countries: ['US'] } });
+    expect(hqBlastAudienceMode(d)).toBe('ALL');
+    const active = withHqBlastAudienceMode(d, 'ACTIVE'), inactive = withHqBlastAudienceMode(d, 'INACTIVE'), only = withHqBlastAudienceMode(d, 'PICKED');
+    expect([hqBlastAudienceMode(active), hqBlastAudienceMode(inactive), hqBlastAudienceMode(only)]).toEqual(['ACTIVE', 'INACTIVE', 'PICKED']);
+    expect(hqBlastAudienceOf(active).statuses).toEqual(['ACTIVE']);
+    expect(hqBlastAudienceOf(inactive).statuses).toEqual(['PAUSED']);
+    expect(hqBlastAudienceOf(only)).toEqual({ picksOnly: true, schools: [id(7)] });
+    expect(hqBlastAudienceOf(withHqBlastAudienceMode(only, 'ALL'))).toEqual({ countries: ['US'], schools: [id(7)], excludeSchools: [id(8)] });
+    expect(hqBlastProblems(withHqBlastAudienceMode(draft(), 'PICKED'))).toEqual(['noPicks']);
+    expect(hqBlastSaveInput(only)?.audience).toEqual({ picksOnly: true, schools: [id(7)] });
+    expect(hqBlastAudienceMode(hqBlastDraftOf(blast({ audience: { picksOnly: true, schools: [id(7)] } })))).toBe('PICKED');
+  });
+  it('starts a draft from a template, saves a draft as a template, and archives with the text unchanged', () => {
+    const d = hqBlastDraftFromTemplate(template());
+    expect([d.blastId, d.name, d.channel, d.subject, d.body]).toEqual([null, 'Welcome', 'EMAIL', 'Welcome to HON OS', 'Hi {{first_name}}, welcome.']);
+    expect(hqBlastTemplateInputOf(draft({ name: ' News ', body: ' Hi ' }))).toEqual({ templateId: null, expectedVersion: 0, name: 'News', channel: 'EMAIL',
+      subject: 'Hello', body: 'Hi', archived: false });
+    expect(hqBlastTemplateInputOf(draft({ channel: 'SMS', subject: 'ignored' }))?.subject).toBeNull();
+    expect(hqBlastTemplateInputOf(draft({ name: '' }))).toBeNull();
+    expect(hqBlastTemplateArchiveOf(template())).toEqual({ templateId: id(30), expectedVersion: 2, name: 'Welcome', channel: 'EMAIL', subject: 'Welcome to HON OS',
+      body: 'Hi {{first_name}}, welcome.', archived: true });
+  });
+  it('template requests: the list and save use the declared path and command marker', async () => {
+    const answer = (status: number, body: unknown) => new Response(JSON.stringify(status < 300 ? { data: body } : body), { status, headers: { 'content-type': 'application/json' } });
+    let fetchMock = vi.fn(async () => answer(200, { templates: [template()], asOf: T }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect((await hqBlastApi.templates(AbortSignal.timeout(1000), () => true)).templates).toHaveLength(1);
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe('/api/v1/hq/communications/blasts/templates');
+    fetchMock = vi.fn(async () => answer(200, { operation: 'TEMPLATE_SAVE', template: template({ status: 'ARCHIVED', version: 3 }), replayed: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await hqBlastApi.saveTemplate(hqBlastTemplateArchiveOf(template()), id(60), AbortSignal.timeout(1000), () => true);
+    expect(r.template.status).toBe('ARCHIVED');
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/v1/hq/communications/blasts/templates');
+    expect(new Headers(init.headers).get('x-hon-human-command')).toBe('hq-blast-template-save');
+    fetchMock = vi.fn(async () => answer(200, { operation: 'TEMPLATE_SAVE', template: template({ status: 'ARCHIVED', version: 9 }), replayed: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(hqBlastApi.saveTemplate(hqBlastTemplateArchiveOf(template()), id(61), AbortSignal.timeout(1000), () => true)).rejects.toMatchObject({ kind: 'UNKNOWN' });
+    await expect(hqBlastApi.saveTemplate({ ...hqBlastTemplateArchiveOf(template()), templateId: null }, id(62), AbortSignal.timeout(1000), () => true)).rejects.toMatchObject({ kind: 'INVALID' });
+  });
+});
 
 describe('HQ blast form model', () => {
   it('turns the form into the closed audience, leaving unset filters out', () => {
@@ -109,10 +158,47 @@ const base = (patch: Partial<HqBlastsViewProps> = {}): HqBlastsViewProps => ({
   language: 'en', formatTime: iso => iso, featureLabel: f => f, concealed: false, list: { state: 'READY', list: { blasts: [summary()], sentToday: 1, dailyLimit: 10, asOf: T } },
   screen: { mode: 'LIST' }, draft: null, dirty: false, preview: null, options: null, search: '', searchRead: null, detail: null, when: 'NOW', local: '', sendAt: null, ask: null,
   outcome: null, locked: false, canRetry: false, onRefresh: noop, onReveal: noop, onNew: noop, onOpen: noop, onBack: noop, onDraft: noop, onFilters: noop, onTag: noop,
-  onSearch: noop, onPick: noop, onSave: noop, onPreviewRetry: noop, onWhen: noop, onLocal: noop, onAsk: noop, onConfirm: noop, onTryAgain: noop, onDismiss: noop, onDetailRetry: noop, ...patch });
+  onSearch: noop, onPick: noop, onSave: noop, onPreviewRetry: noop, onWhen: noop, onLocal: noop, onAsk: noop, onConfirm: noop, onTryAgain: noop, onDismiss: noop, onDetailRetry: noop,
+  templates: null, archiveAsk: null, onTab: noop, onAudienceMode: noop, onUseTemplate: noop, onSaveTemplate: noop, onArchiveAsk: noop, onArchiveTemplate: noop, onTemplatesRetry: noop,
+  ...patch });
 const html = (p: HqBlastsViewProps) => renderToStaticMarkup(<HqBlastsView {...p}/>);
 
 describe('HQ blasts page', () => {
+  it('has Compose, Templates and Campaign history tabs, with totals and a campaign table', () => {
+    const sent = summary({ blastId: id(2), name: 'Sent one', status: 'QUEUED', sendAt: T, queuedAt: T, schoolCount: 2, recipientCount: 3, version: 2 });
+    sent.results.deliveries = { ...sent.results.deliveries, waiting: 0, accepted: 1, delivered: 4, bounced: 1 };
+    const list: HqBlastList = { blasts: [summary(), sent], sentToday: 1, dailyLimit: 10, asOf: T };
+    expect(hqBlastTotals(list)).toEqual({ campaigns: 1, sent: 6, delivered: 4, bounced: 1 });
+    const out = html(base({ list: { state: 'READY', list } }));
+    for (const x of ['data-hq-blast-tab="COMPOSE"', 'data-hq-blast-tab="TEMPLATES"', 'data-hq-blast-tab="HISTORY"', 'Total sent', 'Delivered', 'Bounced', 'Total campaigns',
+      '<th scope="col">Audience</th>', '3 owners at 2 schools', 'Sent one'])
+      expect(out).toContain(x);
+    expect(out).toMatch(/data-hq-blast-tab="HISTORY"[^>]*aria-current="page"|aria-current="page"[^>]*data-hq-blast-tab="HISTORY"/);
+    expect(out).not.toContain('Open rate');
+  });
+  it('lists templates with use and remove, asks before removing, and offers them in Compose', () => {
+    const tpl = template();
+    const out = html(base({ screen: { mode: 'TEMPLATES' }, templates: { state: 'READY', value: [tpl] } }));
+    expect(out).toContain('data-hq-blasts="templates"');
+    expect(out).toContain('Welcome to HON OS');
+    expect(out).toContain(`data-hq-blast-use="${tpl.templateId}"`);
+    expect(html(base({ screen: { mode: 'TEMPLATES' }, templates: { state: 'READY', value: [tpl] }, archiveAsk: tpl.templateId }))).toContain('data-hq-blast-ask="archive"');
+    expect(html(base({ screen: { mode: 'TEMPLATES' }, templates: { state: 'READY', value: [] } }))).toContain('No templates yet.');
+    expect(html(base({ screen: { mode: 'TEMPLATES' }, templates: { state: 'FAILED' } }))).toContain('Templates could not be loaded.');
+    const compose = html(base({ screen: { mode: 'EDIT' }, draft: draft(), templates: { state: 'READY', value: [tpl] } }));
+    expect(compose).toContain('data-hq-blast-start-from="true"');
+    expect(compose).toContain('Welcome (Email)');
+    expect(html(base({ outcome: { kind: 'DONE', receipt: { operation: 'TEMPLATE_SAVE', template: tpl, replayed: false } } }))).toContain('Template saved.');
+  });
+  it('only-picked-schools hides the filters and the leave-out button', () => {
+    const d = withHqBlastAudienceMode(draft({ picked: [{ schoolId: id(7), name: 'Main' }] }), 'PICKED');
+    const out = html(base({ screen: { mode: 'EDIT' }, draft: d, search: 'Ma', searchRead: { state: 'READY', value: [{ schoolId: id(8), schoolDisplayName: 'Other', organizationDisplayName: 'Org', status: 'ACTIVE' }] } }));
+    expect(out).toContain('data-hq-blast-audience="PICKED"');
+    expect(out).toContain('Only the schools you add below get it.');
+    expect(out).not.toContain('More filters');
+    expect(out).not.toContain('Leave out');
+    expect(out).toContain('Main ×');
+  });
   it('lists blasts with today\'s count and links back to the inbox', () => {
     const out = html(base());
     expect(out).toContain('data-hq-blasts="list"');
@@ -125,8 +211,8 @@ describe('HQ blasts page', () => {
   it('shows every filter, the merge tags, the counter and problems in the composer', () => {
     const d = hqBlastDraftOf(blast(), new Map([[id(7), 'Synthetic Main']]));
     const out = html(base({ screen: { mode: 'EDIT' }, draft: { ...d, body: '' }, dirty: true,
-      options: { state: 'READY', value: { planNames: ['Core', 'Complete'], features: ['crm.families_students_prospects'], countries: ['US'], regions: [{ country: 'US', region: 'CA' }], schools: [], asOf: T } } }));
-    for (const text of ['School status', 'Core', 'No plan yet', 'Founder schools', 'Free plan', 'Billing', 'Trial', 'Signed up', 'Country', 'CA', 'Cities (separate with commas)',
+      options: { state: 'READY', value: { planNames: ['Core', 'Complete'], features: ['crm.families_students_prospects'], countries: ['US'], regions: [{ country: 'US', region: 'CA' }], schoolCounts: { active: 12, paused: 3 }, schools: [], asOf: T } } }));
+    for (const text of ['All schools (15)', 'Active schools (12)', 'Inactive schools (3)', 'Only schools I pick (1)', 'More filters', 'Save as template', 'Core', 'No plan yet', 'Founder schools', 'Free plan', 'Billing', 'Trial', 'Signed up', 'Country', 'CA', 'Cities (separate with commas)',
       'Plan includes', 'Plan does not include', 'Only schools where an owner can get texts', 'Pick or leave out schools', 'Synthetic Main', 'Owner first name', 'Write the message.',
       'Save your changes to check who gets it and send.'])
       expect(out).toContain(text);

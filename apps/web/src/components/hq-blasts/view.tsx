@@ -2,17 +2,22 @@ import React from 'react';
 import {
   HQ_BLAST_BILLING_INTERVALS, HQ_BLAST_CHANNELS, HQ_BLAST_DAILY_LIMIT, HQ_BLAST_EMAIL_BODY_MAX, HQ_BLAST_JOINED_DAYS, HQ_BLAST_PURPOSES,
   HQ_BLAST_SCHOOL_STATUSES, HQ_BLAST_SMS_BODY_MAX, HQ_BLAST_TRIAL_ENDS_DAYS, HQ_BLAST_TRIAL_STATES, type HqBlastAudiencePreview, type HqBlastChannel,
-  type HqBlastDetail, type HqBlastList, type HqBlastOptions, type HqBlastPurpose, type HqBlastReceipt, type HqBlastSummary,
+  type HqBlastDetail, type HqBlastList, type HqBlastOptions, type HqBlastPurpose, type HqBlastReceipt, type HqBlastSummary, type HqBlastTemplate,
+  type HqBlastTemplateReceipt,
 } from '@hon/contracts';
 import s from '../comms-kit/comms.module.css';
 import b from './hq-blasts.module.css';
 import type { CommsOutcome } from '../hq-communications/model';
 import { hqBlastText, isHqBlastKey, type HqBlastKey } from './copy';
-import { hqBlastMayCancel, hqBlastProblems, type HqBlastDraft, type HqBlastFilterForm, type PickedSchool, type TriState } from './format';
+import { hqBlastAudienceMode, hqBlastMayCancel, hqBlastProblems, hqBlastTemplateInputOf, type HqBlastAudienceMode, type HqBlastDraft, type HqBlastFilterForm,
+  type PickedSchool, type TriState } from './format';
 
 export type ListRead = { state: 'LOADING' } | { state: 'DENIED' } | { state: 'UNAVAILABLE' } | { state: 'READY'; list: HqBlastList };
 export type Read<T> = null | { state: 'LOADING' } | { state: 'FAILED' } | { state: 'READY'; value: T };
-export type Screen = { mode: 'LIST' } | { mode: 'EDIT' } | { mode: 'DETAIL'; blastId: string };
+/** LIST is the Campaign history tab, EDIT the Compose tab, TEMPLATES the Templates tab. */
+export type Screen = { mode: 'LIST' } | { mode: 'EDIT' } | { mode: 'TEMPLATES' } | { mode: 'DETAIL'; blastId: string };
+export type HqBlastTab = 'COMPOSE' | 'TEMPLATES' | 'HISTORY';
+export type AnyReceipt = HqBlastReceipt | HqBlastTemplateReceipt;
 export type SendAsk = null | { kind: 'SEND'; sendAt: string | null } | { kind: 'CANCEL' };
 export type SearchResult = HqBlastOptions['schools'][number];
 
@@ -20,7 +25,10 @@ export type HqBlastsViewProps = Readonly<{
   language: string; formatTime: (iso: string) => string; featureLabel: (feature: string) => string;
   concealed: boolean; list: ListRead; screen: Screen; draft: HqBlastDraft | null; dirty: boolean; preview: Read<HqBlastAudiencePreview>;
   options: Read<HqBlastOptions>; search: string; searchRead: Read<readonly SearchResult[]>; detail: Read<HqBlastDetail>;
-  when: 'NOW' | 'LATER'; local: string; sendAt: string | null; ask: SendAsk; outcome: CommsOutcome<HqBlastReceipt>; locked: boolean; canRetry: boolean;
+  when: 'NOW' | 'LATER'; local: string; sendAt: string | null; ask: SendAsk; outcome: CommsOutcome<AnyReceipt>; locked: boolean; canRetry: boolean;
+  templates: Read<readonly HqBlastTemplate[]>; archiveAsk: string | null;
+  onTab: (tab: HqBlastTab) => void; onAudienceMode: (mode: HqBlastAudienceMode) => void; onUseTemplate: (t: HqBlastTemplate) => void;
+  onSaveTemplate: () => void; onArchiveAsk: (templateId: string | null) => void; onArchiveTemplate: (t: HqBlastTemplate) => void; onTemplatesRetry: () => void;
   onRefresh: () => void; onReveal: () => void; onNew: () => void; onOpen: (blast: HqBlastSummary) => void; onBack: () => void;
   onDraft: (next: HqBlastDraft) => void; onFilters: (next: Partial<HqBlastFilterForm>) => void; onTag: (field: 'subject' | 'body', tag: 'first_name' | 'school_name' | 'hq_name') => void;
   onSearch: (q: string) => void; onPick: (school: PickedSchool, as: 'picked' | 'leftOut') => void; onSave: () => void; onPreviewRetry: () => void;
@@ -43,31 +51,83 @@ export function HqBlastsView(p: HqBlastsViewProps): React.ReactElement {
   if (p.list.state !== 'READY') return <main className={s.page} data-hq-blasts={p.list.state.toLowerCase()} aria-busy={p.list.state === 'LOADING'}>{head}
     <p className={s.muted} role="status">{t(p.list.state === 'LOADING' ? 'loading' : p.list.state === 'DENIED' ? 'denied' : 'unavailable')}</p></main>;
   const outcome = <Outcome t={t} outcome={p.outcome} canRetry={p.canRetry} onTryAgain={p.onTryAgain} onDismiss={p.onDismiss}/>;
-  if (p.screen.mode === 'EDIT' && p.draft) return <main className={s.page} data-hq-blasts="edit">{head}{outcome}<Editor {...p} t={t} draft={p.draft}/></main>;
-  if (p.screen.mode === 'DETAIL') return <main className={s.page} data-hq-blasts="detail">{head}{outcome}<Detail {...p} t={t}/></main>;
-  const list = p.list.list;
-  return <main className={s.page} data-hq-blasts="list">{head}{outcome}
-    <p className={s.muted}>{t('sentToday', { n: String(list.sentToday), max: String(HQ_BLAST_DAILY_LIMIT) })}</p>
-    {list.blasts.length === 0 ? <p className={s.empty}>{t('empty')}</p> : <ul className={b.list}>
-      {list.blasts.map(x => <li key={x.blastId} className={s.panel} data-hq-blast={x.blastId}>
-        <div className={b.rowHead}><strong>{x.name}</strong>
-          <span className={s.badge} data-tone={x.status === 'QUEUED' ? 'ok' : x.status === 'CANCELLED' ? 'bad' : 'warn'}>{t(x.status)}</span>
-          <span className={s.badge}>{t(x.channel)}</span><span className={s.badge}>{t(x.purpose)}</span></div>
-        <p className={s.muted}>{x.subject ?? x.body.slice(0, 140)}</p>
-        <p className={s.muted}>{x.sendAt ? t('sendsAt', { time: p.formatTime(x.sendAt) }) : t('DRAFT')}
-          {x.recipientCount !== null && x.schoolCount !== null ? ` · ${t('sentTo', { owners: String(x.recipientCount), schools: String(x.schoolCount) })}` : ''}</p>
-        <p className={s.actions}><button type="button" className={s.ghost} disabled={p.locked} onClick={() => p.onOpen(x)}>{t('open')}</button></p></li>)}</ul>}
-  </main>;
+  const tab: HqBlastTab = p.screen.mode === 'EDIT' ? 'COMPOSE' : p.screen.mode === 'TEMPLATES' ? 'TEMPLATES' : 'HISTORY';
+  const tabs = <Tabs t={t} tab={tab} locked={p.locked} onTab={p.onTab}/>;
+  if (p.screen.mode === 'EDIT' && p.draft) return <main className={s.page} data-hq-blasts="edit">{head}{tabs}{outcome}<Editor {...p} t={t} draft={p.draft}/></main>;
+  if (p.screen.mode === 'TEMPLATES') return <main className={s.page} data-hq-blasts="templates">{head}{tabs}{outcome}<Templates {...p} t={t}/></main>;
+  if (p.screen.mode === 'DETAIL') return <main className={s.page} data-hq-blasts="detail">{head}{tabs}{outcome}<Detail {...p} t={t}/></main>;
+  return <main className={s.page} data-hq-blasts="list">{head}{tabs}{outcome}<History {...p} t={t} history={p.list.list}/></main>;
 }
 
 type T = (k: HqBlastKey, v?: Record<string, string>) => string;
 
-function Outcome({ t, outcome, canRetry, onTryAgain, onDismiss }: { t: T; outcome: CommsOutcome<HqBlastReceipt>; canRetry: boolean; onTryAgain: () => void; onDismiss: () => void }): React.ReactElement | null {
+function Tabs({ t, tab, locked, onTab }: { t: T; tab: HqBlastTab; locked: boolean; onTab: (tab: HqBlastTab) => void }): React.ReactElement {
+  return <nav className={b.tabs} aria-label={t('tabs')}>
+    {(['COMPOSE', 'TEMPLATES', 'HISTORY'] as const).map(x => <button key={x} type="button" className={b.tab} aria-current={tab === x ? 'page' : undefined}
+      data-hq-blast-tab={x} disabled={locked} onClick={() => onTab(x)}>{t(`tab_${x}`)}</button>)}</nav>;
+}
+
+/** Totals over every blast handed over. Opens and clicks are not tracked, so they are not shown. */
+export function hqBlastTotals(list: HqBlastList): { campaigns: number; sent: number; delivered: number; bounced: number } {
+  let campaigns = 0, sent = 0, delivered = 0, bounced = 0;
+  for (const x of list.blasts) {
+    if (x.status === 'DRAFT') continue;
+    campaigns += 1;
+    const d = x.results.deliveries;
+    sent += d.accepted + d.delivered + d.bounced + d.failed + d.unknown;
+    delivered += d.delivered; bounced += d.bounced;
+  }
+  return { campaigns, sent, delivered, bounced };
+}
+
+function History(p: HqBlastsViewProps & { t: T; history: HqBlastList }): React.ReactElement {
+  const { t, history: list } = p, tot = hqBlastTotals(list);
+  const tiles: [HqBlastKey, number][] = [['totalSent', tot.sent], ['totalDelivered', tot.delivered], ['totalBounced', tot.bounced], ['totalCampaigns', tot.campaigns]];
+  return <section className={s.panel} aria-label={t('tab_HISTORY')} data-hq-blast-history="true">
+    <dl className={b.counts} data-hq-blast-totals="true">{tiles.map(([k, n]) => <div key={k}><dt>{t(k)}</dt><dd>{n}</dd></div>)}</dl>
+    <p className={s.muted}>{t('sentToday', { n: String(list.sentToday), max: String(HQ_BLAST_DAILY_LIMIT) })}</p>
+    {list.blasts.length === 0 ? <p className={s.empty}>{t('empty')}</p> : <div className={b.tableWrap}><table className={b.table}>
+      <thead><tr><th scope="col">{t('col_campaign')}</th><th scope="col">{t('col_audience')}</th><th scope="col">{t('col_sent')}</th>
+        <th scope="col">{t('col_delivered')}</th><th scope="col">{t('col_bounced')}</th><th scope="col">{t('col_status')}</th><th scope="col">{t('col_when')}</th></tr></thead>
+      <tbody>{list.blasts.map(x => {
+        const d = x.results.deliveries, out = d.accepted + d.delivered + d.bounced + d.failed + d.unknown;
+        return <tr key={x.blastId} data-hq-blast={x.blastId}>
+          <td><button type="button" className={b.linkish} disabled={p.locked} onClick={() => p.onOpen(x)}>{x.name}</button>
+            <span className={s.muted}> {t(x.channel)} · {x.subject ?? x.body.slice(0, 60)}</span></td>
+          <td>{x.recipientCount !== null && x.schoolCount !== null ? t('sentTo', { owners: String(x.recipientCount), schools: String(x.schoolCount) }) : '—'}</td>
+          <td>{x.status === 'DRAFT' ? '—' : out}</td><td>{x.status === 'DRAFT' ? '—' : d.delivered}</td><td>{x.status === 'DRAFT' ? '—' : d.bounced}</td>
+          <td><span className={s.badge} data-tone={x.status === 'QUEUED' ? 'ok' : x.status === 'CANCELLED' ? 'bad' : 'warn'}>{t(x.status)}</span></td>
+          <td>{x.sendAt ? p.formatTime(x.sendAt) : p.formatTime(x.updatedAt)}</td></tr>;
+      })}</tbody></table></div>}
+  </section>;
+}
+
+function Templates(p: HqBlastsViewProps & { t: T }): React.ReactElement {
+  const { t } = p, r = p.templates;
+  return <section className={s.panel} aria-label={t('tab_TEMPLATES')} data-hq-blast-templates={r?.state.toLowerCase() ?? 'none'}>
+    <h2>{t('tab_TEMPLATES')}</h2><p className={s.muted}>{t('templatesHint')}</p>
+    {(!r || r.state === 'LOADING') && <p className={s.muted} role="status">{t('loading')}</p>}
+    {r?.state === 'FAILED' && <p className={s.muted} role="alert">{t('templatesFailed')} <button type="button" className={s.ghost} onClick={p.onTemplatesRetry}>{t('tryAgain')}</button></p>}
+    {r?.state === 'READY' && (r.value.length === 0 ? <p className={s.empty}>{t('noTemplates')}</p> : <ul className={b.list}>
+      {r.value.map(x => <li key={x.templateId} className={s.panel} data-hq-blast-template={x.templateId}>
+        <div className={b.rowHead}><strong>{x.name}</strong><span className={s.badge}>{t(x.channel)}</span></div>
+        {x.subject && <p><strong>{x.subject}</strong></p>}
+        <p className={`${s.muted} ${b.excerpt}`}>{x.body.length > 280 ? `${x.body.slice(0, 280)}…` : x.body}</p>
+        {p.archiveAsk === x.templateId ? <div className={s.flash} role="alertdialog" data-hq-blast-ask="archive"><p>{t('archiveAsk', { name: x.name })}</p>
+          <p className={s.actions}><button type="button" className={s.button} disabled={p.locked} onClick={() => p.onArchiveTemplate(x)}>{t('archiveYes')}</button>
+            <button type="button" className={s.ghost} disabled={p.locked} onClick={() => p.onArchiveAsk(null)}>{t('confirmNo')}</button></p></div>
+          : <p className={s.actions}><button type="button" className={`${s.button} ${s.primary}`} disabled={p.locked} data-hq-blast-use={x.templateId} onClick={() => p.onUseTemplate(x)}>{t('useTemplate')}</button>
+            <button type="button" className={s.ghost} disabled={p.locked} onClick={() => p.onArchiveAsk(x.templateId)}>{t('archive')}</button></p>}
+      </li>)}</ul>)}
+  </section>;
+}
+
+function Outcome({ t, outcome, canRetry, onTryAgain, onDismiss }: { t: T; outcome: CommsOutcome<AnyReceipt>; canRetry: boolean; onTryAgain: () => void; onDismiss: () => void }): React.ReactElement | null {
   if (!outcome) return null;
   if (outcome.kind === 'SENDING') return <p className={s.flash} role="status">{t('sendingNow')}</p>;
   if (outcome.kind === 'DONE') {
     const r = outcome.receipt;
-    const text = r.operation === 'SAVE' ? t('saved') : r.operation === 'CANCEL' ? t('cancelled') : r.blast.sendAt && Date.parse(r.blast.sendAt) > Date.now() + 60_000 ? t('scheduled') : t('sent');
+    const text = r.operation === 'TEMPLATE_SAVE' ? t(r.template.status === 'ARCHIVED' ? 'templateArchived' : 'templateSaved') : r.operation === 'SAVE' ? t('saved') : r.operation === 'CANCEL' ? t('cancelled') : r.blast.sendAt && Date.parse(r.blast.sendAt) > Date.now() + 60_000 ? t('scheduled') : t('sent');
     return <p className={s.flash} data-tone="ok" role="status">{text} <button type="button" className={s.ghost} onClick={onDismiss}>{t('dismiss')}</button></p>;
   }
   const key: HqBlastKey = outcome.kind === 'REFUSED' && outcome.code && isHqBlastKey(outcome.code) ? outcome.code : outcome.kind === 'REFUSED' ? 'INVALID' : outcome.kind;
@@ -89,7 +149,7 @@ const toggle = <V,>(list: readonly V[], v: V): V[] => list.includes(v) ? list.fi
 function Editor(p: HqBlastsViewProps & { t: T; draft: HqBlastDraft }): React.ReactElement {
   const { t, draft } = p, f = draft.filters, lock = p.locked, problems = hqBlastProblems(draft);
   const max = draft.channel === 'EMAIL' ? HQ_BLAST_EMAIL_BODY_MAX : HQ_BLAST_SMS_BODY_MAX, n = draft.body.trim().length;
-  const opts = p.options?.state === 'READY' ? p.options.value : null;
+  const opts = p.options?.state === 'READY' ? p.options.value : null, sc = opts?.schoolCounts ?? null, mode = hqBlastAudienceMode(draft);
   const set = (patch: Partial<HqBlastDraft>) => p.onDraft({ ...draft, ...patch });
   const tagButtons = (field: 'subject' | 'body') => <p className={b.tags}><span className={s.muted}>{t('tags')}</span>
     {(['first_name', 'school_name', 'hq_name'] as const).map(tag => <button key={tag} type="button" className={b.small} disabled={lock} data-hq-blast-tag={`${field}:${tag}`}
@@ -100,8 +160,13 @@ function Editor(p: HqBlastsViewProps & { t: T; draft: HqBlastDraft }): React.Rea
   };
   return <div className={b.layout}>
     <section className={s.panel} aria-label={t('compose')}>
-      <p className={s.actions}><button type="button" className={s.ghost} disabled={lock} onClick={p.onBack}>{t('back')}</button></p>
       <h2>{t('compose')}</h2>
+      {p.templates?.state === 'READY' && p.templates.value.length > 0 && draft.blastId === null && <label className={s.label}>{t('startFrom')}
+        <select className={s.field} value="" disabled={lock} data-hq-blast-start-from="true" onChange={e => {
+          const x = p.templates?.state === 'READY' ? p.templates.value.find(y => y.templateId === e.currentTarget.value) : undefined;
+          if (x) p.onUseTemplate(x);
+        }}><option value="">{t('pickTemplate')}</option>
+          {p.templates.value.map(x => <option key={x.templateId} value={x.templateId}>{`${x.name} (${t(x.channel)})`}</option>)}</select></label>}
       <div className={b.form}>
         <label className={s.label}>{t('name')}<input className={s.field} value={draft.name} maxLength={100} disabled={lock} onChange={e => set({ name: e.currentTarget.value })}/></label>
         <Chips label={t('channel')} values={HQ_BLAST_CHANNELS} chosen={[draft.channel]} text={v => t(v)} disabled={lock}
@@ -117,13 +182,23 @@ function Editor(p: HqBlastsViewProps & { t: T; draft: HqBlastDraft }): React.Rea
         <p className={b.counter} data-over={n > max ? 'true' : undefined} aria-live="polite" data-hq-blast-counter={draft.channel}>
           {n > max ? t('tooLong', { n: String(n - max) }) : t(draft.channel === 'EMAIL' ? 'emailCount' : 'textCount', { n: String(n), max: String(max) })}</p>
         {draft.channel === 'EMAIL' && <p className={s.muted}>{t('footer')}</p>}
+        <p className={s.actions}><button type="button" className={s.ghost} disabled={lock || !hqBlastTemplateInputOf(draft)} data-hq-blast-save-template="true"
+          onClick={p.onSaveTemplate}>{t('saveAsTemplate')}</button></p>
       </div>
     </section>
     <section className={s.panel} aria-label={t('who')}>
-      <h2>{t('who')}</h2><p className={s.muted}>{t('whoHint')}</p>
+      <h2>{t('who')}</h2>
+      <ul className={s.chips} aria-label={t('audience')} data-hq-blast-audience={mode}>
+        {(['ALL', 'ACTIVE', 'INACTIVE', 'PICKED'] as const).map(m => {
+          const n = !sc ? null : m === 'ALL' ? sc.active + sc.paused : m === 'ACTIVE' ? sc.active : m === 'INACTIVE' ? sc.paused : draft.picked.length;
+          return <li key={m}><button type="button" className={s.chip} aria-pressed={mode === m} disabled={lock} data-hq-blast-mode={m} onClick={() => p.onAudienceMode(m)}>
+            {t(`a_${m}`)}{n !== null ? ` (${n})` : ''}</button></li>;
+        })}</ul>
+      <p className={s.muted}>{t(mode === 'PICKED' ? 'pickedHint' : 'whoHint')}</p>
+      <p className={s.muted}>{t('leadsLater')}</p>
       {p.options?.state === 'FAILED' && <p className={s.muted} role="status">{t('optionsFailed')}</p>}
       <div className={b.form}>
-        <Chips label={t('status')} values={HQ_BLAST_SCHOOL_STATUSES} chosen={f.statuses} text={v => t(v)} disabled={lock} onToggle={v => p.onFilters({ statuses: toggle(f.statuses, v) })}/>
+        {mode !== 'PICKED' && <><details className={b.more}><summary>{t('moreFilters')}</summary><div className={b.form}>
         {opts && opts.planNames.length > 0 && <Chips label={t('plan')} values={opts.planNames} chosen={f.planNames} text={v => v} disabled={lock} onToggle={v => p.onFilters({ planNames: toggle(f.planNames, v) })}/>}
         <label className={b.check}><input type="checkbox" checked={f.noPlan} disabled={lock} onChange={e => p.onFilters({ noPlan: e.currentTarget.checked })}/>{t('noPlan')}</label>
         <div className={b.row}>
@@ -153,7 +228,8 @@ function Editor(p: HqBlastsViewProps & { t: T; draft: HqBlastDraft }): React.Rea
           <Chips label={t('has')} values={opts.features} chosen={f.featuresIncluded} text={p.featureLabel} disabled={lock} onToggle={v => p.onFilters({ featuresIncluded: toggle(f.featuresIncluded, v) })}/>
           <Chips label={t('lacks')} values={opts.features} chosen={f.featuresMissing} text={p.featureLabel} disabled={lock} onToggle={v => p.onFilters({ featuresMissing: toggle(f.featuresMissing, v) })}/></>}
         <label className={b.check}><input type="checkbox" checked={f.canGetTexts} disabled={lock} onChange={e => p.onFilters({ canGetTexts: e.currentTarget.checked })}/>{t('canGetTexts')}</label>
-        <fieldset className={b.group}><legend>{t('schools')}</legend>
+        </div></details></>}
+        <fieldset className={b.group}><legend>{t(mode === 'PICKED' ? 'pickSchools' : 'schools')}</legend>
           <input className={s.field} type="search" aria-label={t('findSchool')} placeholder={t('findSchool')} value={p.search} maxLength={80} disabled={lock}
             onChange={e => p.onSearch(e.currentTarget.value)}/>
           {p.searchRead?.state === 'LOADING' && <p className={s.muted} role="status">{t('searching')}</p>}
@@ -161,9 +237,9 @@ function Editor(p: HqBlastsViewProps & { t: T; draft: HqBlastDraft }): React.Rea
           {p.searchRead?.state === 'READY' && (p.searchRead.value.length === 0 ? <p className={s.muted}>{t('noMatch')}</p> : <ul className={b.results}>
             {p.searchRead.value.map(x => <li key={x.schoolId}><span>{x.schoolDisplayName} <span className={s.muted}>{x.organizationDisplayName}</span></span>
               <span className={s.actions}><button type="button" className={b.small} disabled={lock} onClick={() => p.onPick({ schoolId: x.schoolId, name: x.schoolDisplayName }, 'picked')}>{t('add')}</button>
-                <button type="button" className={b.small} disabled={lock} onClick={() => p.onPick({ schoolId: x.schoolId, name: x.schoolDisplayName }, 'leftOut')}>{t('leaveOut')}</button></span></li>)}</ul>)}
+                {mode !== 'PICKED' && <button type="button" className={b.small} disabled={lock} onClick={() => p.onPick({ schoolId: x.schoolId, name: x.schoolDisplayName }, 'leftOut')}>{t('leaveOut')}</button>}</span></li>)}</ul>)}
           {draft.picked.length > 0 && <><p className={s.muted}>{t('picked')}</p><ul className={s.chips}>{draft.picked.map(x => chip(x, 'picked'))}</ul></>}
-          {draft.leftOut.length > 0 && <><p className={s.muted}>{t('leftOut')}</p><ul className={s.chips}>{draft.leftOut.map(x => chip(x, 'leftOut'))}</ul></>}
+          {mode !== 'PICKED' && draft.leftOut.length > 0 && <><p className={s.muted}>{t('leftOut')}</p><ul className={s.chips}>{draft.leftOut.map(x => chip(x, 'leftOut'))}</ul></>}
         </fieldset>
       </div>
       {problems.length > 0 && <ul className={b.problems} data-hq-blast-problems={problems.join(' ')}>{problems.map(x => <li key={x}>{t(`p_${x}`)}</li>)}</ul>}

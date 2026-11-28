@@ -52,6 +52,17 @@ const en = {
   HQ_BLAST_DAILY_LIMIT: 'HQ already handed over 10 blasts in the last 24 hours. Try later.', HQ_BLAST_AUDIENCE_TOO_LARGE: 'That is more than 2,000 schools. Narrow the filters.',
   HQ_BLAST_NOT_CANCELLABLE: 'Some messages already went out, so it can no longer be called off.', HQ_BLAST_SEND_TIME: 'Pick a time between now and 60 days from now.',
   HQ_BLAST_TEXT_TOO_LONG: 'With names filled in, a message is too long. Shorten it.',
+  // tabs, history, templates, audience buttons (Manus layout)
+  tabs: 'Blast sections', tab_COMPOSE: 'Compose', tab_TEMPLATES: 'Templates', tab_HISTORY: 'Campaign history',
+  totalSent: 'Total sent', totalDelivered: 'Delivered', totalBounced: 'Bounced', totalCampaigns: 'Total campaigns',
+  col_campaign: 'Campaign', col_audience: 'Audience', col_sent: 'Sent', col_delivered: 'Delivered', col_bounced: 'Bounced', col_status: 'Status', col_when: 'When',
+  templatesHint: 'Saved texts to start a blast from. To add one, write it in Compose and press Save as template.', templatesFailed: 'Templates could not be loaded.',
+  noTemplates: 'No templates yet.', useTemplate: 'Use this template', archive: 'Remove', archiveAsk: 'Remove the template "{name}"? Blasts already written from it stay as they are.',
+  archiveYes: 'Yes, remove it', templateSaved: 'Template saved.', templateArchived: 'Template removed.', saveAsTemplate: 'Save as template',
+  startFrom: 'Start from a template', pickTemplate: 'Choose a template…',
+  audience: 'Audience', a_ALL: 'All schools', a_ACTIVE: 'Active schools', a_INACTIVE: 'Inactive schools', a_PICKED: 'Only schools I pick',
+  pickedHint: 'Only the schools you add below get it. Find each school by name.', pickSchools: 'Add schools', moreFilters: 'More filters: plan, trial, sign-up date, place, features',
+  leadsLater: 'Leads from the HQ prospects board come next.', p_noPicks: 'Add at least one school.',
 } as const;
 export type HqBlastKey = keyof typeof en;
 
@@ -102,6 +113,16 @@ const ko: Record<HqBlastKey, string> = {
   HQ_BLAST_DAILY_LIMIT: 'HQ가 최근 24시간에 이미 10개를 넘겼습니다. 나중에 시도하세요.', HQ_BLAST_AUDIENCE_TOO_LARGE: '도장이 2,000개를 넘습니다. 조건을 좁혀 주세요.',
   HQ_BLAST_NOT_CANCELLABLE: '이미 나간 메시지가 있어 더 이상 취소할 수 없습니다.', HQ_BLAST_SEND_TIME: '지금부터 60일 사이로 고르세요.',
   HQ_BLAST_TEXT_TOO_LONG: '이름을 넣으면 메시지가 너무 깁니다. 줄여 주세요.',
+  tabs: '단체 발송 메뉴', tab_COMPOSE: '작성', tab_TEMPLATES: '템플릿', tab_HISTORY: '발송 기록',
+  totalSent: '총 발송', totalDelivered: '전달됨', totalBounced: '반송됨', totalCampaigns: '총 캠페인',
+  col_campaign: '캠페인', col_audience: '대상', col_sent: '발송', col_delivered: '전달', col_bounced: '반송', col_status: '상태', col_when: '시간',
+  templatesHint: '단체 발송을 시작할 저장된 문구입니다. 추가하려면 작성에서 쓰고 템플릿으로 저장을 누르세요.', templatesFailed: '템플릿을 불러올 수 없습니다.',
+  noTemplates: '아직 템플릿이 없습니다.', useTemplate: '이 템플릿 사용', archive: '삭제', archiveAsk: '"{name}" 템플릿을 삭제할까요? 이미 만든 단체 발송은 그대로 남습니다.',
+  archiveYes: '네, 삭제', templateSaved: '템플릿을 저장했습니다.', templateArchived: '템플릿을 삭제했습니다.', saveAsTemplate: '템플릿으로 저장',
+  startFrom: '템플릿에서 시작', pickTemplate: '템플릿 선택…',
+  audience: '대상', a_ALL: '모든 도장', a_ACTIVE: '활성 도장', a_INACTIVE: '비활성 도장', a_PICKED: '내가 고른 도장만',
+  pickedHint: '아래에 추가한 도장만 받습니다. 이름으로 도장을 찾으세요.', pickSchools: '도장 추가', moreFilters: '추가 필터: 요금제, 체험, 가입일, 지역, 기능',
+  leadsLater: 'HQ 잠재 고객 보드의 리드는 다음에 추가됩니다.', p_noPicks: '도장을 하나 이상 추가하세요.',
 };
 
 const es: Record<HqBlastKey, string> = {
@@ -151,6 +172,16 @@ const es: Record<HqBlastKey, string> = {
   HQ_BLAST_DAILY_LIMIT: 'HQ ya entregó 10 envíos en las últimas 24 horas. Inténtelo más tarde.', HQ_BLAST_AUDIENCE_TOO_LARGE: 'Son más de 2.000 escuelas. Reduzca los filtros.',
   HQ_BLAST_NOT_CANCELLABLE: 'Algunos mensajes ya salieron, así que ya no se puede anular.', HQ_BLAST_SEND_TIME: 'Elija una hora entre ahora y 60 días desde ahora.',
   HQ_BLAST_TEXT_TOO_LONG: 'Con los nombres puestos, un mensaje es demasiado largo. Acórtelo.',
+  tabs: 'Secciones de envíos', tab_COMPOSE: 'Redactar', tab_TEMPLATES: 'Plantillas', tab_HISTORY: 'Historial de campañas',
+  totalSent: 'Total enviados', totalDelivered: 'Entregados', totalBounced: 'Rebotados', totalCampaigns: 'Total de campañas',
+  col_campaign: 'Campaña', col_audience: 'Público', col_sent: 'Enviados', col_delivered: 'Entregados', col_bounced: 'Rebotados', col_status: 'Estado', col_when: 'Cuándo',
+  templatesHint: 'Textos guardados para empezar un envío. Para agregar uno, escríbalo en Redactar y pulse Guardar como plantilla.', templatesFailed: 'No se pudieron cargar las plantillas.',
+  noTemplates: 'Aún no hay plantillas.', useTemplate: 'Usar esta plantilla', archive: 'Quitar', archiveAsk: '¿Quitar la plantilla "{name}"? Los envíos ya escritos con ella no cambian.',
+  archiveYes: 'Sí, quitarla', templateSaved: 'Plantilla guardada.', templateArchived: 'Plantilla quitada.', saveAsTemplate: 'Guardar como plantilla',
+  startFrom: 'Empezar con una plantilla', pickTemplate: 'Elija una plantilla…',
+  audience: 'Público', a_ALL: 'Todas las escuelas', a_ACTIVE: 'Escuelas activas', a_INACTIVE: 'Escuelas inactivas', a_PICKED: 'Solo las escuelas que elija',
+  pickedHint: 'Solo lo reciben las escuelas que agregue abajo. Busque cada escuela por nombre.', pickSchools: 'Agregar escuelas', moreFilters: 'Más filtros: plan, prueba, fecha de alta, lugar, funciones',
+  leadsLater: 'Los prospectos del tablero de HQ vienen después.', p_noPicks: 'Agregue al menos una escuela.',
 };
 
 const tables: Record<string, Record<HqBlastKey, string>> = { en, ko, es };

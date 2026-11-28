@@ -1,17 +1,18 @@
 'use client';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { HqBlastAudiencePreview, HqBlastDetail, HqBlastOptions, HqBlastReceipt, HqBlastSummary } from '@hon/contracts';
+import type { HqBlastAudiencePreview, HqBlastDetail, HqBlastOptions, HqBlastSummary, HqBlastTemplate } from '@hon/contracts';
 import { useLocale } from '../localization/provider';
 import { CommsError } from '../hq-communications/http';
 import { useCommsCommand, useConcealment, type CommsOutcome } from '../hq-communications/model';
 import { hqBlastApi, type HqBlastApi } from './http';
-import { hqBlastDraftOf, hqBlastSameAsSaved, hqBlastSaveInput, hqBlastSendAt, insertHqBlastTag, newHqBlastDraft, togglePick, type HqBlastDraft,
-  type HqBlastFilterForm, type PickedSchool } from './format';
-import { HqBlastsView, type ListRead, type Read, type Screen, type SearchResult, type SendAsk } from './view';
+import { hqBlastDraftFromTemplate, hqBlastDraftOf, hqBlastSameAsSaved, hqBlastSaveInput, hqBlastSendAt, hqBlastTemplateArchiveOf, hqBlastTemplateInputOf,
+  insertHqBlastTag, newHqBlastDraft, togglePick, withHqBlastAudienceMode, type HqBlastDraft, type HqBlastFilterForm, type PickedSchool } from './format';
+import { HqBlastsView, type AnyReceipt, type ListRead, type Read, type Screen, type SearchResult, type SendAsk } from './view';
 
 /**
- * HQ > Texts and email > Blasts (HB2, 0712). Like a school's Marketing > Blasts: write one text or email, choose which schools'
- * owners get it with filters and picks, check the count and a sample, then send now or schedule. The draft lives in memory
+ * HQ > Texts and email > Blasts (HB2, 0712). Laid out like the Manus CRM: Compose, Templates and Campaign history. Write one text
+ * or email (or start from a saved template), choose which schools' owners get it with the audience buttons, filters and picks,
+ * check the count and a sample, then send now or schedule. The draft lives in memory
  * until saved. A session end hides everything and drops any kept command; leaving the tab hides nothing (owner, 2026-11-26).
  * The database decides who may read or send (the HQ owner only) and who is reached.
  */
@@ -33,28 +34,33 @@ export function HqBlasts({ api = hqBlastApi }: { api?: HqBlastApi }): React.Reac
   const [when, setWhen] = useState<'NOW' | 'LATER'>('NOW');
   const [local, setLocal] = useState('');
   const [ask, setAsk] = useState<SendAsk>(null);
+  const [templates, setTemplates] = useState<Read<readonly HqBlastTemplate[]>>(null);
+  const [templatesTick, setTemplatesTick] = useState(0);
+  const [archiveAsk, setArchiveAsk] = useState<string | null>(null);
   const names = useRef(new Map<string, string>());
   const mounted = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
   const forget = useCallback(() => {
     setScreen({ mode: 'LIST' }); setDraft(null); setSaved(null); setPreview(null); setOptions(null); setSearch(''); setSearchRead(null); setDetail(null);
-    setAsk(null); setWhen('NOW'); setLocal(''); setList({ state: 'LOADING' }); names.current = new Map();
+    setAsk(null); setWhen('NOW'); setLocal(''); setList({ state: 'LOADING' }); setTemplates(null); setArchiveAsk(null); names.current = new Map();
   }, []);
   const { concealed, privacy, reveal } = useConcealment(() => { command.drop(); forget(); });
   const owns = (p: number) => () => mounted.current && p === privacy.current;
 
-  const after = useCallback((outcome: CommsOutcome<HqBlastReceipt>) => {
-    setAsk(null);
+  const after = useCallback((outcome: CommsOutcome<AnyReceipt>) => {
+    setAsk(null); setArchiveAsk(null);
+    if (outcome?.kind === 'DONE' && outcome.receipt.operation === 'TEMPLATE_SAVE') { setTemplatesTick(n => n + 1); return; }
     setRefresh(n => n + 1);
     if (outcome?.kind !== 'DONE') return;
     const r = outcome.receipt;
+    if (r.operation === 'TEMPLATE_SAVE') return;
     if (r.operation === 'SAVE') {
       const next = hqBlastDraftOf(r.blast, names.current);
       setDraft(next); setSaved(next); setPreview(null); setPreviewTick(n => n + 1);
     } else { setDraft(null); setSaved(null); setPreview(null); setScreen({ mode: 'DETAIL', blastId: r.blast.blastId }); setDetailTick(n => n + 1); }
   }, []);
-  const command = useCommsCommand<HqBlastReceipt>(privacy, after);
+  const command = useCommsCommand<AnyReceipt>(privacy, after);
 
   // The list: every blast, newest first, with today's count against the daily limit.
   useEffect(() => {
@@ -93,6 +99,18 @@ export function HqBlasts({ api = hqBlastApi }: { api?: HqBlastApi }): React.Reac
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, search, editing, concealed]);
 
+  // Saved templates, read for the Templates tab and the Compose tab's "Start from a template".
+  const wantTemplates = screen.mode === 'EDIT' || screen.mode === 'TEMPLATES';
+  useEffect(() => {
+    if (concealed || !wantTemplates) return;
+    const owned = owns(privacy.current), abort = new AbortController();
+    setTemplates(x => x?.state === 'READY' ? x : { state: 'LOADING' });
+    api.templates(AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]), owned).then(v => { if (owned() && !abort.signal.aborted) setTemplates({ state: 'READY', value: v.templates }); },
+      () => { if (owned() && !abort.signal.aborted) setTemplates({ state: 'FAILED' }); });
+    return () => abort.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, wantTemplates, templatesTick, concealed]);
+
   // Who gets the saved draft: read again after every save.
   const savedId = saved?.blastId ?? null;
   useEffect(() => {
@@ -127,12 +145,31 @@ export function HqBlasts({ api = hqBlastApi }: { api?: HqBlastApi }): React.Reac
   const featureLabel = useCallback((f: string) => { const x = lt(`planBuilder.f.${f}` as never); return x && !x.startsWith('planBuilder.') ? x : f; }, [lt]);
 
   const edit = (next: HqBlastDraft) => { setDraft(next); setAsk(null); };
+  const startNew = (d: HqBlastDraft) => { command.drop(); setDraft(d); setSaved(null); setPreview(null); setAsk(null); setScreen({ mode: 'EDIT' }); };
   return <HqBlastsView language={language} formatTime={formatTime} featureLabel={featureLabel} concealed={concealed} list={list} screen={screen}
     draft={draft} dirty={dirty} preview={preview} options={options} search={search} searchRead={searchRead} detail={detail}
     when={when} local={local} sendAt={sendAt} ask={ask} outcome={command.outcome} locked={command.locked} canRetry={command.canRetry}
     onRefresh={() => { setRefresh(n => n + 1); if (savedId) setPreviewTick(n => n + 1); }}
     onReveal={() => { reveal(); setRefresh(n => n + 1); }}
-    onNew={() => { command.drop(); const d = newHqBlastDraft(); setDraft(d); setSaved(null); setPreview(null); setAsk(null); setScreen({ mode: 'EDIT' }); }}
+    onNew={() => startNew(newHqBlastDraft())}
+    templates={templates} archiveAsk={archiveAsk}
+    onTab={tab => {
+      if (command.locked) return;
+      command.drop(); setAsk(null); setArchiveAsk(null);
+      if (tab === 'COMPOSE') { if (draft) setScreen({ mode: 'EDIT' }); else startNew(newHqBlastDraft()); }
+      else if (tab === 'TEMPLATES') setScreen({ mode: 'TEMPLATES' });
+      else { setScreen({ mode: 'LIST' }); setDetail(null); }
+    }}
+    onAudienceMode={m => draft && edit(withHqBlastAudienceMode(draft, m))}
+    onUseTemplate={(x: HqBlastTemplate) => startNew(hqBlastDraftFromTemplate(x))}
+    onSaveTemplate={() => {
+      const input = draft ? hqBlastTemplateInputOf(draft) : null;
+      if (!input) { command.local(); return; }
+      command.start((key, signal, owned) => api.saveTemplate(input, key, signal, owned));
+    }}
+    onArchiveAsk={setArchiveAsk}
+    onArchiveTemplate={(x: HqBlastTemplate) => { const input = hqBlastTemplateArchiveOf(x); command.start((key, signal, owned) => api.saveTemplate(input, key, signal, owned)); }}
+    onTemplatesRetry={() => setTemplatesTick(n => n + 1)}
     onOpen={(x: HqBlastSummary) => {
       command.drop(); setAsk(null);
       if (x.status === 'DRAFT') { const d = hqBlastDraftOf(x, names.current); setDraft(d); setSaved(d); setScreen({ mode: 'EDIT' }); setPreviewTick(n => n + 1); }

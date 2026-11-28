@@ -1,7 +1,8 @@
 import {
   HQ_BLAST_COMMANDS, saasUuid, validateHqBlastCancelInput, validateHqBlastSaveInput, validateHqBlastSendInput, verifyHqBlastAudience, verifyHqBlastDetail,
   verifyHqBlastList, verifyHqBlastOptions, verifyHqBlastReceipt, type HqBlastAudiencePreview, type HqBlastCancelInput, type HqBlastDetail, type HqBlastList,
-  type HqBlastOptions, type HqBlastReceipt, type HqBlastSaveInput, type HqBlastSendInput,
+  type HqBlastOptions, type HqBlastReceipt, type HqBlastSaveInput, type HqBlastSendInput, validateHqBlastTemplateSaveInput, verifyHqBlastTemplateList,
+  verifyHqBlastTemplateReceipt, type HqBlastTemplateList, type HqBlastTemplateReceipt, type HqBlastTemplateSaveInput,
 } from '@hon/contracts';
 import { CommsError, commsCommand, commsId, commsRead, type Owned } from '../hq-communications/http';
 
@@ -55,6 +56,18 @@ export const hqBlastApi = {
     const r = await commsCommand(`${BASE}/${saasUuid(body.blastId)}/cancel`, HQ_BLAST_COMMANDS.cancel, { expectedVersion: body.expectedVersion }, key, signal, owned,
       (v) => verifyHqBlastReceipt(v, { operation: 'CANCEL', blastId: body.blastId, status: 'CANCELLED' }), HQ_BLAST_REFUSALS);
     if (r.blast.version !== body.expectedVersion + 1) throw new CommsError('UNKNOWN');
+    return r;
+  },
+  /** Saved texts to start a blast from. Active ones only, newest first. */
+  async templates(signal: AbortSignal, owned: Owned): Promise<HqBlastTemplateList> { return commsRead(`${BASE}/templates`, signal, owned, verifyHqBlastTemplateList); },
+  /** Saves or archives a template. A template sends nothing. */
+  async saveTemplate(input: HqBlastTemplateSaveInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqBlastTemplateReceipt> {
+    let body: HqBlastTemplateSaveInput;
+    try { body = validateHqBlastTemplateSaveInput(input); } catch { throw new CommsError('INVALID'); }
+    const r = await commsCommand(`${BASE}/templates`, HQ_BLAST_COMMANDS.saveTemplate, body, key, signal, owned,
+      (v) => verifyHqBlastTemplateReceipt(v, { templateId: body.templateId, archived: body.archived }), HQ_BLAST_REFUSALS);
+    if (r.template.name !== body.name || r.template.body !== body.body || r.template.channel !== body.channel || !same(r.template.subject, body.subject)
+      || (body.templateId !== null && r.template.version !== body.expectedVersion + 1)) throw new CommsError('UNKNOWN');
     return r;
   },
 };

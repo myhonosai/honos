@@ -23,3 +23,17 @@
 .counts dd { margin: 0; font-size: 18px; font-weight: 800; }
 .sample { display: grid; gap: 6px; margin: 0 0 12px; padding: 12px; border: 1px dashed var(--hon-border-strong, #35506d); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 .sample strong { white-space: normal; }
+/* Manus-style sections: Compose / Templates / Campaign history. */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 14px; border-bottom: 1px solid var(--hon-border, #24405a); }
+.tab { min-height: 40px; padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--hon-text-muted, #a9b8d6); font: inherit; font-weight: 700; cursor: pointer; }
+.tab[aria-current="page"] { color: inherit; border-bottom-color: var(--hon-accent, #4da3ff); }
+.tab:disabled { opacity: .55; cursor: not-allowed; }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th { text-align: left; padding: 8px; color: var(--hon-text-muted, #a9b8d6); font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--hon-border, #24405a); white-space: nowrap; }
+.table td { padding: 8px; border-bottom: 1px solid var(--hon-border, #24405a); vertical-align: top; overflow-wrap: anywhere; }
+.linkish { padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; text-align: left; }
+.linkish:disabled { cursor: not-allowed; opacity: .55; }
+.excerpt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.more { display: grid; gap: 10px; }
+.more summary { cursor: pointer; font-size: var(--hon-text-sm, 13px); font-weight: 700; min-height: 32px; }
