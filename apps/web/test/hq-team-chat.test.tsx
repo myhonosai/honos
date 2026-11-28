@@ -115,12 +115,13 @@ describe('HQ team chat view', () => {
     expect(html).toMatch(/data-member="chase"[^>]*disabled=""/);
     expect(html).not.toMatch(/data-member="mia"[^>]*disabled=""/);
   });
-  it('says plainly when the team cannot answer, and never shows a composer then', () => {
+  it('says plainly when no provider is connected; a budget read never blocks the chat', () => {
     expect(render({ view: conv({ provider: 'NOT_CONNECTED' as never }) })).toContain("No AI text provider is connected");
     const noBudget = conv(); noBudget.budget = { ...noBudget.budget, creditCap: null, version: null, setBy: null as never, setAt: null as never, availableCredits: 0 };
+    // No monthly limit on HQ (owner 2026-11-24): the chat never blocks on the budget read; the server's refusal decides.
     const html = render({ view: noBudget });
-    expect(html).toContain('No HQ AI text budget is set');
-    expect(html).not.toContain('<textarea');
+    expect(html).not.toContain('No HQ AI text budget is set');
+    expect(html).toContain('<textarea');
     expect(render({ phase: 'LOADING', view: null })).toContain('Loading the team chat…');
     expect(render({ phase: 'LOADING', view: null })).not.toContain('data-hon-private');
   });

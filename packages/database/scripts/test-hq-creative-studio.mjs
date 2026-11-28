@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 // (current or next 12 UTC months, versioned, idempotent, never below use, immutable history); the HQ owner or an operator
 // with hq.marketing.manage requests, hq.marketing.read only reads, and support, billing, lapsed owners, school owners and
 // strangers are refused; with no provider connected the API refuses before any write; a request reserves the published
-// rate against the HQ cap (not set, exhausted, too many in progress, platform creative pause, unpriced, units, archived
+// rate against the HQ cap (a month not set has no monthly limit, 0702; exhausted, too many in progress, platform creative pause, unpriced, units, archived
 // campaign all refused with nothing written); replays never reserve twice and key reuse is refused; outcomes are recorded
 // once (succeeded charges actual units, failed/not-sent charge nothing, unverified and unknown are held for the HQ owner,
 // interrupted only after 120 s); the HQ owner resolves held requests; rows never change outside those moves; no school
@@ -140,25 +140,33 @@ try{
  assert.deepEqual(await counts(),start,'refusals wrote nothing');
 
  // ---------- 2. budget ----------
- await deny(creative.create(H('owner'),ask(),K()),422,'HQ_CREATIVE_BUDGET_NOT_SET');
+ // 0702: a month the HQ owner has not set has no monthly limit. The first request records the month at 10,000,000 credits
+ // (version 1, "No monthly limit (HQ default)", by the requester); it is not refused. A rejected answer charges nothing.
+ provider.behaviour='REJECT';
+ const free=await creative.create(H('marketer'),ask({units:1,prompt:'First poster of a month with no HQ limit set.'}),K());
+ assert.deepEqual([free.generation.status,free.generation.chargedCredits,free.budget.creditCap,free.budget.version,free.budget.availableCredits,free.budget.usedCredits,free.budget.setBy.principalId],
+  ['FAILED',null,10000000,1,10000000,0,P('marketer')]);
+ assert.deepEqual(await row('SELECT credit_cap,previous_cap,reason,actor_principal_id::text a FROM hon.hq_creative_budget_changes WHERE period_start=$1 AND version=1',[NOW]),
+  {credit_cap:10000000,previous_cap:null,reason:'No monthly limit (HQ default)',a:P('marketer')});
+ provider.behaviour='SUCCEED';
  for(const bad of [budgetIn({periodStart:'2026-11-02'}),budgetIn({creditCap:-1}),budgetIn({creditCap:10000001}),budgetIn({creditCap:1.5}),budgetIn({reason:'no'}),
   budgetIn({reason:' padded '}),budgetIn({expectedVersion:0}),{...budgetIn(),extra:1}])
   await deny(creative.setBudget(H('owner'),bad,K()),400,'INVALID_SAAS_INPUT');
  await sqlDeny(restricted.query('SELECT hon.set_hq_creative_budget($1,$2::jsonb,$3)',[H('owner'),JSON.stringify(budgetIn({creditCap:'100'})),K()]),'22023');
  await deny(creative.setBudget(H('owner'),budgetIn({periodStart:month(new Date(),-1)}),K()),422,'HQ_CREATIVE_PERIOD_NOT_ALLOWED');
  await deny(creative.setBudget(H('owner'),budgetIn({periodStart:month(new Date(),13)}),K()),422,'HQ_CREATIVE_PERIOD_NOT_ALLOWED');
- await deny(creative.setBudget(H('owner'),budgetIn({expectedVersion:1}),K()),409,'SAAS_VERSION_CONFLICT');
- const bk=K(),set1=await creative.setBudget(H('owner'),budgetIn(),bk);
- assert.deepEqual([set1.replayed,set1.budget.creditCap,set1.budget.version,set1.budget.availableCredits,set1.budget.setBy.principalId],[false,100,1,100,P('owner')]);
- assert.deepEqual((await creative.setBudget(H('owner'),budgetIn(),bk)).replayed,true,'replay');
- await deny(creative.setBudget(H('owner'),budgetIn({creditCap:101}),bk),409,'IDEMPOTENCY_KEY_REUSED');
+ await deny(creative.setBudget(H('owner'),budgetIn({expectedVersion:7}),K()),409,'SAAS_VERSION_CONFLICT');
+ const bk=K(),set1=await creative.setBudget(H('owner'),budgetIn({expectedVersion:1}),bk);
+ assert.deepEqual([set1.replayed,set1.budget.creditCap,set1.budget.version,set1.budget.availableCredits,set1.budget.setBy.principalId],[false,100,2,100,P('owner')]);
+ assert.deepEqual((await creative.setBudget(H('owner'),budgetIn({expectedVersion:1}),bk)).replayed,true,'replay');
+ await deny(creative.setBudget(H('owner'),budgetIn({creditCap:101,expectedVersion:1}),bk),409,'IDEMPOTENCY_KEY_REUSED');
  await deny(creative.setBudget(H('owner'),budgetIn(),K()),409,'SAAS_VERSION_CONFLICT');
- await deny(creative.setBudget(H('owner'),budgetIn({expectedVersion:1}),K()),422,'HQ_CREATIVE_BUDGET_NO_CHANGE');
- const set2=await creative.setBudget(H('owner'),budgetIn({creditCap:60,expectedVersion:1,reason:'Trim to sixty'}),K());
- assert.deepEqual([set2.budget.creditCap,set2.budget.version],[60,2]);
+ await deny(creative.setBudget(H('owner'),budgetIn({expectedVersion:2}),K()),422,'HQ_CREATIVE_BUDGET_NO_CHANGE');
+ const set2=await creative.setBudget(H('owner'),budgetIn({creditCap:60,expectedVersion:2,reason:'Trim to sixty'}),K());
+ assert.deepEqual([set2.budget.creditCap,set2.budget.version],[60,3]);
  await creative.setBudget(H('owner'),budgetIn({periodStart:NEXT,creditCap:500,reason:'Next month plan'}),K());
  const hist=(await creative.studio(H('owner'))).budgetHistory;
- assert.deepEqual(hist.map(h=>[h.periodStart,h.version,h.creditCap,h.previousCap]),[[NEXT,1,500,null],[NOW,2,60,100],[NOW,1,100,null]]);
+ assert.deepEqual(hist.map(h=>[h.periodStart,h.version,h.creditCap,h.previousCap]),[[NEXT,1,500,null],[NOW,3,60,100],[NOW,2,100,10000000],[NOW,1,10000000,null]]);
 
  // ---------- 3. request ----------
  for(const bad of [ask({units:0}),ask({units:1.5}),ask({format:'WIDE'}),ask({prompt:''}),ask({prompt:' x'}),ask({prompt:'a‮b'}),ask({campaignId:'nope'}),
@@ -198,7 +206,7 @@ try{
    await admin.query("UPDATE hon.ai_spend_pauses SET ended_at=clock_timestamp(),end_key=$2,end_reason='Fixture raced pause ended',ended_by_principal_id=$3 WHERE id=$1",[racedId,K(),P('owner')]);
   }finally{await pauser.query('ROLLBACK').catch(()=>{});await pauser.end();}}
  const before=await counts();
- assert.equal(before.g,0,'no refused request wrote a generation');
+ assert.equal(before.g,1,'no refused request wrote a generation (only the first, unlimited-month request)');
 
  // Success: 2 images x 10 = 20 reserved; the synthetic provider returns 2 images; 20 charged.
  provider.behaviour='SUCCEED';provider.calls.length=0;
@@ -230,11 +238,11 @@ try{
  const unk=await creative.create(H('owner'),ask({units:1}),K());
  assert.deepEqual([unk.generation.status,unk.budget.heldCredits,unk.budget.availableCredits],['UNDER_REVIEW',20,20]);
  // The cap is never lowered below what is used plus held.
- await deny(creative.setBudget(H('owner'),budgetIn({creditCap:39,expectedVersion:2,reason:'Too low'}),K()),422,'HQ_CREATIVE_CAP_BELOW_USE');
+ await deny(creative.setBudget(H('owner'),budgetIn({creditCap:39,expectedVersion:3,reason:'Too low'}),K()),422,'HQ_CREATIVE_CAP_BELOW_USE');
  await deny(creative.create(H('owner'),ask({units:3}),K()),422,'HQ_CREATIVE_BUDGET_EXHAUSTED');
 
  // ---------- 4. in flight, interrupted, at most 3 ----------
- await creative.setBudget(H('owner'),budgetIn({creditCap:200,expectedVersion:2,reason:'Room for more'}),K());
+ await creative.setBudget(H('owner'),budgetIn({creditCap:200,expectedVersion:3,reason:'Room for more'}),K());
  const pending=[];
  for(let i=0;i<3;i++){const key=K();const r=await billing.call('createHqCreativeGeneration',[H('owner'),JSON.stringify(ask({units:1,prompt:`Pending poster ${i}`})),
   JSON.stringify({providerId:'HIGGSFIELD',modelCode:'synthetic-image-1'}),key],v=>v);pending.push({key,g:r.generation});}

@@ -37,8 +37,7 @@ export function HqTeamChatView(props: HqTeamChatViewProps): React.ReactElement {
   const view = props.view;
   const ready = props.phase === 'READY' && view !== null;
   const connected = ready && view.provider === 'CONNECTED';
-  const budgeted = ready && view.budget.creditCap !== null;
-  const canTalk = connected && budgeted && props.talkers.length > 0;
+  const canTalk = connected && props.talkers.length > 0;
   const locked = props.busy !== null || (props.stalled !== null && (props.stalled.error.kind === 'UNKNOWN' || props.stalled.error.kind === 'CHANGED'));
   const reason = (e: MarketingError) => e.code === 'HQ_HON_TOO_MANY_IN_PROGRESS' ? t('busyServer')
     : e.kind === 'REFUSED' && e.code ? hqHonText(props.language as Language, e.code as HqHonCopyKey) : hqHonText(props.language as Language, (['DENIED', 'GONE'].includes(e.kind) ? 'denied' : e.kind) as HqHonCopyKey, { name: '' });
@@ -62,8 +61,7 @@ export function HqTeamChatView(props: HqTeamChatViewProps): React.ReactElement {
     {props.phase === 'LOADING' ? <p className={styles.notice} role="status">{t('loading')}</p>
       : props.phase === 'DENIED' ? <p className={styles.notice} role="status">{t('denied')}</p>
       : props.phase === 'UNAVAILABLE' ? <p className={styles.notice} role="alert">{t('unavailable')} <button type="button" className={styles.secondary} onClick={props.onRefresh}>{t('refresh')}</button></p>
-      : !connected ? <p className={styles.notice} role="status">{t('providerOff')}</p>
-      : !budgeted ? <p className={styles.notice} role="status">{t('noBudget')}</p> : null}
+      : !connected ? <p className={styles.notice} role="status">{t('providerOff')}</p> : null}
 
     {ready && <ol className={styles.messages} aria-live="polite" data-hon-private="">
       {props.messages.length === 0 && <li className={styles.empty}>{t('empty')}</li>}
@@ -121,7 +119,7 @@ export function HqTeamChat({ art = 'chibi', api = hqHonApi }: { art?: string; ap
   const [busy, setBusy] = useState<readonly HqHonAgentKey[] | null>(null);
   const [stalled, setStalled] = useState<HqTeamStalled | null>(null);
   const mounted = useRef(true), generation = useRef(0), running = useRef(false);
-  const talkers = view && view.provider === 'CONNECTED' && view.budget.creditCap !== null ? hqTeamTalkers(view.availableAgents) : [];
+  const talkers = view && view.provider === 'CONNECTED' ? hqTeamTalkers(view.availableAgents) : [];
 
   const read = useCallback(async () => {
     const current = ++generation.current, owned = () => mounted.current && current === generation.current;
