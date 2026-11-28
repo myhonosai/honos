@@ -110,6 +110,19 @@ production the schedule provider is unconfigured, so starting a binding answers 
   existing 0230 endpoints.
 - Nothing here charges, starts a provider call, or turns on paid access; the paid-access program stays INACTIVE.
 
+## Piece 5b: the Subscribe and checkout-terms screens (no migration)
+
+- **HQ, Pricing & Offers overview, "Checkout terms".** For each published HON OS price (regular and founder, monthly and
+  annual, not stopped) the HQ owner presses "Prepare checkout terms", which runs the existing `hq/saas/price-schedules`
+  record command (expected version 0, one idempotency key, retried with the same key after an unknown outcome). A 409 means
+  terms already exist for that price. It records terms only.
+- **School, `/staff/subscription#subscribe`.** The plan lock's Upgrade button lands here. The owner picks a price that has
+  terms, reviews the exact disclosure (preview), ticks agreement, and presses Subscribe. HON then sends accept, subscription
+  intent and schedule start, each with its own key kept for retries. When the payment program is not in test mode the
+  section says subscribing is not available and sends nothing, so no agreement is recorded that a later real subscription
+  would trip over (one acceptance per school per schedule). A 503 from the schedule provider shows the same message. Locks
+  lift only after a verified first payment (5a).
+
 ## Creative credit program switch (`/hq/revenue/creative-credits`)
 `ProgramControls` adds HQ-owner buttons using the existing 0202 commands: "Publish credit prices" (the rates David
 approved on 2026-11-14: image 10, video 20/s, avatar 10, avatar video 15/s, photo video 8/s) and "Turn on" / "Turn off"

@@ -25,7 +25,7 @@ export const PLAN_FEATURE_FOR_PAGE: Readonly<Partial<Record<SchoolShellIcon, str
   // Dashboard, Staff, Texts, Email, Parent app, Calls, Shopify, Reports and Settings are never locked: Settings holds the
   // subscription page the Upgrade button opens.
 };
-export const PLAN_UPGRADE_HREF = '/staff/subscription';
+export const PLAN_UPGRADE_HREF = '/staff/subscription#subscribe';
 
 /** The menu pages the plan locks, for the frame. */
 export function lockedPages(features: SaasSchoolPlanFeatures | null): ReadonlySet<SchoolShellIcon> {
