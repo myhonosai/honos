@@ -11,8 +11,8 @@ import { hqRecordingUrl, loadHqCalling, loadHqCalls, saveHqCallingSettings, setH
 import { hqCallsCopy, type HqCallsCopy } from './hq-copy';
 import { greetingValue } from './staff-calls';
 import { CallButton } from './call-button';
-import s from '../testing-registration.module.css';
-import c from './calls.module.css';
+import styles from '../hq-access/hq-access.module.css';
+import k from './hq-calls.module.css';
 
 function who(call: HqCall, copy: HqCallsCopy): string {
   return call.contactName ?? (call.remoteE164 ? `${copy.unknownCaller} ${formatCallNumber(call.remoteE164)}` : copy.unknownCaller);
@@ -22,8 +22,8 @@ function message(problem: unknown, copy: HqCallsCopy): string {
   if (problem instanceof CallsRefusal) return copy.refusal[problem.code] ?? copy.unavailable;
   return copy.unavailable;
 }
-type SettingsDraft = { callingOn: boolean; greeting: string };
-const draftOf = (o: HqCallingOverview): SettingsDraft => ({ callingOn: o.callingOn, greeting: o.voicemailGreeting ?? '' });
+type SettingsDraft = { greeting: string };
+const draftOf = (o: HqCallingOverview): SettingsDraft => ({ greeting: o.voicemailGreeting ?? '' });
 
 /**
  * CL5 (0694) HQ Calls page: the HQ number's call log, the after-call card, Ring me and the HQ owner's settings. The server
@@ -100,88 +100,99 @@ export function HqCalls(): React.ReactElement {
     if (!overview || !settings) return;
     const greeting = greetingValue(settings.greeting);
     if (greeting === undefined) return;
-    void command(() => saveHqCallingSettings({ callingOn: settings.callingOn, voicemailGreeting: greeting, expectedVersion: overview.version }), copy.settingsSaved);
+    void command(() => saveHqCallingSettings({ callingOn: overview.callingOn, voicemailGreeting: greeting, expectedVersion: overview.version }), copy.settingsSaved);
   }
 
   const open = list?.calls.find(x => x.callId === openId) ?? null;
   const ringers = overview?.staff?.filter(m => m.ringMe).map(m => m.name) ?? [];
   const greetingOk = settings ? greetingValue(settings.greeting) !== undefined : false;
-  return <main className={`${s.page} ${c.hq}`} data-hq-calls=""><div className={s.shell}>
-    <header className={s.header}><h1>{copy.title}</h1><p>{copy.intro}</p></header>
-    {hidden && !list && <p className={s.actions}><span className={s.subtle}>{copy.hidden}</span> <button type="button" onClick={() => void refresh()}>{copy.show}</button></p>}
-    <div aria-live="polite">{busy && !list && <p role="status">{copy.loading}</p>}
-      {error && <div className={s.error} role="alert"><strong>{denied ? copy.deniedTitle : copy.title}</strong><p>{error}</p></div>}
-      {notice && <p className={s.notice} role="status">{notice}</p>}</div>
+  const outcomeTone = error ? 'blocked' : 'ok';
+  return <main className={styles.access} data-hq-calls="">
+    <header className={styles.head}><div><h1>{copy.title}</h1><p className={styles.intro}>{copy.intro}</p></div>
+      {list && <button type="button" className={styles.secondary} disabled={busy} onClick={() => void refresh()}>{copy.refresh}</button>}</header>
+    {hidden && !list && <div className={styles.notice}><p>{copy.hidden}</p><button type="button" className={styles.secondary} onClick={() => void refresh()}>{copy.show}</button></div>}
+    <div aria-live="polite">{busy && !list && <p className={styles.notice} role="status">{copy.loading}</p>}
+      {(error || notice) && <div className={styles.outcome} data-tone={outcomeTone} role={error ? 'alert' : 'status'}>
+        {error ? <p><strong>{denied ? copy.deniedTitle : copy.title}</strong> · {error}</p> : <p>{notice}</p>}</div>}</div>
 
-    {overview && <section className={s.card} aria-label={copy.hqNumber}>
-      <h2>{copy.hqNumber}: {overview.hqNumber ? formatCallNumber(overview.hqNumber) : '—'}</h2>
-      {!overview.numberReady && <p>{copy.noNumber} <a href="/hq/communications">{copy.setUpNumber}</a></p>}
-      <p><strong>{overview.callingOn ? copy.callingOn : copy.callingOff}</strong>{!overview.callingOn && <> · <span className={s.subtle}>{copy.callingOffHint}</span></>}</p>
-      <p>{copy.missedToday(overview.missedToday)} · {copy.unheard(overview.unheardVoicemails)}</p>
-      <p className={s.actions}>
-        <label><input type="checkbox" checked={overview.ringMe} disabled={acting || !overview.callingOn}
-          onChange={e => { const on = e.target.checked; void command(() => setHqRingMe(on), on ? copy.ringMeOn : copy.ringMeOff); }} /> {copy.ringMe}</label>
-        <span className={s.subtle}>{copy.ringMeHint}</span></p>
-      {overview.callingOn && <p className={s.subtle}>{overview.staff ? (ringers.length ? copy.ringing(ringers.join(', ')) + '.' : copy.nobodyRings) + ' ' : ''}{copy.voicemailNote}</p>}
+    {overview && <section className={styles.card} aria-label={copy.hqNumber} data-hq-calls-number={overview.numberReady ? 'ready' : 'none'}>
+      <div className={styles.cardHead}><h2>{copy.hqNumber}: {overview.hqNumber ? formatCallNumber(overview.hqNumber) : '—'}</h2>
+        <span className={styles.status} data-tone={overview.callingOn ? 'ready' : 'waiting'} data-hq-calling={overview.callingOn ? 'on' : 'off'}>
+          {overview.callingOn ? copy.statusOn : copy.statusOff}</span></div>
+      {!overview.numberReady && <div className={styles.outcome} data-tone="waiting"><p>{copy.noNumber}</p>
+        {overview.canManage ? <a className={styles.primary} href="/hq/communications#hq-buy-number" data-hq-calls-buy="">{copy.setUpNumber}</a>
+          : <p className={styles.meta}>{copy.askOwnerNumber}</p>}</div>}
+      <p className={styles.meta}>{overview.callingOn ? copy.callingOn : `${copy.callingOff}. ${copy.callingOffHint}`}</p>
+      {overview.canManage && <div className={styles.actions}>
+        <button type="button" className={overview.callingOn ? styles.secondary : styles.primary} disabled={acting} data-hq-calling-toggle=""
+          onClick={() => { const on = !overview.callingOn; void command(() => saveHqCallingSettings({ callingOn: on, voicemailGreeting: overview.voicemailGreeting, expectedVersion: overview.version }),
+            on ? copy.callingTurnedOn : copy.callingTurnedOff); }}>{overview.callingOn ? copy.turnCallingOff : copy.turnCallingOn}</button></div>}
+      <dl className={styles.facts}><div><dt>{copy.filters.MISSED}</dt><dd>{copy.missedToday(overview.missedToday)}</dd></div>
+        <div><dt>{copy.filters.VOICEMAIL}</dt><dd>{copy.unheard(overview.unheardVoicemails)}</dd></div></dl>
+      <div className={k.ringRow}>
+        <button type="button" role="switch" aria-checked={overview.ringMe} aria-describedby="hq-ring-me-hint" className={k.switch} data-hq-ring-me={overview.ringMe ? 'on' : 'off'}
+          disabled={acting || !overview.callingOn}
+          onClick={() => { const on = !overview.ringMe; void command(() => setHqRingMe(on), on ? copy.ringMeOn : copy.ringMeOff); }}>
+          <span className={k.knob} aria-hidden="true"/><span>{copy.ringMe}</span>
+          <span className={k.switchState}>{overview.ringMe ? copy.ringMeOnLabel : copy.ringMeOffLabel}</span></button>
+        <p id="hq-ring-me-hint" className={styles.meta}>{overview.callingOn ? copy.ringMeHint : copy.ringMeNeedsCalling}</p></div>
+      {overview.callingOn && <p className={styles.meta}>{overview.staff ? (ringers.length ? copy.ringing(ringers.join(', ')) + '.' : copy.nobodyRings) + ' ' : ''}{copy.voicemailNote}</p>}
     </section>}
 
-    {list && <section className={s.card} aria-label={copy.log}>
-      <h2>{copy.log}</h2>
-      <p className={`${s.actions} ${c.pressed}`} role="group" aria-label={copy.log}>
+    {list && <section className={styles.card} aria-label={copy.log}>
+      <div className={styles.cardHead}><h2>{copy.log}</h2></div>
+      <div className={styles.filters} role="group" aria-label={copy.log}>
         {SCHOOL_CALL_FILTERS.map(f => <button key={f} type="button" aria-pressed={filter === f} disabled={busy} onClick={() => choose(f)}>{copy.filters[f]}</button>)}
-        <button type="button" disabled={busy} onClick={() => void refresh()}>{copy.refresh}</button>
-      </p>
-      {list.calls.length === 0 ? <p className={s.empty}>{filter === 'ALL' ? copy.empty : copy.emptyFiltered}</p> : <ul className={s.list}>
-        {list.calls.map(x => <li key={x.callId}>
-          <button type="button" aria-expanded={openId === x.callId} onClick={() => openCall(x)}>{who(x, copy)}</button>{' '}
-          <span className={s.subtle}>{x.direction === 'IN' ? copy.incoming : copy.outgoing} · {copy.status[x.status]}
-            {x.durationSeconds ? ` · ${formatCallDuration(x.durationSeconds)}` : ''} · {date(x.startedAt)}{x.staffName ? ` · ${copy.by(x.staffName)}` : ''}</span>
-          {x.contactSchools.length > 0 && <span className={s.subtle}> · {copy.ownerOf(x.contactSchools.join(', '))}</span>}
-          {x.voicemail && <span className={s.badge}> {x.heard ? copy.voicemailHeard : copy.voicemailNew}</span>}
-          {x.doNotCall && <span className={s.subtle}> · {copy.doNotCallBadge}</span>}
-          {x.outcome && <span className={s.subtle}> · {copy.outcomes[x.outcome]}</span>}
+      </div>
+      {list.calls.length === 0 ? <p className={styles.notice}>{filter === 'ALL' ? copy.empty : copy.emptyFiltered}</p> : <ul className={styles.list}>
+        {list.calls.map(x => <li key={x.callId} className={k.callRow}>
+          <button type="button" className={k.callName} aria-expanded={openId === x.callId} onClick={() => openCall(x)}>{who(x, copy)}</button>
+          <span className={styles.meta}>{x.direction === 'IN' ? copy.incoming : copy.outgoing} · {copy.status[x.status]}
+            {x.durationSeconds ? ` · ${formatCallDuration(x.durationSeconds)}` : ''} · {date(x.startedAt)}{x.staffName ? ` · ${copy.by(x.staffName)}` : ''}
+            {x.contactSchools.length > 0 && ` · ${copy.ownerOf(x.contactSchools.join(', '))}`}
+            {x.doNotCall && ` · ${copy.doNotCallBadge}`}{x.outcome && ` · ${copy.outcomes[x.outcome]}`}</span>
+          {x.voicemail && <span className={styles.status} data-tone={x.heard ? 'ready' : 'waiting'}>{x.heard ? copy.voicemailHeard : copy.voicemailNew}</span>}
         </li>)}
       </ul>}
-      {list.nextCursor && <p className={s.actions}><button type="button" disabled={busy} onClick={() => void more()}>{copy.more}</button></p>}
+      {list.nextCursor && <div className={styles.actions}><button type="button" className={styles.secondary} disabled={busy} onClick={() => void more()}>{copy.more}</button></div>}
     </section>}
 
-    {open && <section className={s.card} aria-label={copy.card(who(open, copy))}>
-      <h2>{copy.card(who(open, copy))}</h2>
-      <p className={s.subtle}>{open.remoteE164 ? formatCallNumber(open.remoteE164) : copy.unknownCaller} · {copy.status[open.status]} · {date(open.startedAt)} · {copy.notRecorded}</p>
-      {!open.doNotCall && open.remoteE164 && <p className={s.actions}><CallButton phoneE164={open.remoteE164} personId={open.contactUserId ?? undefined}
-        name={open.contactName ?? undefined} language={preferences.language} /></p>}
-      <fieldset className={c.outcomes}><legend>{copy.outcome}</legend><p className={`${s.actions} ${c.pressed}`}>
+    {open && <section className={styles.card} aria-label={copy.card(who(open, copy))}>
+      <div className={styles.cardHead}><h2>{copy.card(who(open, copy))}</h2></div>
+      <p className={styles.meta}>{open.remoteE164 ? formatCallNumber(open.remoteE164) : copy.unknownCaller} · {copy.status[open.status]} · {date(open.startedAt)} · {copy.notRecorded}</p>
+      {!open.doNotCall && open.remoteE164 && <div className={styles.actions}><CallButton phoneE164={open.remoteE164} personId={open.contactUserId ?? undefined}
+        name={open.contactName ?? undefined} language={preferences.language} /></div>}
+      <fieldset className={styles.fields}><legend className={k.legend}>{copy.outcome}</legend><div className={styles.filters}>
         {HQ_CALL_OUTCOMES.map(o => <button key={o} type="button" aria-pressed={open.outcome === o} disabled={acting} onClick={() => saveOutcome(open, o)}>{copy.outcomes[o]}</button>)}
         {open.outcome && <button type="button" disabled={acting} onClick={() => saveOutcome(open, null)}>{copy.clearOutcome}</button>}
-      </p></fieldset>
-      <form className={c.form} onSubmit={e => saveNote(e, open)}>
+      </div></fieldset>
+      <form className={styles.form} onSubmit={e => saveNote(e, open)}>
         <label htmlFor="hq-call-note">{copy.note}</label>
         <textarea id="hq-call-note" rows={3} value={note} maxLength={SCHOOL_CALL_LIMITS.noteMax + 1} onChange={e => setNote(e.target.value)} disabled={acting} aria-describedby="hq-call-note-hint" />
-        <p id="hq-call-note-hint" className={s.subtle}>{copy.noteHint}</p>
-        <p className={s.actions}><button type="submit" disabled={acting || (note.trim() !== '' && !schoolCallNoteOk(note)) || note === (open.note ?? '')}>{copy.save}</button></p>
+        <p id="hq-call-note-hint" className={styles.meta}>{copy.noteHint}</p>
+        <div className={styles.actions}><button type="submit" className={styles.primary} disabled={acting || (note.trim() !== '' && !schoolCallNoteOk(note)) || note === (open.note ?? '')}>{copy.save}</button></div>
       </form>
-      {open.voicemail && !open.heard && <p className={s.actions}><button type="button" disabled={acting}
-        onClick={() => void command(() => updateHqCall({ callId: open.callId, expectedVersion: open.version, heard: true }), copy.markedHeard)}>{copy.markHeard}</button></p>}
-      {open.recordingAvailable && <div>
+      {open.voicemail && !open.heard && <div className={styles.actions}><button type="button" className={styles.secondary} disabled={acting}
+        onClick={() => void command(() => updateHqCall({ callId: open.callId, expectedVersion: open.version, heard: true }), copy.markedHeard)}>{copy.markHeard}</button></div>}
+      {open.recordingAvailable && <div className={styles.fields}>
         <p><strong>{copy.listen(open.recordingSeconds === null ? '' : formatCallDuration(open.recordingSeconds))}</strong></p>
         <audio key={open.callId} controls preload="none" src={hqRecordingUrl(open.callId)} style={{ width: '100%', maxWidth: 480 }} aria-label={copy.listen('')} data-call-recording="" />
-        <p className={s.subtle}>{copy.voicemailKept}</p></div>}
-      {open.remoteE164 && <p className={s.actions}><button type="button" disabled={acting}
+        <p className={styles.meta}>{copy.voicemailKept}</p></div>}
+      {open.remoteE164 && <div className={styles.actions}><button type="button" className={styles.secondary} disabled={acting}
         onClick={() => void command(() => setHqDoNotCall({ phoneE164: open.remoteE164!, doNotCall: !open.doNotCall }), open.doNotCall ? copy.doNotCallRemoved : copy.doNotCallAdded)}>
-        {open.doNotCall ? copy.removeDoNotCall : copy.addDoNotCall}</button> <span className={s.subtle}>{copy.doNotCallHint}</span></p>}
+        {open.doNotCall ? copy.removeDoNotCall : copy.addDoNotCall}</button> <span className={styles.meta}>{copy.doNotCallHint}</span></div>}
     </section>}
 
-    {overview && settings && <section className={s.card} aria-label={copy.settings}>
-      <h2>{copy.settings}</h2>
-      {!overview.canManage ? <p className={s.subtle}>{copy.ownerOnly}</p> : <form className={c.form} onSubmit={saveSettings}>
-        <p className={s.subtle}>{copy.settingsHint}</p>
-        <p><label><input type="checkbox" checked={settings.callingOn} disabled={acting} onChange={e => setSettings({ ...settings, callingOn: e.target.checked })} /> {copy.turnOn}</label></p>
+    {overview && settings && <section className={styles.card} aria-label={copy.settings} id="hq-call-settings">
+      <div className={styles.cardHead}><h2>{copy.settings}</h2></div>
+      {!overview.canManage ? <p className={styles.meta}>{copy.ownerOnly}</p> : <form className={styles.form} onSubmit={saveSettings}>
+        <p className={styles.meta}>{copy.settingsHint}</p>
         <label htmlFor="hq-call-greeting">{copy.greeting}</label>
         <textarea id="hq-call-greeting" rows={2} value={settings.greeting} maxLength={SCHOOL_CALL_LIMITS.greetingMax + 1} disabled={acting} aria-describedby="hq-call-greeting-hint"
           onChange={e => setSettings({ ...settings, greeting: e.target.value })} />
-        <p id="hq-call-greeting-hint" className={s.subtle}>{copy.greetingHint}</p>
-        <p className={s.actions}><button type="submit" disabled={acting || !greetingOk}>{copy.saveSettings}</button></p>
+        <p id="hq-call-greeting-hint" className={styles.meta}>{copy.greetingHint}</p>
+        <div className={styles.actions}><button type="submit" className={styles.primary} disabled={acting || !greetingOk}>{copy.saveSettings}</button></div>
       </form>}
     </section>}
-  </div></main>;
+  </main>;
 }

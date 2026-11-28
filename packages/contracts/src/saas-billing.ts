@@ -173,6 +173,9 @@ export const SAAS_COMMANDS = {
   recordHqProspectConsent: 'hq-prospect-consent',
   // CL5 (0694): HQ calling on the HQ number; same values as HQ_CALL_COMMANDS.
   setHqCallingSettings: 'hq-call-settings',
+  // 0704: HQ buys its own texting number; same values as HQ_NUMBER_COMMANDS.
+  buyHqNumber: 'hq-number-order-buy',
+  finishHqNumberOrder: 'hq-number-order-finish',
   setMyHqCallRinging: 'hq-call-ring',
   startHqCall: 'hq-call-start',
   updateHqCall: 'hq-call-update',

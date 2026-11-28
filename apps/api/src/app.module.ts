@@ -532,6 +532,7 @@ import { HqSupportController } from './hq-support/hq-support.controller.js';
 import { HqSupportService } from './hq-support/hq-support.service.js';
 import { HqCommunicationsController } from './hq-communications/hq-communications.controller.js';
 import { HqCommunicationsService } from './hq-communications/hq-communications.service.js';
+import { HqNumberService } from './hq-communications/hq-number.service.js';
 import { HqContactController } from './hq-communications/hq-contact.controller.js';
 import { HqContactService } from './hq-communications/hq-contact.service.js';
 import { HQ_MESSAGE_WORKER_STORE, HqMessageDispatchScheduler, HqMessageDispatcher, HqMessageWorkerDatabase } from './hq-communications/hq-message-dispatcher.js';
@@ -1195,7 +1196,7 @@ import { KioskModule } from './kiosk/kiosk.module.js';
     ChampionsClubService, ChampionsCommandGuard, ChampionsReadGuard,
     // Piece 4 of the HQ plan builder: a feature area the school's plan leaves out answers 403 PLAN_FEATURE_LOCKED.
     { provide: APP_INTERCEPTOR, useClass: SchoolPlanFeatureInterceptor },
-    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, CreativeLimitsService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, HqSupportService, HqMarketingService, HqAdConnectionsService, HqPlanPromotionsService, HqSchoolPlansService, HqCreativeService, HqCreativeDesignsService, HqHonService, AiSpendPauseService, AiSchoolCostLimitService, AiExceptionAllowanceService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard, HqCommunicationsService, HqContactService, HqProspectsService,
+    SaasBillingService, SaasCreativeWalletService, CreativeStudioService, CreativeLimitsService, SaasCommandGuard, SaasReadGuard, SaasPaymentsService, SaasSchoolBillingService, HqSupportService, HqMarketingService, HqAdConnectionsService, HqPlanPromotionsService, HqSchoolPlansService, HqCreativeService, HqCreativeDesignsService, HqHonService, AiSpendPauseService, AiSchoolCostLimitService, AiExceptionAllowanceService, AiUnknownResolutionService, AiSchoolUsageService, AiTeamReadinessService, HonConversationService, HonReplyService, HonConversationHumanUiGuard, LanguagePreferencesService, LanguageReadGuard, LanguageCommandGuard, HqCommunicationsService, HqNumberService, HqContactService, HqProspectsService,
     // Real Stripe test mode only when both test credentials are configured; otherwise every call is refused.
     { provide: PAYMENT_PROVIDER_ADAPTER, useFactory: () => paymentProviderFromEnvironment() ?? new UnconfiguredPaymentProvider() },
     // 0230 schedule billing never selects a provider from environment. Only tests may override this deterministic boundary.

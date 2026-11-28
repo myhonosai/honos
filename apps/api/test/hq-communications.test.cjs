@@ -7,6 +7,8 @@ const { Test } = require('@nestjs/testing');
 const { json } = require('express');
 const { HqCommunicationsController } = require('../dist/hq-communications/hq-communications.controller.js');
 const { HqCommunicationsService } = require('../dist/hq-communications/hq-communications.service.js');
+const { HqNumberService } = require('../dist/hq-communications/hq-number.service.js');
+const { TWILIO_NUMBER_CLIENT, FakeTwilioNumberClient } = require('../dist/communication/delivery/twilio-numbers.js');
 const { HqMessageDispatcher } = require('../dist/hq-communications/hq-message-dispatcher.js');
 const { CommunicationProviderError } = require('../dist/communication/delivery/communication-provider.js');
 const { FakeCommunicationProvider } = require('../dist/communication/delivery/fake-communication-provider.js');
@@ -92,7 +94,7 @@ const send = (url, { method = 'GET', headers = {}, body } = {}) => new Promise((
 });
 async function appWith(callSaasBilling) {
   const module = await Test.createTestingModule({ controllers: [HqCommunicationsController],
-    providers: [HqCommunicationsService, SaasBillingService, SaasReadGuard, SaasCommandGuard, { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
+    providers: [HqCommunicationsService, HqNumberService, { provide: TWILIO_NUMBER_CLIENT, useValue: new FakeTwilioNumberClient({ ready: false }) }, SaasBillingService, SaasReadGuard, SaasCommandGuard, { provide: RuntimeDatabaseService, useValue: { callSaasBilling } }] })
     .overrideGuard(HonIdentityGuard).useValue({ canActivate(context) { context.switchToHttp().getRequest().honIdentity = { externalSubject: 'verified-human' }; return true; } }).compile();
   const app = module.createNestApplication({ bodyParser: false });
   app.use(json({ strict: true })); app.setGlobalPrefix('v1'); await app.listen(0, '127.0.0.1');
@@ -262,4 +264,24 @@ test('HQ worker records a verified provider receipt through record_hq_message_pr
   } finally {
     if (previous === undefined) delete process.env.HON_COMMUNICATION_WORKER_DATABASE_URL; else process.env.HON_COMMUNICATION_WORKER_DATABASE_URL = previous;
   }
+});
+
+test('HTTP (0704): HQ number routes forward only the verified subject; switched off, nothing reaches Twilio', async () => {
+  const prior = process.env.HON_PUBLIC_ORIGIN; process.env.HON_PUBLIC_ORIGIN = 'https://hon.example';
+  const calls = [];
+  const { app, base } = await appWith(async (operation, params) => { calls.push([operation, params]); return { orders: [], hasActiveSmsSender: false, asOf: T }; });
+  try {
+    const orders = await send(`${base}/hq/communications/number-orders`);
+    assert.equal(orders.status, 200, orders.body); assert.equal(JSON.parse(orders.body).data.provisioning, 'SWITCHED_OFF');
+    assert.deepEqual(calls.at(-1), ['readHqNumberOrders', ['verified-human']]);
+    const found = await send(`${base}/hq/communications/number-search?areaCode=512`);
+    assert.deepEqual(JSON.parse(found.body).data, { status: 'SWITCHED_OFF', numbers: [] });
+    assert.equal((await send(`${base}/hq/communications/number-search?areaCode=512&x=1`)).status, 400, 'undeclared query key');
+    const body = JSON.stringify({ phoneE164: '+15125550111', monthlyPriceMicrounits: 1150000 });
+    assert.equal((await send(`${base}/hq/communications/number-orders`, { method: 'POST', headers: command('hq-number-order-finish'), body })).status, 403, 'wrong marker');
+    const off = await send(`${base}/hq/communications/number-orders`, { method: 'POST', headers: command('hq-number-order-buy'), body });
+    assert.equal(off.status, 503); assert.equal(JSON.parse(off.body).code, 'NUMBER_PROVISIONING_OFF');
+    assert.equal((await send(`${base}/hq/communications/number-orders/${U()}/finish`, { method: 'POST', headers: command('hq-number-order-finish'), body: '{"x":1}' })).status, 400);
+    assert.ok(calls.every(([op]) => op === 'readHqNumberOrders'), 'no order was started');
+  } finally { await app.close(); process.env.HON_PUBLIC_ORIGIN = prior; if (prior === undefined) delete process.env.HON_PUBLIC_ORIGIN; }
 });

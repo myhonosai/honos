@@ -456,6 +456,7 @@ const expectedRlsTables = [
   'hq_hon_turns',
   'hq_hon_requests',
   'hq_communication_senders',
+  'hq_number_orders',
   'hq_messages',
   'hq_message_deliveries',
   'hq_message_delivery_events',

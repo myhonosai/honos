@@ -1,0 +1,17 @@
+/* HQ calls page extras on top of the HQ dark look (hq-access.module.css). */
+.ringRow { display: grid; gap: 6px; padding-top: 4px; }
+.switch { display: inline-flex; align-items: center; gap: 10px; justify-self: start; min-height: var(--hon-target, 44px); padding: 6px 14px 6px 6px; border: 1px solid var(--hon-line, #24405a);
+  border-radius: 999px; background: #0d1d2e; color: #eaf4fb; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.knob { position: relative; width: 44px; height: 26px; flex: none; border-radius: 999px; background: #2a3e53; transition: background .15s; }
+.knob::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #cfe0f2; transition: transform .15s; }
+.switch[aria-checked='true'] { border-color: var(--hon-accent, #8de3d8); }
+.switch[aria-checked='true'] .knob { background: #2fae8f; }
+.switch[aria-checked='true'] .knob::after { transform: translateX(18px); background: #fff; }
+.switchState { color: var(--hon-muted, #9fb4c8); font-size: 13px; font-weight: 700; }
+.switch:disabled { opacity: .55; cursor: not-allowed; }
+.switch:focus-visible, .callName:focus-visible { outline: 3px solid var(--hon-accent, #8de3d8); outline-offset: 2px; }
+.callRow { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--hon-line, #24405a); border-radius: 12px; background: #0b1a2a; justify-items: start; }
+.callName { padding: 0; border: 0; background: none; color: #8de3d8; font: inherit; font-size: 15px; font-weight: 800; text-align: left; cursor: pointer; }
+.callName[aria-expanded='true'] { text-decoration: underline; }
+.legend { margin-bottom: 6px; padding: 0; font-size: 13px; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .knob, .knob::after { transition: none; } }

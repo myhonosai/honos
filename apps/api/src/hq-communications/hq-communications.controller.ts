@@ -4,6 +4,7 @@ import { HonIdentityGuard } from '../foundation/hon-identity.guard.js';
 import type { HonRequest } from '../foundation/hon-identity.service.js';
 import { SaasCommandGuard, SaasCommandName, SaasReadGuard, SaasReadQuery } from '../saas-billing/saas-billing.guards.js';
 import { HqCommunicationsService } from './hq-communications.service.js';
+import { HqNumberService } from './hq-number.service.js';
 
 function subject(req: HonRequest): string {
   if (!req.honIdentity) throw new ForbiddenException({ code: 'SAAS_FORBIDDEN' });
@@ -17,7 +18,20 @@ function subject(req: HonRequest): string {
 @Controller('hq/communications')
 @UseGuards(HonIdentityGuard)
 export class HqCommunicationsController {
-  constructor(private readonly comms: HqCommunicationsService) {}
+  constructor(private readonly comms: HqCommunicationsService, private readonly hqNumbers: HqNumberService) {}
+  // 0704 HQ "Buy a number": HQ owner only (proved by the database before any Twilio call).
+  @Get('number-orders') @UseGuards(SaasReadGuard)
+  async numberOrders(@Req() req: HonRequest) { return { data: await this.hqNumbers.view(subject(req)) }; }
+  @Get('number-search') @UseGuards(SaasReadGuard) @SaasReadQuery(['areaCode', 'city', 'region'])
+  async numberSearch(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { return { data: await this.hqNumbers.search(subject(req), query) }; }
+  @Post('number-orders') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.buyHqNumber)
+  async buyNumber(@Req() req: HonRequest, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.hqNumbers.buy(subject(req), body, key) };
+  }
+  @Post('number-orders/:orderId/finish') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.finishHqNumberOrder)
+  async finishNumber(@Req() req: HonRequest, @Param('orderId') id: string, @Body() body: unknown) {
+    return { data: await this.hqNumbers.finish(subject(req), id, body) };
+  }
   @Get() @UseGuards(SaasReadGuard) @SaasReadQuery(['schoolId', 'cursor', 'limit'])
   async view(@Req() req: HonRequest, @Query() query: Record<string, unknown>) { return { data: await this.comms.view(subject(req), query) }; }
   @Get('replies') @UseGuards(SaasReadGuard) @SaasReadQuery(['schoolId', 'limit'])
