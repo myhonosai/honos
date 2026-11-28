@@ -38,3 +38,12 @@
 .perks{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:12px;color:#cfe6f0}
 @media(max-width:1000px){.layout{grid-template-columns:minmax(0,1fr)}.preview{position:static;order:-1}}
 @media(max-width:650px){.builder{padding:16px}.steps{display:none}.counter{display:block}.choiceGrid,.features,.pair{grid-template-columns:minmax(0,1fr)}.priceRow{grid-template-columns:minmax(0,1fr)}.nav button,.actions button{flex:1}}
+.plans{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px;border:1px solid #2f5668;border-radius:14px;background:#0a2333}
+.plans button{min-height:40px!important;padding:8px 14px!important;border-radius:999px!important;font-size:13px!important}
+.plans button[aria-pressed=true]{border-color:#8ff5ff!important;background:#15485b!important;color:#eafcff!important}
+.plans .planWarn{border-color:#c9a65a!important}
+.plans .planRemove{margin-left:auto;border-color:#7c704d!important;color:#ffe0aa!important}
+.summary{list-style:none;margin:0;padding:0;display:grid;gap:8px}.summary li{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;padding:10px 12px;border:1px solid #2f5668;border-radius:10px;background:#0a2333}
+.summary strong{font-size:15px}.summary span{font-size:12px;color:#9fc2d2}
+.features label.toggle{min-height:0;font-size:13px}
+@media(max-width:650px){.plans .planRemove{margin-left:0;flex-basis:100%}}

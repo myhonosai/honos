@@ -1,12 +1,14 @@
 'use client';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { HQ_HON_LIMITS } from '@hon/contracts';
-import type { HonReplyMode, HqHonAgentKey, HqHonConversation, HqHonStatus, HqHonTurn } from '@hon/contracts';
+import type { HonReplyMode, HqHonAgentKey, HqHonConversation, HqHonStatus, HqHonTurn, HqHonTurnReceipt } from '@hon/contracts';
 import type { Language } from '@hon/design-system';
 import { useLocale } from '../localization/provider';
 import { MarketingError } from '../hq-marketing/http';
 import { hqHonApi, type HqHonApi } from './http';
 import { hqHonText, type HqHonCopyKey } from './copy';
+import { HonVoiceControls, useHonVoice } from '../hon-command/hon-voice-controls';
+import { honVoiceLang, honVoiceReplyText } from '../hon-command/hon-voice';
 
 export type State = { kind: 'LOADING' } | { kind: 'DENIED' } | { kind: 'UNAVAILABLE' } | { kind: 'READY'; view: HqHonConversation };
 export type BudgetOutcome = null | { kind: 'SENDING' } | { kind: 'DONE' } | { kind: 'ERROR'; error: MarketingError };
@@ -22,9 +24,54 @@ export type Outcome = null | { kind: 'SENDING' } | { kind: 'DONE'; status: HqHon
  * `initialQuestion` pre-fills the question (nothing is sent until Ask is pressed); `compact` leaves out the budget form and
  * shows only the latest few answers, for use beside another page (the contest setup page).
  */
-export function HqHonPanel({ agentKey, name, api = hqHonApi, initialQuestion, compact = false }: { agentKey: HqHonAgentKey; name: string; api?: HqHonApi;
-  initialQuestion?: string; compact?: boolean }): React.ReactElement {
+export function HqHonPanel({ agentKey, name, api = hqHonApi, initialQuestion, compact = false, voice = false, startVoice = 0, focusQuestion = false }: { agentKey: HqHonAgentKey; name: string; api?: HqHonApi;
+  initialQuestion?: string; compact?: boolean;
+  /** The dashboard orb (owner 2026-11-27): talk to this agent by voice; a spoken question takes the same ask path as a typed one. */
+  voice?: boolean;
+  /** Each new value (a microphone tap on the orb card) starts listening once voice can ask. */
+  startVoice?: number;
+  /** Put the cursor in the question box when shown. */
+  focusQuestion?: boolean }): React.ReactElement {
+  return voice ? <HqHonVoicePanel agentKey={agentKey} name={name} api={api} initialQuestion={initialQuestion} compact={compact} startVoice={startVoice} focusQuestion={focusQuestion}/>
+    : <HqHonPlainPanel agentKey={agentKey} name={name} api={api} initialQuestion={initialQuestion} compact={compact} focusQuestion={focusQuestion}/>;
+}
+
+type PanelProps = { agentKey: HqHonAgentKey; name: string; api: HqHonApi; initialQuestion: string | undefined; compact: boolean; focusQuestion: boolean };
+
+function HqHonPlainPanel(props: PanelProps): React.ReactElement {
   const { preferences, number } = useLocale();
+  const ask = useHqHonAsk(props.api, props.agentKey, props.initialQuestion);
+  return <HqHonPanelView agentKey={props.agentKey} name={props.name} language={preferences.language} number={number} {...ask.viewProps} compact={props.compact} focusQuestion={props.focusQuestion}/>;
+}
+
+function HqHonVoicePanel({ startVoice, ...props }: PanelProps & { startVoice: number }): React.ReactElement {
+  const { preferences, number } = useLocale();
+  const ask = useHqHonAsk(props.api, props.agentKey, props.initialQuestion);
+  const lang = honVoiceLang(preferences.language);
+  const askTextRef = useRef(ask.askText); askTextRef.current = ask.askText;
+  const canVoice = ask.canAsk;
+  const voiceAllowed = useRef(canVoice); voiceAllowed.current = canVoice;
+  // No school here: HQ answers are read with this browser's own voice.
+  const voice = useHonVoice(lang, (text) => {
+    if (!voiceAllowed.current) return false;
+    void askTextRef.current(text, true).then((receipt) => voice.reply(honVoiceReplyText(receipt ? receipt.turn : { status: 'FAILED', reply: null }, lang)));
+    return true;
+  });
+  const { talkNow, ready } = voice;
+  const started = useRef(0);
+  useEffect(() => {
+    if (startVoice <= started.current || !ready || !canVoice) return;
+    started.current = startVoice; talkNow();
+  }, [startVoice, ready, canVoice, talkNow]);
+  return <HqHonPanelView agentKey={props.agentKey} name={props.name} language={preferences.language} number={number} {...ask.viewProps} compact={props.compact} focusQuestion={props.focusQuestion}
+    voice={<HonVoiceControls {...voice.controls(canVoice)}/>}/>;
+}
+
+/**
+ * The HQ Ask HON state and its one ask path. A typed question (the form) and a spoken one (voice) both go through askText,
+ * with one Idempotency-Key per attempt until a definitive answer. Resolves with the receipt, or null when nothing was answered.
+ */
+function useHqHonAsk(api: HqHonApi, agentKey: HqHonAgentKey, initialQuestion: string | undefined) {
   const [state, setState] = useState<State>({ kind: 'LOADING' });
   const [question, setQuestion] = useState(initialQuestion ?? '');
   const [mode, setMode] = useState<HonReplyMode>('STANDARD');
@@ -45,29 +92,36 @@ export function HqHonPanel({ agentKey, name, api = hqHonApi, initialQuestion, co
     return () => abort.abort();
   }, [api, refresh]);
 
-  const onAsk = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = question.trim();
-    if (!q || q.length > 2000 || outcome?.kind === 'SENDING' || unconfirmed(outcome)) return;
+  const canAsk = state.kind === 'READY' && state.view.availableAgents.includes(agentKey) && state.view.provider === 'CONNECTED'
+    && outcome?.kind !== 'SENDING' && !unconfirmed(outcome);
+
+  const askText = useCallback(async (text: string, spoken: boolean): Promise<HqHonTurnReceipt | null> => {
+    const q = text.trim();
+    if (!q || q.length > 2000 || outcome?.kind === 'SENDING' || unconfirmed(outcome)) return null;
     const body = JSON.stringify([q, mode]);
     // Keep the key only for the same question and mode; anything else is a new attempt.
     if (pending.current?.body !== body) pending.current = { key: crypto.randomUUID(), body };
     const attempt = pending.current;
     setOutcome({ kind: 'SENDING' });
+    let receipt: HqHonTurnReceipt | null = null;
     try {
-      const receipt = await api.ask({ question: q, replyMode: mode, agentKey }, attempt.key, AbortSignal.timeout(60000), () => mounted.current);
-      if (!mounted.current) return;
+      receipt = await api.ask({ question: q, replyMode: mode, agentKey }, attempt.key, AbortSignal.timeout(60000), () => mounted.current);
+      if (!mounted.current) return null;
       // A replay may return a turn that is still answering, held or failed: show its own status, not "Answered.".
-      pending.current = null; setQuestion(''); setOutcome({ kind: 'DONE', status: receipt.turn.status });
+      // A spoken question never clears what is typed in the box.
+      pending.current = null; if (!spoken) setQuestion(''); setOutcome({ kind: 'DONE', status: receipt.turn.status });
     } catch (error) {
-      if (!mounted.current) return;
+      if (!mounted.current) return null;
       const err = error instanceof MarketingError ? error : new MarketingError('UNKNOWN');
       // UNKNOWN keeps the key: a retry replays the saved turn instead of asking again.
       if (err.kind !== 'UNKNOWN') pending.current = null;
       setOutcome({ kind: 'ERROR', error: err });
     }
     setRefresh(n => n + 1);
-  }, [api, agentKey, mode, question, outcome]);
+    return receipt;
+  }, [api, agentKey, mode, outcome]);
+
+  const onAsk = useCallback((e: React.FormEvent) => { e.preventDefault(); void askText(question, false); }, [askText, question]);
 
   // HQ owner only (the server decides). The same cap, reason and version keep one key until a definitive answer.
   const onBudget = useCallback(async (capText: string, reasonText: string) => {
@@ -91,9 +145,11 @@ export function HqHonPanel({ agentKey, name, api = hqHonApi, initialQuestion, co
     setRefresh(n => n + 1);
   }, [api, state, budgetOutcome]);
 
-  return <HqHonPanelView agentKey={agentKey} name={name} language={preferences.language} number={number} state={state} question={question} mode={mode}
-    outcome={outcome} onQuestion={setQuestion} onMode={setMode} onAsk={onAsk} onRefresh={() => { if (unconfirmed(outcome)) setOutcome(null); if (unconfirmed(budgetOutcome)) setBudgetOutcome(null); setRefresh(n => n + 1); }}
-    budgetOutcome={budgetOutcome} onBudget={onBudget} compact={compact}/>;
+  return {
+    askText, canAsk,
+    viewProps: { state, question, mode, outcome, onQuestion: setQuestion, onMode: setMode, onAsk, budgetOutcome, onBudget,
+      onRefresh: () => { if (unconfirmed(outcome)) setOutcome(null); if (unconfirmed(budgetOutcome)) setBudgetOutcome(null); setRefresh(n => n + 1); } },
+  };
 }
 
 /** An unconfirmed result keeps Ask off until a refresh, so editing the question cannot start a second attempt. */
@@ -103,9 +159,11 @@ export type HqHonPanelViewProps = {
   agentKey: HqHonAgentKey; name: string; language: Language; number: (n: number) => string; state: State; question: string; mode: HonReplyMode;
   outcome: Outcome; onQuestion: (v: string) => void; onMode: (m: HonReplyMode) => void; onAsk: (e: React.FormEvent) => void; onRefresh: () => void;
   budgetOutcome: BudgetOutcome; onBudget: (cap: string, reason: string) => void; compact?: boolean;
+  /** Voice controls, shown under the question box only while this agent can be asked. */
+  voice?: React.ReactNode; focusQuestion?: boolean;
 };
 /** Pure view: everything it shows comes from the props; it decides nothing. */
-export function HqHonPanelView({ agentKey, name, language, number, state, question, mode, outcome, onQuestion, onMode, onAsk, onRefresh, budgetOutcome, onBudget, compact = false }: HqHonPanelViewProps): React.ReactElement {
+export function HqHonPanelView({ agentKey, name, language, number, state, question, mode, outcome, onQuestion, onMode, onAsk, onRefresh, budgetOutcome, onBudget, compact = false, voice = null, focusQuestion = false }: HqHonPanelViewProps): React.ReactElement {
   const t = (key: HqHonCopyKey, p: Readonly<Record<string, string | number>> = {}) => hqHonText(language, key, { name, ...p });
   if (state.kind === 'LOADING') return <section aria-busy="true"><p>{t('loading')}</p></section>;
   if (state.kind === 'DENIED') return <section><p>{t('denied')}</p></section>;
@@ -122,12 +180,13 @@ export function HqHonPanelView({ agentKey, name, language, number, state, questi
     {!allowed ? <p role="note">{t('notYours')}</p> : !connected ? <p role="note">{t('providerOff')}</p> :
       <form onSubmit={onAsk}>
         <label htmlFor={`hq-hon-${agentKey}-q`}>{t('question')}</label>
-        <textarea id={`hq-hon-${agentKey}-q`} value={question} maxLength={2000} required onChange={e => onQuestion(e.target.value)} aria-describedby={`hq-hon-${agentKey}-help`}/>
+        <textarea id={`hq-hon-${agentKey}-q`} autoFocus={focusQuestion} value={question} maxLength={2000} required onChange={e => onQuestion(e.target.value)} aria-describedby={`hq-hon-${agentKey}-help`}/>
         <small id={`hq-hon-${agentKey}-help`}>{t('questionHelp')}</small>
         <fieldset><legend>{t('mode')}</legend>
           {(['STANDARD', 'DETAILED'] as const).map(m => <label key={m}><input type="radio" name={`hq-hon-${agentKey}-mode`} value={m} checked={mode === m} onChange={() => onMode(m)}/>{t(m)}</label>)}
         </fieldset>
         <button type="submit" disabled={outcome?.kind === 'SENDING' || unconfirmed(outcome) || !question.trim()}>{outcome?.kind === 'SENDING' ? t('asking') : t('ask')}</button>
+        {voice}
       </form>}
     <div aria-live="polite">{outcome?.kind === 'DONE' && <p>{outcome.status === 'ANSWERED' ? t('DONE') : t(outcome.status)}</p>}
       {outcome?.kind === 'ERROR' && <p role="alert">{outcome.error.kind === 'REFUSED' && outcome.error.code

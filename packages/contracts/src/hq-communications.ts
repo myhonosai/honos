@@ -308,3 +308,40 @@ export const HQ_INBOUND_REPLIES: Readonly<Record<HqInboundReplyKind, string>> = 
   CONFIRMED: 'HON OS: Your number is confirmed for texts from HON HQ. Msg & data rates may apply. Reply STOP to stop, HELP for help.',
   CODE_WRONG: 'HON OS: That code did not match. Check the code on your HON OS account page, or start again there.',
 };
+
+// ---------- 0698 owners' text replies ----------
+/** One owner's text reply to an HQ text, in that message's conversation. Never an address: the sender is a display name. */
+export interface HqInboundReply {
+  replyId: string; messageId: string; organizationId: string; organizationDisplayName: string; schoolId: string; schoolDisplayName: string;
+  purpose: HqMessagePurpose; channel: 'SMS'; from: HqCommunicationPerson; body: string; receivedAt: string;
+}
+export interface HqRepliesView { replies: HqInboundReply[]; limit: number; asOf: string }
+export interface HqRepliesQuery { schoolId: string | null; limit: number }
+export function validateHqRepliesQuery(value: unknown): HqRepliesQuery {
+  const q = record(value ?? {}, invalid);
+  if (Object.keys(q).some((k) => !['schoolId', 'limit'].includes(k))) invalid();
+  const one = (v: unknown): string | null => (v === undefined ? null : typeof v === 'string' ? v : invalid());
+  const school = one(q.schoolId), limit = one(q.limit);
+  if (limit !== null && !/^(?:[1-9]\d?|100)$/.test(limit)) invalid();
+  return { schoolId: school === null ? null : uuid(school), limit: limit === null ? 50 : Number(limit) };
+}
+function inboundReply(value: unknown): HqInboundReply {
+  const r = record(value, drift);
+  exactKeys(r, ['replyId', 'messageId', 'organizationId', 'organizationDisplayName', 'schoolId', 'schoolDisplayName', 'purpose', 'channel', 'from', 'body', 'receivedAt'], drift);
+  // The body is the owner's own text: any characters, 1 to 1,600, shown as plain text.
+  if (!isUuid(r.replyId) || !isUuid(r.messageId) || !isUuid(r.organizationId) || !label(r.organizationDisplayName, 300) || !isUuid(r.schoolId)
+    || !label(r.schoolDisplayName, 300) || !has(HQ_MESSAGE_PURPOSES, r.purpose) || r.channel !== 'SMS' || typeof r.body !== 'string'
+    || r.body.length < 1 || r.body.length > HQ_MESSAGE_SMS_MAX || !isTimestamp(r.receivedAt)) drift();
+  person(r.from);
+  return r as unknown as HqInboundReply;
+}
+export function validateHqRepliesView(value: unknown): HqRepliesView {
+  const r = record(value, drift); exactKeys(r, ['replies', 'limit', 'asOf'], drift);
+  if (!Array.isArray(r.replies) || !isInt(r.limit, 1, 100) || r.replies.length > (r.limit as number) || !isTimestamp(r.asOf)) drift();
+  const replies = (r.replies as unknown[]).map(inboundReply);
+  for (let i = 1; i < replies.length; i++) {
+    const a = replies[i - 1]!, b = replies[i]!;
+    if (a.receivedAt < b.receivedAt || (a.receivedAt === b.receivedAt && a.replyId <= b.replyId)) drift();
+  }
+  return r as unknown as HqRepliesView;
+}

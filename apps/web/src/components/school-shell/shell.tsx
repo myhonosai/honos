@@ -1,5 +1,6 @@
 'use client';
 import { SchoolSwitcher } from '../school-switcher/switcher';
+import { HqVisitBanner } from '../hq-school-visit/banner';
 import type { StaffReportingSchoolChoice } from '../staff-reporting-schools-http';
 import '@hon/design-system/src/tokens.css';
 import './shell-global.css';
@@ -27,6 +28,8 @@ import { SchoolShellProvider, type SchoolShellState } from './context';
 import { defaultArtStyle, isHonArtStyle, type HonArtStyle } from '../hon-command/roster';
 import { HON_DEMO_DATA_CHANGED_EVENT, demoDataApi } from '../school-demo-data/http';
 import { GlobalSearch } from './global-search';
+import { lockedPages, readSchoolPlanFeatures } from './plan-features';
+import type { SaasSchoolPlanFeatures } from '@hon/contracts';
 
 /** Per-viewer convenience only (never authority, never shared): the chosen AI team art style. */
 export const HON_ART_STYLE_STORAGE_KEY = 'hon.ai-team.art-style';
@@ -171,6 +174,20 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
     return () => abort.abort();
   }, [selection?.organizationId, selection?.schoolId, demoCheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 0699: which menu pages this school's plan leaves out. Read for the verified school only; any refusal or failure locks
+  // nothing (display only: every page's own API still authorizes on the server).
+  const [planFeatures, setPlanFeatures] = useState<SaasSchoolPlanFeatures | null>(null);
+  useEffect(() => {
+    setPlanFeatures(null);
+    if (!selection) return;
+    const abort = new AbortController();
+    const owned = () => !abort.signal.aborted;
+    readSchoolPlanFeatures(selection.schoolId, AbortSignal.any([abort.signal, AbortSignal.timeout(8000)]), owned)
+      .then(features => { if (owned()) setPlanFeatures(features); }, () => {});
+    return () => abort.abort();
+  }, [selection?.schoolId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const planLocks = useMemo(() => lockedPages(planFeatures), [planFeatures]);
+
   const [asleep, setAsleep] = useState(false);
   const saver = useRef<ScreensaverController | null>(null);
   useEffect(() => {
@@ -309,10 +326,11 @@ function MountedSchoolShell({ sessionSubject, children }: { sessionSubject: stri
 
   return <SchoolShellFrame path={path} language={preferences.language} phase={snapshot.phase} selection={snapshot.selection} schoolName={schoolName}
     choices={snapshot.choices} mode={mode} viewState={viewState} menuOpen={menuOpen} utility={<LocaleUtility inShell />}
-    switcher={<SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} schools={schoolChoices} />}
+    switcher={<><SchoolSwitcher language={preferences.language} current={{ kind: 'school', schoolId: snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? '' : '', schoolName: snapshot.phase === 'READY' ? schoolName : null }} schools={schoolChoices} />
+      <HqVisitBanner language={preferences.language} schoolId={snapshot.phase === 'READY' ? snapshot.selection?.schoolId ?? null : null} /></>}
     phone={selection ? <SchoolPhone key={`${selection.organizationId}/${selection.schoolId}`} scope={selection} language={preferences.language} /> : undefined}
     search={<GlobalSearch language={preferences.language} selection={snapshot.phase === 'READY' ? snapshot.selection : null} onOpening={closeMenu} />}
-    tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
+    tourStep={tourStep} onTour={tour} asleep={asleep} onWake={wake} demoLoaded={demoLoaded} lockedPages={planLocks} planName={planFeatures?.planName ?? null} onMode={chooseMode} onMenu={openMenu} onSwitch={() => void entry.load()} onChoose={choose} onRestore={() => void entry.load()}>
     <SchoolShellProvider value={shared}>{children}</SchoolShellProvider>
   </SchoolShellFrame>;
 }

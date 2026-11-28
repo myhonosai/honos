@@ -1733,7 +1733,7 @@ DO $$ DECLARE t text; r text; col text; f text; BEGIN
   FOREACH f IN ARRAY ARRAY['hon.guard_saas_offer_sets()','hon.guard_saas_offer_set_offers()','hon.saas_hon_os_product_json()',
       'hon.saas_offer_json(hon.saas_offer_set_offers)','hon.saas_offer_set_json(uuid)','hon.saas_offer_set_preview(uuid)',
       'hon.saas_offer_set_content_valid(jsonb)','hon.saas_offer_set_write_content(uuid,jsonb)','hon.saas_offer_owner(text)',
-      'hon.read_saas_offer_management_from_hq(text)','hon.read_saas_offer_set_from_hq(text,uuid)',
+      'hon.saas_offer_input_capabilities(jsonb)','hon.read_saas_offer_management_from_hq(text)','hon.read_saas_offer_set_from_hq(text,uuid)',
       'hon.create_saas_offer_set_draft(text,jsonb,uuid,uuid,uuid)','hon.revise_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)',
       'hon.discard_saas_offer_set_draft(text,uuid,jsonb,uuid,uuid,uuid)','hon.publish_saas_offer_set(text,uuid,jsonb,uuid,uuid,uuid)',
       'hon.stop_saas_offer_sales(text,uuid,jsonb,uuid,uuid,uuid)','hon.read_saas_hon_os_offers_for_school(text,uuid)'] LOOP
@@ -3391,6 +3391,16 @@ DO $$ DECLARE t text; r text; BEGIN
   REVOKE ALL ON FUNCTION hon.record_hq_inbound_text(text,text,text,text,text,timestamptz) FROM hon_runtime;
   GRANT EXECUTE ON FUNCTION hon.read_my_hq_contact(text), hon.start_my_hq_phone(text,jsonb,uuid), hon.set_my_hq_texting(text,jsonb,uuid),
     hon.remove_my_hq_phone(text,jsonb,uuid) TO hon_runtime;
+END $$;
+
+-- HQ inbox 0698 owners' text replies: no table privileges; one read. The inbound function stays the worker's (013).
+DO $$ DECLARE r text; BEGIN
+  IF to_regprocedure('hon.read_hq_replies(text,uuid,integer)') IS NULL THEN RAISE EXCEPTION 'Apply HQ inbound owner replies migration 0698 first'; END IF;
+  ALTER TABLE hon.hq_inbound_replies ENABLE ROW LEVEL SECURITY; ALTER TABLE hon.hq_inbound_replies FORCE ROW LEVEL SECURITY;
+  REVOKE ALL ON hon.hq_inbound_replies FROM PUBLIC;
+  FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role') LOOP EXECUTE format('REVOKE ALL ON hon.hq_inbound_replies FROM %I',r); END LOOP;
+  REVOKE ALL ON FUNCTION hon.hq_inbound_reply_json(hon.hq_inbound_replies) FROM PUBLIC, hon_runtime;
+  GRANT EXECUTE ON FUNCTION hon.read_hq_replies(text,uuid,integer) TO hon_runtime;
 END $$;
 
 -- HQ-COMM 0283 HON prospects and their consent: no table privileges; HQ marketing reads and three commands.
@@ -5842,5 +5852,43 @@ BEGIN
   END LOOP;
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
     FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0696 HQ goes inside a school: three runtime entry points (enter, leave, own visits read); four evidence tables stay
+-- forced RLS with no runtime privilege; the visit check, role sync, actor, timestamp and evidence-guard helpers stay
+-- migration-owner only.
+DO $$ DECLARE r text; f text; t text;
+  entry text[]:=ARRAY['hon.enter_school_as_hq(text,uuid,text,uuid,uuid,uuid)','hon.leave_school_as_hq(text,uuid,uuid,uuid,uuid)','hon.read_my_hq_school_visits(text)'];
+BEGIN
+  IF to_regclass('hon.hq_school_visits') IS NULL THEN RAISE EXCEPTION 'Apply migration 0696 first'; END IF;
+  FOREACH t IN ARRAY ARRAY['hon.hq_school_visit_requests','hon.hq_school_visits','hon.hq_school_visit_audit','hon.hq_school_visit_outbox'] LOOP
+    EXECUTE format('REVOKE ALL ON TABLE %s FROM PUBLIC',t);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',t,r); END LOOP;
+  END LOOP;
+  FOREACH f IN ARRAY ARRAY['hon.guard_hq_school_visit_evidence()','hon.hq_visit_active(uuid)','hon.ensure_hq_support_role(uuid)',
+      'hon.require_hq_school_visit_actor(text)','hon.hq_school_visit_ts(timestamp with time zone)']||entry LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    FOREACH f IN ARRAY entry LOOP EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO hon_runtime',f); END LOOP;
+  END IF;
+END $$;
+
+-- 0699 school plan features: one runtime entry point (any eligible staff member reads the school's plan features); the
+-- list helper stays migration-owner only.
+DO $$ DECLARE r text; f text;
+BEGIN
+  IF to_regprocedure('hon.read_school_plan_features(text,uuid)') IS NULL THEN RAISE EXCEPTION 'Apply migration 0699 first'; END IF;
+  FOREACH f IN ARRAY ARRAY['hon.school_plan_features(uuid,uuid)','hon.read_school_plan_features(text,uuid)'] LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC',f);
+    FOR r IN SELECT rolname FROM pg_roles WHERE rolname IN ('hon_runtime','anon','authenticated','service_role','hon_outbox_worker','hon_communication_worker','hon_automation_worker') LOOP
+      EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r); END LOOP;
+  END LOOP;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_runtime') THEN
+    GRANT EXECUTE ON FUNCTION hon.read_school_plan_features(text,uuid) TO hon_runtime;
   END IF;
 END $$;

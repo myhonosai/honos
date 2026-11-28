@@ -2,6 +2,7 @@ import pg from 'pg';
 import { setLegacySales } from './saas-legacy-sales-simulation.mjs';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 // HON OS commercial offers (0181) integrity proof through the real API service on a disposable database:
 // one HON OS product, six HQ-priced offer kinds, owner-only versioned drafts, digest-approved publication,
 // immutable published offers, stop-sales, school discovery with server-evaluated eligibility, and no effect on the
@@ -270,6 +271,44 @@ try{
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_offer_sets WHERE status='PUBLISHED'")).rows[0].n,1);
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_offer_sets WHERE status='RETIRED'")).rows[0].n,3);
 
+ // ---------- 11b. plans with their own features (0697) ----------
+ const ALL=[...contracts.HON_OS_PLAN_CAPABILITIES],CORE=ALL.slice(0,11);
+ assert.ok(pub1.set.offers.every(o=>o.capabilities.join()===ALL.join()),'an offer saved without a list sells every HON OS feature');
+ assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_offer_set_offers WHERE capabilities<>hon.saas_plan_capabilities('COMPLETE')")).rows[0].n,0);
+ assert.equal((await restricted.query("SELECT has_function_privilege(current_user,'hon.saas_offer_input_capabilities(jsonb)','EXECUTE') a")).rows[0].a,false);
+ const plans=draftInput({founderTotalLimit:null,offers:[offer('CORE_M','REGULAR_MONTHLY',14900,{displayName:'Core',capabilities:[...CORE].reverse()}),
+  offer('CORE_A','REGULAR_ANNUAL',149000,{displayName:'Core',capabilities:CORE}),offer('FULL_M','REGULAR_MONTHLY',24900,{displayName:'Complete',capabilities:ALL})]});
+ const d4=await ok(api.createOfferSetDraft(H('owner'),plans,K()));
+ assert.equal(d4.preview.ready,true,JSON.stringify(d4.preview.issues));
+ assert.deepEqual(d4.set.offers.map(o=>[o.offerCode,o.displayName,o.capabilities.length]),[['CORE_M','Core',11],['CORE_A','Core',11],['FULL_M','Complete',16]]);
+ assert.deepEqual(d4.set.offers[0].capabilities,CORE,'stored in canonical HON OS order whatever order HQ sent');
+ assert.ok(!d4.set.offers[0].capabilities.includes('ai.workforce'),'a cheaper plan can leave out the AI team');
+ // The database refuses bad feature lists directly, including two lists for one plan.
+ await dbInvalid({...plans,offers:[{...plans.offers[0],capabilities:[]}]});
+ await dbInvalid({...plans,offers:[{...plans.offers[0],capabilities:['ai.unknown']}]});
+ await dbInvalid({...plans,offers:[{...plans.offers[0],capabilities:[CORE[0],CORE[0]]}]});
+ await dbInvalid({...plans,offers:[{...plans.offers[0],capabilities:CORE[0]}]});
+ await dbInvalid({...plans,offers:[{...plans.offers[0],capabilities:[1]}]});
+ await dbInvalid({...plans,offers:[plans.offers[0],{...plans.offers[1],capabilities:ALL}]});
+ await sqlDeny(admin.query("INSERT INTO hon.saas_offer_set_offers(set_id,position,offer_code,offer_kind,billing_interval,founder,display_name,price_minor,eligibility,price_lock,refund_window_days,cancellation_timing,capabilities) VALUES($1,9,'BAD_CAPS','REGULAR_MONTHLY','MONTHLY',false,'Bad',1000,'ANY_ACTIVE_ORGANIZATION','NONE',0,'END_OF_PAID_PERIOD','{ai.unknown}')",[d4.set.setId]),'23514');
+ await sqlDeny(admin.query("UPDATE hon.saas_offer_set_offers SET capabilities='{crm.families_students_prospects}' WHERE set_id=$1",[d4.set.setId]));
+ // The approved preview digest covers the feature lists: the preview content is built from offer JSON that carries them.
+ assert.equal((await admin.query("SELECT bool_and(hon.saas_offer_json(o) ? 'capabilities') a FROM hon.saas_offer_set_offers o")).rows[0].a,true);
+ const d4r=await ok(api.reviseOfferSetDraft(H('owner'),d4.set.setId,{expectedRevision:1,termsReference:plans.termsReference,founderTotalLimit:null,
+  offers:plans.offers.map(o=>o.displayName==='Core'?{...o,capabilities:CORE.slice(0,10)}:o)},K()));
+ assert.deepEqual(d4r.set.offers.map(o=>o.capabilities.length),[10,10,16]);
+ const pub4=await ok(publish(d4.set.setId,2,d4r.preview.previewDigest));
+ assert.deepEqual(pub4.set.offers.map(o=>o.capabilities.length),[10,10,16]);
+ await sqlDeny(admin.query("UPDATE hon.saas_offer_set_offers SET capabilities=hon.saas_plan_capabilities('COMPLETE') WHERE set_id=$1",[d4.set.setId]));
+ // Schools see each plan's features. Nothing here enforces them or changes purchase (per-plan checkout is a separate change).
+ const s2c=await api.readSchoolHonOsOffers(H('purchaser2'),O[2].school);
+ assert.deepEqual(s2c.offers.map(o=>[o.offerCode,o.capabilities.length]),[['CORE_M',10],['CORE_A',10],['FULL_M',16]]);
+ // The canonical 011 section for 0697 passes on this fixture.
+ const canonical=await readFile(new URL('../../../infra/postgres/011_verify_supabase_hon_runtime.sql',import.meta.url),'utf8');
+ const block=canonical.split('-- HON OS plan features exact verification (0697)')[1]?.split('-- End HON OS plan features exact verification.')[0];
+ assert.ok(block,'011 section present');
+ await admin.query(block.slice(block.indexOf('\n')+1).replaceAll('hon_runtime',runtime.username));
+
  // ---------- 12. evidence: one audit + outbox row per command; nothing else changed ----------
  assert.deepEqual(await evidence(d1.set.setId),[['saas.offers.draft','OFFER_SET','saas.offers.drafted'],['saas.offers.revise','OFFER_SET','saas.offers.revised'],
   ['saas.offers.revise','OFFER_SET','saas.offers.revised'],['saas.offers.publish','OFFER_SET','saas.offers.published']].map(([action_code,entity_type,event_type])=>({action_code,entity_type,event_type})));
@@ -278,7 +317,7 @@ try{
  assert.equal((await admin.query("SELECT count(*)::int n FROM hon.saas_audit WHERE action_code LIKE 'saas.offers.%'")).rows[0].n,commands);
  assert.deepEqual(await untouched(),before,'legacy catalog, subscriptions, founder inventory, entitlements, payments, credits and paid access unchanged');
  assert.equal((await api.readOfferManagement(H('owner'))).paidAccessProgram,'INACTIVE');
- console.log(`PASS: HON OS commercial offers (0181) proof — ${commands} owner commands with exact audit/outbox evidence; six HQ-priced offer kinds (monthly, annual, founder monthly/annual, lifetime, founder lifetime) on one HON OS product; operator/support/school identities refused; idempotent replay and key reuse; revision conflicts; server preview quotes and readiness; publish only with the digest of the exact previewed revision; published offers immutable (UPDATE/DELETE/INSERT/TRUNCATE refused); stop-sales once and published only; price change = new version with new offer IDs and the prior set retired intact; concurrent publishes leave one published set; exact-school purchaser discovery with on-sale filtering and server eligibility; HON OS offer IDs refused by the legacy subscription path; legacy catalog, subscriptions, founder records, entitlements and paid access (INACTIVE) unchanged.`);
+ console.log(`PASS: HON OS commercial offers (0181) proof — ${commands} owner commands with exact audit/outbox evidence; six HQ-priced offer kinds (monthly, annual, founder monthly/annual, lifetime, founder lifetime) on one HON OS product; operator/support/school identities refused; idempotent replay and key reuse; revision conflicts; server preview quotes and readiness; publish only with the digest of the exact previewed revision; published offers immutable (UPDATE/DELETE/INSERT/TRUNCATE refused); stop-sales once and published only; price change = new version with new offer IDs and the prior set retired intact; concurrent publishes leave one published set; plans with their own feature lists (0697: canonical order, one list per plan, bad lists refused by the database, immutable once published, shown to schools); exact-school purchaser discovery with on-sale filtering and server eligibility; HON OS offer IDs refused by the legacy subscription path; legacy catalog, subscriptions, founder records, entitlements and paid access (INACTIVE) unchanged.`);
 }finally{
  await setLegacySales(admin,false).catch(e=>console.error('RESTORE FAILED',e));
  await cleanup().catch(e=>console.error('cleanup failed',e));await Promise.all([admin.end(),restricted.end()]);}

@@ -437,6 +437,11 @@
     "0693_school_voice_apps.sql": "3732a33c60a4ab592768b344c57b5a5fea56d51bdcbe11502509ec6765e5e7da",
     "0694_hq_calls.sql": "828b4f102f63cbef9b14462338b1e15ea89258ee0f23e654c112435723555015",
     "0695_school_blast_audience_filters.sql": "eecde1129b9abe9eee70caa069b445b4c384a903df4a34108a26cb8b323140c9",
+    "0696_hq_enter_school.sql": "2e38b91671c07cd55e2a1bd7ed3579ddf3be6bf3b654511c7f8dca56856bb909",
+    "0697_hon_os_plan_features.sql": "4b8afcfa294062fc3a3f31af72a476b109179c371d129ba81854e619c8b09ebc",
+    "0698_hq_inbound_owner_replies.sql": "cbd99d366661f7f44a2ad05b12cf13766fc928384f142b2c41b5637b9436ccbc",
+    "0699_school_plan_features.sql": "58ae0072195b790c2d9d7ef71e2c06db44df99d01f73f28257c5f9b17b7dbbc8",
+    "0700_hq_school_plan_start_date.sql": "2ce441c4506cc0c770fd49343acc78d41cb5672f65a1899de554d0435f51f56c",
     "0701_school_contact_type_program_expired.sql": "8ac263c23617af1e777e525e8bc0ef3cdaaa17171f15c851481323eceb2deadd"
   }
 }

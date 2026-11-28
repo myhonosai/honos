@@ -630,5 +630,7 @@ export const ko = {
   "Only test-mode checkouts can run, and each still needs a published offer and an eligible school.": "테스트 모드 결제만 가능하며, 각 결제에는 게시된 오퍼와 자격 있는 학교가 필요합니다.",
   "No checkout can start while the payment program is disabled.": "결제 프로그램이 비활성화된 동안에는 결제를 시작할 수 없습니다.",
   "Top-ups unavailable · overage and purchases disabled": "충전 불가 · 초과 사용 및 구매 비활성화",
-  "Nothing on this panel changes billing, checkout or credits.": "이 패널은 청구, 결제 또는 크레딧을 변경하지 않습니다."
+  "Nothing on this panel changes billing, checkout or credits.": "이 패널은 청구, 결제 또는 크레딧을 변경하지 않습니다.",
+  "HON conversation": "HON 대화",
+  "Close HON chat": "HON 채팅 닫기"
 } satisfies TranslationCatalog;

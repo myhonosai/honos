@@ -9,7 +9,7 @@ const input=(kind,i)=>({offerCode:kind,offerKind:kind,displayName:'HON OS',price
   annualRenewal:kind.endsWith('ANNUAL')?'NO_AUTO_RENEWAL':null,plannedMonthlyPremiumCredits:12000,
   aiFairUseReference:'Synthetic fair-use terms',refundWindowDays:30,cancellationTiming:kind.endsWith('LIFETIME')?null:'END_OF_PAID_PERIOD'});
 export const syntheticSetInput=()=>({basedOnSetId:null,termsReference:'Synthetic terms; not a commercial offer',founderTotalLimit:30,offers:SAAS_HON_OS_OFFER_KINDS.map(input)});
-function responseOffer(value,position){return {...value,offerId:randomUUID(),position,billingInterval:saasHonOsOfferBillingInterval(value.offerKind),founder:value.offerKind.startsWith('FOUNDER'),currency:'USD',premiumCreditsStatus:'PLANNING_ONLY_NOT_A_CREDIT_GRANT',salesStop:null};}
+function responseOffer(value,position){return {...value,capabilities:value.capabilities?[...value.capabilities]:[...HON_OS_PRODUCT.capabilities],offerId:randomUUID(),position,billingInterval:saasHonOsOfferBillingInterval(value.offerKind),founder:value.offerKind.startsWith('FOUNDER'),currency:'USD',premiumCreditsStatus:'PLANNING_ONLY_NOT_A_CREDIT_GRANT',salesStop:null};}
 const fail=(code,status)=>{throw Object.assign(new Error(code),{code,status});};
 export function createOfferFixtures(){
   const sets=new Map(),requests=new Map(),checkouts=new Map();let next=1,mutations=0,clock=Date.parse(T);

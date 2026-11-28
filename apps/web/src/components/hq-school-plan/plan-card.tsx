@@ -7,7 +7,7 @@ import styles from '../hq-access/hq-access.module.css';
 import own from './plan.module.css';
 
 type Load = { state: 'LOADING' } | { state: 'DENIED' } | { state: 'UNAVAILABLE' } | { state: 'READY'; view: HqSchoolPlanView };
-type Step = { step: 'VIEW' } | { step: 'PICK' } | { step: 'CONFIRM'; choice: HqSchoolPlanChoice; label: string; price: string } | { step: 'REMOVE' };
+type Step = { step: 'VIEW' } | { step: 'PICK' } | { step: 'CONFIRM'; choice: HqSchoolPlanChoice; startDate: string; label: string; price: string; start: string } | { step: 'REMOVE' };
 type Pick = { kind: 'OFFER'; offerId: string } | { kind: 'CUSTOM' } | null;
 const PRICE = /^(?:0|[1-9]\d{0,5})(?:\.\d{1,2})?$/;
 
@@ -21,9 +21,11 @@ export function centsFromDollars(text: string): number | null {
 }
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 const yearsAhead = (n: number) => { const d = new Date(); d.setUTCFullYear(d.getUTCFullYear() + n); return d.toISOString().slice(0, 10); };
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const dayText = (f: Fmt, day: string) => f.day.format(new Date(`${day}T00:00:00Z`));
 
 export type PlanLoad = Load; export type PlanStep = Step; export type PlanPick = Pick;
-export type PlanForm = Readonly<{ name: string; price: string; interval: 'MONTHLY' | 'ANNUAL'; freeUntil: string; note: string }>;
+export type PlanForm = Readonly<{ name: string; price: string; interval: 'MONTHLY' | 'ANNUAL'; freeUntil: string; startDate: string; note: string }>;
 type Text = (key: SchoolPlanKey, vars?: Record<string, string>) => string;
 type Fmt = Readonly<{ money: Intl.NumberFormat; day: Intl.DateTimeFormat }>;
 function fmt(formattingLocale: string): Fmt {
@@ -35,21 +37,29 @@ export function planPriceText(t: Text, f: Fmt, r: { priceMinor: number | null; b
   if (r.priceMinor === 0) return r.freeUntil ? t('freeUntil', { date: f.day.format(new Date(`${r.freeUntil}T00:00:00Z`)) }) : t('freeForever');
   return t(`per${r.billingInterval ?? 'MONTHLY'}` as SchoolPlanKey, { price: f.money.format((r.priceMinor ?? 0) / 100) });
 }
-/** Turns the picker into the exact choice the server will get, or the reason it cannot be sent. Pure; the server re-checks. */
-export function reviewChoice(view: HqSchoolPlanView, pick: Pick, form: PlanForm, t: Text, f: Fmt, today = todayUtc(), limit = yearsAhead(3)):
-  { ok: true; choice: HqSchoolPlanChoice; label: string; price: string } | { ok: false; problem: SchoolPlanKey } {
+/**
+ * Turns the picker into the exact choice the server will get, or the reason it cannot be sent. Pure; the server re-checks.
+ * The start date (0700) may be one year back to one year ahead (UTC days); a free plan's end date must come after it.
+ */
+export function reviewChoice(view: HqSchoolPlanView, pick: Pick, form: PlanForm, t: Text, f: Fmt, today = todayUtc(), limit = yearsAhead(3),
+  startFrom = yearsAhead(-1), startTo = yearsAhead(1)):
+  { ok: true; choice: HqSchoolPlanChoice; startDate: string; label: string; price: string; start: string } | { ok: false; problem: SchoolPlanKey } {
   if (!pick) return { ok: false, problem: 'pickOne' };
+  const startDate = form.startDate;
+  if (!DAY.test(startDate) || Number.isNaN(Date.parse(`${startDate}T00:00:00Z`)) || startDate < startFrom || startDate > startTo) return { ok: false, problem: 'invalidStart' };
+  const start = dayText(f, startDate);
   if (pick.kind === 'OFFER') {
     const o = view.offers.find(x => x.offerId === pick.offerId);
-    return o ? { ok: true, choice: { source: 'OFFER', offerId: o.offerId }, label: o.displayName, price: planPriceText(t, f, o) } : { ok: false, problem: 'pickOne' };
+    return o ? { ok: true, choice: { source: 'OFFER', offerId: o.offerId }, startDate, label: o.displayName, price: planPriceText(t, f, o), start } : { ok: false, problem: 'pickOne' };
   }
   const n = form.name.trim(), cents = centsFromDollars(form.price);
   if (n.length < 3 || n.length > 80) return { ok: false, problem: 'invalidName' };
   if (cents === null) return { ok: false, problem: 'invalidPrice' };
   const until = cents === 0 && form.freeUntil ? form.freeUntil : null;
   if (until && (until <= today || until > limit)) return { ok: false, problem: 'invalidDate' };
-  return { ok: true, choice: { source: 'CUSTOM', name: n, billingInterval: form.interval, priceMinor: cents, freeUntil: until }, label: n,
-    price: planPriceText(t, f, { priceMinor: cents, billingInterval: form.interval, freeUntil: until }) };
+  if (until && until <= startDate) return { ok: false, problem: 'freeAfterStart' };
+  return { ok: true, choice: { source: 'CUSTOM', name: n, billingInterval: form.interval, priceMinor: cents, freeUntil: until }, startDate, label: n,
+    price: planPriceText(t, f, { priceMinor: cents, billingInterval: form.interval, freeUntil: until }), start };
 }
 
 export type PlanCardViewProps = Readonly<{
@@ -72,7 +82,8 @@ export function PlanCardView(p: PlanCardViewProps): React.ReactElement {
   const v = load.view, cur = v.current, school = v.schoolName;
   const record = (r: HqSchoolPlanRecord) => {
     const when = f.day.format(new Date(r.recordedAt)), who = r.recordedBy.displayName;
-    return r.action === 'REMOVE' ? t('historyRemove', { date: when, who }) : t('historyAssign', { date: when, plan: r.planName ?? '', price: price(r), who });
+    return r.action === 'REMOVE' ? t('historyRemove', { date: when, who })
+      : t('historyAssign', { date: when, plan: r.planName ?? '', price: price(r), start: r.startDate ? dayText(f, r.startDate) : '', who });
   };
   return <article id="plan" className={styles.card} aria-labelledby="hq-sd-plan" data-hq-school-plan="ready">{head}
     <p className={styles.meta}>{t('chargingOff')}</p>
@@ -80,6 +91,7 @@ export function PlanCardView(p: PlanCardViewProps): React.ReactElement {
     {step.step === 'VIEW' && <>
       <div><p className={styles.meta}>{t('current')}</p>
         {cur ? <><p className={own.big} data-plan-current="">{cur.planName} · {price(cur)}</p>
+          {cur.startDate && <p className={styles.meta} data-plan-start="">{t('starts', { date: dayText(f, cur.startDate) })}</p>}
           <p className={styles.meta}><span className={styles.status} data-tone="ready">{t(cur.source === 'OFFER' ? 'sourceOFFER' : 'sourceCUSTOM')}</span>
             {cur.founder && <> <span className={styles.status} data-tone="waiting">{t('founder')}</span></>}</p></>
           : <p className={own.big} data-plan-current="none">{t('none')}</p>}
@@ -111,13 +123,16 @@ export function PlanCardView(p: PlanCardViewProps): React.ReactElement {
           <input id="plan-free-until" type="date" value={form.freeUntil} min={todayUtc()} onChange={e => p.onForm({ freeUntil: e.target.value })}/>
           <span className={styles.meta}>{t('freeUntilHelp')}</span></div>}
       </div>}
+      <div className={styles.fields}><label htmlFor="plan-start">{t('startLabel')}</label>
+        <input id="plan-start" type="date" required value={form.startDate} min={yearsAhead(-1)} max={yearsAhead(1)} onChange={e => p.onForm({ startDate: e.target.value })}/>
+        <span className={styles.meta}>{t('startHelp')}</span></div>
       <div className={styles.fields}><label htmlFor="plan-note">{t('note')}</label><input id="plan-note" value={form.note} maxLength={300} onChange={e => p.onForm({ note: e.target.value })}/></div>
       {problem && <p className={styles.outcome} data-tone="blocked" role="alert">{problem}</p>}
       <div className={styles.actions}><button type="submit" className={styles.primary}>{t('review')}</button>
         <button type="button" className={styles.secondary} onClick={p.onCancel}>{t('cancel')}</button></div>
     </form>}
     {step.step === 'CONFIRM' && <div className={styles.outcome} data-tone="waiting" role="group" aria-label={t('confirmTitle')}>
-      <p><strong>{t('confirmTitle')}</strong></p><p data-plan-confirm="">{t('confirmAssign', { school, plan: step.label, price: step.price })}</p>
+      <p><strong>{t('confirmTitle')}</strong></p><p data-plan-confirm="">{t('confirmAssign', { school, plan: step.label, price: step.price, start: step.start })}</p>
       <p>{t('chargingOff')}</p>
       {problem && <p role="alert">{problem}</p>}
       <div className={styles.actions}>
@@ -171,7 +186,7 @@ export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = s
   const [reload, setReload] = useState(0);
   const [step, setStep] = useState<Step>({ step: 'VIEW' });
   const [pick, setPick] = useState<Pick>(null);
-  const [form, setForm] = useState<PlanForm>({ name: '', price: '', interval: 'MONTHLY', freeUntil: '', note: '' });
+  const [form, setForm] = useState<PlanForm>({ name: '', price: '', interval: 'MONTHLY', freeUntil: '', startDate: todayUtc(), note: '' });
   const [problem, setProblem] = useState<string | null>(null); const [done, setDone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const key = useRef<string | null>(null), mounted = useRef(true), generation = useRef(0);
@@ -190,8 +205,8 @@ export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = s
     if (!view) return; fresh(); const cur = view.current;
     setPick(startingPick(view));
     if (cur?.source === 'CUSTOM') setForm({ name: cur.planName ?? '', price: String((cur.priceMinor ?? 0) / 100),
-      interval: cur.billingInterval === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY', freeUntil: cur.freeUntil ?? '', note: '' });
-    else setForm(x => ({ ...x, note: '' }));
+      interval: cur.billingInterval === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY', freeUntil: cur.freeUntil ?? '', startDate: todayUtc(), note: '' });
+    else setForm(x => ({ ...x, startDate: todayUtc(), note: '' }));
     setStep({ step: 'PICK' });
   };
   const opened = useRef(false);
@@ -200,7 +215,7 @@ export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = s
     if (!view) return; setProblem(null);
     const r = reviewChoice(view, pick, form, t, f);
     if (!r.ok) { setProblem(t(r.problem)); return; }
-    key.current = null; setStep({ step: 'CONFIRM', choice: r.choice, label: r.label, price: r.price });
+    key.current = null; setStep({ step: 'CONFIRM', choice: r.choice, startDate: r.startDate, label: r.label, price: r.price, start: r.start });
   };
   const submit = async (work: (k: string, signal: AbortSignal, owned: () => boolean) => Promise<unknown>, okText: string) => {
     if (busy) return;
@@ -221,7 +236,7 @@ export function HqSchoolPlanCard({ schoolId, language, formattingLocale, api = s
   return <PlanCardView language={language} formattingLocale={formattingLocale} load={load} step={step} pick={pick} form={form} problem={problem} done={done} busy={busy}
     onRetry={() => setReload(n => n + 1)} onStart={onStart} onStartRemove={() => { fresh(); setForm(x => ({ ...x, note: '' })); setStep({ step: 'REMOVE' }); }}
     onPick={setPick} onForm={(patch) => setForm(x => ({ ...x, ...patch }))} onReview={onReview}
-    onSave={() => { if (view && step.step === 'CONFIRM') void submit((k, s, o) => api.assign(schoolId, { expectedRevision: view.revision, plan: step.choice, note: note() }, k, s, o), t('saved')); }}
+    onSave={() => { if (view && step.step === 'CONFIRM') void submit((k, s, o) => api.assign(schoolId, { expectedRevision: view.revision, plan: step.choice, startDate: step.startDate, note: note() }, k, s, o), t('saved')); }}
     onRemove={() => { if (view) void submit((k, s, o) => api.remove(schoolId, { expectedRevision: view.revision, note: note() }, k, s, o), t('removed')); }}
     onBack={() => { setProblem(null); key.current = null; setStep({ step: 'PICK' }); }}
     onCancel={() => { setProblem(null); key.current = null; setStep({ step: 'VIEW' }); }}/>;

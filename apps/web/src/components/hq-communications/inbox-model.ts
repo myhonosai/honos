@@ -1,32 +1,43 @@
-import type { HqMessage, HqMessageCreateInput, HqMessageReceipt } from '@hon/contracts';
+import type { HqInboundReply, HqMessage, HqMessageChannel, HqMessageCreateInput, HqMessageReceipt } from '@hon/contracts';
 import { CommsError, type Owned } from './http';
 import { commsOutcomeFor } from './model';
 
-/** One row in the HQ inbox: every HQ message to one school's owners, newest first. */
+/** One row in the HQ inbox: every HQ message to one school's owners and their text replies, newest activity first. */
 export type HqConversation = Readonly<{
-  schoolId: string; organizationId: string; schoolDisplayName: string; organizationDisplayName: string; latest: HqMessage; count: number;
+  schoolId: string; organizationId: string; schoolDisplayName: string; organizationDisplayName: string;
+  latestAt: string; latestId: string; preview: Readonly<{ direction: 'OUT' | 'IN'; channel: HqMessageChannel; text: string }>; count: number;
 }>;
+/** One bubble in a thread: a message HQ wrote (OUT) or an owner's text reply (IN). */
+export type ThreadItem = Readonly<{ direction: 'OUT'; at: string; id: string; message: HqMessage }> | Readonly<{ direction: 'IN'; at: string; id: string; reply: HqInboundReply }>;
 
-/** Group the loaded HQ messages by school, newest conversation first. Ids are compared case-insensitively. */
-export function groupConversations(messages: readonly HqMessage[]): HqConversation[] {
-  const bySchool = new Map<string, HqConversation>();
-  for (const m of messages) {
-    const key = m.schoolId.toLowerCase(), prior = bySchool.get(key);
-    if (!prior) { bySchool.set(key, { schoolId: m.schoolId, organizationId: m.organizationId, schoolDisplayName: m.schoolDisplayName,
-      organizationDisplayName: m.organizationDisplayName, latest: m, count: 1 }); continue; }
-    const newer = newest(prior.latest, m);
-    bySchool.set(key, { ...prior, latest: newer, count: prior.count + 1,
-      ...(newer === m ? { schoolDisplayName: m.schoolDisplayName, organizationDisplayName: m.organizationDisplayName } : {}) });
+type Activity = Readonly<{ schoolId: string; organizationId: string; schoolDisplayName: string; organizationDisplayName: string; at: string; id: string;
+  direction: 'OUT' | 'IN'; channel: HqMessageChannel; text: string }>;
+const fromMessage = (m: HqMessage): Activity => ({ schoolId: m.schoolId, organizationId: m.organizationId, schoolDisplayName: m.schoolDisplayName,
+  organizationDisplayName: m.organizationDisplayName, at: m.createdAt, id: m.messageId, direction: 'OUT', channel: m.channel, text: m.content });
+const fromReply = (r: HqInboundReply): Activity => ({ schoolId: r.schoolId, organizationId: r.organizationId, schoolDisplayName: r.schoolDisplayName,
+  organizationDisplayName: r.organizationDisplayName, at: r.receivedAt, id: r.replyId, direction: 'IN', channel: r.channel, text: r.body });
+const later = (a: { at: string; id: string }, b: { at: string; id: string }) => a.at !== b.at ? a.at > b.at : a.id > b.id;
+
+/** Group the loaded HQ messages and owner replies by school, newest activity first. Ids are compared case-insensitively. */
+export function groupConversations(messages: readonly HqMessage[], replies: readonly HqInboundReply[] = []): HqConversation[] {
+  const bySchool = new Map<string, { latest: Activity; count: number }>();
+  for (const a of [...messages.map(fromMessage), ...replies.map(fromReply)]) {
+    const key = a.schoolId.toLowerCase(), prior = bySchool.get(key);
+    bySchool.set(key, { latest: !prior || later(a, prior.latest) ? a : prior.latest, count: (prior?.count ?? 0) + 1 });
   }
-  return [...bySchool.values()].sort((a, b) => newest(a.latest, b.latest) === a.latest ? -1 : 1);
-}
-function newest(a: HqMessage, b: HqMessage): HqMessage {
-  if (a.createdAt !== b.createdAt) return a.createdAt > b.createdAt ? a : b;
-  return a.messageId > b.messageId ? a : b;
+  return [...bySchool.values()].sort((a, b) => later(a.latest, b.latest) ? -1 : 1).map(({ latest: l, count }) => ({
+    schoolId: l.schoolId, organizationId: l.organizationId, schoolDisplayName: l.schoolDisplayName, organizationDisplayName: l.organizationDisplayName,
+    latestAt: l.at, latestId: l.id, preview: { direction: l.direction, channel: l.channel, text: l.text }, count }));
 }
 /** A thread reads oldest to newest, like a chat. */
 export function threadOrder(messages: readonly HqMessage[]): HqMessage[] {
   return [...messages].sort((a, b) => a.createdAt === b.createdAt ? (a.messageId < b.messageId ? -1 : 1) : a.createdAt < b.createdAt ? -1 : 1);
+}
+/** HQ's messages and the owners' replies in one thread, oldest first. */
+export function threadItems(messages: readonly HqMessage[], replies: readonly HqInboundReply[] = []): ThreadItem[] {
+  const items: ThreadItem[] = [...messages.map(m => ({ direction: 'OUT' as const, at: m.createdAt, id: m.messageId, message: m })),
+    ...replies.map(r => ({ direction: 'IN' as const, at: r.receivedAt, id: r.replyId, reply: r }))];
+  return items.sort((a, b) => later(a, b) ? 1 : -1);
 }
 /** Conversations whose school or organization name contains the search text. */
 export function filterConversations(list: readonly HqConversation[], search: string): HqConversation[] {

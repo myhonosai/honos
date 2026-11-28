@@ -10,6 +10,9 @@ import { HqSchoolDirectoryController, bindHqSchoolDirectoryPrivacy } from './hq-
 import { useHqModern } from './hq-modern/shell';
 import styles from './hq-school-directory.module.css';
 import { schoolPlanText } from './hq-school-plan/copy';
+import { hqSchoolVisitText } from './hq-school-visit/copy';
+import { HqSchoolVisitError, enterSchoolAsHq } from './hq-school-visit/http';
+import { rememberHqHint, schoolHomeHref } from './school-switcher/switcher';
 
 function formatDate(value: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {
@@ -61,13 +64,15 @@ export function LifecycleDialog({ pending, busy, error, onCancel, onConfirm }: {
   </section></div>;
 }
 
-function RowMenu({ school, onPick }: { school: HqSchoolDirectoryEntry; onPick: (action: HqSchoolLifecycleAction) => void }): React.ReactElement {
+function RowMenu({ school, onPick, onGoInside }: { school: HqSchoolDirectoryEntry; onPick: (action: HqSchoolLifecycleAction) => void; onGoInside?: () => void }): React.ReactElement {
   const { preferences } = useLocale();
   const l = (key: HqSchoolLifecycleCopyKey) => hqSchoolLifecycleText(preferences.language, key);
   const label = (action: HqSchoolLifecycleAction) => l(action === 'PAUSE' ? 'pause' : action === 'RESUME' ? 'resume' : action === 'ARCHIVE' ? 'remove' : 'restore');
   return <details className={styles.menu}>
     <summary aria-label={`${l('actions')} ${school.schoolDisplayName}`}>⋯</summary>
     <div role="menu">
+      {school.schoolOperationalStatus === 'ACTIVE' && onGoInside && <button type="button" role="menuitem" data-action="ENTER"
+        onClick={event => { (event.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open'); onGoInside(); }}>{hqSchoolVisitText(preferences.language, 'goInside')}</button>}
       {school.schoolOperationalStatus !== 'ARCHIVED' && <a role="menuitem" href={`/hq/schools/${encodeURIComponent(school.schoolId)}`}>{l('open')}</a>}
       {school.schoolOperationalStatus !== 'ARCHIVED' && <a role="menuitem" data-menu="plan" href={`/hq/schools/${encodeURIComponent(school.schoolId)}#plan`}>{schoolPlanText(preferences.language, 'menuPlan')}</a>}
       {hqSchoolLifecycleActionsFor(school.schoolOperationalStatus).map(action => <button key={action} type="button" role="menuitem" data-action={action}
@@ -86,6 +91,8 @@ export function DirectoryTable({ directory, archives = {}, onChanged = () => {} 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [entering, setEntering] = useState<{ schoolId: string; key: string } | null>(null);
+  const [retryEnter, setRetryEnter] = useState<{ schoolId: string; key: string } | null>(null);
   if (directory.schools.length === 0) {
     return <section className={styles.state}><p className={styles.eyebrow}>{t('directoryEmptyEyebrow')}</p><h2>{t('directoryEmpty')}</h2><p>{t('directoryEmptyHelp')}</p></section>;
   }
@@ -104,6 +111,24 @@ export function DirectoryTable({ directory, archives = {}, onChanged = () => {} 
       if (reason === 'changed') { setPending(null); setNotice(message); onChanged(); }
       else { setError(message); if (reason !== 'unknown') setPending(current => current && { ...current, key: crypto.randomUUID() }); }
     } finally { setBusy(false); }
+  };
+
+  // Go inside: a 4-hour, logged HQ support visit, then the school's own home page (David, 2026-11-25).
+  const goInside = async (school: HqSchoolDirectoryEntry) => {
+    if (entering) return;
+    // An unknown outcome is retried with the same key, so a retry can never open two visits.
+    const key = retryEnter?.schoolId === school.schoolId ? retryEnter.key : crypto.randomUUID();
+    setEntering({ schoolId: school.schoolId, key }); setRetryEnter(null); setError(''); setNotice(hqSchoolVisitText(preferences.language, 'going'));
+    try {
+      const receipt = await enterSchoolAsHq(school.schoolId, key);
+      rememberHqHint(true);
+      window.location.assign(schoolHomeHref(receipt));
+    } catch (failure) {
+      const reason = failure instanceof HqSchoolVisitError ? failure.reason : 'unavailable';
+      setNotice(hqSchoolVisitText(preferences.language, reason === 'signedOut' ? 'failSignedOut' : reason === 'forbidden' ? 'failForbidden' : reason === 'unknown' ? 'failUnknown' : 'failUnavailable'));
+      if (reason === 'unknown') setRetryEnter({ schoolId: school.schoolId, key });
+      setEntering(null);
+    }
   };
 
   return <section className={styles.section} aria-labelledby="hq-schools-directory-title">
@@ -125,7 +150,7 @@ export function DirectoryTable({ directory, archives = {}, onChanged = () => {} 
             {school.schoolOperationalStatus === 'ARCHIVED' && archives[school.schoolId] && <small>{l('erasesOn')} {formatDate(archives[school.schoolId]!, formattingLocale)}</small>}</td>
           <td>{school.entitlementTier ?? <span className={styles.unavailable}>{t('directoryNoTier')}</span>}</td>
           <td>{formatDate(school.createdAt, formattingLocale)}</td>
-          <td><RowMenu school={school} onPick={action => { setNotice(''); setError(''); setPending({ school, action, key: crypto.randomUUID() }); }} /></td>
+          <td><RowMenu school={school} onGoInside={() => void goInside(school)} onPick={action => { setNotice(''); setError(''); setPending({ school, action, key: crypto.randomUUID() }); }} /></td>
         </tr>)}</tbody>
       </table>
       {rows.length === 0 && <p className={styles.empty}>{l('noMatches')}</p>}

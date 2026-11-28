@@ -9,6 +9,8 @@ import { HON_SCHOOL_CONTEXT_CHANGED_EVENT, HON_SESSION_INVALIDATED_EVENT } from 
 import { PersonRecordError, peopleApi, sameEmail, type PeopleApi } from './http';
 import { attemptOutcome, type ListState, type RecordState, type SaveOutcome } from './model';
 import { PeopleView, type BirthDraft, type ContactDraft } from './view';
+import { AddContact, watchContactHold } from './add-contact';
+import type { ContactAdded, ContactCapsule } from './add-contact-http';
 import { PersonConsents } from './consents';
 import { consentApi, type ConsentApi } from './consent-http';
 import { NO_CONTACT_FILTERS, contactAdminApi, contactsApi, type ContactAdminApi, type ContactFilters, type ContactsApi } from './contacts-http';
@@ -22,6 +24,12 @@ import { CardFamilyAccess } from './card-family-access';
 import { CardFamilyMessages } from './card-family-messages';
 import { CardTexts } from './card-texts';
 
+/** The open contact's email, only when the card is read and that person is a guardian of the family shown. */
+export function guardianEmail(card: CardState, family: FamilyItem): string | null {
+  if (card.state !== 'READY') return null;
+  const person = card.card.person;
+  return family.members.some(m => m.personId === person.personId && m.role === 'GUARDIAN') ? person.email : null;
+}
 /** Keeps the open card (or none) in the address without a navigation, so a reload or a shared link reopens it. */
 function showCardInAddress(target: { personId: string; tab: CardTab } | null): void {
   try {
@@ -305,8 +313,9 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} item={m} onChanged={onMembershipChanged}/></> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onMembershipChanged, shownDetails]); // eslint-disable-line react-hooks/exhaustive-deps
   const familySlot = useCallback((family: FamilyItem) => selection && sessionSubject ? <CardFamilyAccess key={`${lower(selection.schoolId)}:${family.familyId}`}
-    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} sessionSubject={sessionSubject} familyId={family.familyId}/> : null,
-  [selection?.organizationId, selection?.schoolId, preferences.language, sessionSubject]); // eslint-disable-line react-hooks/exhaustive-deps
+    language={preferences.language} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} sessionSubject={sessionSubject} familyId={family.familyId}
+    suggestedEmail={guardianEmail(card, family)}/> : null,
+  [selection?.organizationId, selection?.schoolId, preferences.language, sessionSubject, card]); // eslint-disable-line react-hooks/exhaustive-deps
   const messagesSlot = useCallback((c: SchoolContactCard) => selection ? <>
     <CardTexts key={`${lower(selection.schoolId)}:${c.person.personId}`} language={preferences.language}
       scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} personId={c.person.personId}/>
@@ -354,11 +363,22 @@ export function People({ api = peopleApi, consents = consentApi, contacts = cont
   </> : null,
   [selection?.organizationId, selection?.schoolId, preferences.language, onConsentRecorded, consents, photos, details, card]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Add contact: the new adult's card opens (its Family app access is the next step) and the list is read again.
+  const onContactAdded = useCallback((added: ContactAdded) => {
+    if (!mounted.current) return; setListRefresh(n => n + 1); onOpen(added.adultId);
+    if (added.familyId) { setCardTab('family'); showCardInAddress({ personId: added.adultId, tab: 'family' }); }
+  }, [onOpen]);
+  // Kept here, above the node that is replaced when the page conceals, so an unfinished add is never retyped as a new one.
+  const addHold = useRef<ContactCapsule | null>(null);
+  useEffect(() => watchContactHold(addHold), []);
+  const addSlot = selection && shell.phase === 'READY'
+    ? <AddContact key={`add:${lower(selection.schoolId)}`} scope={{ organizationId: selection.organizationId, schoolId: selection.schoolId }} language={preferences.language} onAdded={onContactAdded} hold={addHold}/> : null;
+
   // Keyed by the shell phase: a concealed node is replaced, never un-hidden in place.
   return <div key={shell.phase} data-shell-private="">
     <PeopleView language={preferences.language} waiting={shell.phase === 'IDLE' || shell.phase === 'LOADING'} concealed={shell.phase === 'CONCEALED'}
       hasSchool={selection !== null} list={list} record={record} selectedId={selectedId} outcome={outcome} locked={lock !== 'NONE'} canRetry={lock === 'KEPT'}
       filters={filters} options={options} card={card} cardTab={cardTab} membershipSlot={membershipSlot} membershipTools={membershipTools} agreementSlot={agreementSlot}
-      cardMode={cardMode} onCardMode={onCardMode} onClose={onClose} onCardTab={onCardTab} familySlot={familySlot} messagesSlot={messagesSlot} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot}/>
+      cardMode={cardMode} onCardMode={onCardMode} onClose={onClose} onCardTab={onCardTab} familySlot={familySlot} messagesSlot={messagesSlot} actionsSlot={actionsSlot} actionNotice={actionNotice} onFilters={onFilters} onMore={onMore} onOpen={onOpen} onReload={onReload} onSaveContact={onSaveContact} onSaveBirth={onSaveBirth} onTryAgain={onTryAgain} onDiscard={onDiscard} consentSlot={consentSlot} addSlot={addSlot}/>
   </div>;
 }

@@ -10,6 +10,8 @@ const en = {
   back: 'Back to threads', retry: 'Try again', sendUnknown: 'We could not confirm the reply was sent. Try again sends the same reply once.',
   accessTitle: 'Family app access', accessLoading: 'Reading app access…', accessDenied: 'Your role doesn’t include family app access.',
   accessUnavailable: 'App access could not be loaded.', accessNone: 'No invitations for this family yet.', accessRead: 'Show app access',
+  accessSteps: 'What to tell the parent', accessStep1: '1. Open {link} and sign in with {email}.', accessStep2: '2. Type the invitation ID and the private code shown below.',
+  accessStep3: '3. After that, sign in to the HON Family app with the same email.', accessThisEmail: 'the invited email',
 };
 export type PanelKey = keyof typeof en;
 const ko: Record<PanelKey, string> = {
@@ -23,6 +25,8 @@ const ko: Record<PanelKey, string> = {
   back: '대화 목록으로', retry: '다시 시도', sendUnknown: '답장이 전송되었는지 확인하지 못했습니다. 다시 시도하면 같은 답장을 한 번만 보냅니다.',
   accessTitle: '가족 앱 접근', accessLoading: '앱 접근을 읽는 중…', accessDenied: '내 역할에는 가족 앱 접근이 포함되지 않습니다.',
   accessUnavailable: '앱 접근을 불러오지 못했습니다.', accessNone: '이 가족에 대한 초대가 아직 없습니다.', accessRead: '앱 접근 보기',
+  accessSteps: '학부모에게 안내할 내용', accessStep1: '1. {link} 을(를) 열고 {email}(으)로 로그인합니다.', accessStep2: '2. 아래에 표시된 초대 ID와 비공개 코드를 입력합니다.',
+  accessStep3: '3. 그런 다음 같은 이메일로 HON Family 앱에 로그인합니다.', accessThisEmail: '초대받은 이메일',
 };
 const es: Record<PanelKey, string> = {
   fullScreen: 'Pantalla completa', keepSide: 'Mantener al lado', close: 'Cerrar', panelLabel: 'Ficha de contacto',
@@ -35,6 +39,8 @@ const es: Record<PanelKey, string> = {
   back: 'Volver a las conversaciones', retry: 'Reintentar', sendUnknown: 'No pudimos confirmar que se envió la respuesta. Reintentar envía la misma respuesta una sola vez.',
   accessTitle: 'Acceso de la familia a la app', accessLoading: 'Leyendo el acceso a la app…', accessDenied: 'Su función no incluye el acceso de familias a la app.',
   accessUnavailable: 'No se pudo cargar el acceso a la app.', accessNone: 'Aún no hay invitaciones para esta familia.', accessRead: 'Ver acceso a la app',
+  accessSteps: 'Qué decirle al padre o madre', accessStep1: '1. Abra {link} e inicie sesión con {email}.', accessStep2: '2. Escriba el ID de invitación y el código privado que aparecen abajo.',
+  accessStep3: '3. Después, inicie sesión en la app HON Family con el mismo correo.', accessThisEmail: 'el correo invitado',
 };
 export const PANEL_COPY = { en, ko, es } as const;
 export function panelText(language: string, key: PanelKey, vars: Readonly<Record<string, string | number>> = {}): string {

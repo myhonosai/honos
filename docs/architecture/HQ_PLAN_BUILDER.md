@@ -1,6 +1,6 @@
-# HQ Plan builder and creative program switch (frontend only)
+# HQ Plan builder, plans with their own features, and creative program switch
 
-**Status:** source change. No migration, no API change, nothing deployed.
+**Status:** source change, nothing deployed. Piece 1 (PR #672) was frontend only; piece 2 adds migration 0697.
 
 ## Plan builder (`/hq/pricing-offers`, tab "Plan builder")
 A GoHighLevel SaaS Configurator style step editor over the existing HON OS offer set (0181):
@@ -10,8 +10,8 @@ lifetime, founder monthly/yearly/lifetime, founder and lifetime spots) -> What's
 buy, sales window, terms link) -> Review (Save, then the existing server review and digest-confirmed publish).
 A live "What schools will see" card follows every step.
 
-- `pricing-plan-builder-model.ts` maps a `PlanDraft` to and from the same local `OfferSetForm`; the form stays the only
-  source of truth. `PricingController.applyPlan` only rewrites the local form. Save, review, publish and stop-sales are
+- `pricing-plan-builder-model.ts` maps a `PlansDraft` (plans plus shared terms) to and from the same local `OfferSetForm`; the form stays the only
+  source of truth. `PricingController.applyPlans` only rewrites the local form. Save, review, publish and stop-sales are
   unchanged server-checked commands. Existing options keep key and offer code, so a revision edits them in place.
 - Defaults are applied only when HQ presses "Regular plan": $249 / $2,097, 12,000 credits, 30-day refund,
   `https://myhonos.com/terms/`. Founder options use price lock "while continuously subscribed"; annual renews at the
@@ -20,8 +20,50 @@ A live "What schools will see" card follows every step.
 - The old per-option editor stays under a collapsed "Advanced" section.
 - The pricing page no longer hides itself on window blur or a hidden tab (David, 2026-11-26). A 401/403 still conceals.
 
-Not in this change: per-plan feature selection (David chose it on 2026-11-26; needs migration 0697 so a set can hold
-several plans with their own capability lists, then enforcement at school access).
+## Plans with their own features (migration 0697, piece 2)
+David chose "Let me pick features per plan" (2026-11-26). An offer set can now hold several plans:
+- **Database (0697).** `hon.saas_offer_set_offers.capabilities text[]`: a non-empty subset of the HON OS (COMPLETE)
+  capability policy, stored in canonical policy order. Existing offers (published and retired too) get the full list from
+  the column default; no row is updated, so the 0181 immutability guard and every published price are untouched.
+  `saas_offer_json` reports `capabilities`, so the preview digest HQ approves covers the feature lists.
+  `saas_offer_set_content_valid` accepts an optional `capabilities` per offer (absent = full list) and requires the same
+  list for offers that share a display name; `saas_offer_set_write_content` stores it through the private helper
+  `saas_offer_input_capabilities(jsonb)`.
+- **A plan = the offers that share a display name** (in the database). The builder tracks a local `planKey` per offer, so a plan stays separate while its name is being typed, even through another plan's name. Each plan has its own name, prices, lifetime spots, planned
+  credits and feature checklist. Refund days, who can buy, sales window, terms link and the founder pool are shared.
+  Up to 6 plans and 12 prices in all.
+- **Contracts.** `HON_OS_PLAN_CAPABILITIES`, `saasHonOsPlanCapabilities()`; offer input `capabilities` optional, offer
+  responses (HQ and school reads) always carry it. Accepted-offer snapshots from before 0697 validate with the full list.
+- **Builder.** Plan tabs with "Add a plan" / "Remove"; "What's included" is a checklist (School system, AI team and AI
+  marketing) with "Include everything" and "School system only"; the preview and Review list each plan's features.
+
+Not in this change (each a separate reviewed change):
+- **Enforcement.** Piece 3 (below) shows left-out features locked with an Upgrade button.
+- **Per-plan checkout.** Purchase code is unchanged. Its price acceptance (0188/0279/0306) needs exactly one regular
+  monthly price per set, so while two plans are published, recurring price acceptance would be refused
+  (`SAAS_PRICE_TERMS_UNSUPPORTED`). Paid access is INACTIVE; HQ can assign any published offer (0676). Changing that touches
+  founder billing and needs David's approval.
+
+## Piece 3: locked features in the school app (0699)
+Owner decision 2026-11-26: a feature the school's plan leaves out is shown **locked, with an Upgrade button** (not hidden).
+- **Which plan.** The school's plan is its current HQ plan assignment (0676). With a published offer assigned, the plan's
+  features are that offer's capability list (0697) and the rest are locked. No assignment, a removed one, or a custom
+  plan locks nothing, so no school loses a page it uses today. The entitlement tier is not consulted.
+- **Database.** Private `hon.school_plan_features(org, school)` and one runtime read `hon.read_school_plan_features(subject,
+  school)` for any eligible staff member of the exact school (`staff_member_eligible`, so HQ during a logged 0696 visit too;
+  family logins refused). Returns `source` (OFFER/CUSTOM/NONE), `planName`, `included`, `locked` in policy order.
+- **API.** `GET /api/v1/schools/:schoolId/plan-features`, validated by `validateSaasSchoolPlanFeatures`.
+- **School app.** The shell reads it once the school is verified. Menu pages mapped to a locked feature
+  (`PLAN_FEATURE_FOR_PAGE` in `school-shell/plan-features.tsx`) show a lock; opening one shows "X is not in your plan" with an
+  **Upgrade** button to `/staff/subscription`, and the page itself never loads. Dashboard, Staff, Texts, Email, Parent app,
+  Calls, Shopify, Reports and Settings never lock. If the read fails, nothing is locked.
+- **Mapping.** AI Team and Conversation AI = `ai.workforce`; Ask HON = `assistant.ordinary`; contacts, leads, automations =
+  CRM; calendar, attendance = classes; membership, checkout, POS, invoices = memberships and payments; ranks, tests,
+  promotions = testing and curriculum; marketing, website, social = manual marketing; ads = marketing connections; Creative
+  Studio = `ai.premium_metered`; Community = Champions Club.
+
+Still not in this change: **server refusal.** The lock is display only; a locked feature's own APIs still answer. Refusing
+them on the server (per area) is a separate reviewed change, as is reconciling the accepted-offer `planCode`.
 
 ## Creative credit program switch (`/hq/revenue/creative-credits`)
 `ProgramControls` adds HQ-owner buttons using the existing 0202 commands: "Publish credit prices" (the rates David
