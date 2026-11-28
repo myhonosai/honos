@@ -43,7 +43,8 @@ function store() {
   const cases = new Map(), events = new Map(), answers = new Map();
   const json = c => ({ caseId: c.id, organizationId: ORG, organizationDisplayName: 'Synthetic Dojo', schoolId: c.schoolId, schoolDisplayName: c.schoolId ? 'Synthetic Academy' : null,
     subject: c.subject, category: c.category, priority: c.priority, status: c.status, assignee: c.assignee, openedBy: people.agent, openedAt: c.openedAt, updatedAt: c.updatedAt,
-    closedAt: c.closedAt, version: c.version, noteCount: events.get(c.id).filter(e => e.note !== null).length });
+    closedAt: c.closedAt, version: c.version, noteCount: events.get(c.id).filter(e => e.note !== null).length,
+    fromSchool: false, needsReply: false, lastSchoolMessageAt: null, lastReplyAt: null });
   const add = (c, e) => { const list = events.get(c.id); list.push({ seq: list.length + 1, actor: people.agent, note: null, statusFrom: null, statusTo: null, priorityFrom: null, priorityTo: null,
     assigneeChanged: false, assigneeTo: null, occurredAt: c.updatedAt, ...e }); };
   const open = (input, at = now()) => {
@@ -96,6 +97,8 @@ const api = createServer(async (req, res) => {
       if (path === '/v1/hq/overview') send(200, { data: { overview } });
       else if (path === '/v1/hq/session') send(200, { data: { principalId: people.agent.principalId, hqRole: 'HON_HQ_OWNER' } });
       else if (path === '/v1/me/language-preference') send(200, { data: validateMyLanguagePreferenceView({ preference: { language: f.language, version: 1, updatedAt: T0 }, schoolDefault: null, effective: { language: f.language, source: 'PERSONAL' }, supportedLanguages: ['en', 'ko', 'es'] }) });
+      // 0713: the HQ menu badge reads alerts on every page; kept out of the recorded reads below.
+      else if (path === '/v1/hq/support/cases/alerts') { if (f.denied) send(403, { code: 'SAAS_FORBIDDEN' }); else send(200, { data: { needsReply: 0, latest: [], asOf: T0 } }); }
       else if (path.startsWith('/v1/hq/support/')) {
         f.reads.push(req.url);
         if (f.denied) { send(403, { code: 'SAAS_FORBIDDEN' }); return; }

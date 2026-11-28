@@ -304,6 +304,9 @@ const SAAS_BILLING_CALLS = {
   recordHqProspectConsent: { sql: 'SELECT hon.record_hq_prospect_consent($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   addSupportNote: { sql: 'SELECT hon.add_hq_support_note($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
   changeSupportCase: { sql: 'SELECT hon.change_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  // 0713: HQ replies the school sees, and the HQ alert summary (read-only).
+  replySupportCase: { sql: 'SELECT hon.reply_to_hq_support_case($1,$2::uuid,$3::jsonb,$4::uuid) AS data', arity: 4, readOnly: false },
+  readSupportAlerts: { sql: 'SELECT hon.read_hq_support_alerts($1) AS data', arity: 1, readOnly: true },
   // M1 (0252): HQ marketing campaigns. Reads are read-only; the three commands write only HQ campaign rows.
   readMarketingCampaigns: { sql: 'SELECT hon.read_hq_marketing_campaigns($1,$2,$3::timestamptz,$4::uuid,$5::integer) AS data', arity: 5, readOnly: true },
   readMarketingCampaign: { sql: 'SELECT hon.read_hq_marketing_campaign($1,$2::uuid) AS data', arity: 2, readOnly: true },

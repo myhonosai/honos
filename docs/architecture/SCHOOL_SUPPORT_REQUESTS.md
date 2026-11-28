@@ -32,5 +32,12 @@ A school message on a WAITING_ON_SCHOOL or RESOLVED case adds a NOTE to the HQ h
 
 Route ids are never authority: scope is resolved from the verified session and re-proved in the database. Nothing here sends a message or touches billing, access, credits or AI.
 
+## HON answers first, then HQ (0713, owner 2026-11-28)
+- Under every finished HON answer, **Send to HQ** opens this request form already filled with the question, HON's answer and the page. Only the person's own press sends it; HON never opens a request by itself. HON's guide tells it to point there when it cannot help.
+- A **?** Help button in the school header opens this page. It shows a dot while a request is `awaitingSchool`.
+- HQ answers with **Reply to school** (`REPLY` event, see HQ_SUPPORT_RECORDS.md). The school sees it in the request as `from: "HON"`, author "HON support", never an HQ person's name. HQ notes stay hidden.
+- Each request carries `awaitingSchool` (active and the last message is HON's); the list carries `awaitingSchoolCount`.
+- A replayed receipt stored before 0713 is read with the old shape (no `from`, no `awaitingSchool`).
+
 ## Not in this slice
-The school Help panel (next PR), notifying the school when HQ replies, HQ marking a case as from a school.
+Emailing or texting the school when HQ replies (next step, through HQ communications).

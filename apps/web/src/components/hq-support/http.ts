@@ -1,5 +1,6 @@
 import { HQ_SUPPORT_COMMANDS, encodeHqSupportCursor, saasUuid, validateHqSupportCaseDetail, validateHqSupportCaseList, validateHqSupportChangeInput,
-  validateHqSupportNoteInput, validateHqSupportOpenInput, validateHqSupportReceipt, validateHqSupportSchools,
+  validateHqSupportNoteInput, validateHqSupportOpenInput, validateHqSupportReceipt, validateHqSupportSchools, validateHqSupportAlerts, validateHqSupportReplyInput,
+  type HqSupportAlerts, type HqSupportReplyInput,
   type HqSupportCaseDetail, type HqSupportCaseList, type HqSupportChangeInput, type HqSupportCursor, type HqSupportListFilter, type HqSupportNoteInput,
   type HqSupportOpenInput, type HqSupportReceipt, type HqSupportSchools } from '@hon/contracts';
 import { reportConfirmedSessionInvalidation } from '../session-invalidation';
@@ -26,7 +27,7 @@ export type Owned = () => boolean;
 const RESPONSE_MAX = 2_000_000;
 const JSON_TYPE = /^application\/json(?:\s*;|$)/i;
 const CHANGED = new Set(['SAAS_VERSION_CONFLICT', 'SUPPORT_CASE_CLOSED']);
-const REFUSED = new Set(['SUPPORT_ASSIGNEE_NOT_ELIGIBLE', 'SUPPORT_NO_CHANGE']);
+const REFUSED = new Set(['SUPPORT_ASSIGNEE_NOT_ELIGIBLE', 'SUPPORT_NO_CHANGE', 'SUPPORT_NOT_FROM_SCHOOL']);
 
 /** Lower-case case id for a path, or null when the value is not a case id. */
 export function supportCaseId(value: unknown): string | null {
@@ -122,6 +123,20 @@ export const supportApi = {
     try { if (!id) throw new Error('id'); body = validateHqSupportNoteInput(input); } catch { throw new SupportError('INVALID'); }
     const receipt = await command(`/api/v1/hq/support/cases/${id}/notes`, HQ_SUPPORT_COMMANDS.note, body, key, signal, owned);
     if (receipt.operation !== 'NOTE' || !sameId(receipt.case.caseId, id) || receipt.case.version !== body.expectedVersion + 1) throw new SupportError('UNKNOWN');
+    return receipt;
+  },
+  /** 0713: school requests waiting for an HQ reply (menu badge, banner, desktop alert). */
+  async alerts(signal: AbortSignal, owned: Owned): Promise<HqSupportAlerts> {
+    return read('/api/v1/hq/support/cases/alerts', signal, owned, validateHqSupportAlerts);
+  },
+  /** 0713: a reply the school sees as "HON support". The answer must be this case, one version on, waiting on the school if asked. */
+  async reply(caseId: string, input: HqSupportReplyInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqSupportReceipt> {
+    const id = supportCaseId(caseId);
+    let body: HqSupportReplyInput;
+    try { if (!id) throw new Error('id'); body = validateHqSupportReplyInput(input); } catch { throw new SupportError('INVALID'); }
+    const receipt = await command(`/api/v1/hq/support/cases/${id}/replies`, HQ_SUPPORT_COMMANDS.reply, body, key, signal, owned), c = receipt.case;
+    if (receipt.operation !== 'REPLY' || !sameId(c.caseId, id) || c.version !== body.expectedVersion + 1 || !c.fromSchool
+      || (body.waitForSchool && c.status !== 'WAITING_ON_SCHOOL')) throw new SupportError('UNKNOWN');
     return receipt;
   },
   async change(caseId: string, input: HqSupportChangeInput, key: string, signal: AbortSignal, owned: Owned): Promise<HqSupportReceipt> {

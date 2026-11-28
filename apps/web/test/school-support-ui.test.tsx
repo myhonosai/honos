@@ -20,8 +20,8 @@ const signal = () => new AbortController().signal;
 const fails = async (p: Promise<unknown>) => { try { await p; } catch (e) { return e as SupportError; } throw new Error('expected a failure'); };
 const request = (over: Partial<SupportRequest> = {}): SupportRequest => ({ requestId: rid, topic: 'GETTING_STARTED', subject: 'How do I add a class?', status: 'OPEN', pageHint: '/staff/welcome',
   openedAt: '2026-11-13T07:00:00.000Z', updatedAt: '2026-11-13T07:05:00.000Z', closedAt: null,
-  messages: [{ seq: 1, note: 'We teach on Tuesdays.\nWhere do I start?', at: '2026-11-13T07:00:00.000Z', author: 'Synthetic Owner' }], ...over });
-const list = (requests: SupportRequest[] = [request()]): SupportRequestList => ({ requests, limits: { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, checkedAt: '2026-11-13T07:10:00.000Z' });
+  messages: [{ seq: 1, note: 'We teach on Tuesdays.\nWhere do I start?', at: '2026-11-13T07:00:00.000Z', author: 'Synthetic Owner', from: 'SCHOOL' }], awaitingSchool: false, ...over });
+const list = (requests: SupportRequest[] = [request()]): SupportRequestList => ({ requests, limits: { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, checkedAt: '2026-11-13T07:10:00.000Z', awaitingSchoolCount: requests.filter(r => r.awaitingSchool).length });
 const ask = { topic: 'GETTING_STARTED' as const, subject: 'How do I add a class?', message: 'Help', pageHint: null };
 
 it('lists with a plain same-origin GET and sends each command with its own name and key', async () => {

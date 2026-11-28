@@ -61,9 +61,16 @@ export function HqSupportCase({ caseId, api = supportApi }: { caseId: string; ap
     if (!input) { local('change'); return; }
     start((key, signal, owned) => api.change(id, input, key, signal, owned));
   }, [api, view, start, local]);
+  const onReply = useCallback((message: string, waitForSchool: boolean) => {
+    if (!view || view.case.status === 'CLOSED' || !view.case.fromSchool) return;
+    const clean = message.trim();
+    if (!clean || clean.length > HQ_SUPPORT_NOTE_MAX) { local('note'); return; }
+    const input = { expectedVersion: view.case.version, message: clean, waitForSchool }, id = view.case.caseId;
+    start((key, signal, owned) => api.reply(id, input, key, signal, owned));
+  }, [api, view, start, local]);
   const onRefresh = useCallback(() => setRefresh(n => n + 1), []);
 
   return <HqSupportCaseView language={preferences.language} formattingLocale={formattingLocale} concealed={concealed} state={state} busy={busy}
     outcome={command.outcome} locked={command.locked} canRetry={command.canRetry} formKey={formKey}
-    onRefresh={onRefresh} onReveal={reveal} onNote={onNote} onChange={onChange} onTryAgain={command.tryAgain}/>;
+    onRefresh={onRefresh} onReveal={reveal} onNote={onNote} onReply={onReply} onChange={onChange} onTryAgain={command.tryAgain}/>;
 }

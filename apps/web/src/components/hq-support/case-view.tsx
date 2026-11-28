@@ -29,7 +29,7 @@ export function changeInputFrom(draft: ChangeDraft, view: HqSupportCaseDetail): 
 
 export type SupportCaseViewProps = Readonly<{ language: string; formattingLocale: string; concealed: boolean; state: SupportCaseState; busy: boolean;
   outcome: SupportOutcome; locked: boolean; canRetry: boolean; formKey: number;
-  onRefresh: () => void; onReveal: () => void; onNote: (note: string) => void; onChange: (draft: ChangeDraft) => void; onTryAgain: () => void }>;
+  onRefresh: () => void; onReveal: () => void; onNote: (note: string) => void; onReply?: ((message: string, waitForSchool: boolean) => void) | undefined; onChange: (draft: ChangeDraft) => void; onTryAgain: () => void }>;
 
 function EventLine({ e, t, locale }: { e: HqSupportEvent; t: (k: SupportKey, v?: Record<string, string>) => string; locale: string }): React.ReactElement {
   const changes = [
@@ -67,12 +67,17 @@ export function HqSupportCaseView(props: SupportCaseViewProps): React.ReactEleme
     event.preventDefault(); const f = new FormData(event.currentTarget), g = (k: string) => String(f.get(k) ?? '');
     props.onChange({ status: g('status'), priority: g('priority'), assignee: g('assignee'), note: g('note') });
   };
-  const done: SupportKey = props.outcome?.kind === 'DONE' && props.outcome.receipt.operation === 'NOTE' ? 'noted' : 'changedOk';
+  const op = props.outcome?.kind === 'DONE' ? props.outcome.receipt.operation : null;
+  const done: SupportKey = op === 'NOTE' ? 'noted' : op === 'REPLY' ? 'replied' : 'changedOk';
+  const onReply = (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); const f = new FormData(event.currentTarget);
+    props.onReply?.(String(f.get('reply') ?? ''), f.get('wait') === 'on'); };
   return <section className={styles.access} data-hq-support-case="ready">{head}
     <article className={styles.card} aria-labelledby="hq-support-case-facts">
       <div className={styles.cardHead}><h2 id="hq-support-case-facts">{t('caseTitle')}</h2>
         <span className={styles.status} data-tone={priorityTone(c.priority)}>{t(c.priority)}</span>
-        <span className={styles.status} data-tone={statusTone(c.status)}>{t(c.status)}</span></div>
+        <span className={styles.status} data-tone={statusTone(c.status)}>{t(c.status)}</span>
+        {c.fromSchool && <span className={styles.status} data-tone="ready" data-from-school="">{t('fromSchool')}</span>}
+        {c.needsReply && <span className={styles.status} data-tone="waiting" data-needs-reply="">{t('needsReply')}</span>}</div>
       <Facts rows={[[t('organization'), c.organizationDisplayName], [t('school'), c.schoolDisplayName ?? t('wholeOrganization')], [t('category'), t(c.category)],
         [t('assignee'), c.assignee?.displayName ?? t('unassigned')], [t('openedBy'), c.openedBy.displayName], [t('opened'), `${formatTime(formattingLocale, c.openedAt)} UTC`],
         [t('updated'), `${formatTime(formattingLocale, c.updatedAt)} UTC`], [t('closed'), c.closedAt ? `${formatTime(formattingLocale, c.closedAt)} UTC` : '—']]}/>
@@ -81,6 +86,16 @@ export function HqSupportCaseView(props: SupportCaseViewProps): React.ReactEleme
     </article>
     <Outcome language={language} outcome={props.outcome} done={done} canRetry={props.canRetry} onTryAgain={props.onTryAgain}/>
     {closed ? <p className={styles.notice}>{t('closedFinal')}</p> : <React.Fragment key={props.formKey}>
+      {c.fromSchool ? <form className={styles.form} onSubmit={onReply} aria-labelledby="hq-support-reply-title" data-support-form="reply">
+        <h3 id="hq-support-reply-title">{t('replyTitle')}</h3>
+        <fieldset className={styles.fields} disabled={locked}>
+          <label htmlFor="hq-support-case-reply">{t('replyLabel')}</label>
+          <textarea id="hq-support-case-reply" name="reply" required rows={4} maxLength={HQ_SUPPORT_NOTE_MAX} aria-describedby="hq-support-case-reply-help"/>
+          <p id="hq-support-case-reply-help" className={styles.meta}>{t('replyHelp')}</p>
+          <label><input type="checkbox" name="wait" defaultChecked /> {t('waitForSchool')}</label>
+        </fieldset>
+        <div className={styles.actions}><button type="submit" className={styles.primary} disabled={locked}>{t('submitReply')}</button></div>
+      </form> : <p className={styles.meta} data-not-from-school="">{t('notFromSchool')}</p>}
       <form className={styles.form} onSubmit={onNote} aria-labelledby="hq-support-note-title" data-support-form="note">
         <h3 id="hq-support-note-title">{t('addNote')}</h3>
         <fieldset className={styles.fields} disabled={locked}>

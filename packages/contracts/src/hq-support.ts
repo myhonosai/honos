@@ -13,7 +13,7 @@ export type HqSupportPriority = typeof HQ_SUPPORT_PRIORITIES[number];
 export type HqSupportStatus = typeof HQ_SUPPORT_STATUSES[number];
 export type HqSupportListFilter = typeof HQ_SUPPORT_LIST_FILTERS[number];
 /** Human-command header values, one per support command route. */
-export const HQ_SUPPORT_COMMANDS = { open: 'hq-support-case-open', note: 'hq-support-case-note', change: 'hq-support-case-change' } as const;
+export const HQ_SUPPORT_COMMANDS = { open: 'hq-support-case-open', note: 'hq-support-case-note', change: 'hq-support-case-change', reply: 'hq-support-case-reply' } as const;
 export const HQ_SUPPORT_SUBJECT_MAX = 200;
 export const HQ_SUPPORT_NOTE_MAX = 4000;
 
@@ -27,6 +27,8 @@ const uuid = (v: unknown): string => (isUuid(v) ? (v as string).toLowerCase() : 
 // ---------- inputs ----------
 export interface HqSupportOpenInput { organizationId: string; schoolId: string | null; subject: string; category: HqSupportCategory; priority: HqSupportPriority; note: string }
 export interface HqSupportNoteInput { expectedVersion: number; note: string }
+/** 0713: a reply the school sees as "HON support"; optionally the case then waits on the school. */
+export interface HqSupportReplyInput { expectedVersion: number; message: string; waitForSchool: boolean }
 export interface HqSupportChangeInput { expectedVersion: number; status?: HqSupportStatus; priority?: HqSupportPriority; assigneePrincipalId?: string | null; note?: string }
 const version = (v: unknown): number => (isInt(v, 1, 999_999_999) ? v as number : invalid());
 
@@ -41,6 +43,11 @@ export function validateHqSupportNoteInput(value: unknown): HqSupportNoteInput {
   const r = record(value, invalid); exactKeys(r, ['expectedVersion','note'], invalid);
   if (!text(r.note, 1, HQ_SUPPORT_NOTE_MAX)) invalid();
   return { expectedVersion: version(r.expectedVersion), note: r.note as string };
+}
+export function validateHqSupportReplyInput(value: unknown): HqSupportReplyInput {
+  const r = record(value, invalid); exactKeys(r, ['expectedVersion','message','waitForSchool'], invalid);
+  if (!text(r.message, 1, HQ_SUPPORT_NOTE_MAX) || typeof r.waitForSchool !== 'boolean') invalid();
+  return { expectedVersion: version(r.expectedVersion), message: r.message as string, waitForSchool: r.waitForSchool as boolean };
 }
 export function validateHqSupportChangeInput(value: unknown): HqSupportChangeInput {
   const r = record(value, invalid);
@@ -80,16 +87,18 @@ export interface HqSupportCase {
   caseId: string; organizationId: string; organizationDisplayName: string; schoolId: string | null; schoolDisplayName: string | null;
   subject: string; category: HqSupportCategory; priority: HqSupportPriority; status: HqSupportStatus;
   assignee: HqSupportPerson | null; openedBy: HqSupportPerson; openedAt: string; updatedAt: string; closedAt: string | null; version: number; noteCount: number;
+  /** 0713: asked by the school (0335), and whether HQ owes it a reply (open, the school wrote last). */
+  fromSchool: boolean; needsReply: boolean; lastSchoolMessageAt: string | null; lastReplyAt: string | null;
 }
 export interface HqSupportEvent {
-  seq: number; kind: 'OPENED' | 'NOTE' | 'CHANGED'; actor: HqSupportPerson; note: string | null;
+  seq: number; kind: 'OPENED' | 'NOTE' | 'CHANGED' | 'REPLY'; actor: HqSupportPerson; note: string | null;
   statusFrom: HqSupportStatus | null; statusTo: HqSupportStatus | null; priorityFrom: HqSupportPriority | null; priorityTo: HqSupportPriority | null;
   assigneeChanged: boolean; assigneeTo: HqSupportPerson | null; occurredAt: string;
 }
 export interface HqSupportSummary { OPEN: number; WAITING_ON_SCHOOL: number; RESOLVED: number; CLOSED: number; urgentActive: number; unassignedActive: number }
 export interface HqSupportCaseList { cases: HqSupportCase[]; limit: number; nextCursor: HqSupportCursor | null; summary: HqSupportSummary; viewer: HqSupportPerson; asOf: string }
 export interface HqSupportCaseDetail { case: HqSupportCase; events: HqSupportEvent[]; assignees: HqSupportPerson[]; viewer: HqSupportPerson; asOf: string }
-export interface HqSupportReceipt { operation: 'OPEN' | 'NOTE' | 'CHANGE'; case: HqSupportCase; replayed: boolean }
+export interface HqSupportReceipt { operation: 'OPEN' | 'NOTE' | 'CHANGE' | 'REPLY'; case: HqSupportCase; replayed: boolean }
 
 const COUNT_MAX = 100_000_000;
 function person(value: unknown): HqSupportPerson {
@@ -97,16 +106,22 @@ function person(value: unknown): HqSupportPerson {
   if (!isUuid(p.principalId) || !label(p.displayName, 120) || (p.displayName as string).length === 0) drift();
   return p as unknown as HqSupportPerson;
 }
-function supportCase(value: unknown): HqSupportCase {
-  const c = record(value, drift);
+const CASE_0713_KEYS = ['fromSchool','needsReply','lastSchoolMessageAt','lastReplyAt'] as const;
+/** `legacy`: a saved receipt from before 0713 replays without the 0713 keys; it is read as "not from a school". */
+function supportCase(value: unknown, legacy = false): HqSupportCase {
+  let c = record(value, drift);
+  if (legacy && CASE_0713_KEYS.every((k) => !Object.hasOwn(c, k))) c = { ...c, fromSchool: false, needsReply: false, lastSchoolMessageAt: null, lastReplyAt: null };
   exactKeys(c, ['caseId','organizationId','organizationDisplayName','schoolId','schoolDisplayName','subject','category','priority','status',
-    'assignee','openedBy','openedAt','updatedAt','closedAt','version','noteCount'], drift);
+    'assignee','openedBy','openedAt','updatedAt','closedAt','version','noteCount','fromSchool','needsReply','lastSchoolMessageAt','lastReplyAt'], drift);
   if (!isUuid(c.caseId) || !isUuid(c.organizationId) || !label(c.organizationDisplayName, 300) || !nullable(c.schoolId, isUuid)
     || (c.schoolId === null) !== (c.schoolDisplayName === null) || (c.schoolDisplayName !== null && !label(c.schoolDisplayName, 300))
     || !text(c.subject, 3, HQ_SUPPORT_SUBJECT_MAX) || !has(HQ_SUPPORT_CATEGORIES, c.category) || !has(HQ_SUPPORT_PRIORITIES, c.priority)
     || !has(HQ_SUPPORT_STATUSES, c.status) || !isTimestamp(c.openedAt) || !isTimestamp(c.updatedAt) || !nullable(c.closedAt, isTimestamp)
     || (c.status === 'CLOSED') !== (c.closedAt !== null) || Date.parse(c.updatedAt as string) < Date.parse(c.openedAt as string)
-    || !isInt(c.version, 1, 999_999_999) || !isInt(c.noteCount, 0, COUNT_MAX)) drift();
+    || !isInt(c.version, 1, 999_999_999) || !isInt(c.noteCount, 0, COUNT_MAX)
+    || typeof c.fromSchool !== 'boolean' || typeof c.needsReply !== 'boolean' || !nullable(c.lastSchoolMessageAt, isTimestamp) || !nullable(c.lastReplyAt, isTimestamp)
+    || (c.needsReply && (!c.fromSchool || c.status !== 'OPEN' || c.lastSchoolMessageAt === null))
+    || (!c.fromSchool && c.lastReplyAt !== null)) drift();
   if (c.assignee !== null) person(c.assignee);
   person(c.openedBy);
   return c as unknown as HqSupportCase;
@@ -116,10 +131,10 @@ function event(value: unknown): HqSupportEvent {
   exactKeys(e, ['seq','kind','actor','note','statusFrom','statusTo','priorityFrom','priorityTo','assigneeChanged','assigneeTo','occurredAt'], drift);
   person(e.actor);
   const st = (v: unknown) => v === null || has(HQ_SUPPORT_STATUSES, v), pr = (v: unknown) => v === null || has(HQ_SUPPORT_PRIORITIES, v);
-  if (!isInt(e.seq, 1, COUNT_MAX) || !has(['OPENED','NOTE','CHANGED'], e.kind) || !isTimestamp(e.occurredAt) || typeof e.assigneeChanged !== 'boolean'
+  if (!isInt(e.seq, 1, COUNT_MAX) || !has(['OPENED','NOTE','CHANGED','REPLY'], e.kind) || !isTimestamp(e.occurredAt) || typeof e.assigneeChanged !== 'boolean'
     || (e.note !== null && !text(e.note, 1, HQ_SUPPORT_NOTE_MAX)) || !st(e.statusFrom) || !st(e.statusTo) || !pr(e.priorityFrom) || !pr(e.priorityTo)
     || (e.statusFrom === null) !== (e.statusTo === null) || (e.priorityFrom === null) !== (e.priorityTo === null)
-    || (!e.assigneeChanged && e.assigneeTo !== null) || (e.kind === 'NOTE' && e.note === null)
+    || (!e.assigneeChanged && e.assigneeTo !== null) || ((e.kind === 'NOTE' || e.kind === 'REPLY') && e.note === null)
     || (e.kind === 'CHANGED' && e.statusTo === null && e.priorityTo === null && !e.assigneeChanged)
     || (e.kind !== 'CHANGED' && (e.statusTo !== null || e.priorityTo !== null || e.assigneeChanged))) drift();
   if (e.assigneeTo !== null) person(e.assigneeTo);
@@ -128,7 +143,7 @@ function event(value: unknown): HqSupportEvent {
 export function validateHqSupportCaseList(value: unknown): HqSupportCaseList {
   const r = record(value, drift); exactKeys(r, ['cases','limit','nextCursor','summary','viewer','asOf'], drift);
   if (!Array.isArray(r.cases) || !isInt(r.limit, 1, 100) || r.cases.length > (r.limit as number) || !isTimestamp(r.asOf)) drift();
-  const cases = (r.cases as unknown[]).map(supportCase);
+  const cases = (r.cases as unknown[]).map((c) => supportCase(c));
   for (let i = 1; i < cases.length; i++) {
     const a = cases[i - 1]!, b = cases[i]!;
     if (a.openedAt < b.openedAt || (a.openedAt === b.openedAt && a.caseId <= b.caseId)) drift();
@@ -156,9 +171,8 @@ export function validateHqSupportCaseDetail(value: unknown): HqSupportCaseDetail
 }
 export function validateHqSupportReceipt(value: unknown): HqSupportReceipt {
   const r = record(value, drift); exactKeys(r, ['operation','case','replayed'], drift);
-  if (!has(['OPEN','NOTE','CHANGE'], r.operation) || typeof r.replayed !== 'boolean') drift();
-  supportCase(r.case);
-  return r as unknown as HqSupportReceipt;
+  if (!has(['OPEN','NOTE','CHANGE','REPLY'], r.operation) || typeof r.replayed !== 'boolean') drift();
+  return { operation: r.operation as HqSupportReceipt['operation'], case: supportCase(r.case, r.replayed === true), replayed: r.replayed as boolean };
 }
 
 export interface HqSupportSchoolChoice { schoolId: string; schoolDisplayName: string; organizationId: string; organizationDisplayName: string }
@@ -171,4 +185,22 @@ export function validateHqSupportSchools(value: unknown): HqSupportSchools {
     if (!isUuid(s.schoolId) || !isUuid(s.organizationId) || !label(s.schoolDisplayName, 300) || !label(s.organizationDisplayName, 300)) drift();
   }
   return r as unknown as HqSupportSchools;
+}
+
+// ---------- 0713 alerts ----------
+/** The menu badge and dashboard: school requests waiting for an HQ reply. Names, subjects and times only. */
+export interface HqSupportAlert { caseId: string; subject: string; priority: HqSupportPriority; schoolDisplayName: string; organizationDisplayName: string; lastSchoolMessageAt: string }
+export interface HqSupportAlerts { needsReply: number; latest: HqSupportAlert[]; asOf: string }
+export function validateHqSupportAlerts(value: unknown): HqSupportAlerts {
+  const r = record(value, drift); exactKeys(r, ['needsReply','latest','asOf'], drift);
+  if (!isInt(r.needsReply, 0, COUNT_MAX) || !Array.isArray(r.latest) || r.latest.length > 10 || r.latest.length > (r.needsReply as number) || !isTimestamp(r.asOf)) drift();
+  const latest = (r.latest as unknown[]).map((value) => {
+    const a = record(value, drift); exactKeys(a, ['caseId','subject','priority','schoolDisplayName','organizationDisplayName','lastSchoolMessageAt'], drift);
+    if (!isUuid(a.caseId) || !text(a.subject, 3, HQ_SUPPORT_SUBJECT_MAX) || !has(HQ_SUPPORT_PRIORITIES, a.priority) || !label(a.schoolDisplayName, 300)
+      || !label(a.organizationDisplayName, 300) || !isTimestamp(a.lastSchoolMessageAt)) drift();
+    return a as unknown as HqSupportAlert;
+  });
+  if (r.latest.length < 10 && r.latest.length !== r.needsReply) drift();
+  for (let i = 1; i < latest.length; i++) if (latest[i - 1]!.lastSchoolMessageAt < latest[i]!.lastSchoolMessageAt) drift();
+  return r as unknown as HqSupportAlerts;
 }

@@ -19,7 +19,8 @@ const U = () => randomUUID(), T = '2026-11-01T00:00:00.000Z', T2 = '2026-11-02T0
 const person = (n = 'HQ Agent') => ({ principalId: U(), displayName: n });
 const kase = (patch = {}) => ({ caseId: U(), organizationId: U(), organizationDisplayName: 'Fixture Dojo', schoolId: null, schoolDisplayName: null,
   subject: 'Owner cannot sign in', category: 'ACCOUNT_ACCESS', priority: 'HIGH', status: 'OPEN', assignee: null, openedBy: person(),
-  openedAt: T, updatedAt: T, closedAt: null, version: 1, noteCount: 1, ...patch });
+  openedAt: T, updatedAt: T, closedAt: null, version: 1, noteCount: 1,
+  fromSchool: false, needsReply: false, lastSchoolMessageAt: null, lastReplyAt: null, ...patch });
 const ev = (patch = {}) => ({ seq: 1, kind: 'OPENED', actor: person(), note: 'First note', statusFrom: null, statusTo: null, priorityFrom: null, priorityTo: null,
   assigneeChanged: false, assigneeTo: null, occurredAt: T, ...patch });
 const summary = (patch = {}) => ({ OPEN: 1, WAITING_ON_SCHOOL: 0, RESOLVED: 0, CLOSED: 0, urgentActive: 0, unassignedActive: 1, ...patch });
@@ -27,7 +28,7 @@ const list = (patch = {}) => ({ cases: [kase()], limit: 50, nextCursor: null, su
 
 test('contracts: the HQ support command values match the SaaS command table', () => {
   assert.deepEqual(contracts.HQ_SUPPORT_COMMANDS, { open: contracts.SAAS_COMMANDS.openSupportCase, note: contracts.SAAS_COMMANDS.addSupportNote,
-    change: contracts.SAAS_COMMANDS.changeSupportCase });
+    change: contracts.SAAS_COMMANDS.changeSupportCase, reply: contracts.SAAS_COMMANDS.replySupportCase });
 });
 
 test('contracts: inputs are closed, trimmed and bounded', () => {
@@ -62,6 +63,26 @@ test('contracts: responses are closed and internally consistent', () => {
     [ev(), ev({ seq: 2, kind: 'NOTE', statusFrom: 'OPEN', statusTo: 'CLOSED' })], [ev(), ev({ seq: 2, kind: 'OPENED' })]])
     assert.throws(() => contracts.validateHqSupportCaseDetail({ ...detail, case: kase({ noteCount: events.filter(e => e.note).length }), events }));
   assert.throws(() => contracts.validateHqSupportCaseDetail({ ...detail, case: kase({ noteCount: 5 }) }), 'note count must match');
+  // 0713: from-school facts are consistent; a REPLY carries its message; a replayed pre-0713 receipt reads as not from a school.
+  const school = kase({ schoolId: U(), schoolDisplayName: 'Main', fromSchool: true, needsReply: true, lastSchoolMessageAt: T });
+  assert.equal(contracts.validateHqSupportCaseList(list({ cases: [school] })).cases[0].needsReply, true);
+  for (const bad of [kase({ needsReply: true, lastSchoolMessageAt: T }), { ...school, status: 'WAITING_ON_SCHOOL' }, { ...school, lastSchoolMessageAt: null },
+    kase({ lastReplyAt: T }), kase({ fromSchool: 'yes' }), (({ needsReply, ...r }) => r)(school)])
+    assert.throws(() => contracts.validateHqSupportCaseList(list({ cases: [bad] })), JSON.stringify(bad).slice(0, 60));
+  assert.equal(contracts.validateHqSupportCaseDetail({ ...detail, case: kase({ noteCount: 2 }), events: [ev(), ev({ seq: 2, kind: 'REPLY', note: 'We fixed it' })] }).events[1].kind, 'REPLY');
+  assert.throws(() => contracts.validateHqSupportCaseDetail({ ...detail, case: kase({ noteCount: 1 }), events: [ev(), ev({ seq: 2, kind: 'REPLY', note: null })] }));
+  const old = (({ fromSchool, needsReply, lastSchoolMessageAt, lastReplyAt, ...r }) => r)(kase());
+  assert.equal(contracts.validateHqSupportReceipt({ operation: 'NOTE', case: old, replayed: true }).case.fromSchool, false);
+  assert.throws(() => contracts.validateHqSupportReceipt({ operation: 'NOTE', case: old, replayed: false }), 'only a replay may be pre-0713');
+  assert.deepEqual(contracts.validateHqSupportReplyInput({ expectedVersion: 2, message: 'Fixed', waitForSchool: true }), { expectedVersion: 2, message: 'Fixed', waitForSchool: true });
+  for (const bad of [{ expectedVersion: 2, message: 'Fixed' }, { expectedVersion: 2, message: '', waitForSchool: false }, { expectedVersion: 2, message: 'x', waitForSchool: 'no' },
+    { expectedVersion: 2, message: 'x', waitForSchool: false, note: 'y' }])
+    assert.throws(() => contracts.validateHqSupportReplyInput(bad), JSON.stringify(bad));
+  const alert = (patch = {}) => ({ caseId: U(), subject: 'Cannot sign in', priority: 'NORMAL', schoolDisplayName: 'Main', organizationDisplayName: 'Fixture Dojo', lastSchoolMessageAt: T2, ...patch });
+  assert.equal(contracts.validateHqSupportAlerts({ needsReply: 2, latest: [alert(), alert({ lastSchoolMessageAt: T })], asOf: T2 }).needsReply, 2);
+  for (const bad of [{ needsReply: 3, latest: [alert()], asOf: T2 }, { needsReply: 2, latest: [alert({ lastSchoolMessageAt: T }), alert()], asOf: T2 },
+    { needsReply: 1, latest: [alert({ note: 'their words' })], asOf: T2 }, { needsReply: 0, latest: [alert()], asOf: T2 }])
+    assert.throws(() => contracts.validateHqSupportAlerts(bad), JSON.stringify(bad).slice(0, 80));
   const pick = (patch = {}) => ({ schoolId: U(), schoolDisplayName: 'Main', organizationId: U(), organizationDisplayName: 'Fixture Dojo', ...patch });
   assert.equal(contracts.validateHqSupportSchools({ schools: [pick()], truncated: false, asOf: T2 }).schools.length, 1);
   for (const bad of [{ schools: [pick({ email: 'a@example.test' })], truncated: false, asOf: T2 }, { schools: [pick({ schoolId: 'x' })], truncated: false, asOf: T2 }, { schools: [pick({ schoolDisplayName: 'x'.repeat(301) })], truncated: false, asOf: T2 },
@@ -117,6 +138,25 @@ test('HTTP: reads and commands forward only the verified subject, the path id, t
     reply = () => ({ operation: 'NOTE', case: kase(), replayed: false });
     assert.equal((await send(`${base}/hq/support/cases/${c.caseId}/notes`, { method: 'POST', headers: command('hq-support-case-note', key), body: JSON.stringify({ expectedVersion: 1, note: 'Hi' }) })).status, 200);
     assert.deepEqual(calls.at(-1), ['addSupportNote', ['verified-human', c.caseId, JSON.stringify({ expectedVersion: 1, note: 'Hi' }), key]]);
+    // 0713: alerts read and the reply command.
+    reply = () => ({ needsReply: 0, latest: [], asOf: T2 });
+    const alerts = await send(`${base}/hq/support/cases/alerts`);
+    assert.equal(alerts.status, 200, alerts.body); assert.deepEqual(calls.at(-1), ['readSupportAlerts', ['verified-human']]);
+    assert.equal((await send(`${base}/hq/support/cases/alerts?all=1`)).status, 400, 'alerts take no query');
+    const r0 = { expectedVersion: 1, message: 'We fixed it', waitForSchool: true };
+    reply = () => ({ operation: 'REPLY', case: { ...c, version: 2 }, replayed: false });
+    const replied = await send(`${base}/hq/support/cases/${c.caseId}/replies`, { method: 'POST', headers: command('hq-support-case-reply', key), body: JSON.stringify(r0) });
+    assert.equal(replied.status, 200, replied.body);
+    assert.deepEqual(calls.at(-1), ['replySupportCase', ['verified-human', c.caseId, JSON.stringify(r0), key]]);
+    const k = calls.length;
+    assert.equal((await send(`${base}/hq/support/cases/${c.caseId}/replies`, { method: 'POST', headers: command('hq-support-case-note'), body: JSON.stringify(r0) })).status, 403, 'wrong marker');
+    assert.equal((await send(`${base}/hq/support/cases/${c.caseId}/replies`, { method: 'POST', headers: command('hq-support-case-reply'), body: JSON.stringify({ ...r0, waitForSchool: 'yes' }) })).status, 400);
+    assert.equal(calls.length, k);
+    reply = () => ({ operation: 'REPLY', case: kase(), replayed: false });
+    assert.equal((await send(`${base}/hq/support/cases/${c.caseId}/replies`, { method: 'POST', headers: command('hq-support-case-reply'), body: JSON.stringify(r0) })).status, 503, 'an answer about another case is never shown');
+    reply = () => { const e = new Error('SUPPORT_NOT_FROM_SCHOOL'); e.code = '23514'; throw e; };
+    const notSchool = await send(`${base}/hq/support/cases/${c.caseId}/replies`, { method: 'POST', headers: command('hq-support-case-reply'), body: JSON.stringify(r0) });
+    assert.deepEqual([notSchool.status, JSON.parse(notSchool.body).code], [422, 'SUPPORT_NOT_FROM_SCHOOL']);
     for (const [code, message, status, answer] of [['42501', 'SAAS_FORBIDDEN', 403, 'SAAS_FORBIDDEN'], ['40001', 'SAAS_VERSION_CONFLICT', 409, 'SAAS_VERSION_CONFLICT'],
       ['23514', 'SUPPORT_CASE_CLOSED', 422, 'SUPPORT_CASE_CLOSED'], ['23514', 'SUPPORT_ASSIGNEE_NOT_ELIGIBLE', 422, 'SUPPORT_ASSIGNEE_NOT_ELIGIBLE'],
       ['23514', 'SUPPORT_NO_CHANGE', 422, 'SUPPORT_NO_CHANGE'], ['23505', 'SAAS_KEY_REUSED', 409, 'IDEMPOTENCY_KEY_REUSED']]) {

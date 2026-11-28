@@ -23,6 +23,9 @@ export class HqSupportController {
   /** The schools a case can be opened for (names and ids only). Declared before :caseId so it is never read as an id. */
   @Get('schools') @UseGuards(SaasReadGuard)
   async schools(@Req() req: HonRequest) { return { data: await this.support.schools(subject(req)) }; }
+  /** 0713: school requests waiting for an HQ reply. Declared before :caseId so it is never read as an id. */
+  @Get('alerts') @UseGuards(SaasReadGuard)
+  async alerts(@Req() req: HonRequest) { return { data: await this.support.alerts(subject(req)) }; }
   @Get(':caseId') @UseGuards(SaasReadGuard)
   async read(@Req() req: HonRequest, @Param('caseId') caseId: string) { return { data: await this.support.read(subject(req), caseId) }; }
   @Post() @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.openSupportCase)
@@ -32,6 +35,10 @@ export class HqSupportController {
   @Post(':caseId/notes') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.addSupportNote)
   async note(@Req() req: HonRequest, @Param('caseId') caseId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
     return { data: await this.support.note(subject(req), caseId, body, key) };
+  }
+  @Post(':caseId/replies') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.replySupportCase)
+  async reply(@Req() req: HonRequest, @Param('caseId') caseId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {
+    return { data: await this.support.reply(subject(req), caseId, body, key) };
   }
   @Post(':caseId/changes') @HttpCode(200) @UseGuards(SaasCommandGuard) @SaasCommandName(SAAS_COMMANDS.changeSupportCase)
   async change(@Req() req: HonRequest, @Param('caseId') caseId: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined) {

@@ -24,6 +24,6 @@ export function Outcome({ language, outcome, done, canRetry, onTryAgain, childre
     {canRetry && <button type="button" className={styles.secondary} onClick={onTryAgain}>{t('tryAgain')}</button>}</div>;
   const key: SupportKey = outcome.kind === 'CHANGED' ? 'changed' : outcome.kind === 'KEY_REUSED' ? 'keyReused' : outcome.kind === 'DENIED' ? 'deniedCommand'
     : outcome.kind === 'INVALID' ? 'invalidCommand' : outcome.kind === 'GONE' ? 'goneCommand' : outcome.kind === 'LOCAL_INVALID' ? (outcome.form === 'open' ? 'localInvalid' : outcome.form === 'note' ? 'localInvalidNote' : 'localInvalidChange')
-    : outcome.code === 'SUPPORT_ASSIGNEE_NOT_ELIGIBLE' ? 'refusedAssignee' : 'refusedNoChange';
+    : outcome.code === 'SUPPORT_ASSIGNEE_NOT_ELIGIBLE' ? 'refusedAssignee' : outcome.code === 'SUPPORT_NOT_FROM_SCHOOL' ? 'notFromSchool' : 'refusedNoChange';
   return <p className={styles.outcome} data-tone="blocked" role="alert" data-support-outcome={outcome.kind.toLowerCase()}>{t(key)}</p>;
 }

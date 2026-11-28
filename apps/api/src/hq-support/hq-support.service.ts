@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { saasUuid, validateHqSupportCaseDetail, validateHqSupportCaseList, validateHqSupportChangeInput, validateHqSupportListQuery,
-  validateHqSupportNoteInput, validateHqSupportOpenInput, validateHqSupportReceipt, validateHqSupportSchools } from '@hon/contracts';
+  validateHqSupportNoteInput, validateHqSupportOpenInput, validateHqSupportReceipt, validateHqSupportSchools,
+  validateHqSupportAlerts, validateHqSupportReplyInput } from '@hon/contracts';
 import { BadRequestException } from '@nestjs/common';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
@@ -15,6 +16,8 @@ export class HqSupportService {
     return this.billing.call('readSupportCases', [subject, q.status, q.organizationId, q.cursor?.openedAt ?? null, q.cursor?.caseId ?? null, String(q.limit)],
       validateHqSupportCaseList);
   }
+  /** 0713: school requests waiting for an HQ reply (menu badge, dashboard). */
+  async alerts(subject: string) { return this.billing.call('readSupportAlerts', [subject], validateHqSupportAlerts); }
   async schools(subject: string) { return this.billing.call('readSupportSchools', [subject], validateHqSupportSchools); }
   async read(subject: string, caseId: unknown) {
     const id = parse(() => saasUuid(caseId));
@@ -29,6 +32,13 @@ export class HqSupportService {
   async note(subject: string, caseId: unknown, body: unknown, key: unknown) {
     const [id, input, k] = parse(() => [saasUuid(caseId), validateHqSupportNoteInput(body), saasUuid(key)] as const);
     return this.billing.call('addSupportNote', [subject, id, JSON.stringify(input), k], validateHqSupportReceipt);
+  }
+  /** 0713: a reply the school sees as "HON support". */
+  async reply(subject: string, caseId: unknown, body: unknown, key: unknown) {
+    const [id, input, k] = parse(() => [saasUuid(caseId), validateHqSupportReplyInput(body), saasUuid(key)] as const);
+    return this.billing.call('replySupportCase', [subject, id, JSON.stringify(input), k], (v) => {
+      const r = validateHqSupportReceipt(v); if (r.case.caseId.toLowerCase() !== id.toLowerCase()) throw new Error('mismatch'); return r;
+    });
   }
   async change(subject: string, caseId: unknown, body: unknown, key: unknown) {
     const [id, input, k] = parse(() => [saasUuid(caseId), validateHqSupportChangeInput(body), saasUuid(key)] as const);

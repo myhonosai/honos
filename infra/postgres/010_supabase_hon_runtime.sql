@@ -2623,6 +2623,12 @@ DO $$ DECLARE r text; f text; BEGIN
     GRANT EXECUTE ON FUNCTION hon.read_hq_support_schools(text) TO hon_runtime;
   END IF;
 END $$;
+-- 0713 school help, HQ side: HQ replies the school sees and the HQ alert read (when present).
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'hon_runtime') AND to_regprocedure('hon.reply_to_hq_support_case(text,uuid,jsonb,uuid)') IS NOT NULL THEN
+    GRANT EXECUTE ON FUNCTION hon.reply_to_hq_support_case(text,uuid,jsonb,uuid), hon.read_hq_support_alerts(text) TO hon_runtime;
+  END IF;
+END $$;
 -- M1 0252 HQ marketing campaigns: no table privileges; three commands and two reads are the only runtime boundary.
 DO $$ DECLARE r text; t text; BEGIN
   FOREACH t IN ARRAY ARRAY['hq_marketing_campaigns','hq_marketing_campaign_versions','hq_marketing_requests'] LOOP

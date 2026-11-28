@@ -64,6 +64,21 @@ a different body is refused (409 `IDEMPOTENCY_KEY_REUSED`). Other refusals: 404 
 school or case), 409 `SAAS_VERSION_CONFLICT`, 422 `SUPPORT_CASE_CLOSED`, 422 `SUPPORT_ASSIGNEE_NOT_ELIGIBLE`,
 422 `SUPPORT_NO_CHANGE`, 409 `SAAS_OUTCOME_UNKNOWN` (busy; retry the identical request).
 
+### School replies and alerts (0713)
+
+| Route | Marker / answer |
+| --- | --- |
+| `GET /v1/hq/support/cases/alerts` | `needsReply` count and the 10 newest such cases (id, subject, priority, school and organization names, `lastSchoolMessageAt`), `asOf` |
+| `POST /v1/hq/support/cases/:caseId/replies` | `hq-support-case-reply`; body `expectedVersion`, `message`, `waitForSchool` |
+
+A reply is a `REPLY` event. Only HQ support people write it, only on a case that came from a school (else 422
+`SUPPORT_NOT_FROM_SCHOOL`), never on a closed case. With `waitForSchool` the case also moves to WAITING_ON_SCHOOL with a
+recorded CHANGED event. The school sees the reply as "HON support". Like 0232 there is no audit row and no outbox event.
+Every case now carries `fromSchool`, `needsReply` (active and the school wrote last), `lastSchoolMessageAt` and
+`lastReplyAt`. The HQ menu shows the needs-reply count; HQ Support shows the newest three and a switch for desktop
+notices in this browser. While HQ is open the count is read every minute and when the tab comes back; a rise shows one
+notice naming the school and subject only.
+
 ## Pages
 
 - `/hq/support`: summary (urgent active, unassigned active), filters with counts (Active, each status, All), the case
@@ -97,7 +112,7 @@ Behavior shared with the other HQ pages:
 
 ## Not included
 
-- No messages to schools, no email, no school-visible portal, no attachments.
+- No email or text to schools or to HQ people (0713 replies show only inside the school's request), no attachments.
 - No automatic case creation from failed operations or AI escalations (the dashboard's "Failed operations" link still
   points here as a place to record them by hand).
 - Who holds `hq.support.manage` is set through existing HQ operator grants; there is no new grant screen.

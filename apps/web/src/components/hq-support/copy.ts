@@ -35,6 +35,12 @@ const en = {
   change: 'Update the case', changeNote: 'Note (optional)', submitChange: 'Save changes', changedOk: 'Case updated.', keep: 'No change',
   closedFinal: 'This case is closed. Closed cases cannot be changed or noted. Open a new case if the school needs more help.',
   reopenHelp: 'A resolved case can be reopened by setting it back to Open.', messageOwners: 'Message the owners',
+  // 0713: answering a school inside its request, and the alerts.
+  eventREPLY: 'Replied to the school', replyTitle: 'Reply to the school', replyLabel: 'Your answer', replyHelp: 'The school sees this in Ask HON for help, signed "HON support". Your name and internal notes stay hidden. Up to 4,000 characters.',
+  waitForSchool: 'Then wait for the school to answer (status: Waiting on school)', submitReply: 'Send reply', replied: 'Reply sent to the school.',
+  fromSchool: 'From school', needsReply: 'Needs reply', needsReplyBanner: '{count} school request(s) waiting for your reply.', notFromSchool: 'This case was opened by HQ, so there is no school request to reply in. Use Message the owners.',
+  alertsOn: 'Desktop alerts are on while HQ is open.', alertsOff: 'Get a desktop alert when a school asks for help (while HQ is open).', alertsTurnOn: 'Turn on alerts', alertsBlocked: 'Desktop alerts are blocked in this browser. The count in the menu still updates.',
+  alertTitle: 'A school needs help', alertBody: '{school}: {subject}',
 };
 type Key = keyof typeof en;
 const ko: Record<Key, string> = {
@@ -73,6 +79,11 @@ const ko: Record<Key, string> = {
   change: '지원 건 변경', changeNote: '메모(선택)', submitChange: '변경 저장', changedOk: '지원 건이 변경되었습니다.', keep: '변경 안 함',
   closedFinal: '이 지원 건은 종료되었습니다. 종료된 건은 변경하거나 메모할 수 없습니다. 도장에 도움이 더 필요하면 새 지원 건을 여세요.',
   reopenHelp: '해결된 건은 상태를 다시 열림으로 바꾸어 다시 열 수 있습니다.', messageOwners: '원장님께 메시지 보내기',
+  eventREPLY: '도장에 답장했습니다', replyTitle: '도장에 답장', replyLabel: '답변', replyHelp: '도장은 "HON 도움 요청"에서 "HON support" 이름으로 이 답변을 봅니다. 이름과 내부 메모는 보이지 않습니다. 최대 4,000자.',
+  waitForSchool: '보낸 후 도장의 답을 기다림 (상태: 도장 대기)', submitReply: '답장 보내기', replied: '도장에 답장을 보냈습니다.',
+  fromSchool: '도장 요청', needsReply: '답장 필요', needsReplyBanner: '답장을 기다리는 도장 요청 {count}건.', notFromSchool: 'HQ가 연 지원 건이라 답장할 도장 요청이 없습니다. 소유자에게 메시지를 사용하세요.',
+  alertsOn: 'HQ가 열려 있는 동안 데스크톱 알림이 켜져 있습니다.', alertsOff: '도장이 도움을 요청하면 데스크톱 알림 받기 (HQ가 열려 있는 동안).', alertsTurnOn: '알림 켜기', alertsBlocked: '이 브라우저에서 데스크톱 알림이 차단되어 있습니다. 메뉴의 숫자는 계속 업데이트됩니다.',
+  alertTitle: '도움이 필요한 도장', alertBody: '{school}: {subject}',
 };
 const es: Record<Key, string> = {
   title: 'Soporte', caseTitle: 'Caso de soporte', back: 'Todos los casos', refresh: 'Actualizar',
@@ -110,6 +121,11 @@ const es: Record<Key, string> = {
   change: 'Actualizar el caso', changeNote: 'Nota (opcional)', submitChange: 'Guardar cambios', changedOk: 'Caso actualizado.', keep: 'Sin cambio',
   closedFinal: 'Este caso está cerrado. Los casos cerrados no se pueden cambiar ni anotar. Abre un caso nuevo si la escuela necesita más ayuda.',
   reopenHelp: 'Un caso resuelto se puede reabrir poniéndolo de nuevo en Abierto.', messageOwners: 'Escribir a los dueños',
+  eventREPLY: 'Respondió a la escuela', replyTitle: 'Responder a la escuela', replyLabel: 'Su respuesta', replyHelp: 'La escuela lo ve en Pedir ayuda a HON, firmado "HON support". Su nombre y las notas internas no se muestran. Hasta 4.000 caracteres.',
+  waitForSchool: 'Luego esperar la respuesta de la escuela (estado: Esperando a la escuela)', submitReply: 'Enviar respuesta', replied: 'Respuesta enviada a la escuela.',
+  fromSchool: 'De la escuela', needsReply: 'Necesita respuesta', needsReplyBanner: '{count} solicitud(es) de escuelas esperan su respuesta.', notFromSchool: 'HQ abrió este caso, así que no hay solicitud de la escuela donde responder. Use Enviar mensaje a los propietarios.',
+  alertsOn: 'Las alertas de escritorio están activas mientras HQ está abierto.', alertsOff: 'Reciba una alerta de escritorio cuando una escuela pida ayuda (mientras HQ está abierto).', alertsTurnOn: 'Activar alertas', alertsBlocked: 'Las alertas de escritorio están bloqueadas en este navegador. El número del menú se sigue actualizando.',
+  alertTitle: 'Una escuela necesita ayuda', alertBody: '{school}: {subject}',
 };
 export type SupportKey = Key;
 export function supportText(language: string, key: Key, vars: Record<string, string> = {}): string {

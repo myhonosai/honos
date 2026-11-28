@@ -1,5 +1,6 @@
 'use client';
 
+import { HqSupportBadge } from '../hq-support/alerts';
 import { SchoolSwitcher } from '../school-switcher/switcher';
 import { useLocale } from '../localization/provider';
 import React, { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -120,7 +121,7 @@ export function HqModernShell({ children }: { children: ReactNode }): React.Reac
         if (!group) return <Link key={item.path} href={item.path} onClick={() => setMenu(false)} aria-current={hqNavMatch(path) === item.path ? 'page' : undefined}><HqIcon name={item.icon}/>{text(item.title)}</Link>;
         const links = [...(group.overview ? [group.overview] : []), ...group.children];
         return <details className={styles.growthNav} key={`${group.key}:${hqGroupContains(group, path)}`} open={hqGroupContains(group, path)} data-hq-nav-group={group.key}>
-          <summary><HqIcon name={group.icon}/><span>{text(group.title)}</span></summary>
+          <summary><HqIcon name={group.icon}/><span>{text(group.title)}</span>{group.key === 'inbox' && access.kind === 'ready' ? <HqSupportBadge language={preferences?.language ?? 'en'}/> : null}</summary>
           {links.map((child) => <Link key={child.path} href={child.path} onClick={() => setMenu(false)} aria-current={hqNavMatch(path) === child.path ? 'page' : undefined}>{child === group.overview ? null : <HqIcon name={child.icon} size={17}/>}{text(child.title)}</Link>)}
         </details>;
       })}

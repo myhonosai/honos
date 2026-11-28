@@ -104,7 +104,7 @@ try{
  const c1=opened.case;
  assert.deepEqual({...c1,caseId:null,openedAt:null,updatedAt:null},{caseId:null,organizationId:ORG,organizationDisplayName:'HQSC Fixture Dojo',schoolId:S,schoolDisplayName:'HQSC Fixture Dojo Main',
   subject:'Owner cannot sign in',category:'ACCOUNT_ACCESS',priority:'HIGH',status:'OPEN',assignee:null,openedBy:{principalId:P('supportAgent'),displayName:'Fixture supportAgent'},
-  openedAt:null,updatedAt:null,closedAt:null,version:1,noteCount:1});
+  openedAt:null,updatedAt:null,closedAt:null,version:1,noteCount:1,fromSchool:false,needsReply:false,lastSchoolMessageAt:null,lastReplyAt:null});
  const replay=await support.open(H('supportAgent'),openInput(),k1);
  assert.equal(replay.replayed,true); assert.deepEqual(replay.case,c1,'replay returns the first receipt');
  await deny(support.open(H('supportAgent'),openInput({priority:'LOW'}),k1),409,'IDEMPOTENCY_KEY_REUSED');

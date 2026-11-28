@@ -9,6 +9,7 @@ import { shellText, type ShellKey } from './copy';
 import { ShellIcon } from './icons';
 import { HonOrb } from '../hon-command/hon-orb';
 import { ShellHonCorner } from './hon-corner';
+import { SchoolHelpDot } from '../school-support/help-dot';
 import { SCHOOL_TOUR_STEPS, SchoolTourDialog } from './tour';
 import { tourCopy } from './tour-copy';
 import { SignOutButton } from '../auth/sign-out-button';
@@ -155,7 +156,8 @@ export function SchoolShellFrame(props: SchoolShellFrameProps): React.ReactEleme
         {props.search ?? <a className={styles.iconButton} href="/staff/search" aria-label={t('search')} title={t('search')}><ShellIcon name="search" /></a>}
         {/* Owner 2026-11-28: help is one tap from every page; the page it came from rides in the fragment only. */}
         {verified && path !== '/staff/help' ? <a className={styles.iconButton} href={path.startsWith('/staff/') ? `/staff/help#${path}` : '/staff/help'} aria-label={t('helpButton')}
-          title={t('helpButtonTitle')} data-shell-help=""><span aria-hidden="true" className={styles.helpMark}>?</span></a> : null}
+          title={t('helpButtonTitle')} data-shell-help="" style={{ position: 'relative' }}><span aria-hidden="true" className={styles.helpMark}>?</span>
+          <SchoolHelpDot label={t('helpAnswered')} /></a> : null}
       </header>
       {!sidebar && <div className={styles.schoolStrip}>{school}</div>}
       {active?.steps && <nav className={styles.steps} aria-label={t('stepsNav')} data-shell-steps=""><ol>

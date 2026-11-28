@@ -10,7 +10,7 @@ const context = (patch = {}) => ({ ...scope, principalType: 'HUMAN_USER', source
 const status = (value, code) => (error) => { assert.equal(error.getStatus(), value); if (code) assert.equal(error.getResponse().code, code); return true; };
 const rid = randomUUID();
 const request = (patch = {}) => ({ requestId: rid, topic: 'GETTING_STARTED', subject: 'How do I start?', status: 'OPEN', pageHint: null, openedAt: '2026-11-13T07:00:00.000Z',
-  updatedAt: '2026-11-13T07:00:00.000Z', closedAt: null, messages: [{ seq: 1, note: 'Hello', at: '2026-11-13T07:00:00.000Z', author: 'Owner' }], ...patch });
+  updatedAt: '2026-11-13T07:00:00.000Z', closedAt: null, messages: [{ seq: 1, note: 'Hello', at: '2026-11-13T07:00:00.000Z', author: 'Owner', from: 'SCHOOL' }], awaitingSchool: false, ...patch });
 const ask = { topic: 'GETTING_STARTED', subject: 'How do I start?', message: 'Hello', pageHint: null };
 function fixture(options = {}) {
   const queries = [];
@@ -20,7 +20,7 @@ function fixture(options = {}) {
         queries.push({ sql, args, readOnly });
         if (/^SET LOCAL/.test(sql) || /set_config\('app\.hon_source','HUMAN_UI'/.test(sql)) return { rows: [] };
         if (options.error) throw options.error;
-        if (/read_school_support_requests/.test(sql)) return { rows: [{ data: options.read ?? { requests: [request()], limits: { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, checkedAt: '2026-11-13T07:00:00.000Z' } }] };
+        if (/read_school_support_requests/.test(sql)) return { rows: [{ data: options.read ?? { requests: [request()], limits: { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, checkedAt: '2026-11-13T07:00:00.000Z', awaitingSchoolCount: 0 } }] };
         if (/submit_school_support_request|add_school_support_message/.test(sql)) return { rows: [{ data: options.save ?? { record: request(), replayed: false } }] };
         throw new Error('Unexpected SQL: ' + sql);
       } });
@@ -64,7 +64,26 @@ test('database refusals map to stable codes and unknown failures claim nothing',
 });
 
 test('unverifiable lists and receipts, or a receipt for another request, are refused', async () => {
-  await assert.rejects(new SchoolSupportService(fixture({ read: { requests: [request({ status: 'CLOSED' })], limits: { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, checkedAt: '2026-11-13T07:00:00.000Z' } }).db).list(context({ idempotencyKey: '' })), status(503));
+  await assert.rejects(new SchoolSupportService(fixture({ read: { requests: [request({ status: 'CLOSED' })], limits: { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, checkedAt: '2026-11-13T07:00:00.000Z', awaitingSchoolCount: 0 } }).db).list(context({ idempotencyKey: '' })), status(503));
   await assert.rejects(new SchoolSupportService(fixture({ save: { record: request({ secret: 1 }), replayed: false } }).db).submit(context(), ask), status(503));
   await assert.rejects(new SchoolSupportService(fixture({ save: { record: request(), replayed: false } }).db).message(context(), randomUUID(), { message: 'x' }), status(503));
+});
+
+// 0713: HQ replies reach the school as "HON support"; the awaiting flag must match the last message; a pre-0713 replay is read as the school's own.
+test('contracts: HON support replies, the awaiting flag and the awaiting count are consistent', () => {
+  const c = require('@hon/contracts');
+  const hon = { seq: 2, note: 'We fixed it', at: '2026-11-13T08:00:00.000Z', author: 'HON support', from: 'HON' };
+  const school = request().messages[0];
+  assert.equal(c.verifySupportRequest(request({ messages: [school, hon], awaitingSchool: true })).awaitingSchool, true);
+  for (const bad of [request({ messages: [school, hon], awaitingSchool: false }), request({ awaitingSchool: true }),
+    request({ status: 'RESOLVED', messages: [school, hon], updatedAt: '2026-11-13T08:00:00.000Z', awaitingSchool: true }),
+    request({ messages: [{ ...school, from: 'HQ' }] }), request({ messages: [{ ...hon, seq: 1 }].concat([]), awaitingSchool: false })])
+    assert.throws(() => c.verifySupportRequest(bad), JSON.stringify(bad).slice(0, 80));
+  const { awaitingSchool, ...old } = request(); old.messages = old.messages.map(({ from, ...m }) => m);
+  assert.equal(c.verifySupportRequest(old, true).messages[0].from, 'SCHOOL');
+  assert.throws(() => c.verifySupportRequest(old), 'only a replay may be pre-0713');
+  const limits = { requestsPerDay: 10, messagesPerDay: 30, subjectMax: 200, messageMax: 4000 }, at = '2026-11-13T08:00:00.000Z';
+  assert.equal(c.verifySupportRequestList({ requests: [request({ messages: [school, hon], awaitingSchool: true })], limits, checkedAt: at, awaitingSchoolCount: 3 }).awaitingSchoolCount, 3);
+  assert.throws(() => c.verifySupportRequestList({ requests: [request({ messages: [school, hon], awaitingSchool: true })], limits, checkedAt: at, awaitingSchoolCount: 0 }));
+  assert.throws(() => c.verifySupportRequestList({ requests: [], limits, checkedAt: at }));
 });
