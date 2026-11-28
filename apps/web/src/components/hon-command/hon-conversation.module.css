@@ -116,3 +116,10 @@
 .conversation[data-presentation="dock"] .body, .conversation[data-presentation="dock"] .thread { display: flex; flex: 1; flex-direction: column; }
 .conversation[data-presentation="dock"] .composer { margin-top: auto; }
 .conversation[data-presentation="dock"] details.history { display: block; }
+/* Send to HQ under a finished answer (2026-11-28). */
+.sendToHq { display: grid; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px dashed #2f4a63; min-width: 0; }
+.sendToHq label { display: grid; gap: 4px; font-size: 13px; font-weight: 700; }
+.sendToHq input, .sendToHq select, .sendToHq textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #3b5269; border-radius: 10px; padding: 9px 11px; background: #0a1625; color: #eef6fc; font: inherit; }
+.sendToHq > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.sendToHq button { min-height: 40px; padding: 8px 14px; border-radius: 10px; cursor: pointer; }
+.sendToHq [role="alert"] { margin: 0; color: #ffd28a; font-size: 13px; }

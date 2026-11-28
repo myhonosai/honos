@@ -50,7 +50,7 @@ function RequestCard({ r, t, p }: { r: SupportRequest; t: T; p: SupportViewProps
 /** Pure view: what is shown is either the server's verified list or this person's unsent draft. */
 export function SupportView(p: SupportViewProps): React.ReactElement {
   const t: T = (key, vars) => supportText(p.language, key, vars);
-  const head = <div className={styles.head}><div><h1>{t('title')}</h1><p className={styles.intro}>{t('intro')}</p></div>
+  const head = <div className={styles.head}><div><h1>{t('title')}</h1><p className={styles.intro}>{t('intro')}</p><p className={styles.meta} data-hon-first="">{t('honFirst')}</p></div>
     {p.list.state === 'READY' && <button type="button" className={styles.secondary} disabled={p.locked} onClick={p.onRefresh}>{t('refresh')}</button>}</div>;
   if (p.waiting) return <section className={styles.page}>{head}<p className={styles.meta} role="status">{t('waiting')}</p></section>;
   if (p.concealed) return <section className={styles.page}>{head}<p className={styles.notice}>{t('concealed')}</p></section>;

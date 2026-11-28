@@ -451,3 +451,4 @@
 .planLocked .planLockedBadge { display: inline-block; margin: 0 0 4px; padding: 4px 10px; border-radius: 999px; background: #2a2210; color: #ffe4a8; font-size: 13px; font-weight: 700; }
 .planUpgrade { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 22px; border-radius: 10px; background: var(--hon-color-accent, #e5483a); color: #fff; font-weight: 800; text-decoration: none; }
 .planUpgrade:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.helpMark { font-weight: 800; font-size: 18px; line-height: 1; }
