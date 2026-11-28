@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { saasUuid, validateHqProspectConsentInput, validateHqProspectCreateInput, validateHqProspectDetail, validateHqProspectList,
-  validateHqProspectListQuery, validateHqProspectReceipt, validateHqProspectUpdateInput, type HqProspectReceipt } from '@hon/contracts';
+  validateHqProspectListQuery, validateHqProspectReceipt, validateHqProspectUpdateInput, type HqProspectReceipt,
+  validateHqProspectMoveInput, validateHqProspectStagesInput, verifyHqProspectBoard, verifyHqProspectMoveReceipt, verifyHqProspectStagesReceipt } from '@hon/contracts';
 import { SaasBillingService } from '../saas-billing/saas-billing.service.js';
 
 function parse<T>(f: () => T): T { try { return f(); } catch { throw new BadRequestException({ code: 'INVALID_SAAS_INPUT' }); } }
@@ -51,6 +52,24 @@ export class HqProspectsService {
     return this.billing.call('recordHqProspectConsent', [subject, prospectId, JSON.stringify(input), k], (v) => {
       const r = validateHqProspectReceipt(v);
       if (r.operation !== 'CONSENT' || !same(r.prospect.prospectId, prospectId)) throw new Error('mismatch');
+      return r;
+    });
+  }
+  /** 0715: stages, open prospects and customer schools by real status. */
+  async board(subject: string) {
+    return this.billing.call('readHqProspectBoard', [subject], (v) => verifyHqProspectBoard(v));
+  }
+  async move(subject: string, id: unknown, body: unknown, key: unknown) {
+    const [prospectId, input, k] = parse(() => [saasUuid(id), validateHqProspectMoveInput(body), saasUuid(key)] as const);
+    return this.billing.call('moveHqProspectStage', [subject, prospectId, JSON.stringify(input), k], (v) => verifyHqProspectMoveReceipt(v, { prospectId, input }));
+  }
+  async saveStages(subject: string, body: unknown, key: unknown) {
+    const [input, k] = parse(() => [validateHqProspectStagesInput(body), saasUuid(key)] as const);
+    return this.billing.call('saveHqProspectStages', [subject, JSON.stringify(input), k], (v) => {
+      const r = verifyHqProspectStagesReceipt(v);
+      // Every stage sent comes back, in order, with the names asked for.
+      if (r.stages.length !== input.stages.length || r.stages.some((s, i) => s.name !== input.stages[i]!.name || s.hidden !== input.stages[i]!.hidden
+        || (input.stages[i]!.id !== null && s.stageId !== input.stages[i]!.id))) throw new Error('mismatch');
       return r;
     });
   }

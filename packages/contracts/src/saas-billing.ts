@@ -171,6 +171,9 @@ export const SAAS_COMMANDS = {
   createHqProspect: 'hq-prospect-create',
   updateHqProspect: 'hq-prospect-update',
   recordHqProspectConsent: 'hq-prospect-consent',
+  // 0715 HQ prospects pipeline board; same values as HQ_PROSPECT_BOARD_COMMANDS.
+  moveHqProspectStage: 'hq-prospect-stage-move',
+  saveHqProspectStages: 'hq-prospect-stages-save',
   // CL5 (0694): HQ calling on the HQ number; same values as HQ_CALL_COMMANDS.
   setHqCallingSettings: 'hq-call-settings',
   setMyHqCallRinging: 'hq-call-ring',

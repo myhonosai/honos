@@ -1,0 +1,3 @@
+/* HQ prospects board: links styled like the school board's card buttons. */
+.link { color: inherit; text-decoration: none; }
+.link:hover strong, .link:focus-visible strong { text-decoration: underline; }

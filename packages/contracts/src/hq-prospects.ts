@@ -167,3 +167,133 @@ export function validateHqProspectReceipt(value: unknown): HqProspectReceipt {
   prospect(r.prospect);
   return r as unknown as HqProspectReceipt;
 }
+
+// ---------- 0715 HQ prospects pipeline board ----------
+// HQ-editable prospect stages, plus customer schools in two fixed read-only columns by their real status: Active school
+// (school and organization ACTIVE) and Inactive school (SUSPENDED or ARCHIVED). Drop zones close a prospect as WON (became
+// a school) or LOST (not interested). School cards are never moved from the board.
+export const HQ_STAGE_COLORS = ['BLUE', 'SKY', 'CYAN', 'VIOLET', 'GREEN', 'RED', 'AMBER', 'SLATE'] as const;
+export type HqStageColor = typeof HQ_STAGE_COLORS[number];
+export const HQ_STAGE_MAX = 20;
+export const HQ_STAGE_NAME_MAX = 60;
+export const HQ_BOARD_PROSPECT_MAX = 2000;
+export const HQ_PROSPECT_OUTCOMES = ['WON', 'LOST'] as const;
+export type HqProspectOutcome = typeof HQ_PROSPECT_OUTCOMES[number];
+export const HQ_BOARD_SCHOOL_STATUSES = ['ACTIVE', 'SUSPENDED', 'ARCHIVED'] as const;
+export type HqBoardSchoolStatus = typeof HQ_BOARD_SCHOOL_STATUSES[number];
+export const HQ_PROSPECT_BOARD_COMMANDS = { move: 'hq-prospect-stage-move', stages: 'hq-prospect-stages-save' } as const;
+
+export interface HqProspectStage { stageId: string; name: string; color: HqStageColor; position: number; hidden: boolean; openCount: number }
+export interface HqBoardProspect {
+  prospectId: string; fullName: string; schoolName: string | null; email: string | null; phone: string | null; source: HqProspectSource;
+  stageId: string | null; status: HqProspectStatus; closedOutcome: HqProspectOutcome | null; textOptedOut: boolean; createdAt: string; version: number;
+}
+/** The board reads at most this many customer schools, newest first. */
+export const HQ_BOARD_SCHOOL_MAX = 5000;
+export interface HqBoardSchool {
+  schoolId: string; schoolName: string; organizationName: string; status: HqBoardSchoolStatus; tier: string | null; trialEndsAt: string | null; createdAt: string;
+}
+export interface HqProspectBoard {
+  pipelineVersion: number; stages: HqProspectStage[]; prospects: HqBoardProspect[]; truncated: boolean;
+  closed: { won: number; lost: number }; schools: HqBoardSchool[]; schoolsTruncated: boolean; asOf: string;
+}
+export interface HqProspectMoveInput { expectedVersion: number; stageId: string | null; outcome: HqProspectOutcome | null }
+export interface HqProspectMoveReceipt { operation: 'MOVE'; prospect: HqBoardProspect; replayed: boolean }
+export interface HqProspectStageDraft { id: string | null; name: string; color: HqStageColor; hidden: boolean }
+export interface HqProspectStageMove { fromStageId: string; toStageId: string }
+export interface HqProspectStagesInput { expectedVersion: number; stages: HqProspectStageDraft[]; moves: HqProspectStageMove[] }
+export interface HqProspectStagesReceipt { operation: 'STAGES'; pipelineVersion: number; stages: HqProspectStage[]; replayed: boolean }
+
+// The database's stage-name rule: trimmed, 1-60, no control, bidi or zero-width characters, no angle brackets.
+const UNSAFE_STAGE = /[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁠-⁯﻿<>]/;
+export function hqStageNameOk(v: unknown): v is string {
+  return typeof v === 'string' && v.length >= 1 && v.length <= HQ_STAGE_NAME_MAX && v.trim() === v && !v.startsWith(' ') && !UNSAFE_STAGE.test(v);
+}
+const lower = (v: string) => v.toLowerCase();
+
+function stage(value: unknown): HqProspectStage {
+  const s = record(value, drift); exactKeys(s, ['stageId', 'name', 'color', 'position', 'hidden', 'openCount'], drift);
+  if (!isUuid(s.stageId) || !hqStageNameOk(s.name) || !has(HQ_STAGE_COLORS, s.color) || !isInt(s.position, 1, HQ_STAGE_MAX)
+    || typeof s.hidden !== 'boolean' || !isInt(s.openCount, 0, 1_000_000_000)) drift();
+  return { ...(s as unknown as HqProspectStage), stageId: lower(s.stageId as string) };
+}
+function stages(value: unknown): HqProspectStage[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > HQ_STAGE_MAX) drift();
+  const list = (value as unknown[]).map(stage);
+  if (list.some((s, i) => s.position !== i + 1) || new Set(list.map(s => s.stageId)).size !== list.length
+    || new Set(list.map(s => lower(s.name))).size !== list.length || list.every(s => s.hidden)) drift();
+  return list;
+}
+function boardProspect(value: unknown): HqBoardProspect {
+  const p = record(value, drift);
+  exactKeys(p, ['prospectId', 'fullName', 'schoolName', 'email', 'phone', 'source', 'stageId', 'status', 'closedOutcome', 'textOptedOut', 'createdAt', 'version'], drift);
+  if (!isUuid(p.prospectId) || !isName(p.fullName) || !nullable(p.schoolName, isSchool) || !nullable(p.email, isEmail) || !nullable(p.phone, isPhone)
+    || (p.email === null && p.phone === null) || !has(HQ_PROSPECT_SOURCES, p.source) || !has(HQ_PROSPECT_STATUSES, p.status)
+    || !nullable(p.stageId, isUuid) || (p.status === 'ACTIVE' && p.stageId === null)
+    || !(p.closedOutcome === null || has(HQ_PROSPECT_OUTCOMES, p.closedOutcome)) || (p.closedOutcome !== null && p.status !== 'ARCHIVED')
+    || typeof p.textOptedOut !== 'boolean' || !isTimestamp(p.createdAt) || !isInt(p.version, 1, 999_999_999)) drift();
+  return { ...(p as unknown as HqBoardProspect), prospectId: lower(p.prospectId as string), stageId: p.stageId === null ? null : lower(p.stageId as string) };
+}
+function boardSchool(value: unknown): HqBoardSchool {
+  const s = record(value, drift); exactKeys(s, ['schoolId', 'schoolName', 'organizationName', 'status', 'tier', 'trialEndsAt', 'createdAt'], drift);
+  if (!isUuid(s.schoolId) || typeof s.schoolName !== 'string' || s.schoolName.length < 1 || s.schoolName.length > 200
+    || typeof s.organizationName !== 'string' || s.organizationName.length < 1 || s.organizationName.length > 200
+    || !has(HQ_BOARD_SCHOOL_STATUSES, s.status) || !(s.tier === null || (typeof s.tier === 'string' && /^[A-Z_]{1,40}$/.test(s.tier)))
+    || !nullable(s.trialEndsAt, isTimestamp) || !isTimestamp(s.createdAt)) drift();
+  return { ...(s as unknown as HqBoardSchool), schoolId: lower(s.schoolId as string) };
+}
+export function verifyHqProspectBoard(value: unknown): HqProspectBoard {
+  const r = record(value, drift); exactKeys(r, ['pipelineVersion', 'stages', 'prospects', 'truncated', 'closed', 'schools', 'schoolsTruncated', 'asOf'], drift);
+  if (!isInt(r.pipelineVersion, 1, 999_999_999) || !Array.isArray(r.prospects) || r.prospects.length > HQ_BOARD_PROSPECT_MAX
+    || typeof r.truncated !== 'boolean' || !Array.isArray(r.schools) || r.schools.length > HQ_BOARD_SCHOOL_MAX
+    || typeof r.schoolsTruncated !== 'boolean' || !isTimestamp(r.asOf)) drift();
+  const c = record(r.closed, drift); exactKeys(c, ['won', 'lost'], drift);
+  if (!isInt(c.won, 0, 1_000_000_000) || !isInt(c.lost, 0, 1_000_000_000)) drift();
+  const list = stages(r.stages), ids = new Set(list.map(s => s.stageId));
+  const prospects = (r.prospects as unknown[]).map(boardProspect);
+  if (prospects.some(p => p.status !== 'ACTIVE' || !ids.has(p.stageId as string)) || new Set(prospects.map(p => p.prospectId)).size !== prospects.length) drift();
+  const schools = (r.schools as unknown[]).map(boardSchool);
+  if (new Set(schools.map(s => s.schoolId)).size !== schools.length) drift();
+  return { pipelineVersion: r.pipelineVersion as number, stages: list, prospects, truncated: r.truncated as boolean,
+    closed: { won: c.won as number, lost: c.lost as number }, schools, schoolsTruncated: r.schoolsTruncated as boolean, asOf: r.asOf as string };
+}
+export function validateHqProspectMoveInput(value: unknown): HqProspectMoveInput {
+  const r = record(value, invalid); exactKeys(r, ['expectedVersion', 'stageId', 'outcome'], invalid);
+  if (!isInt(r.expectedVersion, 1, 999_999_999) || !nullable(r.stageId, isUuid) || !(r.outcome === null || has(HQ_PROSPECT_OUTCOMES, r.outcome))
+    || (r.stageId === null) === (r.outcome === null)) invalid();
+  return { expectedVersion: r.expectedVersion as number, stageId: r.stageId === null ? null : lower(r.stageId as string), outcome: r.outcome as HqProspectOutcome | null };
+}
+export function verifyHqProspectMoveReceipt(value: unknown, expect: { prospectId: string; input: HqProspectMoveInput }): HqProspectMoveReceipt {
+  const r = record(value, drift); exactKeys(r, ['operation', 'prospect', 'replayed'], drift);
+  if (r.operation !== 'MOVE' || typeof r.replayed !== 'boolean') drift();
+  const p = boardProspect(r.prospect);
+  if (p.prospectId !== lower(expect.prospectId)) drift();
+  if (expect.input.stageId !== null ? (p.status !== 'ACTIVE' || p.stageId !== expect.input.stageId)
+    : (p.status !== 'ARCHIVED' || p.closedOutcome !== expect.input.outcome)) drift();
+  return { operation: 'MOVE', prospect: p, replayed: r.replayed as boolean };
+}
+export function validateHqProspectStagesInput(value: unknown): HqProspectStagesInput {
+  const r = record(value, invalid); exactKeys(r, ['expectedVersion', 'stages', 'moves'], invalid);
+  if (!isInt(r.expectedVersion, 1, 999_999_999) || !Array.isArray(r.stages) || r.stages.length < 1 || r.stages.length > HQ_STAGE_MAX
+    || !Array.isArray(r.moves) || r.moves.length > HQ_STAGE_MAX) invalid();
+  const list = (r.stages as unknown[]).map((v): HqProspectStageDraft => {
+    const s = record(v, invalid); exactKeys(s, ['id', 'name', 'color', 'hidden'], invalid);
+    if (!nullable(s.id, isUuid) || !hqStageNameOk(s.name) || !has(HQ_STAGE_COLORS, s.color) || typeof s.hidden !== 'boolean') invalid();
+    return { id: s.id === null ? null : lower(s.id as string), name: s.name as string, color: s.color as HqStageColor, hidden: s.hidden as boolean };
+  });
+  if (list.every(s => s.hidden) || new Set(list.map(s => lower(s.name))).size !== list.length) invalid();
+  const ids = list.filter(s => s.id !== null).map(s => s.id as string);
+  if (new Set(ids).size !== ids.length) invalid();
+  const moves = (r.moves as unknown[]).map((v): HqProspectStageMove => {
+    const m = record(v, invalid); exactKeys(m, ['fromStageId', 'toStageId'], invalid);
+    if (!isUuid(m.fromStageId) || !isUuid(m.toStageId)) invalid();
+    return { fromStageId: lower(m.fromStageId as string), toStageId: lower(m.toStageId as string) };
+  });
+  if (new Set(moves.map(m => m.fromStageId)).size !== moves.length) invalid();
+  return { expectedVersion: r.expectedVersion as number, stages: list, moves };
+}
+export function verifyHqProspectStagesReceipt(value: unknown): HqProspectStagesReceipt {
+  const r = record(value, drift); exactKeys(r, ['operation', 'pipelineVersion', 'stages', 'replayed'], drift);
+  if (r.operation !== 'STAGES' || !isInt(r.pipelineVersion, 2, 999_999_999) || typeof r.replayed !== 'boolean') drift();
+  return { operation: 'STAGES', pipelineVersion: r.pipelineVersion as number, stages: stages(r.stages), replayed: r.replayed as boolean };
+}

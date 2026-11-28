@@ -7725,3 +7725,45 @@ DO $$ BEGIN
     RAISE EXCEPTION 'School plan features read drift'; END IF;
 END $$;
 -- End school plan features exact verification.
+-- HQ prospect pipeline exact verification (0715): the runtime runs one board read and two HQ marketing commands; the three
+-- board tables are forced-RLS, policy-free and grant-free; open prospects keep a stage and only closed ones carry an outcome.
+DO $$ DECLARE f text; t text; c text; d boolean; s text; r boolean; tb text;
+BEGIN
+  FOR f,t,c,d,s,r IN SELECT * FROM (VALUES
+    ('hon.guard_hq_prospect_pipeline()','c9bdcad99b8fab2326f66584cd61c33c','v',false,'search_path=pg_catalog, hon',false),
+    ('hon.guard_hq_prospect_stage()','c936ce50e0f5eb674a59c4d727a92021','v',false,'search_path=pg_catalog, hon',false),
+    ('hon.hq_prospect_board_claim(uuid,uuid,text,text)','b9f98e24c608928c6bc591571895019e','v',false,'search_path=pg_catalog, hon',false),
+    ('hon.hq_prospect_card_json(hon.hq_prospects)','2a0c6ac2c01049e3d64a1892deb967f2','s',false,'search_path=pg_catalog, hon',false),
+    ('hon.hq_prospect_stage_defaults()','5637bdc783cdb6cb9552686e42a218aa','v',false,'search_path=pg_catalog, hon',false),
+    ('hon.hq_prospect_stages_json()','6d7dc426a6f2da05d9cda12d8cbb7447','s',false,'search_path=pg_catalog, hon',false),
+    ('hon.move_hq_prospect_stage(text,uuid,jsonb,uuid)','7539475336f01b70bb43c07051df45e0','v',true,'search_path=pg_catalog, hon',true),
+    ('hon.read_hq_prospect_board(text)','c5c05ad2f9b0342fe108be6472e89023','v',true,'search_path=pg_catalog, hon',true),
+    ('hon.save_hq_prospect_stages(text,jsonb,uuid)','df5bc5dc3c99f17536298f7697921f40','v',true,'search_path=pg_catalog, hon',true)) x(f,t,c,d,s,r) LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=f::regprocedure AND md5(p.prosrc)=t AND p.provolatile=c AND p.prosecdef=d
+        AND p.proconfig IS NOT DISTINCT FROM ARRAY[s])
+      OR has_function_privilege('hon_runtime',f::regprocedure,'EXECUTE')<>r
+      OR (EXISTS(SELECT 1 FROM pg_roles WHERE rolname='hon_communication_worker') AND has_function_privilege('hon_communication_worker',f::regprocedure,'EXECUTE'))
+      OR EXISTS(SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a WHERE p.oid=f::regprocedure AND a.grantee=0) THEN
+      RAISE EXCEPTION 'HQ prospect pipeline function body/posture drift: %',f; END IF;
+  END LOOP;
+  IF (SELECT count(*) FROM pg_proc WHERE pronamespace='hon'::regnamespace AND proname IN ('hq_prospect_stage_defaults','guard_hq_prospect_stage','guard_hq_prospect_pipeline','hq_prospect_board_claim','hq_prospect_stages_json','hq_prospect_card_json','read_hq_prospect_board','move_hq_prospect_stage','save_hq_prospect_stages'))<>9 THEN
+    RAISE EXCEPTION 'Unexpected HQ prospect pipeline overload'; END IF;
+  FOREACH tb IN ARRAY ARRAY['hq_prospect_pipeline','hq_prospect_stages','hq_prospect_board_requests'] LOOP
+    IF NOT EXISTS(SELECT 1 FROM pg_class c WHERE c.oid=('hon.'||tb)::regclass AND c.relrowsecurity AND c.relforcerowsecurity)
+      OR EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='hon' AND tablename=tb)
+      OR EXISTS(SELECT 1 FROM pg_class c, aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE c.oid=('hon.'||tb)::regclass AND a.grantee<>c.relowner)
+      OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid=('hon.'||tb)::regclass AND tgname='no_truncate' AND tgenabled='O' AND NOT tgisinternal) THEN
+      RAISE EXCEPTION 'Unsafe HQ prospect pipeline table: %',tb; END IF;
+  END LOOP;
+  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_prospect_board_requests'::regclass AND tgname='immutable' AND tgfoid='hon.guard_hq_communication_evidence()'::regprocedure AND tgenabled='O')
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_prospect_stages'::regclass AND tgname='guarded' AND tgfoid='hon.guard_hq_prospect_stage()'::regprocedure AND tgenabled='O')
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_prospect_pipeline'::regclass AND tgname='guarded' AND tgfoid='hon.guard_hq_prospect_pipeline()'::regprocedure AND tgenabled='O')
+    OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='hon.hq_prospects'::regclass AND tgname='stage_defaults' AND tgfoid='hon.hq_prospect_stage_defaults()'::regprocedure AND tgenabled='O') THEN
+    RAISE EXCEPTION 'HQ prospect pipeline triggers missing'; END IF;
+  IF (SELECT count(*) FROM pg_constraint WHERE conrelid='hon.hq_prospects'::regclass AND contype='c' AND convalidated AND (
+      (conname='hq_prospects_closed_outcome_check' AND md5(pg_get_constraintdef(oid))='d2bd69e744e291706083f78bb7755734') OR
+      (conname='hq_prospects_outcome_closed' AND md5(pg_get_constraintdef(oid))='6fdff134e66630a0340ba30185d3b505') OR
+      (conname='hq_prospects_stage_open' AND md5(pg_get_constraintdef(oid))='f8d8c56cd7eb089d4cef9184041b3adc')))<>3 THEN
+    RAISE EXCEPTION 'HQ prospect stage/outcome check drift'; END IF;
+END $$;
+-- End HQ prospect pipeline exact verification.
