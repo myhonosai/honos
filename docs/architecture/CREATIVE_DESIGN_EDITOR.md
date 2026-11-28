@@ -118,3 +118,15 @@ design-editor-canva/SPEC.md.
 - The web app serves Latin woff2 files from `apps/web/public/fonts/design/` (licences in LICENSES.md there); no outside
   font service at run time. `fonts.ts` loads the fonts a design uses with the FontFace API before painting or exporting
   and repaints when they arrive; missing letters (Korean, for example) fall back to the system stack.
+
+## E2 pro templates (2026-11-28, frontend only)
+
+- A template is a theme (free trial, open house, summer camp, belt promotion, class schedule, tournament, bring a friend,
+  after-school, birthday party, holiday special) in a look (bold, clean, fun, elegant): 40 in all (`templates.ts`), words
+  in `template-copy.ts` (en, ko, es). Each look has its own portrait and landscape layout and uses the E1 designer fonts.
+- The class schedule is a real table (day, time and class columns, shaded rows), not typewriter text.
+- Text keeps to its space: headlines shrink to fit their width and height, wrapped text shrinks until its estimated lines
+  fit; Hangul and CJK are measured as full width because the shipped Latin fonts fall back to a system font for them.
+- `gallery.tsx` replaces the "Start from" list with picture previews at the chosen size, in the school color and contact
+  line, filtered by theme. Picking only chooses; "Create design" still makes it as an ordinary design.
+- Templates are still built in the browser and nothing is stored for them; old five-template ids are gone (never saved).

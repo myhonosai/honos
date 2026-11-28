@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZE_CODES, blankCreativeDesignDocument, validateCreativeDesignDocument,
+  CREATIVE_DESIGN_LIMITS, CREATIVE_DESIGN_SIZES, CREATIVE_DESIGN_SIZE_CODES, blankCreativeDesignDocument, validateCreativeDesignDocument,
   type CreativeDesign, type CreativeDesignDocument, type CreativeDesignElement, type CreativeDesignReceipt,
 } from '@hon/contracts';
 
@@ -23,7 +23,8 @@ import { Properties, downloadName, layerLabel, saveStateText } from '../src/comp
 import { Designs, createInput, refusalKey } from '../src/components/design-editor/designs';
 import { exportScale, paintPage } from '../src/components/design-editor/paint';
 import { SCHOOL_SHELL_NAV } from '../src/components/school-shell/catalog';
-import { TEMPLATE_IDS, templateDocument } from '../src/components/design-editor/templates';
+import { STYLE_FONTS, TEMPLATE_IDS, estimateLines, templateDocument, templateName, templateParts } from '../src/components/design-editor/templates';
+import { galleryItems } from '../src/components/design-editor/gallery';
 import { PRINT_BLEED, PRINT_MARGIN, buildPrintPdf, printBoxes, trimMarks } from '../src/components/design-editor/pdf';
 import { shellText } from '../src/components/school-shell/copy';
 
@@ -400,19 +401,51 @@ describe('design D2: QR codes, templates, brand kit and print PDF', () => {
   });
 
   it('builds every template on every size in every language as a valid document, with the school color and contact line', () => {
+    expect(TEMPLATE_IDS).toHaveLength(40);
     for (const template of [null, ...TEMPLATE_IDS]) for (const code of CREATIVE_DESIGN_SIZE_CODES) for (const language of ['en', 'ko', 'es']) {
       const doc = templateDocument(template, code, language, { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
       expect(() => valid(doc, code), `${template} ${code} ${language}`).not.toThrow();
     }
-    const trial = templateDocument('trial', 'POSTCARD_4X6', 'en', { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
+    const trial = templateDocument('trial-clean', 'POSTCARD_4X6', 'en', { accent: '#1F4E9C', contactLine: 'Sunrise Martial Arts · 555-0100' });
     expect(trial.pages).toHaveLength(2);
     expect(JSON.stringify(trial)).toContain('Sunrise Martial Arts');
-    expect(trial.pages[0]!.elements.find(e => e.id === 'band')).toMatchObject({ fill: '#1F4E9C' });
-    const plain = templateDocument('openHouse', 'SOCIAL_SQUARE', 'ko');
-    expect(JSON.stringify(plain)).toContain('오픈 하우스');
+    expect(trial.pages[0]!.elements.find(e => e.id === 'panel')).toMatchObject({ fill: '#1F4E9C' });
+    const plain = templateDocument('openHouse-bold', 'SOCIAL_SQUARE', 'ko');
+    expect(JSON.stringify(plain)).toContain('오픈\\n하우스');
     expect(JSON.stringify(plain)).toContain('#C8102E');
     expect(templateDocument(null, 'FLYER_HALF', 'en')).toEqual(blankCreativeDesignDocument('FLYER_HALF'));
-    expect(createInput('Trial', 'FLYER_LETTER', 'trial', 'es')?.document.pages[0]!.elements.length).toBeGreaterThan(3);
+    expect(templateDocument('nope' as never, 'FLYER_HALF', 'en')).toEqual(blankCreativeDesignDocument('FLYER_HALF'));
+    expect(createInput('Trial', 'FLYER_LETTER', 'trial-fun', 'es')?.document.pages[0]!.elements.length).toBeGreaterThan(5);
+  });
+
+  it('E2: 10 themes in 4 looks, designer fonts, the schedule as a table, names in every language', () => {
+    expect(new Set(TEMPLATE_IDS.map(id => templateParts(id).theme)).size).toBe(10);
+    for (const id of TEMPLATE_IDS) {
+      const doc = templateDocument(id, 'FLYER_LETTER', 'en');
+      const fonts = new Set(doc.pages[0]!.elements.flatMap(e => e.kind === 'text' ? [e.font] : []));
+      expect([...fonts].some(f => STYLE_FONTS[templateParts(id).style].includes(f)), id).toBe(true);
+      expect(fonts.has('MONO'), id).toBe(false);
+      for (const language of ['en', 'ko', 'es']) expect(templateName(language, id).length).toBeGreaterThan(1);
+    }
+    const sched = templateDocument('schedule-clean', 'FLYER_LETTER', 'en').pages[0]!.elements;
+    expect(sched.filter(e => e.id.startsWith('day-'))).toHaveLength(4);
+    expect(sched.find(e => e.id === 'time-0')).toMatchObject({ text: '4:30 PM' });
+    expect(sched.find(e => e.id === 'class-3')).toMatchObject({ text: 'Open mat', align: 'right' });
+    expect(templateName('ko', 'camp-fun')).toBe('여름 캠프');
+    expect(galleryItems('all')).toHaveLength(40);
+    expect(galleryItems('camp')).toEqual(['camp-bold', 'camp-clean', 'camp-fun', 'camp-elegant']);
+  });
+
+  it('E2: headlines and wrapped text are kept inside their space, even in Korean on a square page', () => {
+    for (const code of CREATIVE_DESIGN_SIZE_CODES) for (const language of ['en', 'ko', 'es']) for (const id of TEMPLATE_IDS) {
+      const page = templateDocument(id, code, language).pages[0]!, H = CREATIVE_DESIGN_SIZES[code].height;
+      const head = page.elements.find(e => e.id === 'head') as Extract<CreativeDesignElement, { kind: 'text' }>;
+      expect(head.y + head.h, `${id} ${code} ${language}`).toBeLessThan(H * 0.9);
+      for (const e of page.elements) if (e.kind === 'text') expect(e.size, `${id} ${code} ${language} ${e.id}`).toBeGreaterThanOrEqual(4);
+    }
+    expect(estimateLines('one two three four', 10, 1000, 'SANS', false)).toBe(1);
+    expect(estimateLines('one two three four', 10, 60, 'SANS', false)).toBeGreaterThan(1);
+    expect(estimateLines('a\nb', 10, 1000, 'SANS', false)).toBe(2);
   });
 
   it('writes a print PDF with one page per side, bleed and trim boxes, trim marks outside the bleed, and a correct cross-reference table', () => {
@@ -516,6 +549,8 @@ describe('design E1: designer fonts (0703)', () => {
     expect(fontStack('BEBAS')).toBe('"HON Bebas Neue", Impact, "Arial Narrow", sans-serif');
     expect(fontStack('SANS')).toBe('Arial, Helvetica, sans-serif');
     expect(DESIGN_FONTS.SANS.files).toEqual([]);
+    const { shippedFont } = await import('../src/components/design-editor/fonts');
+    expect(shippedFont('SANS')).toBe(false); expect(shippedFont('LOBSTER')).toBe(true);
   });
 
   it('a document using a new font still validates, and an unknown font is refused', () => {

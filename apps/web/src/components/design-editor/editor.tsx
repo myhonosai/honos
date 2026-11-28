@@ -11,7 +11,7 @@ import {
   type AddKind, type Handle, type History, type LayerMove,
 } from './model';
 import { exportScale, paintPage, type PhotoSource } from './paint';
-import { fontStack, fontsInDocument, loadDesignFonts } from './fonts';
+import { fontStack, fontsInDocument, loadDesignFonts, shippedFont } from './fonts';
 import { PRINT_BLEED, buildPrintPdf, type PdfImage } from './pdf';
 import { NO_BRAND, type Brand } from './templates';
 import { DesignSaver, type SaveState } from './saver';
@@ -251,9 +251,15 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     if (!ready) setNotice({ key: 'photosLoading', tone: 'warn' });
     return ready;
   };
+  // Exports wait for the designer fonts; one that cannot load is drawn in its fallback, and the person is told (E1 review P3).
+  const fontsForExport = async () => {
+    const wanted = fontsInDocument(doc).filter(f => shippedFont(f));
+    const ready = await loadDesignFonts(wanted);
+    if (ready.length < wanted.length) setNotice({ key: 'fontsFallback', tone: 'warn' });
+  };
   const download = async () => {
     if (!photosReady()) return;
-    await loadDesignFonts(fontsInDocument(doc));
+    await fontsForExport();
     const k = exportScale(size), canvas = document.createElement('canvas');
     canvas.width = Math.round(size.width * k); canvas.height = Math.round(size.height * k);
     const ctx = canvas.getContext('2d');
@@ -267,7 +273,7 @@ export function DesignEditor({ scope, design: initial, language, api, onBack, on
     if (busy || !photosReady()) return;
     setBusy('PDF');
     try {
-      await loadDesignFonts(fontsInDocument(doc));
+      await fontsForExport();
       const bleedSize = { ...size, width: size.width + 2 * PRINT_BLEED, height: size.height + 2 * PRINT_BLEED };
       const k = exportScale(bleedSize), images: PdfImage[] = [];
       for (const side of doc.pages) {

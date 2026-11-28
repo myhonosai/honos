@@ -49,6 +49,9 @@ export function fontStack(font: CreativeDesignFont): string {
   return f.family ? `"${f.family}", ${f.fallback}` : f.fallback;
 }
 
+/** True for a font the web app ships (and so must load), false for a system font family. */
+export function shippedFont(font: CreativeDesignFont): boolean { return DESIGN_FONTS[font].files.length > 0; }
+
 /** Every font a design's text uses, in first-use order. */
 export function fontsInDocument(doc: CreativeDesignDocument): CreativeDesignFont[] {
   return [...new Set(doc.pages.flatMap(p => p.elements.flatMap(e => e.kind === 'text' ? [e.font] : [])))];

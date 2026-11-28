@@ -30,14 +30,9 @@ const en = {
   units: 'Sizes are in points (72 per inch).', pixels: 'Sizes are in pixels.',
   addQr: 'QR code', kindQr: 'QR code', qrData: 'Link or text in the code', qrHint: 'Up to 200 plain characters. Test-scan it with a phone before printing.', qrBackground: 'Light square behind the code',
   downloadPdf: 'Download print PDF', pdfNote: 'Print PDF: 300 dpi with 1/8 inch bleed and trim marks.', schoolColor: 'School color', addContact: 'Contact line',
-  startFrom: 'Start from', blank: 'Blank page', tplTrial: 'Free trial class', tplOpenHouse: 'Open house', tplCamp: 'Summer camp', tplPromotion: 'Belt promotion', tplSchedule: 'Class schedule',
-  tTrialHead: 'FREE TRIAL CLASS', tTrialSub: 'Kids, teens and adults. No experience needed.', tTrialCta: 'Book your first class today',
-  tOpenHead: 'OPEN HOUSE', tOpenSub: 'Saturday, 10 AM to 2 PM', tOpenBody: 'Free mini classes · Meet the instructors · Family fun',
-  tCampHead: 'SUMMER CAMP', tCampSub: 'Ages 6 to 12 · Weekly sessions', tCampBody: 'Martial arts · Games · Confidence · Friends',
-  tPromoHead: 'BELT PROMOTION', tPromoSub: 'Congratulations to every student testing this month!', tPromoBody: 'Date · Time · Place',
-  tSchedHead: 'CLASS SCHEDULE', tSchedBody: 'Mon & Wed  4:30 PM  Little Dragons\nMon & Wed  5:30 PM  Kids\nTue & Thu  6:30 PM  Teens & Adults\nSaturday  10:00 AM  Open mat',
-  tContact: 'Your school · phone · website', tBack: 'Thank you for training with us!',
+  startFrom: 'Start from', blank: 'Blank page',
   photosLoading: 'Photos are still loading. Try the download again in a moment.',
+  fontsFallback: 'A font could not load, so the download uses a similar standard font. Try again for the exact font.',
 };
 export type DesignKey = keyof typeof en;
 
@@ -70,14 +65,9 @@ const ko: Record<DesignKey, string> = {
   units: '크기 단위는 포인트(1인치 = 72)입니다.', pixels: '크기 단위는 픽셀입니다.',
   addQr: 'QR 코드', kindQr: 'QR 코드', qrData: '코드에 넣을 링크나 글', qrHint: '일반 문자 200자까지. 인쇄 전에 휴대폰으로 스캔해 보세요.', qrBackground: '코드 뒤 밝은 사각형',
   downloadPdf: '인쇄용 PDF 내려받기', pdfNote: '인쇄용 PDF: 300dpi, 1/8인치 재단 여백과 재단선 포함.', schoolColor: '학교 색상', addContact: '연락처 줄',
-  startFrom: '시작 방법', blank: '빈 페이지', tplTrial: '무료 체험 수업', tplOpenHouse: '오픈 하우스', tplCamp: '여름 캠프', tplPromotion: '띠 승급', tplSchedule: '수업 시간표',
-  tTrialHead: '무료 체험 수업', tTrialSub: '어린이, 청소년, 성인. 경험이 없어도 됩니다.', tTrialCta: '오늘 첫 수업을 예약하세요',
-  tOpenHead: '오픈 하우스', tOpenSub: '토요일 오전 10시 ~ 오후 2시', tOpenBody: '무료 미니 수업 · 사범님 만나기 · 가족 행사',
-  tCampHead: '여름 캠프', tCampSub: '6~12세 · 주간 프로그램', tCampBody: '무술 · 게임 · 자신감 · 친구',
-  tPromoHead: '띠 승급 심사', tPromoSub: '이번 달 심사를 보는 모든 수련생을 축하합니다!', tPromoBody: '날짜 · 시간 · 장소',
-  tSchedHead: '수업 시간표', tSchedBody: '월·수  오후 4:30  리틀 드래곤\n월·수  오후 5:30  어린이\n화·목  오후 6:30  청소년·성인\n토요일  오전 10:00  자유 수련',
-  tContact: '학교 이름 · 전화 · 웹사이트', tBack: '함께 수련해 주셔서 감사합니다!',
+  startFrom: '시작 방법', blank: '빈 페이지',
   photosLoading: '사진을 아직 불러오는 중입니다. 잠시 후 다시 내려받으세요.',
+  fontsFallback: '글꼴을 불러오지 못해 비슷한 기본 글꼴로 내려받았습니다. 정확한 글꼴은 다시 시도하세요.',
 };
 const es: Record<DesignKey, string> = {
   hqTitle: 'Diseños para HON', hqIntro: 'Crea volantes, carteles y gráficos sociales para promocionar HON OS. Arrastra, haz clic para cambiar y descarga cuando termines. Aquí nada cuesta ni usa IA.',
@@ -108,14 +98,9 @@ const es: Record<DesignKey, string> = {
   units: 'Las medidas están en puntos (72 por pulgada).', pixels: 'Las medidas están en píxeles.',
   addQr: 'Código QR', kindQr: 'Código QR', qrData: 'Enlace o texto del código', qrHint: 'Hasta 200 caracteres simples. Escanéalo con un teléfono antes de imprimir.', qrBackground: 'Cuadro claro detrás del código',
   downloadPdf: 'Descargar PDF para imprenta', pdfNote: 'PDF para imprenta: 300 ppp con 1/8 de pulgada de sangrado y marcas de corte.', schoolColor: 'Color de la escuela', addContact: 'Línea de contacto',
-  startFrom: 'Empezar con', blank: 'Página en blanco', tplTrial: 'Clase de prueba gratis', tplOpenHouse: 'Puertas abiertas', tplCamp: 'Campamento de verano', tplPromotion: 'Promoción de cinturón', tplSchedule: 'Horario de clases',
-  tTrialHead: 'CLASE DE PRUEBA GRATIS', tTrialSub: 'Niños, adolescentes y adultos. No se necesita experiencia.', tTrialCta: 'Reserva tu primera clase hoy',
-  tOpenHead: 'PUERTAS ABIERTAS', tOpenSub: 'Sábado, de 10 AM a 2 PM', tOpenBody: 'Mini clases gratis · Conoce a los instructores · Diversión en familia',
-  tCampHead: 'CAMPAMENTO DE VERANO', tCampSub: 'De 6 a 12 años · Sesiones semanales', tCampBody: 'Artes marciales · Juegos · Confianza · Amigos',
-  tPromoHead: 'PROMOCIÓN DE CINTURÓN', tPromoSub: '¡Felicidades a todos los alumnos que presentan examen este mes!', tPromoBody: 'Fecha · Hora · Lugar',
-  tSchedHead: 'HORARIO DE CLASES', tSchedBody: 'Lun y Mié  4:30 PM  Pequeños dragones\nLun y Mié  5:30 PM  Niños\nMar y Jue  6:30 PM  Adolescentes y adultos\nSábado  10:00 AM  Práctica libre',
-  tContact: 'Tu escuela · teléfono · sitio web', tBack: '¡Gracias por entrenar con nosotros!',
+  startFrom: 'Empezar con', blank: 'Página en blanco',
   photosLoading: 'Las fotos aún se están cargando. Intenta la descarga de nuevo en un momento.',
+  fontsFallback: 'Una fuente no se pudo cargar, así que la descarga usa una fuente estándar parecida. Inténtalo de nuevo para la fuente exacta.',
 };
 const ALL: Record<string, Record<DesignKey, string>> = { en, ko, es };
 
