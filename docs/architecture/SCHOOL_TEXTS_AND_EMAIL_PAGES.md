@@ -129,3 +129,17 @@ GO + green CI.
 | TE3b | Texts **History** (one-to-one table + drawer), **Templates** (cards + editor, Use in Send), **Opted out**. | TE1, TE2 | component tests |
 | TE4 | `/staff/email`: Send (subject with merge tags, sent as `emailSubject`), History, Templates, Opted out (read only; opting back in or out stays on the contact card). Owner ask 2026-11-21: on both Send pages the message box, merge tags and template picker show before a contact is picked. | TE1, TE2, TE3a kit | component tests + screenshots |
 | TE5 | Group sends on both pages (BL1 composer, group history cards, Scheduled). | #489 merged | component tests |
+
+## 7. TE5 done (2026-11-28)
+
+David tested the live app on 2026-11-28 and could not find a blast on Texts > Send or Email > Send. The blasts were only on
+Marketing > Email & text blasts. Both Send pages now open on **New blast**, with **One person** as the second tab. A
+`?template=` link opens One person, because templates fill that form.
+
+- New blast mounts the 0621 composer for that page's channel. It has no page heading of its own, the composer comes
+  first, and the list shows only that channel's blasts with only that channel's New button. A new draft opens whenever
+  nothing else is open.
+- Groups and the school's tags (from the Contacts list options) are chips, as in the owner's current CRM. Belt, program,
+  plan, membership, end date and age filters and individual contacts come from BL4 (0695).
+- After a save, the audience is counted straight away, so the number of people shows without pressing Check audience.
+- Marketing > Email & text blasts is unchanged. Group history cards and a Scheduled tab are still to do.

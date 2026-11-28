@@ -5,7 +5,7 @@ import {
   type SchoolMediaAsset, SCHOOL_BLAST_ENDS_WITHIN_DAYS, SCHOOL_BLAST_MEMBERSHIP_FILTERS, SCHOOL_BLAST_LIMITS, type SchoolContactOptions,
 } from '@hon/contracts';
 import { blastCopy, type BlastCopy, type BlastOutcomeKind } from './copy';
-import { NO_BELT, filterCount, pictureIdsOf, videoIdsOf, type BlastDraft, type BlastField, type BlastFilterForm, type BlastProblem, type PickedPerson } from './format';
+import { NO_BELT, filterCount, tagList, pictureIdsOf, videoIdsOf, type BlastDraft, type BlastField, type BlastFilterForm, type BlastProblem, type PickedPerson } from './format';
 import page from '../membership-changes/membership-changes.module.css';
 import styles from './school-blasts.module.css';
 
@@ -43,6 +43,9 @@ export type SchoolBlastsViewProps = Readonly<{
   filterOptions?: FilterOptionsRead; onFilters?: ((patch: Partial<BlastFilterForm>) => void) | undefined; onClearFilters?: (() => void) | undefined;
   peopleQuery?: string; onPeopleQuery?: ((text: string) => void) | undefined; peopleSearch?: PeopleSearchRead;
   onPickPerson?: ((person: PersonMatch) => void) | undefined; onUnpickPerson?: ((personId: string) => void) | undefined;
+  /** TE5: shown inside Texts > Send or Email > Send: one channel, no page heading, the composer before the list. */
+  embedded?: SchoolBlastChannel | undefined;
+  onToggleTag?: ((tag: string) => void) | undefined;
   onNew?: ((channel: SchoolBlastChannel) => void) | undefined; onOpen?: ((blastId: string) => void) | undefined;
   onEdit?: ((field: BlastField, value: string) => void) | undefined; onToggleGroup?: ((group: SchoolBlastAudienceGroup) => void) | undefined;
   onInsert?: ((target: 'subject' | 'body', field: SchoolBlastMergeField, start: number, end: number) => void) | undefined;
@@ -230,8 +233,8 @@ function List({ p, c, blasts, current }: { p: SchoolBlastsViewProps; c: BlastCop
   return <section className={page.card} aria-labelledby="blast-list-title" data-testid="blast-list">
     <div className={page.cardHead}><h2 id="blast-list-title">{c.listTitle}</h2></div>
     <div className={page.row}>
-      <button type="button" className={page.secondary} disabled={p.locked} onClick={() => p.onNew?.('EMAIL')} data-new="EMAIL">{c.newEmail}</button>
-      <button type="button" className={page.secondary} disabled={p.locked} onClick={() => p.onNew?.('SMS')} data-new="SMS">{c.newText}</button>
+      {p.embedded !== 'SMS' ? <button type="button" className={page.secondary} disabled={p.locked} onClick={() => p.onNew?.('EMAIL')} data-new="EMAIL">{c.newEmail}</button> : null}
+      {p.embedded !== 'EMAIL' ? <button type="button" className={page.secondary} disabled={p.locked} onClick={() => p.onNew?.('SMS')} data-new="SMS">{c.newText}</button> : null}
     </div>
     {blasts.length === 0 ? <p className={page.meta}>{c.empty}</p>
       : <ul className={page.list}>{blasts.map(b => <li key={b.blastId}>
@@ -284,8 +287,13 @@ function Composer({ p, c, draft }: { p: SchoolBlastsViewProps; c: BlastCopy; dra
     <Checkouts p={p} c={c} draft={draft} body={body}/>
     <fieldset className={page.form} disabled={p.locked}>
       <legend>{c.audienceTitle}</legend>
-      <div className={page.grid}>{SCHOOL_BLAST_AUDIENCE_GROUPS.map(g => <label key={g} className={page.check}>
-        <input type="checkbox" checked={draft.groups.includes(g)} onChange={() => p.onToggleGroup?.(g)} data-group={g}/>{c.groups[g]}</label>)}</div>
+      <div className={styles.tags} role="group" aria-label={c.audienceTitle}>{SCHOOL_BLAST_AUDIENCE_GROUPS.map(g =>
+        <button key={g} type="button" className={page.tab} aria-pressed={draft.groups.includes(g)} onClick={() => p.onToggleGroup?.(g)} data-group={g}>{c.groups[g]}</button>)}</div>
+      {p.filterOptions?.state === 'READY' && p.filterOptions.options.tags.length ? <div className={styles.tags} role="group" aria-label={c.byTag} data-testid="blast-tag-chips">
+        <span className={page.meta}>{c.byTag}</span>
+        {p.filterOptions.options.tags.map(t => { const on = tagList(draft.tags).some(x => x.toLowerCase() === t.toLowerCase());
+          return <button key={t} type="button" className={styles.small} aria-pressed={on} data-on={on ? 'true' : undefined} onClick={() => p.onToggleTag?.(t)} data-tag={t}>#{t}</button>; })}
+      </div> : null}
       <label className={page.field}>{c.fieldTags}
         <input value={draft.tags} onChange={(e) => p.onEdit?.('tags', e.target.value)} data-field="tags"/>
         <span className={page.meta}>{c.tagsHint}</span></label>
@@ -376,23 +384,26 @@ function Detail({ p, c, blast }: { p: SchoolBlastsViewProps; c: BlastCopy; blast
 /** Marketing > Blasts. Pure view: every action is a callback; the container decides, the server decides again. */
 export function SchoolBlastsView(p: SchoolBlastsViewProps): React.ReactElement {
   const c = blastCopy(p.language);
-  const head = <div className={page.head}><div><h1>{c.pageTitle}</h1><p className={page.intro}>{c.intro}</p></div>
+  const head = p.embedded ? null : <div className={page.head}><div><h1>{c.pageTitle}</h1><p className={page.intro}>{c.intro}</p></div>
     <button type="button" className={page.secondary} onClick={() => p.onRefresh?.()} disabled={p.locked}>{c.refresh}</button></div>;
-  if (p.waiting) return <main className={page.page}>{head}<p className={page.meta} role="status">{c.checking}</p></main>;
-  if (p.concealed) return <main className={page.page}>{head}<p className={page.meta} role="status">{c.hidden}</p></main>;
-  if (!p.hasSchool) return <main className={page.page}>{head}<p className={page.meta} role="status">{c.chooseSchool}</p></main>;
+  const Wrap = p.embedded ? 'section' : 'main';
+  if (p.waiting) return <Wrap className={p.embedded ? styles.embedded : page.page}>{head}<p className={page.meta} role="status">{c.checking}</p></Wrap>;
+  if (p.concealed) return <Wrap className={p.embedded ? styles.embedded : page.page}>{head}<p className={page.meta} role="status">{c.hidden}</p></Wrap>;
+  if (!p.hasSchool) return <Wrap className={p.embedded ? styles.embedded : page.page}>{head}<p className={page.meta} role="status">{c.chooseSchool}</p></Wrap>;
   const outcome = p.outcome ? <div className={`${page.notice} ${CALM.includes(p.outcome.kind) ? '' : page.warn}`} role={CALM.includes(p.outcome.kind) ? 'status' : 'alert'} data-testid="blast-outcome" data-kind={p.outcome.kind}>
     <p>{c.outcomes2[p.outcome.kind]}</p>
     {p.canRetry ? <button type="button" className={page.secondary} onClick={() => p.onTryAgain?.()} data-action="retry">{c.tryAgain}</button> : null}
   </div> : null;
   const list = p.list;
-  if (list.state !== 'READY') return <main className={page.page}>{head}{list.state === 'LOADING' ? <p className={page.meta} role="status">{c.reading}</p>
-    : <div className={`${page.notice} ${page.warn}`} role="alert" data-testid={list.state === 'DENIED' ? 'blast-denied' : undefined}><p>{list.state === 'DENIED' ? c.denied : c.unavailable}</p></div>}</main>;
+  if (list.state !== 'READY') return <Wrap className={p.embedded ? styles.embedded : page.page}>{head}{list.state === 'LOADING' ? <p className={page.meta} role="status">{c.reading}</p>
+    : <div className={`${page.notice} ${page.warn}`} role="alert" data-testid={list.state === 'DENIED' ? 'blast-denied' : undefined}><p>{list.state === 'DENIED' ? c.denied : c.unavailable}</p></div>}</Wrap>;
   const selected = p.selected;
   const current = p.draft?.blastId ?? (selected?.state === 'READY' ? selected.blast.blastId : null);
-  return <main className={page.page}>{head}{outcome}
-    <div className={styles.layout}>
-      <List p={p} c={c} blasts={list.blasts} current={current}/>
+  const blasts = p.embedded ? list.blasts.filter(b => b.channel === p.embedded) : list.blasts;
+  const listCard = <List p={p} c={c} blasts={blasts} current={current}/>;
+  return <Wrap className={p.embedded ? styles.embedded : page.page} data-testid={p.embedded ? 'blast-embedded' : undefined}>{head}{outcome}
+    <div className={p.embedded ? styles.stack : styles.layout}>
+      {p.embedded ? null : listCard}
       <div>
         {p.draft ? <Composer p={p} c={c} draft={p.draft}/>
           : selected?.state === 'READY' ? <Detail p={p} c={c} blast={selected.blast}/>
@@ -400,6 +411,7 @@ export function SchoolBlastsView(p: SchoolBlastsViewProps): React.ReactElement {
           : selected?.state === 'UNAVAILABLE' || selected?.state === 'DENIED' ? <div className={`${page.notice} ${page.warn}`} role="alert"><p>{c.unavailable}</p></div>
           : <p className={page.meta}>{c.permissionsHint}</p>}
       </div>
+      {p.embedded ? listCard : null}
     </div>
-  </main>;
+  </Wrap>;
 }
